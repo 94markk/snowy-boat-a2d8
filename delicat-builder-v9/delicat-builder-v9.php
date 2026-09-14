@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.16
+ * Version: 9.2.0-pro.17
 
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -151,7 +151,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.16' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.17' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -1316,6 +1316,83 @@ register_activation_hook(
 		update_option( 'delicat_builder_v9_activation_version', DELICAT_BUILDER_V9_VERSION, false );
 	}
 );
+
+/**
+ * Rebuild each Builder page's compiled stylesheet after a version change.
+ *
+ * pro.17. Every Builder page has a stylesheet compiled from only the components
+ * that page actually uses - for this store's homepage, roughly half the size of
+ * the catch-all bundle. The public path refuses to serve it when its manifest
+ * names a different plugin version, and nothing rebuilt it except saving the
+ * page by hand in the Builder.
+ *
+ * So every update silently downgraded the homepage from its own stylesheet to
+ * the 28KB fallback: render-blocking, on every visit, for every visitor, until
+ * somebody happened to re-save the page. On a 2G connection that is seconds
+ * before anything can paint, and nothing anywhere said so.
+ *
+ * This is deliberately NOT part of the schema migration. A schema step runs
+ * once, ever; this has to run once per VERSION, because that is what
+ * invalidates the manifest. Admin-only, because compiling writes files and the
+ * public path is designed never to.
+ */
+function delicat_builder_v9_maybe_recompile_pages(): void {
+	if ( (string) get_option( 'delicat_builder_v9_compiled_version', '' ) === DELICAT_BUILDER_V9_VERSION ) {
+		return;
+	}
+	if ( ! class_exists( 'Delicat_Builder_V9_Compiler', false ) || ! class_exists( 'Delicat_Builder_V9_Pages', false ) ) {
+		return;
+	}
+
+	/* Claim the version first. A compile that fails must not be retried on every
+	 * admin page load for the rest of the release. */
+	update_option( 'delicat_builder_v9_compiled_version', DELICAT_BUILDER_V9_VERSION, false );
+
+	$report = array( 'at' => time(), 'version' => DELICAT_BUILDER_V9_VERSION, 'recompiled' => 0, 'failed' => array() );
+
+	try {
+		$pages = get_posts(
+			array(
+				'post_type'        => 'page',
+				'post_status'      => array( 'publish', 'private', 'draft' ),
+				'numberposts'      => 60,
+				'fields'           => 'ids',
+				'suppress_filters' => true,
+				'meta_query'       => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- once per release, in admin.
+					array(
+						'key'     => Delicat_Builder_V9_Pages::META_LAYOUT,
+						'compare' => 'EXISTS',
+					),
+				),
+			)
+		);
+
+		foreach ( (array) $pages as $page_id ) {
+			$layout = Delicat_Builder_V9_Pages::get_layout( (int) $page_id );
+			if ( empty( $layout ) ) {
+				continue;
+			}
+			$result = Delicat_Builder_V9_Compiler::compile_page( (int) $page_id, $layout );
+			if ( ! empty( $result['file'] ) ) {
+				$report['recompiled']++;
+			} else {
+				$report['failed'][] = (int) $page_id;
+			}
+		}
+
+		$report['failed'] = array_slice( $report['failed'], 0, 20 );
+	} catch ( Throwable $error ) {
+		$report['error'] = substr( $error->getMessage(), 0, 180 );
+		unset( $error );
+	}
+
+	/* Recorded so the health panel can say so. A page still on the fallback is
+	 * not an error, but it is slower than it needs to be, and until now there
+	 * was no way to find that out. */
+	update_option( 'delicat_builder_v9_last_recompile', $report, false );
+}
+
+add_action( 'admin_init', 'delicat_builder_v9_maybe_recompile_pages', 20 );
 
 add_action(
 	'plugins_loaded',

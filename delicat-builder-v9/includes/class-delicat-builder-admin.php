@@ -187,6 +187,53 @@ final class Delicat_Builder_V9_Admin {
 		 * plugin. Each row appears only when its ledger is non-empty, so a
 		 * healthy install shows exactly what it showed before.
 		 */
+		/*
+		 * pro.17: page stylesheets.
+		 *
+		 * Each Builder page has a stylesheet compiled from only the components
+		 * that page uses. The public path refuses one whose manifest names a
+		 * different plugin version, and until pro.17 nothing rebuilt them except
+		 * saving each page by hand — so every update quietly moved the homepage
+		 * onto the 28KB catch-all bundle, render-blocking on every visit, and
+		 * nothing said so. Now it rebuilds on the first admin page load after an
+		 * update, and this row reports what happened.
+		 */
+		$recompile = get_option( 'delicat_builder_v9_last_recompile', array() );
+		$recompile = is_array( $recompile ) ? $recompile : array();
+
+		if ( ! empty( $recompile['error'] ) ) {
+			$items[] = array(
+				'label' => 'Page stylesheets',
+				'ok'    => false,
+				'text'  => sprintf(
+					'Rebuild failed after %s — %s. Pages are serving the larger catch-all bundle until this is fixed.',
+					(string) ( $recompile['version'] ?? '' ),
+					(string) $recompile['error']
+				),
+			);
+		} elseif ( ! empty( $recompile['failed'] ) ) {
+			$items[] = array(
+				'label' => 'Page stylesheets',
+				'ok'    => false,
+				'text'  => sprintf(
+					'%d rebuilt, %d could not be written (page %s). Those pages serve the larger catch-all bundle. Check that wp-content/uploads is writable.',
+					absint( $recompile['recompiled'] ?? 0 ),
+					count( (array) $recompile['failed'] ),
+					implode( ', ', array_map( 'absint', array_slice( (array) $recompile['failed'], 0, 5 ) ) )
+				),
+			);
+		} elseif ( ! empty( $recompile['at'] ) ) {
+			$items[] = array(
+				'label' => 'Page stylesheets',
+				'ok'    => (string) ( $recompile['version'] ?? '' ) === DELICAT_BUILDER_V9_VERSION,
+				'text'  => sprintf(
+					'%d rebuilt for %s',
+					absint( $recompile['recompiled'] ?? 0 ),
+					(string) ( $recompile['version'] ?? '' )
+				),
+			);
+		}
+
 		$pro_error = get_option( 'delicat_builder_v9_pro_boot_error', array() );
 		if ( is_array( $pro_error ) && ! empty( $pro_error ) ) {
 			$items[] = array(
