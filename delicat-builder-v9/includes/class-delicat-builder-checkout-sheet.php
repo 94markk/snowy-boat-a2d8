@@ -125,6 +125,22 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 	 * WC()->cart->get_total(), and the balance is the wallet plugin's own.
 	 * ===================================================================== */
 
+	/**
+	 * The label the pay button wears while WooCommerce is taking the payment.
+	 *
+	 * Handed to CSS as a custom property because the swap itself is a
+	 * stylesheet's job - it keys off the .processing class WooCommerce already
+	 * puts on the form - but the words have to come through translation like
+	 * every other string here.
+	 */
+	public static function paying_label_style(): string {
+		/* A quote or a backslash inside the value would end the CSS string
+		   early, so they go before it is ever put in one. Escaping for the
+		   attribute happens once, where it is printed. */
+		$label = str_replace( array( '"', '\\' ), '', (string) __( 'Paiement en cours…', 'delicat-builder-v9' ) );
+		return '--dcs-paying:"' . $label . '"';
+	}
+
 	public static function render_summary(): void {
 		if ( ! function_exists( 'WC' ) || ! WC()->cart || WC()->cart->is_empty() ) {
 			return;
@@ -162,10 +178,10 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 			}
 		}
 
-		self::row(
-			__( 'Total', 'delicat-builder-v9' ),
-			'<span class="dcs-total">' . wp_kses_post( WC()->cart->get_total() ) . '</span>',
-			'strong'
+		printf(
+			'<div class="dcs-row dcs-row--total"><span class="dcs-row__label">%1$s</span><span class="dcs-row__value dcs-row__value--strong"><span class="dcs-total">%2$s</span></span></div>',
+			esc_html__( 'Total', 'delicat-builder-v9' ),
+			wp_kses_post( WC()->cart->get_total() )
 		);
 
 		echo '</div>';
@@ -433,7 +449,7 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 
 		$i18n = self::config()['i18n'];
 		?>
-		<dialog class="dcs" id="dcs-sheet" aria-label="<?php echo esc_attr( $i18n['title'] ); ?>">
+		<dialog class="dcs" id="dcs-sheet" aria-label="<?php echo esc_attr( $i18n['title'] ); ?>" style="<?php echo esc_attr( self::paying_label_style() ); ?>">
 			<button type="button" class="dcs__close" data-dcs-close aria-label="<?php echo esc_attr( $i18n['close'] ); ?>">
 				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
 			</button>

@@ -11,6 +11,12 @@ const CSS = fs.readFileSync('/home/user/snowy-boat-a2d8/delicat-builder-v9/asset
 const CHECKOUT_PAGE = `<!doctype html><html><body>
   <div class="woocommerce-message">Produit ajouté au panier.</div>
 
+  <!-- what the checkout template prints and the express sheet does not want -->
+  <div class="woocommerce-form-coupon-toggle">
+    <div class="woocommerce-info">Avez-vous un code promo ?
+      <a href="#" class="showcoupon">Cliquez ici pour saisir votre code</a></div>
+  </div>
+
   <!-- what render_summary() prints when the request carries X-Delicat-Sheet -->
   <div class="dcs-summary" data-dcs-summary>
     <div class="dcs-card dcs-card--order">
@@ -31,6 +37,7 @@ const CHECKOUT_PAGE = `<!doctype html><html><body>
 
   <form name="checkout" method="post" class="checkout woocommerce-checkout" action="/checkout/">
     <input type="hidden" name="woocommerce-process-checkout-nonce" value="REAL_NONCE_abc123">
+    <h3>Coordonnées</h3>
     <div class="woocommerce-billing-fields"><h3>Vos coordonnées</h3>
       <p class="form-row"><label for="billing_first_name">Prénom</label>
         <input id="billing_first_name" class="input-text" name="billing_first_name" type="text"></p>
@@ -47,6 +54,9 @@ const CHECKOUT_PAGE = `<!doctype html><html><body>
         <label>MonCash</label></li>
     </ul>
     <div class="form-row place-order">
+      <div class="woocommerce-privacy-policy-text"><p>Vos données personnelles seront
+        utilisées pour traiter votre commande, selon notre
+        <a href="#">politique de confidentialité</a>.</p></div>
       <div class="woocommerce-terms-and-conditions-wrapper"><p class="form-row">
         <label class="checkbox"><input type="checkbox" name="terms" id="terms">
         <span>J’ai lu et j’accepte les <a href="#">conditions générales</a></span></label></p></div>
@@ -67,7 +77,7 @@ const PRODUCT_PAGE = (extra) => `<!doctype html><html><head><style>${CSS}</style
     <button type="submit" class="button alt dnp-buy-now" name="delicat_native_buy_now" value="1">Acheter maintenant</button>
   </form>
 
-  <dialog class="dcs" id="dcs-sheet" aria-label="Vérifiez votre commande">
+  <dialog class="dcs" id="dcs-sheet" aria-label="Vérifiez votre commande" style='--dcs-paying:"Paiement en cours…"'>
     <button type="button" class="dcs__close" data-dcs-close aria-label="Fermer">x</button>
     <div class="dcs__scroll" data-dcs-scroll tabindex="-1" autofocus>
       <div class="dcs__grip" aria-hidden="true"></div>
@@ -225,6 +235,97 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
       r.order.indexOf('dcs__notices') < r.order.indexOf('dcs-summary') &&
       r.order.indexOf('dcs-summary') < r.order.indexOf('checkout'), r.order.join(','));
     ok('the trust line appears only once there is a form to trust', r.trustShown);
+    await ctx.close();
+  }
+
+  group('What the express sheet leaves out');
+
+  {
+    /*
+     * The checkout page carries things the express panel is not for: a coupon
+     * prompt, WooCommerce's privacy paragraph, and a heading above the card
+     * that already carries the same title. They are hidden in the sheet's own
+     * stylesheet rather than unhooked, so the full checkout page keeps every
+     * one of them - which is where a customer goes for a coupon.
+     */
+    const { ctx, p } = await page();
+    await p.click('.dnp-buy-now');
+    await p.waitForTimeout(300);
+
+    const r = await p.evaluate(() => {
+      const sheet = document.getElementById('dcs-sheet');
+      const shows = (sel) => {
+        const el = sheet.querySelector(sel);
+        return el ? el.getBoundingClientRect().height > 0 : false;
+      };
+      return {
+        couponBlock: shows('.woocommerce-form-coupon-toggle'),
+        /* The words, anywhere in the panel. The prompt does not arrive as the
+           block the stylesheet hides - it arrives as the .woocommerce-info
+           inside it, lifted out by extractNotices - so looking for the block is
+           looking in the wrong place. */
+        couponPrompt: /code promo/i.test(sheet.textContent || ''),
+        showCoupon: !!sheet.querySelector('.showcoupon'),
+        /* Visibility, not words: this block IS in the sheet - it sits inside
+           .place-order, which is the pinned footer - and the stylesheet hides
+           it. textContent reports hidden text too, so looking for the words
+           would fail even when the rule is working. */
+        privacy: shows('.woocommerce-privacy-policy-text'),
+        privacyPresent: !!sheet.querySelector('.woocommerce-privacy-policy-text'),
+        strayHeading: shows('form.checkout > h3'),
+        cardTitle: shows('.woocommerce-billing-fields h3'),
+        fields: sheet.querySelectorAll('form.checkout input[name^="billing_"]').length,
+        terms: !!sheet.querySelector('input[name="terms"]')
+      };
+    });
+
+    ok('the coupon block is not shown', !r.couponBlock);
+    ok('and the prompt is nowhere in the panel', !r.couponPrompt && !r.showCoupon,
+      'extractNotices lifts .woocommerce-info out of the block the CSS hides');
+    ok('the privacy paragraph is mounted but not shown', r.privacyPresent && !r.privacy,
+      'present=' + r.privacyPresent + ' visible=' + r.privacy);
+    ok('nor the heading above the card of the same name', !r.strayHeading);
+    ok('the card keeps its own title', r.cardTitle);
+    ok('and every field is still there', r.fields === 3 && r.terms,
+      r.fields + ' billing fields, terms=' + r.terms);
+    await ctx.close();
+  }
+
+  group('While the payment is going through');
+
+  {
+    const { ctx, p } = await page();
+    await p.click('.dnp-buy-now');
+    await p.waitForTimeout(300);
+
+    const r = await p.evaluate(() => {
+      const btn = document.getElementById('place_order');
+      const before = { label: getComputedStyle(btn, '::before').content,
+                       after: getComputedStyle(btn, '::after').content };
+
+      /* The class WooCommerce puts on its form while it submits. */
+      document.querySelector('#dcs-sheet form.checkout').classList.add('processing');
+
+      const cs = getComputedStyle(btn);
+      const ring = getComputedStyle(btn, '::after');
+      return {
+        before,
+        says: getComputedStyle(btn, '::before').content,
+        ownLabelHidden: parseFloat(cs.fontSize) === 0,
+        untappable: cs.pointerEvents === 'none',
+        ringRound: ring.borderTopLeftRadius,
+        spinning: ring.animationName
+      };
+    });
+
+    ok('the button says nothing extra while idle', r.before.label === 'none', r.before.label);
+    ok('it says what is happening once submitting', /Paiement en cours/.test(r.says), r.says);
+    ok('in the translated words, not a hard-coded default',
+      r.says.indexOf('var(') === -1 && r.says !== 'none', r.says);
+    ok('its own label is out of the way', r.ownLabelHidden);
+    ok('a second tap cannot reach it', r.untappable);
+    ok('and the arrow has become a spinner',
+      r.ringRound === '50%' && r.spinning === 'dcs-spin', JSON.stringify(r));
     await ctx.close();
   }
 

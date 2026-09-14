@@ -317,10 +317,22 @@
 		var wrap = document.createElement('div');
 		wrap.className = 'dcs__notices';
 		found.forEach(function (node) {
+			/*
+			 * The coupon prompt is not a notice about this order, it is an
+			 * invitation to go and find a code - and the sheet is the express
+			 * path, where the reference design has no coupon row at all. The
+			 * stylesheet hides the block it normally sits in; lifting the inner
+			 * notice out of that block would smuggle it back in past the rule,
+			 * which is exactly what put "Avez-vous un code promo ?" at the top
+			 * of the panel. Coupons still work on the full checkout page.
+			 */
+			if (node.closest('.woocommerce-form-coupon-toggle') || node.querySelector('.showcoupon')) return;
+
 			node.querySelectorAll('script').forEach(function (s) { s.remove(); });
 			wrap.appendChild(node);
 		});
-		return wrap;
+
+		return wrap.firstChild ? wrap : null;
 	}
 
 	function reset() {

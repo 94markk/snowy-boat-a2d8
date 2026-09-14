@@ -132,6 +132,22 @@ final class Delicat_Builder_V9_Runtime_Router {
         if ( (function_exists('is_cart') && is_cart()) || (function_exists('is_checkout') && is_checkout()) ) {
             self::load('includes/class-delicat-builder-purchase-ui.php','Delicat_Builder_V9_Purchase_UI');
             self::load('includes/class-delicat-builder-purchase-native.php','Delicat_Builder_V9_Purchase_Native');
+
+            /*
+             * pro.18: the checkout sheet, again - and this is the request that
+             * actually needs it.
+             *
+             * The sheet fetches the checkout page and lifts the form out of the
+             * reply. The order and wallet cards are rendered onto THAT reply, by
+             * hooks this class registers. Loading it only in the is_product()
+             * branch above meant the class did not exist on the request that
+             * renders them, so the sheet showed a bare checkout form: no order
+             * card, no wallet card, and WooCommerce's default button text
+             * instead of the total. It decides for itself whether to render -
+             * only a request carrying the sheet's own header gets the cards, so
+             * an ordinary visit to the checkout page is untouched.
+             */
+            self::load('includes/class-delicat-builder-checkout-sheet.php','Delicat_Builder_V9_Checkout_Sheet');
         }
 
         /*

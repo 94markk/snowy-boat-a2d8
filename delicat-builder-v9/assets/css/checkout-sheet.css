@@ -248,6 +248,12 @@
 }
 
 .dcs-row__value--strong { font-weight: 750; }
+
+/* The last row of the order card is the figure being charged, so its label
+   carries the same weight as the number beside it rather than sitting in the
+   grey used for "Produit" and "Option". */
+.dcs-row--total { border-bottom: 0; }
+.dcs-row--total .dcs-row__label { font-weight: 800; color: var(--dcs-ink); }
 .dcs-row__value--ok { color: var(--dcs-ok); font-weight: 750; }
 /* A balance that will not cover the order is stated before the gateway has to
    say so. */
@@ -343,6 +349,37 @@
 
 .dcs .checkout.woocommerce-checkout { margin: 0; }
 .dcs .col2-set, .dcs .col-1, .dcs .col-2 { float: none; width: 100%; }
+
+/* ---- What the checkout page carries and this sheet does not want ----
+   Hidden here rather than unhooked in PHP, on purpose: these rules are scoped
+   to .dcs, so the real checkout page keeps every one of them. A customer who
+   wants a coupon, or the privacy notice, still has the full page - this panel
+   is the express path, and the reference for it has none of this.
+
+   Which of them appear depends on how the reply was rendered, and that differs
+   between the two routes into this sheet. Hiding them in CSS is what makes the
+   panel look the same either way. */
+
+/* The coupon prompt: "Avez-vous un code promo ?" and the form behind it. */
+.dcs .woocommerce-form-coupon-toggle,
+.dcs form.checkout_coupon { display: none !important; }
+
+/* WooCommerce's privacy paragraph, which sits above the terms line. */
+.dcs .woocommerce-privacy-policy-text { display: none !important; }
+
+/* A heading the template prints OUTSIDE the field cards - the second
+   "Coordonnées", above the card already titled the same thing. Only headings
+   that are direct children of the form or of the column wrappers go: the ones
+   inside .woocommerce-billing-fields and its siblings are the card titles and
+   are kept. */
+.dcs form.checkout > h2,
+.dcs form.checkout > h3,
+.dcs #customer_details > h2,
+.dcs #customer_details > h3,
+.dcs #customer_details > .col-1 > h2,
+.dcs #customer_details > .col-1 > h3,
+.dcs #customer_details > .col-2 > h2,
+.dcs #customer_details > .col-2 > h3 { display: none; }
 
 /* WooCommerce's own headings become the card's title, so the fields sit in a
    card like the summary rather than running loose down the sheet. */
@@ -520,12 +557,47 @@
 .dcs #place_order:active { scale: .985; }
 .dcs #place_order[disabled] { opacity: .55; pointer-events: none; }
 
-/* While WooCommerce is submitting it blocks the form with an overlay. The pay
-   button is pinned outside the form's painted box, so it would stay bright and
-   tappable underneath - it is dimmed here to match. The guard against a second
-   submit is WooCommerce's own (checkout.js returns early on .processing); this
-   only makes that visible. */
-.dcs .checkout.processing #place_order { opacity: .55; pointer-events: none; }
+/* ---- While WooCommerce is taking the payment ----
+   It blocks the form with an overlay, but the pay button is pinned outside the
+   form's painted box, so it would sit there bright and tappable over the top.
+   It says what is happening instead.
+
+   The words come from --dcs-paying, which PHP sets from the translated string:
+   CSS content cannot be translated, and a French storefront should not be the
+   one place an English default leaks through. The guard against a second submit
+   is WooCommerce's own - checkout.js returns early while the form carries
+   .processing - and this only makes that visible. */
+.dcs .checkout.processing #place_order {
+  pointer-events: none;
+  /* Hides the button's own label without touching the markup, so the pseudo
+     elements below can stand in for it. Each sets its own size back. */
+  font-size: 0;
+}
+
+.dcs .checkout.processing #place_order::before {
+  content: var(--dcs-paying, "Paiement en cours…");
+  font-size: 1.02rem;
+  font-weight: 780;
+  letter-spacing: -.01em;
+}
+
+/* The arrow becomes the spinner: same element, so the button does not change
+   width as it switches. */
+.dcs .checkout.processing #place_order::after {
+  content: "";
+  width: 22px;
+  height: 22px;
+  background: none;
+  clip-path: none;
+  border: 2.5px solid rgb(255 255 255 / .4);
+  border-top-color: var(--dcs-accent-ink);
+  border-radius: 50%;
+  animation: dcs-spin .7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dcs .checkout.processing #place_order::after { animation-duration: 2.4s; }
+}
 
 /* While the wallet is short, "Recharger mon compte" is the action that gets the
    customer paid - two orange buttons on one screen just ask them to guess. The

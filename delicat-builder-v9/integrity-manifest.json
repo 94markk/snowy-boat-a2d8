@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T18:26:09.395115+00:00",
-  "version": "9.2.0-pro.17",
-  "bytes": 5799019,
+  "built": "2026-09-14T19:43:01.986362+00:00",
+  "version": "9.2.0-pro.18",
+  "bytes": 5808032,
   "count": 349,
   "files": {
     "PRO-README.md": {
@@ -15,7 +15,7 @@
     },
     "asset-versions.php": {
       "bytes": 9267,
-      "sha256": "412946caee7e7b6605efcc146a43ce74f9a36da7390400e5bcbeb675de1a0608"
+      "sha256": "14d4c620bba5b167ce258efd5951c721013b15cfd005f4c01ef2f2bac8638e27"
     },
     "assets/components/all-components.min.351bbc99b97a.css": {
       "bytes": 177594,
@@ -273,13 +273,13 @@
       "bytes": 7043,
       "sha256": "5c66e922190d74a441294b48a320ac5d0aff7598e76292ee26f17ef061dd9439"
     },
-    "assets/css/checkout-sheet.959bc5e1c76e.css": {
-      "bytes": 18588,
-      "sha256": "959bc5e1c76e5bec774d80e5166968337c9a9c9a7450d7a6b376227b08e24a35"
+    "assets/css/checkout-sheet.2dfd09c24777.css": {
+      "bytes": 21509,
+      "sha256": "2dfd09c24777acc07d0579b47d384e2a539e8c38521e12241f3f71da6b9153c5"
     },
     "assets/css/checkout-sheet.css": {
-      "bytes": 18588,
-      "sha256": "959bc5e1c76e5bec774d80e5166968337c9a9c9a7450d7a6b376227b08e24a35"
+      "bytes": 21509,
+      "sha256": "2dfd09c24777acc07d0579b47d384e2a539e8c38521e12241f3f71da6b9153c5"
     },
     "assets/css/currency.8334671dccfa.css": {
       "bytes": 1272,
@@ -609,13 +609,13 @@
       "bytes": 24152,
       "sha256": "d42494873b02095292af3dd330ace9c0eb70cf5d6a545b5c21c27a5d59ea0b78"
     },
-    "assets/js/checkout-sheet.99db6bed3ba1.js": {
-      "bytes": 15367,
-      "sha256": "99db6bed3ba19b07774faa5e87c70ccb4d3a7b843e2d8b4c7e7d90307f380a1b"
+    "assets/js/checkout-sheet.065da282c37a.js": {
+      "bytes": 15994,
+      "sha256": "065da282c37aac217b53634f8ffd16ed193593709d86fe20ed4e44878c73019c"
     },
     "assets/js/checkout-sheet.js": {
-      "bytes": 15367,
-      "sha256": "99db6bed3ba19b07774faa5e87c70ccb4d3a7b843e2d8b4c7e7d90307f380a1b"
+      "bytes": 15994,
+      "sha256": "065da282c37aac217b53634f8ffd16ed193593709d86fe20ed4e44878c73019c"
     },
     "assets/js/core.d2d18e641204.js": {
       "bytes": 4799,
@@ -883,7 +883,7 @@
     },
     "delicat-builder-v9.php": {
       "bytes": 71523,
-      "sha256": "60e4d246f4875143a178171dbdb7ae96205ddbdba09857af3e0084bfeaec3606"
+      "sha256": "0c60d6d0adf473f7b2ab59fefad4ab1ddba69a2fc5a3af057fabf67fab395040"
     },
     "includes/class-delicat-builder-admin.php": {
       "bytes": 23021,
@@ -930,8 +930,8 @@
       "sha256": "3a53f20283c01b778fecd585db48455ab1cec829ae3ab9cccb0a483f187c2d78"
     },
     "includes/class-delicat-builder-checkout-sheet.php": {
-      "bytes": 18856,
-      "sha256": "982658c7a3412eb366fc44b52a5d8ea17130d214cc0636268aa060e5c6fa85ab"
+      "bytes": 19796,
+      "sha256": "871d30b701c1451b216ea187913b9def02493b7011d7bcde5951d0e6f2afce9c"
     },
     "includes/class-delicat-builder-cloudflare.php": {
       "bytes": 15226,
@@ -1110,8 +1110,8 @@
       "sha256": "9b8c19e81f9dff0242610401afe0358a96c4195e41c865f794dfe589e7f1918c"
     },
     "includes/class-delicat-builder-runtime-router.php": {
-      "bytes": 12579,
-      "sha256": "3a1a59c069ab279d04d2e6ebd042c0f5002dac0e3998c33cd91dfe689492600a"
+      "bytes": 13556,
+      "sha256": "d31ca3ffd1b9d48bae3160431de90e9a22743f4a2b7c92961a962a821ce7feaa"
     },
     "includes/class-delicat-builder-schema.php": {
       "bytes": 53544,
