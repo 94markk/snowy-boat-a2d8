@@ -154,49 +154,35 @@ final class DBP_Nav {
 		add_filter( 'litespeed_comment', '__return_false', PHP_INT_MAX );
 
 		/*
-		 * pro.16: fragments were unconditionally no-store. Every in-app page
-		 * switch therefore paid for a full uncached WordPress + WooCommerce
-		 * render, while the same page as a plain document would have come
-		 * straight out of LiteSpeed's page cache — the "instant" engine was
-		 * the slowest way to reach a page, and prefetch had to stay disabled.
+		 * Fragments are never stored by any cache layer.
 		 *
-		 * A fragment is a reduction of the very document the shopper would
-		 * otherwise receive, so it can be cached exactly as that document is:
-		 * shared for a guest without private state (same policy as
-		 * Security::public_cache_allowed()), per-user in LiteSpeed's private
-		 * cache for a signed-in customer (same policy as private_cache_allowed()),
-		 * and no-store everywhere else. The fragment URL (?dbp_nav=1) is its own
-		 * cache key, and a stray visit to it without the engine header is
-		 * redirected (below) instead of rendered, so a cache can never hold
-		 * HTML under the JSON URL or the reverse.
+		 * pro.16 tried to make them cacheable like documents. That was wrong on this
+		 * stack and delivered nothing: Delicat_Builder_V9_Security::protect_private_response()
+		 * runs on template_redirect at priority 0 and already treats the bare presence
+		 * of ?dbp_nav as private — it defines DONOTCACHEPAGE and calls
+		 * litespeed_control_set_nocache — and Server_Engine::prepare_cache_policy()
+		 * does the same at priority 3 because $_GET is non-empty on exactly these
+		 * requests. LiteSpeed honours DONOTCACHEPAGE, so it would never have stored a
+		 * fragment whatever header we chose, while `Cache-Control: public, max-age=60`
+		 * still reached Cloudflare on a zone this plugin purges wholesale (i.e. one
+		 * that caches HTML). The Vary header it leaned on is honoured by neither
+		 * LiteSpeed nor Cloudflare, so ?dbp_nav=1 was a single cache key for a JSON
+		 * body, a 302, and every currency and low-data variant of the page.
+		 *
+		 * Making fragments genuinely cacheable is worth doing, but it has to start at
+		 * that priority-0 gate and at the "$_GET is non-empty" rule in
+		 * Security::public_cache_allowed(), not with a header written over the top of
+		 * both of them.
 		 */
-		$mode = self::fragment_cache_mode();
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
+		do_action( 'litespeed_control_set_nocache', 'Delicat navigation response' );
 		if ( ! headers_sent() ) {
+			nocache_headers();
 			header( 'Content-Type: application/json; charset=utf-8' );
 			header( 'X-Content-Type-Options: nosniff' );
 			header( 'X-Robots-Tag: noindex, noarchive' );
-			header( 'Vary: Cookie, X-Delicat-Pro-Nav, Accept-Encoding', false );
-		}
-		if ( 'public' === $mode ) {
-			do_action( 'litespeed_control_set_cacheable', 'Delicat navigation fragment (public)' );
-			if ( ! headers_sent() ) {
-				header( 'Cache-Control: public, max-age=60', true );
-				header( 'X-Delicat-V9-Cache: public' );
-			}
-		} elseif ( 'private' === $mode ) {
-			do_action( 'litespeed_control_set_private', 'Delicat navigation fragment (signed-in)' );
-			if ( ! headers_sent() ) {
-				header( 'Cache-Control: private, no-cache, must-revalidate', true );
-				header( 'X-Delicat-V9-Cache: private' );
-			}
-		} else {
-			if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
-			do_action( 'litespeed_control_set_nocache', 'Delicat navigation response' );
-			if ( ! headers_sent() ) {
-				nocache_headers();
-				header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0', true );
-				header( 'X-LiteSpeed-Cache-Control: no-cache', true );
-			}
+			header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0', true );
+			header( 'X-LiteSpeed-Cache-Control: no-cache', true );
 		}
 
 		ob_start( array( __CLASS__, 'transform' ) );
@@ -230,57 +216,6 @@ final class DBP_Nav {
 		exit;
 	}
 
-	/**
-	 * Cache policy for the fragment being rendered: 'public', 'private' or 'none'.
-	 * Mirrors the Security gates used for full documents, minus their blanket
-	 * "no query string" rule, because the navigation flag is the only parameter.
-	 *
-	 * @return string
-	 */
-	private static function fragment_cache_mode() {
-		if ( ! class_exists( 'Delicat_Builder_V9_Security', false ) || is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
-			return 'none';
-		}
-		if ( 'GET' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ) ) {
-			return 'none';
-		}
-		foreach ( array_keys( (array) $_GET ) as $param ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache policy only.
-			if ( 'dbp_nav' !== $param ) {
-				return 'none';
-			}
-		}
-		if ( ! is_callable( array( 'Delicat_Builder_V9_Security', 'navigation_request_allowed' ) ) || ! Delicat_Builder_V9_Security::navigation_request_allowed() ) {
-			return 'none';
-		}
-		if ( ! is_user_logged_in() ) {
-			if ( is_callable( array( 'Delicat_Builder_V9_Security', 'has_private_cookie' ) ) && Delicat_Builder_V9_Security::has_private_cookie() ) {
-				return 'none';
-			}
-			if ( class_exists( 'Delicat_Builder_V9_Multi_Currency', false ) && is_callable( array( 'Delicat_Builder_V9_Multi_Currency', 'instance' ) ) ) {
-				$currency = Delicat_Builder_V9_Multi_Currency::instance();
-				if ( is_callable( array( $currency, 'public_cache_variant_required' ) ) && $currency->public_cache_variant_required() ) {
-					return 'none';
-				}
-			}
-			return 'public';
-		}
-		if ( ! (bool) apply_filters( 'delicat_builder_v9_private_cache', true ) ) {
-			return 'none';
-		}
-		if ( current_user_can( 'edit_posts' ) || is_admin_bar_showing() ) {
-			return 'none';
-		}
-		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
-			return 'none';
-		}
-		$path = strtolower( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '/' ), PHP_URL_PATH ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
-		foreach ( array( '/my-wallet', '/woo-wallet', '/wallet', '/my-account', '/checkout', '/cart', '/order' ) as $needle ) {
-			if ( false !== strpos( $path, $needle ) ) {
-				return 'none';
-			}
-		}
-		return 'private';
-	}
 
 	/**
 	 * Reduce a full rendered document to the parts that change between pages.
@@ -579,15 +514,11 @@ final class DBP_Nav {
 			'blockParams' => array( 'add-to-cart', 'remove_item', 'undo_item', 'wc-ajax', 'download_file', 'logout', 'customer-logout', '_wpnonce', 'nonce', 'action', 'dip_action', 'key', 'token', 'code', 'payment_method', 'preview', 'delicat_builder_preview' ),
 			'cacheTtl'    => (int) $settings['nav_cache_ttl'] * 1000,
 			'cacheMax'    => (int) $settings['nav_cache_max'],
-			/* pro.16: prefetch is on again. A no-store fragment is still never
-			 * kept in the engine's memory cache (the response header decides),
-			 * but the in-flight request started on pointerdown is reused by the
-			 * click that follows it, which is where the instant feel comes from.
-			 * Speculative (viewport) prefetch is reserved for visitors whose
-			 * fragments are shared-cacheable, so it never costs the server a
-			 * private render for a page nobody opens. */
-			'fragmentPrefetch' => true,
-			'fragmentCacheable' => ( ! is_user_logged_in() && class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'has_private_cookie' ) ) && ! Delicat_Builder_V9_Security::has_private_cookie() ) ? 1 : 0,
+			/* Fragments are rendered uncached and never stored, so a speculative
+			 * fetch is a full server render for a page nobody may open — on a
+			 * touch device every scroll that begins on a link would pay for one.
+			 * Prefetch stays off until fragments are genuinely cacheable. */
+			'fragmentPrefetch' => false,
 			'prefetch'    => ! empty( $settings['prefetch'] ) ? 1 : 0,
 			'budget'      => (int) $settings['prefetch_budget'],
 			'transitions' => ! empty( $settings['transitions'] ) ? 1 : 0,

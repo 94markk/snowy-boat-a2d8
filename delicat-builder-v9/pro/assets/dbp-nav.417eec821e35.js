@@ -72,10 +72,8 @@
   }
 
   function prefetchAllowed() {
-    // The server decides per response whether a fragment may be retained
-    // (no-store payloads never enter the cache); an in-flight prefetch is
-    // reused by the click that follows regardless. Old inline configs that
-    // predate this contract fail closed.
+    // The current endpoint is private/no-store: speculative responses cannot
+    // be retained for a later click. Fail closed even with old saved settings.
     if (cfg.fragmentPrefetch !== true) return false;
     if (!cfg.prefetch) return false;
     if (PREFETCH_BUDGET <= 0) return false;
@@ -87,10 +85,7 @@
      slow link we keep intent-based prefetch (pointerdown, which the user has
      already committed to) and drop speculative viewport prefetch. */
   function viewportPrefetchAllowed() {
-    // Speculative prefetch only when the server can answer from a shared
-    // cache; a signed-in visitor's fragments are rendered privately and are
-    // only fetched on intent (pointerdown / hover).
-    return prefetchAllowed() && !!cfg.fragmentCacheable && !slowLink() && !lowMemoryDevice();
+    return prefetchAllowed() && !slowLink() && !lowMemoryDevice();
   }
 
   /* ----------------------------------------------------------------- cache */
@@ -237,9 +232,7 @@
     });
     var task = fetch(fragmentUrl(url).href, {
       credentials: 'same-origin',
-      /* The response's own Cache-Control decides (public/private/no-store);
-         forcing no-store here threw away every cache layer on every switch. */
-      cache: 'default',
+      cache: 'no-store',
       redirect: 'follow',
       signal: controller ? controller.signal : signal,
       headers: {
@@ -261,7 +254,12 @@
       if (type.indexOf('application/json') === -1) throw new Error('not-json');
       return response.text().then(function (text) {
         var payload = parsePayload(text);
-        payload.noStore = /no-store/i.test(response.headers.get('cache-control') || '');
+        /* Retain only what the server marked publicly cacheable. Anything
+           private, no-cache, no-store or unlabelled is treated as
+           non-retainable, so a fragment carrying nonces, a cart badge or a
+           wallet figure can never be replayed from memory on a later click. */
+        var cc = String(response.headers.get('cache-control') || '').toLowerCase();
+        payload.noStore = cc.indexOf('public') === -1 || cc.indexOf('no-store') !== -1 || cc.indexOf('private') !== -1;
         return payload;
       });
     }).then(function (payload) {

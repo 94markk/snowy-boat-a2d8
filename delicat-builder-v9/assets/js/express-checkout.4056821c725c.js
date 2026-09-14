@@ -90,10 +90,18 @@
         retry.addEventListener('click', function () { loadForm(); }); notice.appendChild(retry); return;
       }
       if (res.ok && data && data.state === 'declined') {
-        uncertain = false;
-        setNotice('Le paiement a été refusé (solde insuffisant ou refus de la passerelle) et aucun débit n’a été effectué. Rechargez votre wallet si nécessaire, puis préparez une nouvelle vérification.');
-        var again = el('button', 'dnp-express-fallback', 'Revoir la commande'); again.type = 'button';
-        again.addEventListener('click', function () { loadForm(); }); notice.appendChild(again); return;
+        /* Only a wallet decline was verified against the wallet's own ledger and
+           balance. For any other gateway the server checked nothing about that
+           gateway's books, so the brakes stay on and the customer is pointed at
+           their orders rather than told to pay again. */
+        if (data.walletDecline) {
+          uncertain = false;
+          setNotice('Le paiement a été refusé (solde insuffisant ou refus de la passerelle) et aucun débit n’a été constaté sur votre wallet. Rechargez votre wallet si nécessaire, puis préparez une nouvelle vérification.');
+          var again = el('button', 'dnp-express-fallback', 'Revoir la commande'); again.type = 'button';
+          again.addEventListener('click', function () { loadForm(); }); notice.appendChild(again); return;
+        }
+        setNotice('Le paiement a été refusé. Vérifiez vos commandes avant toute nouvelle tentative ; ne payez pas une seconde fois.');
+        return;
       }
       setNotice('Résultat en cours de vérification. Consultez vos commandes ; ne payez pas une seconde fois.');
     }).catch(function () { checkingStatus = false; setNotice('Vérification momentanément indisponible. Consultez vos commandes ou contactez le support.'); });

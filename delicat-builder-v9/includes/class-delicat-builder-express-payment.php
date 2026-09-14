@@ -120,7 +120,20 @@ final class Delicat_Builder_V9_Express_Payment {
   self::order_created( $order );
  }
  public static function success( $result, $order_id ) {
-  if ( ! self::$context || 'success' !== ( $result['result'] ?? '' ) ) { return $result; }
+  if ( ! self::$context ) { return $result; }
+  $outcome = is_array( $result ) ? (string) ( $result['result'] ?? '' ) : '';
+  if ( 'success' !== $outcome ) {
+   /*
+    * pro.16b: WC_Checkout::process_order_payment() applies this filter to EVERY
+    * gateway result, not only successes, so a decline reaches us here. Recording
+    * it is the only positive evidence that a gateway ran and said no; the absence
+    * of a fatal proves nothing (a gateway that throws, or a request killed on a
+    * dropped mobile link, leaves this key unset and the guard held).
+    */
+   try { $record = self::$context['record']; $record['gateway_result'] = '' !== $outcome ? $outcome : 'failure'; self::save( $record ); }
+   catch ( Throwable $e ) { unset( $e ); /* Unrecorded verdict: shutdown() then fails closed. */ }
+   return $result;
+  }
   $order = wc_get_order( $order_id );
   if ( ! $order || (int) $order->get_customer_id() !== self::$context['uid'] ) { throw new RuntimeException( 'Commande à vérifier.' ); }
   $record = self::$context['record']; $record['order_id'] = (int) $order_id;
@@ -163,10 +176,19 @@ final class Delicat_Builder_V9_Express_Payment {
   if ( ! self::declined_without_charge( $c ) ) { return; }
   try {
    $r = $c['record']; $r['status'] = 'declined'; self::save( $r );
+   self::release( $c['active'], $c['id'] );
+  } catch ( Throwable $e ) { return; /* Fail closed: the guard stays for an administrator. */ }
+  /*
+   * The note is written only after the release. add_order_note() inserts a comment
+   * and fires hooks that reach LiteSpeed, Cloudflare and any mailer; this runs inside
+   * a shutdown callback, after do_action('shutdown'), so a throw in that stack must
+   * not be able to leave the record saying 'declined' while the guard is still held —
+   * the customer would be blocked by a message contradicting the one they just read.
+   */
+  try {
    $order = wc_get_order( (int) $c['record']['order_id'] );
    if ( $order ) { $order->add_order_note( 'Paiement refusé par la passerelle, aucun débit constaté : protection paiement direct libérée automatiquement.' ); }
-   self::release( $c['active'], $c['id'] );
-  } catch ( Throwable $e ) { /* Fail closed. */ }
+  } catch ( Throwable $e ) { unset( $e ); }
  }
  /** Wallet balance snapshot (TeraWallet API), or null when it cannot be read. */
  private static function wallet_balance( int $uid ): ?string {
@@ -174,28 +196,105 @@ final class Delicat_Builder_V9_Express_Payment {
   try {
    $wallet = woo_wallet();
    if ( ! is_object( $wallet ) || ! isset( $wallet->wallet ) || ! is_callable( array( $wallet->wallet, 'get_wallet_balance' ) ) ) { return null; }
-   return sprintf( '%.4F', (float) $wallet->wallet->get_wallet_balance( $uid, 'edit' ) );
+   /* get_wallet_balance() returns wc_price() HTML in 'view' context and is run through
+    * a public filter, so a non-numeric answer is real. Casting it would turn an
+    * unreadable balance into a stable 0.0000 that compares equal to itself and would
+    * license a release with no comparison having happened. Mirror the guard in
+    * pro/class-dbp-state.php and fail closed instead. */
+   $raw = $wallet->wallet->get_wallet_balance( $uid, 'edit' );
+   if ( ! is_numeric( $raw ) ) { return null; }
+   return sprintf( '%.4F', (float) $raw );
   } catch ( Throwable $e ) { return null; }
  }
- /** True only when the attempt verifiably ended as a decline with no charge. */
+ /**
+  * True only when this attempt verifiably ended as a decline that moved no money.
+  *
+  * Every condition below must hold. Any one of them being unknown keeps the durable
+  * guard and leaves the case to the administrator reconciliation screen, which is
+  * PRO14's behaviour. Releasing wrongly is the one failure this module exists to
+  * prevent: it tells the customer nothing was charged and re-arms the pay button.
+  */
  private static function declined_without_charge( array $c ): bool {
+  /*
+   * 1. The wallet gateway, and only the wallet gateway.
+   *
+   * guard_classic() puts EVERY signed-in classic checkout under this mutex, including
+   * MonCash and card gateways (a wallet top-up is itself an ordinary checkout). For
+   * those, comparing the wallet balance proves nothing about whether the PSP captured
+   * the payment — and an external charge whose HTTP response was lost on a 2G link
+   * looks identical to a clean decline. Exact match, not a substring: an empty
+   * payment_method is not evidence of anything.
+   */
+  $method = (string) ( $c['record']['method'] ?? 'wallet' );
+  if ( 'wallet' !== $method ) { return false; }
+
+  /*
+   * 2. A gateway verdict that was actually observed, not inferred from silence.
+   * success() records this for declines as well as successes.
+   */
+  $verdict = (string) ( $c['record']['gateway_result'] ?? '' );
+  if ( '' === $verdict || 'success' === $verdict ) { return false; }
+
+  /*
+   * 3. No fatal — as an additional veto only. error_get_last() is not trustworthy on
+   * its own here: shutdown callbacks registered before this one run first and any
+   * notice they raise overwrites the fatal, and it is null after a client abort.
+   */
   $error = error_get_last();
   if ( is_array( $error ) && in_array( (int) ( $error['type'] ?? 0 ), array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR ), true ) ) { return false; }
+
+  /* 4. An order exists and carries no sign of payment. */
   $order_id = (int) ( $c['record']['order_id'] ?? 0 );
   if ( $order_id <= 0 || ! function_exists( 'wc_get_order' ) ) { return false; }
   $order = wc_get_order( $order_id );
   if ( ! is_object( $order ) || ! is_callable( array( $order, 'is_paid' ) ) ) { return false; }
   if ( $order->is_paid() || $order->get_date_paid() || '' !== (string) $order->get_transaction_id() ) { return false; }
   if ( ! in_array( (string) $order->get_status(), array( 'pending', 'failed', 'cancelled' ), true ) ) { return false; }
+
+  /*
+   * 5. No partial wallet payment. TeraWallet debits the wallet share from
+   * woocommerce_checkout_order_processed — before any gateway runs — and marks the
+   * order. A marked order has already moved money even though it is still pending.
+   */
+  if ( is_callable( array( $order, 'get_meta' ) ) && '' !== (string) $order->get_meta( '_via_wallet_payment' ) ) { return false; }
+
+  /* 6. Nothing in the wallet ledger references this order. */
+  if ( ! self::wallet_ledger_quiet( $order_id ) ) { return false; }
+
+  /*
+   * 7. And finally the balance, from two readable numeric snapshots. This is the last
+   * check rather than the only one, because it reads TeraWallet's derived balance meta:
+   * a debit whose ledger row was written but whose meta had not caught up would read
+   * as "no charge". Step 6 covers that ordering; this covers the reverse.
+   */
   $before = $c['record']['balance'] ?? null;
   $after  = self::wallet_balance( (int) ( $c['uid'] ?? 0 ) );
-  if ( null === $before || null === $after ) {
-   // No verifiable balance: only a method that cannot touch the wallet may be released.
-   return false === stripos( (string) ( $c['record']['method'] ?? 'wallet' ), 'wallet' );
-  }
+  if ( null === $before || null === $after ) { return false; }
   return abs( (float) $before - (float) $after ) < 0.00001;
  }
- /** Daily: drop finished intent records older than three days (nonces expire after one). */
+
+ /**
+  * False when TeraWallet's ledger holds a transaction for this order, or when the
+  * ledger exists but cannot be read. True only when there is demonstrably nothing
+  * there, or when TeraWallet keeps no such table on this install.
+  */
+ private static function wallet_ledger_quiet( int $order_id ): bool {
+  global $wpdb;
+  if ( $order_id <= 0 ) { return false; }
+  $table  = $wpdb->prefix . 'woo_wallet_transaction_meta';
+  $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $table ) ) );
+  if ( $wpdb->last_error ) { return false; }
+  if ( $table !== $exists ) { return true; }
+  $count = $wpdb->get_var(
+   $wpdb->prepare(
+    "SELECT COUNT(*) FROM `{$table}` WHERE meta_key IN ( '_wallet_payment_order_id', '_partial_payment_order_id', '_refund_order_id' ) AND meta_value = %s",
+    (string) $order_id
+   )
+  );
+  if ( $wpdb->last_error || null === $count ) { return false; }
+  return 0 === (int) $count;
+ }
+ /** Daily: drop finished intent records once no nonce could still replay them. */
  public static function schedule_cleanup(): void {
   if ( ! wp_next_scheduled( 'delicat_builder_v9_payment_cleanup' ) ) {
    wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'delicat_builder_v9_payment_cleanup' );
@@ -203,8 +302,14 @@ final class Delicat_Builder_V9_Express_Payment {
  }
  public static function cleanup(): void {
   global $wpdb;
-  $rows = $wpdb->get_results( $wpdb->prepare( "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s LIMIT 500", $wpdb->esc_like( 'delicat_payment_' ) . '%', $wpdb->esc_like( 'delicat_payment_active_' ) . '%', $wpdb->esc_like( 'delicat_payment_completed_' ) . '%' ) );
-  $cutoff = time() - 3 * DAY_IN_SECONDS;
+  /* ORDER BY option_id: without it MySQL satisfies the LIKE range from the option_name
+   * UNIQUE index, i.e. lexicographically by customer id as text, so past one window the
+   * same low-sorting prefix is rescanned every run and older records belonging to
+   * higher-sorting customer ids are never reclaimed. */
+  $rows = $wpdb->get_results( $wpdb->prepare( "SELECT option_id, option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s ORDER BY option_id ASC LIMIT 500", $wpdb->esc_like( 'delicat_payment_' ) . '%', $wpdb->esc_like( 'delicat_payment_active_' ) . '%', $wpdb->esc_like( 'delicat_payment_completed_' ) . '%' ) );
+  /* A record is what refuses a replay of its intent, so it must outlive the nonce that
+   * could carry that replay. Default nonce_life is 24h; a site may filter it longer. */
+  $cutoff = time() - max( 7 * DAY_IN_SECONDS, 3 * (int) apply_filters( 'nonce_life', DAY_IN_SECONDS ) );
   foreach ( (array) $rows as $row ) {
    $record = maybe_unserialize( $row->option_value );
    $created = is_array( $record ) ? (int) ( $record['created'] ?? 0 ) : 0;
@@ -237,6 +342,9 @@ final class Delicat_Builder_V9_Express_Payment {
    $response = array( 'state' => 'unknown', 'ordersUrl' => wc_get_account_endpoint_url( 'orders' ) );
    if ( is_array( $record ) ) {
     $response['state'] = in_array( $record['status'], array( 'rejected', 'declined', 'confirmed', 'submitted' ), true ) ? $record['status'] : 'pending';
+    /* Only a wallet decline is safe for the client to present as "no debit": for any
+     * other method the server verified nothing about that gateway's books. */
+    $response['walletDecline'] = ( 'declined' === $response['state'] && 'wallet' === (string) ( $record['method'] ?? '' ) );
     if ( ! empty( $record['order_id'] ) ) {
      $order = wc_get_order( $record['order_id'] );
      if ( $order && (int) $order->get_customer_id() === get_current_user_id() ) {

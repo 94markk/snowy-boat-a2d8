@@ -134,10 +134,22 @@ final class Delicat_Builder_V9_TurboNav {
 		if ( ! self::pro_navigation_active() ) {
 			return array( '/*' );
 		}
-		$permalinks = get_option( 'woocommerce_permalinks', array() );
-		$base       = is_array( $permalinks ) && ! empty( $permalinks['product_base'] ) ? trim( (string) $permalinks['product_base'], '/' ) : 'product';
+		/* Never guess: WooCommerce's product base is a translated slug ('produit' on
+		 * this store), so an English literal would emit a rule matching no URL at all.
+		 * wc_get_permalink_structure() resolves it the same way WooCommerce does. */
+		$base = '';
+		if ( function_exists( 'wc_get_permalink_structure' ) ) {
+			$structure = wc_get_permalink_structure();
+			$base      = is_array( $structure ) ? trim( (string) ( $structure['product_rewrite_slug'] ?? '' ), '/' ) : '';
+		}
+		if ( '' === $base ) {
+			$permalinks = get_option( 'woocommerce_permalinks', array() );
+			$base       = is_array( $permalinks ) && ! empty( $permalinks['product_base'] ) ? trim( (string) $permalinks['product_base'], '/' ) : '';
+		}
 		if ( '' === $base || false !== strpos( $base, '%' ) ) {
-			/* A category-based product permalink cannot be matched as a literal path. */
+			/* Unknown, or a category-based permalink that cannot be matched as a
+			 * literal path segment. Returning nothing keeps WordPress core's own
+			 * rules in charge (see upgrade_core_speculation). */
 			return array();
 		}
 		return array( '/' . $base . '/*' );
@@ -252,10 +264,13 @@ final class Delicat_Builder_V9_TurboNav {
 		if ( ! self::active() || empty( self::settings()['prerender'] ) || self::save_data_requested() ) {
 			return $config;
 		}
-		if ( self::pro_navigation_active() ) {
-			/* Core's rules would prerender the very links the Pro engine swaps
-			 * as fragments. Switch Core off; print_speculation_rules() prints
-			 * the product-only set instead. */
+		if ( self::pro_navigation_active() && ! empty( self::prerender_targets() ) ) {
+			/* Core's rules would prerender the very links the Pro engine swaps as
+			 * fragments. Switch Core off — but only when this module can actually
+			 * print the product-only replacement. Disabling core unconditionally
+			 * left stores whose product permalink cannot be matched (a
+			 * category-based base, or a lost woocommerce_permalinks option) with
+			 * no speculative loading at all and nothing to say so. */
 			return null;
 		}
 		if ( is_array( $config ) ) {

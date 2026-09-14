@@ -80,7 +80,7 @@ return array(
  'assets/js/design-product.js' => 'assets/js/design-product.97edbc14de2d.js',
  'assets/js/drawer.js' => 'assets/js/drawer.2284ffbe86a0.js',
  'assets/js/editor.js' => 'assets/js/editor.950970965bf0.js',
- 'assets/js/express-checkout.js' => 'assets/js/express-checkout.e9c436e36db9.js',
+ 'assets/js/express-checkout.js' => 'assets/js/express-checkout.4056821c725c.js',
  'assets/js/heart.js' => 'assets/js/heart.fa4066262ab3.js',
  'assets/js/hero-search.js' => 'assets/js/hero-search.5d2a0b5c3481.js',
  'assets/js/islands.js' => 'assets/js/islands.de1303afca0a.js',
@@ -115,7 +115,7 @@ return array(
  'modules/product-fields/assets/js/calc-front.js' => 'modules/product-fields/assets/js/calc-front.b715a9b757a4.js',
  'pro/assets/dbp-app.css' => 'pro/assets/dbp-app.7a879c9be0ba.css',
  'pro/assets/dbp-critical.css' => 'pro/assets/dbp-critical.fe8be8e23362.css',
- 'pro/assets/dbp-nav.js' => 'pro/assets/dbp-nav.830d7dce8b8d.js',
+ 'pro/assets/dbp-nav.js' => 'pro/assets/dbp-nav.417eec821e35.js',
  'pro/assets/dbp-state.js' => 'pro/assets/dbp-state.3d92762ed0b8.js',
  'pro/assets/dbp-type.css' => 'pro/assets/dbp-type.b55df9990c0e.css',
 );

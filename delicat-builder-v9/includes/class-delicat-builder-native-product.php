@@ -131,6 +131,18 @@ final class Delicat_Builder_V9_Native_Product {
 	 */
 	public static function is_digital_product( $product ): bool {
 		if ( ! $product instanceof WC_Product ) { return false; }
+		/* Called three times per product render (compact quantity, the delivery
+		 * badge, and hide_quantity() through woocommerce_quantity_input_args); for
+		 * a variable product each call constructed up to 40 child products. */
+		static $memo = array();
+		$memo_key = (int) $product->get_id();
+		if ( $memo_key > 0 && array_key_exists( $memo_key, $memo ) ) { return $memo[ $memo_key ]; }
+		$answer = self::resolve_digital_product( $product );
+		if ( $memo_key > 0 ) { $memo[ $memo_key ] = $answer; }
+		return $answer;
+	}
+
+	private static function resolve_digital_product( WC_Product $product ): bool {
 		if ( $product->is_virtual() || $product->is_downloadable() ) { return true; }
 		if ( $product->is_type( 'variable' ) ) {
 			$children = (array) $product->get_children();
@@ -268,7 +280,7 @@ final class Delicat_Builder_V9_Native_Product {
 			 * original attachment URL; a resized (-1200x675), "-scaled" or external
 			 * URL silently fell back to the product image. Keep the attachment path
 			 * when it resolves (responsive srcset), otherwise print the URL itself. */
-			$hero_id = (int) attachment_url_to_postid( (string) $m['hero_image'] );
+			$hero_id = self::attachment_for_url( (string) $m['hero_image'] );
 			if ( $hero_id > 0 ) { $image_id = $hero_id; } else { $hero_url = esc_url( (string) $m['hero_image'] ); }
 		}
 		$identity_image_id = $product->get_image_id();
@@ -292,7 +304,7 @@ final class Delicat_Builder_V9_Native_Product {
 			<?php if ( ! empty($s['show_breadcrumbs']) ) : ?><nav class="dnp-breadcrumb"><?php woocommerce_breadcrumb(array('delimiter'=>'<span>›</span>')); ?></nav><?php endif; ?>
 			<section class="dnp-hero">
 				<div class="dnp-media">
-					<?php if('' !== $hero_url) echo '<img class="dnp-image" src="'.esc_url($hero_url).'" alt="'.esc_attr($title).'" loading="eager" fetchpriority="high" decoding="async">'; elseif($image_id) echo wp_get_attachment_image($image_id,'large',false,array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async','sizes'=>'(max-width:767px) 100vw, 520px','alt'=>$title)); else echo $product->get_image('large',array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async')); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php if('' !== $hero_url) echo '<img class="dnp-image" src="'.esc_url($hero_url).'" alt="'.esc_attr($title).'" width="1200" height="675" sizes="(max-width:767px) 100vw, 520px" loading="eager" fetchpriority="high" decoding="async">'; elseif($image_id) echo wp_get_attachment_image($image_id,'large',false,array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async','sizes'=>'(max-width:767px) 100vw, 520px','alt'=>$title)); else echo $product->get_image('large',array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async')); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 				<div class="dnp-summary">
 					<div class="dnp-identity">
@@ -328,6 +340,36 @@ final class Delicat_Builder_V9_Native_Product {
 		<?php if(!empty($s['show_mobile_dock'])): ?><div class="dnp-mobile-dock" data-dnp-dock data-product-id="<?php echo esc_attr($id); ?>" hidden><div class="dnp-dock-price"><small>Total</small><strong data-dnp-dock-price><?php echo $variable?'Choisissez une option':wp_kses_post(wp_strip_all_tags($product->get_price_html())); ?></strong></div><button type="button" data-dnp-proxy="add"><?php echo esc_html($s['add_text']); ?></button><button type="button" class="is-buy" data-dnp-proxy="buy"><?php echo esc_html($s['buy_text']); ?></button></div><?php endif; ?>
 		<?php
 		$html=(string)ob_get_clean(); wp_reset_postdata(); $post=$old_post; $GLOBALS['product']=$old_product; return $html;
+	}
+
+	/**
+	 * Resolve a banner URL to its attachment, including the resized and "-scaled"
+	 * variants a merchant actually copies out of the media library. Without this an
+	 * attachment the site already owns was treated as an external URL, which cost
+	 * the page its srcset and shipped the full-size original as the LCP image.
+	 */
+	private static function attachment_for_url( string $url ): int {
+		$url = trim( $url );
+		if ( '' === $url ) { return 0; }
+		$id = (int) attachment_url_to_postid( $url );
+		if ( $id > 0 ) { return $id; }
+		$candidates = array();
+		/* product-1200x675.jpg -> product.jpg */
+		$stripped = preg_replace( '/-\d+x\d+(?=\.[A-Za-z0-9]{2,5}(?:$|\?))/', '', $url );
+		if ( is_string( $stripped ) && $stripped !== $url ) { $candidates[] = $stripped; }
+		/* product-scaled.jpg -> product.jpg, and the reverse, since WordPress stores
+		 * the scaled file for large uploads but reports the original URL. */
+		foreach ( array_merge( array( $url ), $candidates ) as $base ) {
+			$unscaled = preg_replace( '/-scaled(?=\.[A-Za-z0-9]{2,5}(?:$|\?))/', '', (string) $base );
+			if ( is_string( $unscaled ) && $unscaled !== $base ) { $candidates[] = $unscaled; }
+			$scaled = preg_replace( '/(\.[A-Za-z0-9]{2,5})(?:$|\?)/', '-scaled$1', (string) $base );
+			if ( is_string( $scaled ) && $scaled !== $base ) { $candidates[] = $scaled; }
+		}
+		foreach ( array_unique( $candidates ) as $candidate ) {
+			$id = (int) attachment_url_to_postid( $candidate );
+			if ( $id > 0 ) { return $id; }
+		}
+		return 0;
 	}
 
 	private static function render_important( array $m ): void {
