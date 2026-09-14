@@ -38,7 +38,7 @@ final class Delicat_Builder_V9_Audit_Fixes {
  }
  public static function script_exclusions( $list ): array {
   $list = is_array( $list ) ? $list : array();
-  return array_values( array_unique( array_merge( $list, array( 'DelicatSessionConfig', 'DelicatExpress', 'DIPIdentityModal', 'DelicaBuilderV9', 'DelicatShell', 'DBPNavConfig', 'DBPStateConfig', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dbv9-speculation', '/delicat-builder-v9/', '/delicat-identity-pro/assets/' ) ) ) );
+  return array_values( array_unique( array_merge( $list, array( 'DelicatSessionConfig', 'DIPIdentityModal', 'DelicaBuilderV9', 'DelicatShell', 'DBPNavConfig', 'DBPStateConfig', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dbv9-speculation', '/delicat-builder-v9/', '/delicat-identity-pro/assets/' ) ) ) );
  }
  public static function inline_attributes( $attributes ): array {
   if ( preg_match( '/^(delicat-|delica-|dbp-|dbv9-|dip-)/', (string) ( $attributes['id'] ?? '' ) ) ) {
@@ -85,7 +85,7 @@ final class Delicat_Builder_V9_Audit_Fixes {
   }
   if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) { return $html; }
   $p = new WP_HTML_Tag_Processor( $html );
-  $boots = array( 'delicat-builder-v9-session-js-before', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'delicat-builder-v9-express-js-before', 'dip-identity-modal-v4-js-extra', 'dbp-nav-js-before', 'dbp-state-js-before' );
+  $boots = array( 'delicat-builder-v9-session-js-before', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dip-identity-modal-v4-js-extra', 'dbp-nav-js-before', 'dbp-state-js-before' );
   while ( $p->next_tag() ) {
    $tag = $p->get_tag();
    if ( 'SCRIPT' === $tag || 'LINK' === $tag ) {

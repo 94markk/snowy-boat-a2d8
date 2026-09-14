@@ -93,7 +93,6 @@ final class DBP_Assets {
 			'delicat-direct-swatches'           => array( 'product' ),
 			'delicat-product-switcher'          => array( 'product' ),
 			'dmc-calc'                          => array( 'product' ),
-			'delicat-builder-v9-express'        => array( 'product', 'shop', 'archive' ),
 
 			/* Listing surfaces. */
 			'delicat-builder-v9-native-archive' => array( 'shop', 'archive', 'search' ),

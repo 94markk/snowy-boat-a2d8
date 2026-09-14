@@ -453,7 +453,7 @@ if ( $delicat_builder_v9_maintenance_on || $delicat_builder_v9_maintenance_previ
 $delicat_builder_v9_wc_ajax = isset( $_REQUEST['wc-ajax'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
 	? sanitize_key( delicat_builder_v9_request_scalar( $_REQUEST['wc-ajax'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
 	: '';
-if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review', 'delicat_express_pay' ), true ) ) {
+if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
 	if (
 		class_exists( 'Delicat_Builder_V9_Purchase_Native', false )
@@ -496,7 +496,7 @@ function delicat_builder_v9_maybe_upgrade_native_only(): bool {
 	 * gates changed. Legacy stamps convert once, then the stamp is retired.
 	 */
 	$schema = absint( get_option( 'delicat_builder_v9_schema', 0 ) );
-	if ( $schema >= 6 ) {
+	if ( $schema >= 7 ) {
 		return false;
 	}
 	if ( 0 === $schema && '' !== $native_only_version ) {
@@ -678,15 +678,53 @@ function delicat_builder_v9_maybe_upgrade_native_only(): bool {
 		update_option( 'delicat_builder_v9_purchase_ui', $purchase_toasts, false );
 	}
 
+	if ( $schema < 7 ) { /* step 7: pro.17 — free every customer the retired payment lock is still holding */
+		/*
+		 * The express payment module kept a durable per-customer mutex in wp_options
+		 * and released it only when an administrator ticked a box. Any customer whose
+		 * last attempt ended uncertainly is still locked out of checkout right now,
+		 * and the module that could release them has been deleted. Free them here, and
+		 * keep a copy of what was released so nothing is lost: these rows name a
+		 * customer and, where one was created, an order id, which is what anyone
+		 * reconciling a past payment would need.
+		 */
+		global $wpdb;
+		try {
+			$held = $wpdb->get_results(
+				"SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE 'delicat\\_payment\\_%' ORDER BY option_id ASC LIMIT 500"
+			);
+			if ( $held ) {
+				$archive = array();
+				foreach ( $held as $row ) {
+					$archive[] = array(
+						'name'  => (string) $row->option_name,
+						'value' => maybe_unserialize( $row->option_value ),
+					);
+				}
+				update_option(
+					'delicat_builder_v9_retired_payment_locks',
+					array( 'retired' => gmdate( 'c' ), 'count' => count( $archive ), 'rows' => array_slice( $archive, 0, 200 ) ),
+					false
+				);
+				foreach ( $held as $row ) {
+					delete_option( (string) $row->option_name );
+				}
+			}
+		} catch ( Throwable $delicat_builder_v9_lock_error ) {
+			unset( $delicat_builder_v9_lock_error );
+		}
+		wp_clear_scheduled_hook( 'delicat_builder_v9_payment_cleanup' );
+	}
+
 	if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'bump_version' ) ) ) {
 		Delicat_Builder_V9_Cache::bump_version();
 	}
 	do_action( 'litespeed_purge_all' );
 
 	/* Keep emergency Safe Mode as-is; the Woo-native presentation is now safe-mode resilient. */
-	update_option( 'delicat_builder_v9_schema', 6, true );
+	update_option( 'delicat_builder_v9_schema', 7, true );
 	/* Legacy stamp kept readable for older-build rollbacks; no longer authoritative. */
-	update_option( 'delicat_builder_v9_native_only_version', 'schema-6', false );
+	update_option( 'delicat_builder_v9_native_only_version', 'schema-7', false );
 	return true;
 }
 
@@ -1169,141 +1207,21 @@ add_filter(
 );
 
 /*
- * Express checkout (RC24 transport). The product form is posted by fetch()
- * through WooCommerce's own classic add-to-cart handler (same validation,
- * product fields, variations and notices as a real submit) with dpn_express=1.
+ * pro.17: the express payment transport is gone.
  *
- *  - Accepted: WooCommerce asks where to redirect; the answer is a JSON body
- *    written right there (no 302, no second request, nothing a proxy or WAF
- *    can rewrite on the way).
- *  - Refused: WooCommerce's own error notices are returned as JSON so the
- *    product page can show them next to the button.
- *  - The sheet then loads WooCommerce's real checkout form (fields, gateway,
- *    terms, process-checkout nonce) from `wc-ajax=delicat_express_form`, and
- *    Continue opens the normal WooCommerce checkout. Only its native form
- *    and configured gateway can submit payment.
+ * It was a custom wc-ajax endpoint that called WC_Checkout directly, guarded by a
+ * durable per-customer mutex in wp_options. The merchant asked for the opposite:
+ * when a customer has no funds, decline the payment and let WooCommerce and
+ * WordPress run everything. "Acheter maintenant" is a plain submit inside
+ * form.cart, so with this layer removed it posts to WooCommerce's own add-to-cart
+ * handler and the filter above redirects it to the real checkout, which is also
+ * exactly what happened with JavaScript disabled.
+ *
+ * Removed with it: delicat_builder_v9_express_request(), the two wp_loaded guards,
+ * the woocommerce_add_to_cart_redirect JSON short-circuit, and the
+ * wc_ajax_delicat_express_form endpoint that rendered a signed-in customer's
+ * checkout fields and process-checkout nonce into a fetch response.
  */
-/* Express requires a same-origin POST and a logged-in WordPress nonce.
- * Invalid flagged requests stop before WooCommerce mutates the cart. */
-function delicat_builder_v9_express_request(): bool {
-	if ( empty( $_REQUEST['dpn_express'] ) || 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		return false;
-	}
-	$site = isset( $_SERVER['HTTP_SEC_FETCH_SITE'] ) ? strtolower( sanitize_key( (string) $_SERVER['HTTP_SEC_FETCH_SITE'] ) ) : '';
-	return '' === $site || in_array( $site, array( 'same-origin', 'none' ), true );
-}
-add_filter(
-	'woocommerce_add_to_cart_redirect',
-	static function ( $url ) {
-		if ( ! delicat_builder_v9_express_request() ) {
-			return $url;
-		}
-		nocache_headers();
-		if ( ! headers_sent() ) {
-			header( 'X-Content-Type-Options: nosniff' );
-		}
-		$count = ( function_exists( 'WC' ) && is_object( WC() ) && is_object( WC()->cart ) ) ? (int) WC()->cart->get_cart_contents_count() : 0;
-		wp_send_json( array( 'success' => true, 'count' => $count ) );
-		return $url; // unreachable; wp_send_json() ends the request.
-	},
-	PHP_INT_MAX
-);
-/* Validate the custom express transport before WooCommerce's handler at 20.
- * Never remove/replace cart lines before WooCommerce validates the new item. */
-add_action( 'wp_loaded', static function (): void {
-	if ( ! isset( $_REQUEST['dpn_express'] ) ) { return; }
-	$nonce = isset( $_POST['_delicat_express_nonce'] ) && is_string( $_POST['_delicat_express_nonce'] ) ? wp_unslash( $_POST['_delicat_express_nonce'] ) : '';
-	if ( ! delicat_builder_v9_express_request() || ! is_ssl() || ! is_user_logged_in() || ! wp_verify_nonce( $nonce, 'delicat_express_add' ) ) {
-		nocache_headers();
-		wp_send_json( array( 'success' => false, 'messages' => array( 'Session expirée. Rechargez la page sécurisée.' ) ), 403 );
-	}
-}, 18 );
-add_action(
-	'wp_loaded',
-	static function (): void {
-		/* WooCommerce's handler runs at wp_loaded:20; reaching this point means it did not accept the item. */
-		if ( ! delicat_builder_v9_express_request() || ! isset( $_REQUEST['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			return;
-		}
-		$messages = array();
-		if ( function_exists( 'wc_get_notices' ) ) {
-			foreach ( (array) wc_get_notices( 'error' ) as $notice ) {
-				$text = is_array( $notice ) ? (string) ( $notice['notice'] ?? '' ) : (string) $notice;
-				$text = trim( wp_strip_all_tags( $text ) );
-				if ( '' !== $text ) {
-					$messages[] = $text;
-				}
-			}
-			if ( function_exists( 'wc_clear_notices' ) ) {
-				wc_clear_notices();
-			}
-		}
-		nocache_headers();
-		if ( ! headers_sent() ) {
-			header( 'X-Content-Type-Options: nosniff' );
-		}
-		wp_send_json( array( 'success' => false, 'messages' => $messages ) );
-	},
-	25
-);
-add_action(
-	'wc_ajax_delicat_express_form',
-	static function (): void {
-		nocache_headers();
-		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
-			define( 'DONOTCACHEPAGE', true );
-		}
-		do_action( 'litespeed_control_set_nocache', 'Delicat Builder express form' );
-		if ( ! headers_sent() ) {
-			header( 'X-Content-Type-Options: nosniff' );
-			header( 'X-Robots-Tag: noindex, nofollow', true );
-		}
-		/* The form carries the signed-in client's details and checkout nonce:
-		 * same-site requests only, signed-in only, and throttled. */
-		$fetch_site = isset( $_SERVER['HTTP_SEC_FETCH_SITE'] ) ? strtolower( sanitize_key( (string) $_SERVER['HTTP_SEC_FETCH_SITE'] ) ) : '';
-		if ( '' !== $fetch_site && ! in_array( $fetch_site, array( 'same-origin', 'none' ), true ) ) {
-			status_header( 403 );
-			exit;
-		}
-		if ( ! is_ssl() || ! is_user_logged_in() ) {
-			status_header( 403 );
-			exit;
-		}
-		if (
-			class_exists( 'Delicat_Builder_V9_Security', false )
-			&& is_callable( array( 'Delicat_Builder_V9_Security', 'rate_limit_allowed' ) )
-			&& ! Delicat_Builder_V9_Security::rate_limit_allowed( 'express_form_' . get_current_user_id(), 40, 60 )
-		) {
-			status_header( 429 );
-			exit;
-		}
-		if ( ! class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) ) {
-			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
-		}
-		$html = '';
-		if (
-			class_exists( 'Delicat_Builder_V9_Purchase_Native', false )
-			&& is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'express_supported' ) )
-			&& is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'render_express_form' ) )
-		) {
-			try {
-				if ( Delicat_Builder_V9_Purchase_Native::express_supported() ) {
-					Delicat_Builder_V9_Purchase_Native::boot();
-					Delicat_Builder_V9_Purchase_Native::mark_express();
-					$html = (string) Delicat_Builder_V9_Purchase_Native::render_express_form();
-				}
-			} catch ( Throwable $error ) {
-				unset( $error );
-				$html = '';
-			}
-		}
-		if ( ! headers_sent() ) {
-			header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
-		}
-		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WooCommerce's own checkout template output.
-		exit;
-	}
-);
 
 /*
  * RC28: Builder's stylesheets and scripts are excluded from LiteSpeed Cache's
@@ -1458,7 +1376,7 @@ add_action(
 );
 
 /*
- * pro.16: these two PRO14 modules were the only files pulled in with a bare
+ * pro.16: this PRO14 module was the only file pulled in with a bare
  * require_once — on every request, including plugin activation and Safe Mode,
  * and outside the guarded loader every other module goes through. A damaged
  * upload of either file would have fataled every request without the
@@ -1467,6 +1385,5 @@ add_action(
  * during the activation sandbox, which parses no class files by design.
  */
 if ( ! $delicat_builder_v9_activating ) {
-	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-express-payment.php' );
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-audit-fixes.php' );
 }

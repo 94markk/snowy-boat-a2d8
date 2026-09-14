@@ -19,7 +19,6 @@ final class Delicat_Builder_V9_Purchase_Native {
 	private static bool $checkout_shell            = false;
 	private static bool $checkout_block            = false;
 	private static bool $checkout_request          = false;
-	private static bool $express                   = false;
 	private static bool $context_resolved          = false;
 	private static bool $cart_heading_rendered     = false;
 	private static bool $checkout_heading_rendered = false;
@@ -180,7 +179,7 @@ final class Delicat_Builder_V9_Purchase_Native {
 		);
 	}
 
-	/** RC20: the balance guard (sheet + interceptor) is shared by the checkout page and the express sheet. */
+	/** The wallet balance guard on the checkout page: markup plus the interceptor script. */
 	public static function enqueue_wallet_guard(): void {
 		if ( ! is_user_logged_in() ) {
 			return;
@@ -223,7 +222,7 @@ final class Delicat_Builder_V9_Purchase_Native {
 	 */
 	public static function wallet_modal(): void {
 		self::ensure_context();
-		if ( ! is_user_logged_in() || ( ! self::$express && ( ! self::$checkout_shell || self::$checkout_block ) ) ) {
+		if ( ! is_user_logged_in() || ! self::$checkout_shell || self::$checkout_block ) {
 			return;
 		}
 		?>
@@ -253,70 +252,15 @@ final class Delicat_Builder_V9_Purchase_Native {
 		self::$checkout_request = true;
 	}
 
-	/* ------------------------------------------------------------------ */
-	/* RC20 express checkout (product page sheet)                          */
-	/* ------------------------------------------------------------------ */
-
-	/** The express sheet reuses the checkout contract; flag it so shared markup renders. */
-	public static function mark_express(): void {
-		self::$express          = true;
-		self::$checkout_request = true;
-	}
-
-	public static function express_active(): bool {
-		return self::$express;
-	}
-
+	/*
+	 * pro.17: the RC20 express sheet and its helpers (mark_express, express_active,
+	 * express_presentation_css, render_express_form) are gone with the rest of the
+	 * express transport. Their only caller was the deleted express-checkout module.
+	 * express_supported() stays because the product editor's diagnostics panel reads
+	 * it to explain the purchase configuration.
+	 */
 	public static function express_supported(): bool {
 		return self::studio_enabled() && ! empty( self::settings()['native_checkout'] );
-	}
-
-	/** Same accent/action variables as the checkout page, scoped to the express document. */
-	public static function express_presentation_css(): string {
-		return self::presentation_css( 'body.dnp-express-enabled' );
-	}
-
-	/**
-	 * WooCommerce's real checkout form (checkout/form-checkout.php with the
-	 * store's fields, gateways, terms, nonce and place-order button) for the
-	 * express sheet. Only presentation hooks that belong to the full checkout
-	 * page are stood down while it renders: the coupon form, the login form
-	 * and the page-level notice dump.
-	 */
-	public static function render_express_form(): string {
-		if ( ! is_user_logged_in() || ! function_exists( 'WC' ) || ! function_exists( 'wc_get_template' ) ) {
-			return '';
-		}
-		$wc = WC();
-		if ( ! is_object( $wc ) || ! is_object( $wc->cart ) || ! is_callable( array( $wc, 'checkout' ) ) ) {
-			return '';
-		}
-		self::mark_express();
-		$stood_down = array();
-		foreach ( array( 'woocommerce_checkout_coupon_form', 'woocommerce_checkout_login_form', 'woocommerce_output_all_notices' ) as $callback ) {
-			$priority = has_action( 'woocommerce_before_checkout_form', $callback );
-			if ( false !== $priority ) {
-				remove_action( 'woocommerce_before_checkout_form', $callback, (int) $priority );
-				$stood_down[ $callback ] = (int) $priority;
-			}
-		}
-		$html = '';
-		ob_start();
-		try {
-			if ( is_callable( array( $wc->cart, 'is_empty' ) ) && ! $wc->cart->is_empty() && is_callable( array( $wc->cart, 'calculate_totals' ) ) ) {
-				$wc->cart->calculate_totals();
-			}
-			wc_get_template( 'checkout/form-checkout.php', array( 'checkout' => $wc->checkout() ) );
-			$html = (string) ob_get_clean();
-		} catch ( Throwable $error ) {
-			ob_end_clean();
-			unset( $error );
-			$html = '';
-		}
-		foreach ( $stood_down as $callback => $priority ) {
-			add_action( 'woocommerce_before_checkout_form', $callback, $priority );
-		}
-		return $html;
 	}
 
 	private static function settings(): array {

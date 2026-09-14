@@ -100,20 +100,24 @@ final class Delicat_Builder_V9_Native_Product {
 		);
 	}
 
+	/**
+	 * pro.17: the express sheet is retired. WooCommerce owns the purchase.
+	 *
+	 * "Acheter maintenant" is a plain submit inside form.cart, so it now posts to
+	 * WooCommerce's own add-to-cart handler and is redirected to the real checkout
+	 * by the filter in the bootstrap. That is the same path the button already took
+	 * whenever JavaScript was unavailable, so nothing about the product form, its
+	 * custom fields or the supplier Player ID changes: those are captured
+	 * server-side by modules/product-fields on the ordinary add-to-cart hooks.
+	 *
+	 * The method stays so the product editor's diagnostics panel still explains
+	 * itself rather than reporting nothing at all.
+	 */
 	public static function prepare_express(): void {
 		if ( is_admin() || wp_doing_ajax() || ! function_exists( 'is_product' ) || ! is_product() ) return;
 		$id = absint( get_queried_object_id() );
 		if ( $id <= 0 || ! self::is_active_product( $id ) ) return;
-		if ( ! self::express_enabled_for( $id ) ) { self::record_express( $id, 'off', 'Commande express désactivée pour ce produit.' ); return; }
-		if ( ! is_user_logged_in() ) { self::record_express( $id, 'guest', 'Visiteur non connecté : la page checkout normale est utilisée.' ); return; }
-		if ( ! class_exists( 'Delicat_Builder_V9_Express_Checkout', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
-			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-express-checkout.php' );
-		}
-		if ( ! class_exists( 'Delicat_Builder_V9_Express_Checkout', false ) ) {
-			self::record_express( $id, 'missing', 'Le module express n’a pas pu être chargé.' );
-			return;
-		}
-		Delicat_Builder_V9_Express_Checkout::boot_for_product( $id );
+		self::record_express( $id, 'off', 'La commande express est retirée : WooCommerce gère le paiement.' );
 	}
 
 	/**
