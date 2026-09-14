@@ -102,7 +102,7 @@ return array(
  'assets/js/reviews.js' => 'assets/js/reviews.a8a666867e0e.js',
  'assets/js/session.js' => 'assets/js/session.6a162f0efdc8.js',
  'assets/js/shell-admin.js' => 'assets/js/shell-admin.b8d356336d5e.js',
- 'assets/js/shell-nav.js' => 'assets/js/shell-nav.4b27b6a775d2.js',
+ 'assets/js/shell-nav.js' => 'assets/js/shell-nav.51e86f506d0b.js',
  'assets/js/shell.js' => 'assets/js/shell.5230c2c6b326.js',
  'assets/js/storefront-commerce.js' => 'assets/js/storefront-commerce.86fe14fac2f0.js',
  'assets/js/swatch-product-admin.js' => 'assets/js/swatch-product-admin.7d00db0c3e8f.js',

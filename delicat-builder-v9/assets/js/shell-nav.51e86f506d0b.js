@@ -407,12 +407,38 @@
     doc.addEventListener('wheel', cancelRestore, { passive: true, once: true });
     doc.addEventListener('touchmove', cancelRestore, { passive: true, once: true });
     var restoreAttempts = 0;
+    var landedAt = -1;
     var restore = function () {
       if (userScrolled) return;
+
+      /*
+       * Has anything moved the page since our last attempt? If so it was the
+       * visitor, because content growing BELOW the viewport does not move the
+       * scroll position on its own.
+       *
+       * This is the check wheel and touchmove cannot make. Neither fires for a
+       * scrollbar drag or a keyboard, and neither fires for a finger that
+       * started scrolling before this script was listening - which is the
+       * ordinary case on a slow connection, where the markup arrives seconds
+       * before the script does. Measured without it: on a page still growing,
+       * a visitor who scrolled to 200px was thrown to 1400px a moment later.
+       *
+       * Standing down wrongly costs a restore. Restoring wrongly throws the
+       * page out from under someone who is reading it.
+       */
+      var y = (window.pageYOffset || 0);
+      var expected = landedAt >= 0 ? landedAt : 0;
+      if (Math.abs(y - expected) > 2 && Math.abs(y - arrivalScroll) > 2) {
+        userScrolled = true;
+        return;
+      }
+
       window.scrollTo(0, arrivalScroll);
+      landedAt = (window.pageYOffset || 0);
+
       /* Lazy images and web fonts can still grow the page after load; try a few
          more times until the position is reachable or the visitor takes over. */
-      if (++restoreAttempts < 4 && Math.abs((window.pageYOffset || 0) - arrivalScroll) > 2) setTimeout(restore, 120 * restoreAttempts);
+      if (++restoreAttempts < 4 && Math.abs(landedAt - arrivalScroll) > 2) setTimeout(restore, 120 * restoreAttempts);
     };
     if (doc.readyState === 'complete') restore(); else window.addEventListener('load', restore, { once: true });
   }

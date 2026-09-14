@@ -26,6 +26,12 @@ things they cover cannot be reasoned about from the source alone:
   `DRAWER_JS=/path/to/drawer.js` runs the suite against a different build of the
   script, which is how these cases were checked against the one that shipped.
 
+- **shell-nav-test.cjs** — the scroll position a visitor comes back to. Asserts
+  that pressing Back restores it, including on a page still growing, and that a
+  visitor who has started reading is never thrown somewhere else by the restore
+  still retrying behind them. Uses real back/forward navigation: the restore
+  only acts on a navigation Chromium reports as `back_forward`.
+
 - **speculation-gate-test.cjs** — which speculation rules get registered on a
   fast connection and on a slow one.
 
@@ -33,6 +39,7 @@ Run them with a Chromium on the machine:
 
     NODE_PATH=/path/to/node_modules node tests/browser/checkout-sheet-test.cjs
     NODE_PATH=/path/to/node_modules node tests/browser/drawer-test.cjs
+    NODE_PATH=/path/to/node_modules node tests/browser/shell-nav-test.cjs
     NODE_PATH=/path/to/node_modules node tests/browser/speculation-gate-test.cjs
 
 They need `playwright` resolvable on NODE_PATH and a Chromium at the
