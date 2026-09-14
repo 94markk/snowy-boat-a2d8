@@ -1,0 +1,535 @@
+/* =============================================================================
+   06 - Storefront
+   -----------------------------------------------------------------------------
+   The commercial surfaces: the homepage's sections, the product page, and the
+   places where WooCommerce's own markup needs to be brought into the same
+   design system without being replaced.
+
+   That last part matters. V10 restyles WooCommerce; it never re-implements it.
+   The cart table is WooCommerce's cart table, the checkout form is WooCommerce's
+   checkout form, and every price, stock state and total on this page was
+   decided by WooCommerce. What is below is presentation, and if all of it were
+   deleted the store would still take orders correctly.
+   ============================================================================= */
+
+@layer components {
+
+  /* ---------------------------------------------------------------------
+     Hero
+     ------------------------------------------------------------------ */
+
+  .dlx-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: var(--dlx-space-sm);
+
+    min-height: 320px;
+    padding: var(--dlx-space-xl) var(--dlx-gutter);
+    border-radius: var(--dlx-radius-xl);
+    overflow: hidden;
+    isolation: isolate;
+
+    background: var(--dlx-sunken);
+    color: var(--dlx-ink);
+  }
+
+  .dlx-hero__bg {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+  }
+
+  .dlx-hero__bg img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Present only when there is a background image behind it: text over a photo
+     needs the contrast, text over a flat token colour already has it. */
+  .dlx-hero__scrim {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(180deg,
+      transparent 0%,
+      var(--dlx-scrim) 62%,
+      var(--dlx-scrim) 100%);
+  }
+
+  .dlx-hero:has(.dlx-hero__scrim) { color: var(--dlx-on-media); }
+  .dlx-hero:has(.dlx-hero__scrim) .dlx-hero__title,
+  .dlx-hero:has(.dlx-hero__scrim) .dlx-hero__sub { color: inherit; }
+
+  .dlx-hero__eyebrow {
+    font-size: var(--dlx-text-xs);
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.85;
+  }
+
+  .dlx-hero__title {
+    font-size: var(--dlx-text-3xl);
+    color: inherit;
+  }
+
+  .dlx-hero__sub {
+    max-width: 46ch;
+    font-size: var(--dlx-text-lg);
+    color: inherit;
+    opacity: 0.9;
+  }
+
+  .dlx-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--dlx-space-sm);
+    margin-top: var(--dlx-space-xs);
+  }
+
+  @media (min-width: 720px) {
+    .dlx-hero { min-height: 420px; }
+  }
+
+  /* ---------------------------------------------------------------------
+     Category chips
+     ------------------------------------------------------------------ */
+
+  .dlx-chips {
+    display: flex;
+    gap: var(--dlx-space-xs);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    margin-inline: calc(var(--dlx-gutter) * -1);
+    padding-inline: var(--dlx-gutter);
+    scrollbar-width: none;
+  }
+
+  .dlx-chips::-webkit-scrollbar { display: none; }
+
+  .dlx-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--dlx-space-2xs);
+    flex: 0 0 auto;
+
+    min-height: 40px;
+    padding-inline: var(--dlx-space-md);
+
+    border: 1px solid var(--dlx-line);
+    border-radius: var(--dlx-radius-full);
+    background: var(--dlx-surface);
+    color: var(--dlx-ink-soft);
+    font-size: var(--dlx-text-sm);
+    font-weight: 600;
+    white-space: nowrap;
+
+    transition: scale var(--dlx-t-instant) var(--dlx-ease-out);
+  }
+
+  .dlx-chip:active { scale: 0.95; }
+
+  .dlx-chip[aria-current="page"] {
+    border-color: transparent;
+    background: var(--dlx-brand);
+    color: var(--dlx-brand-ink);
+  }
+
+  /* ---------------------------------------------------------------------
+     Steps / how it works
+     ------------------------------------------------------------------ */
+
+  .dlx-steps {
+    display: grid;
+    gap: var(--dlx-space-sm);
+    /* Two across as soon as there is room for two, three when there is room
+       for three. No breakpoint decides this, so every width in between is
+       designed too - which is what V9's tablet was missing. */
+    grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  }
+
+  .dlx-step {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: var(--dlx-space-xs);
+    padding: var(--dlx-space-lg);
+    border: 1px solid var(--dlx-line-soft);
+    border-radius: var(--dlx-radius-lg);
+    background: var(--dlx-surface);
+  }
+
+  .dlx-step__n {
+    position: absolute;
+    inset-block-start: var(--dlx-space-sm);
+    inset-inline-end: var(--dlx-space-md);
+    font-size: var(--dlx-text-3xl);
+    font-weight: 800;
+    line-height: 1;
+    color: var(--dlx-line);
+  }
+
+  .dlx-step__icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-sunken);
+    color: var(--dlx-brand);
+  }
+
+  .dlx-step h3 {
+    padding-inline-end: var(--dlx-space-2xl);
+    font-size: var(--dlx-text-lg);
+  }
+
+  /* ---------------------------------------------------------------------
+     Trust strip
+     ------------------------------------------------------------------ */
+
+  .dlx-trust {
+    display: grid;
+    gap: var(--dlx-space-sm);
+    grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+    padding: var(--dlx-space-md);
+    border: 1px solid var(--dlx-line-soft);
+    border-radius: var(--dlx-radius-lg);
+    background: var(--dlx-surface);
+  }
+
+  .dlx-trust__item {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-xs);
+    min-width: 0;
+    font-size: var(--dlx-text-sm);
+    font-weight: 600;
+    color: var(--dlx-ink-soft);
+  }
+
+  .dlx-trust__item svg { flex: 0 0 20px; color: var(--dlx-brand); }
+
+  /* ---------------------------------------------------------------------
+     FAQ - a real <details>, so it works with JavaScript off
+     ------------------------------------------------------------------ */
+
+  .dlx-faq {
+    display: flex;
+    flex-direction: column;
+    gap: var(--dlx-space-xs);
+  }
+
+  .dlx-faq__item {
+    border: 1px solid var(--dlx-line-soft);
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-surface);
+    overflow: hidden;
+  }
+
+  .dlx-faq__item summary {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+    min-height: 56px;
+    padding: var(--dlx-space-sm) var(--dlx-space-md);
+    cursor: pointer;
+    font-weight: 650;
+    list-style: none;
+  }
+
+  .dlx-faq__item summary::-webkit-details-marker { display: none; }
+
+  .dlx-faq__item summary::after {
+    content: "";
+    flex: 0 0 auto;
+    width: 9px;
+    height: 9px;
+    margin-inline-start: auto;
+    border-right: 2px solid var(--dlx-ink-muted);
+    border-bottom: 2px solid var(--dlx-ink-muted);
+    rotate: 45deg;
+    transition: rotate var(--dlx-t-quick) var(--dlx-ease-out);
+  }
+
+  .dlx-faq__item[open] summary::after { rotate: -135deg; }
+
+  .dlx-faq__body {
+    padding: 0 var(--dlx-space-md) var(--dlx-space-md);
+    color: var(--dlx-ink-soft);
+  }
+
+  /* ---------------------------------------------------------------------
+     Product page
+     ------------------------------------------------------------------ */
+
+  .dlx-product-page {
+    display: grid;
+    gap: var(--dlx-space-lg);
+  }
+
+  @media (min-width: 1024px) {
+    .dlx-product-page {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: var(--dlx-space-2xl);
+      align-items: start;
+    }
+  }
+
+  .dlx-product-hero {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    border-radius: var(--dlx-radius-lg);
+    overflow: hidden;
+    background: var(--dlx-sunken);
+  }
+
+  .dlx-product-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .dlx-product-title { font-size: var(--dlx-text-2xl); }
+
+  .dlx-product-price {
+    display: flex;
+    align-items: baseline;
+    gap: var(--dlx-space-xs);
+    font-size: var(--dlx-text-2xl);
+    font-weight: 800;
+  }
+
+  .dlx-product-price del {
+    font-size: var(--dlx-text-lg);
+    font-weight: 500;
+    color: var(--dlx-ink-muted);
+  }
+
+  /* Variation choices as a grid of real radio inputs, so a keyboard and a
+     screen reader get a labelled group and the form submits without script. */
+  .dlx-options {
+    display: grid;
+    gap: var(--dlx-space-xs);
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
+    border: 0;
+    margin: 0;
+    padding: 0;
+  }
+
+  .dlx-option {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-height: 60px;
+    padding: var(--dlx-space-sm) var(--dlx-space-md);
+    border: 1.5px solid var(--dlx-line);
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-surface);
+    cursor: pointer;
+    transition: border-color var(--dlx-t-quick) var(--dlx-ease-out),
+                scale var(--dlx-t-instant) var(--dlx-ease-out);
+  }
+
+  .dlx-option:active { scale: 0.98; }
+
+  .dlx-option input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .dlx-option__name { font-size: var(--dlx-text-sm); font-weight: 650; line-height: 1.3; }
+  .dlx-option__price { font-size: var(--dlx-text-sm); color: var(--dlx-ink-muted); line-height: 1.3; }
+
+  .dlx-option:has(input:checked) {
+    border-color: var(--dlx-brand);
+    background: color-mix(in srgb, var(--dlx-brand) 7%, var(--dlx-surface));
+  }
+
+  .dlx-option:has(input:focus-visible) {
+    outline: 2px solid var(--dlx-brand);
+    outline-offset: 2px;
+  }
+
+  .dlx-option:has(input:disabled) {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  /* ---------------------------------------------------------------------
+     WooCommerce, brought into the system
+     ------------------------------------------------------------------ */
+
+  /* Notices. WooCommerce says what happened; V10 only decides how it looks.
+     A declined payment, an out-of-stock line and a coupon error all arrive
+     here, and all of them keep WooCommerce's own wording. */
+  .woocommerce-message,
+  .woocommerce-info,
+  .woocommerce-error,
+  .wc-block-components-notice-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--dlx-space-sm);
+    margin-block: var(--dlx-space-md);
+    padding: var(--dlx-space-md);
+    border: 1px solid var(--dlx-line);
+    border-inline-start: 3px solid var(--dlx-brand);
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-surface);
+    color: var(--dlx-ink-soft);
+    font-size: var(--dlx-text-sm);
+    list-style: none;
+  }
+
+  .woocommerce-error { border-inline-start-color: var(--dlx-danger); }
+  .woocommerce-message { border-inline-start-color: var(--dlx-positive); }
+
+  .woocommerce-error li,
+  .woocommerce-message li,
+  .woocommerce-info li { list-style: none; }
+
+  /* WooCommerce's own buttons, so the store has one button and not three. */
+  .woocommerce a.button,
+  .woocommerce button.button,
+  .woocommerce input.button,
+  .woocommerce #respond input#submit,
+  .wc-block-components-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding-inline: var(--dlx-space-lg);
+    border: 0;
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-sunken);
+    color: var(--dlx-ink);
+    font-size: var(--dlx-text-md);
+    font-weight: 650;
+    line-height: 1;
+    transition: scale var(--dlx-t-instant) var(--dlx-ease-out);
+  }
+
+  .woocommerce a.button:active,
+  .woocommerce button.button:active,
+  .woocommerce input.button:active { scale: 0.97; }
+
+  .woocommerce button.button.alt,
+  .woocommerce a.button.alt,
+  .woocommerce input.button.alt,
+  .woocommerce #place_order,
+  .wc-block-components-button:not([disabled]) {
+    background: var(--dlx-brand);
+    color: var(--dlx-brand-ink);
+  }
+
+  /* The cart, as a list of cards on a phone and a table on a desktop. A table
+     that keeps its columns at 390px wide is the single most common reason a
+     mobile cart feels broken. */
+  @media (max-width: 719px) {
+    .woocommerce-cart-form__contents,
+    .woocommerce-cart-form__contents tbody,
+    .woocommerce-cart-form__contents tr,
+    .woocommerce-cart-form__contents td {
+      display: block;
+      width: 100%;
+    }
+
+    .woocommerce-cart-form__contents thead { display: none; }
+
+    .woocommerce-cart-form__cart-item {
+      position: relative;
+      margin-bottom: var(--dlx-space-sm);
+      padding: var(--dlx-space-sm);
+      border: 1px solid var(--dlx-line-soft);
+      border-radius: var(--dlx-radius-lg);
+      background: var(--dlx-surface);
+    }
+
+    .woocommerce-cart-form__contents td { border: 0; padding: var(--dlx-space-2xs) 0; }
+    .woocommerce-cart-form__contents td.product-thumbnail { max-width: 84px; }
+    .woocommerce-cart-form__contents td.product-thumbnail img { border-radius: var(--dlx-radius-md); }
+  }
+
+  .cart_totals,
+  .woocommerce-checkout-review-order {
+    padding: var(--dlx-space-md);
+    border: 1px solid var(--dlx-line-soft);
+    border-radius: var(--dlx-radius-lg);
+    background: var(--dlx-surface);
+  }
+
+  /* Payment methods as tappable rows. WooCommerce renders the radio and the
+     label; this only gives them the reach and the target a thumb needs. */
+  .woocommerce-checkout #payment ul.payment_methods {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    list-style: none;
+  }
+
+  .woocommerce-checkout #payment ul.payment_methods li {
+    margin-bottom: var(--dlx-space-xs);
+    padding: var(--dlx-space-sm) var(--dlx-space-md);
+    border: 1.5px solid var(--dlx-line);
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-surface);
+  }
+
+  .woocommerce-checkout #payment ul.payment_methods li:has(input:checked) {
+    border-color: var(--dlx-brand);
+  }
+
+  .woocommerce-checkout #payment ul.payment_methods label {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-xs);
+    min-height: 40px;
+    font-weight: 600;
+  }
+
+  .woocommerce-checkout #payment div.payment_box {
+    margin-top: var(--dlx-space-xs);
+    padding: var(--dlx-space-sm);
+    border-radius: var(--dlx-radius-sm);
+    background: var(--dlx-sunken);
+    color: var(--dlx-ink-soft);
+    font-size: var(--dlx-text-sm);
+  }
+
+  .woocommerce-checkout #payment div.payment_box::before { display: none; }
+
+  /* An insufficient wallet balance arrives here, as a WooCommerce notice on a
+     WooCommerce gateway, and is styled like any other decline. There is no
+     V10 code in that path at all - which is the point. */
+
+  /* ---------------------------------------------------------------------
+     Empty states
+     ------------------------------------------------------------------ */
+
+  .dlx-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+    padding: var(--dlx-space-3xl) var(--dlx-gutter);
+    text-align: center;
+  }
+
+  .dlx-empty__icon {
+    display: grid;
+    place-items: center;
+    width: 64px;
+    height: 64px;
+    border-radius: var(--dlx-radius-full);
+    background: var(--dlx-sunken);
+    color: var(--dlx-ink-muted);
+  }
+
+  .dlx-empty h2 { font-size: var(--dlx-text-xl); }
+  .dlx-empty p { max-width: 34ch; }
+}

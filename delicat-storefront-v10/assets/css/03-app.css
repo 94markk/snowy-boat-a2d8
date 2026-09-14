@@ -1,0 +1,282 @@
+/* =============================================================================
+   03 — The app shell
+   -----------------------------------------------------------------------------
+   The chrome a customer never sees reload: a header, a tab bar, and the content
+   between them. Three rules matter here and the rest is detail.
+
+   1. The band is DERIVED. `--dlx-band` is how much of the bottom of the screen
+      is currently covered by fixed chrome. It starts at zero and each piece of
+      chrome that exists adds exactly its own height. Nothing types a total.
+      Anything needing clearance writes `padding-bottom: var(--dlx-band)` and is
+      correct at every width, in every combination, permanently.
+
+   2. The chrome is marked with view-transition-name, so when the browser
+      animates between two documents it recognises the header on the old page
+      and the header on the new page as the same object and holds it still while
+      the content crossfades. That is what "the chrome never reloads" means here
+      — not a JavaScript router keeping it alive, but the browser being told
+      what is the same.
+
+   3. Touch feedback is immediate and local. A tap scales its own target within
+      90ms. Nothing waits for the network to confirm anything.
+   ============================================================================= */
+
+@layer layout {
+
+  /* ---------------------------------------------------------------------
+     The band
+     ------------------------------------------------------------------ */
+
+  /* PHP states what it rendered; CSS derives the size from the tokens. Neither
+     side holds a number the other could disagree with. */
+  body.dlx-has-tabbar { --dlx-band: calc(var(--dlx-tabbar-h) + var(--dlx-safe-b)); }
+  body.dlx-has-dock   { --dlx-band: calc(var(--dlx-tabbar-h) + var(--dlx-dock-h) + var(--dlx-safe-b)); }
+
+  /* On a desktop the bottom bars do not exist, so the band collapses and the
+     page reclaims the space. One statement, not fifteen. */
+  @media (min-width: 1024px) {
+    body.dlx-has-tabbar,
+    body.dlx-has-dock { --dlx-band: 0px; }
+  }
+
+  /* ---------------------------------------------------------------------
+     Frame
+     ------------------------------------------------------------------ */
+
+  .dlx-app {
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
+    min-height: 100dvh;
+  }
+
+  .dlx-main {
+    flex: 1 1 auto;
+    /* The one place page clearance is expressed. */
+    padding-bottom: var(--dlx-band);
+  }
+
+  .dlx-shell-width {
+    width: 100%;
+    max-width: 1180px;
+    margin-inline: auto;
+    padding-inline: var(--dlx-gutter);
+  }
+
+  /* ---------------------------------------------------------------------
+     Header
+     ------------------------------------------------------------------ */
+
+  .dlx-header {
+    position: sticky;
+    top: 0;
+    z-index: var(--dlx-z-header);
+
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+
+    height: calc(var(--dlx-header-h) + var(--dlx-safe-t));
+    padding-top: var(--dlx-safe-t);
+    padding-inline: var(--dlx-gutter);
+
+    background: color-mix(in srgb, var(--dlx-surface) 82%, transparent);
+    border-bottom: 1px solid var(--dlx-line-soft);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+
+    -webkit-user-select: none;
+    user-select: none;
+
+    /* Named for the view transition: the browser holds this still across a
+       navigation instead of crossfading it with a copy of itself. */
+    view-transition-name: dlx-header;
+  }
+
+  /* A browser without backdrop-filter gets an opaque bar rather than unreadable
+     text over moving content. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .dlx-header { background: var(--dlx-surface); }
+  }
+
+  .dlx-header__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-xs);
+    min-width: 0;
+    margin-inline-end: auto;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .dlx-header__brand img { max-height: 32px; width: auto; }
+
+  .dlx-header__name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--dlx-text-lg);
+  }
+
+  .dlx-header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-2xs);
+  }
+
+  /* ---------------------------------------------------------------------
+     Tab bar
+     ------------------------------------------------------------------ */
+
+  .dlx-tabbar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: var(--dlx-z-tabbar);
+
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    align-items: stretch;
+
+    height: calc(var(--dlx-tabbar-h) + var(--dlx-safe-b));
+    padding-bottom: var(--dlx-safe-b);
+
+    background: color-mix(in srgb, var(--dlx-surface) 86%, transparent);
+    border-top: 1px solid var(--dlx-line-soft);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+
+    -webkit-user-select: none;
+    user-select: none;
+
+    view-transition-name: dlx-tabbar;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .dlx-tabbar { background: var(--dlx-surface); }
+  }
+
+  /* A tablet gets a bar sized to a thumb's reach, not stretched to the bezels.
+     V9 pinned it to both edges at every width, so a 768px tablet showed a
+     744px-wide pill with its five items at the far corners. */
+  @media (min-width: 560px) {
+    .dlx-tabbar {
+      inset-inline: 50% auto;
+      translate: -50% 0;
+      width: min(calc(100% - (var(--dlx-gutter) * 2)), 460px);
+      margin-bottom: var(--dlx-space-sm);
+      border: 1px solid var(--dlx-line-soft);
+      border-radius: var(--dlx-radius-xl);
+      box-shadow: var(--dlx-shadow-lg);
+    }
+  }
+
+  /* Above this width the customer has a pointer and a wide window; the bottom
+     bar is phone furniture and is removed rather than restyled. */
+  @media (min-width: 1024px) {
+    .dlx-tabbar { display: none; }
+  }
+
+  .dlx-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+
+    min-height: 48px;
+    padding: var(--dlx-space-2xs) 2px;
+
+    color: var(--dlx-ink-muted);
+    font-size: var(--dlx-text-xs);
+    font-weight: 600;
+    line-height: 1;
+    text-align: center;
+
+    /* Native feel: the target responds to the finger in under a tenth of a
+       second, before any navigation has begun. */
+    transition: color var(--dlx-t-instant) var(--dlx-ease-out),
+                scale var(--dlx-t-instant) var(--dlx-ease-out);
+  }
+
+  .dlx-tab__icon {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+  }
+
+  .dlx-tab__icon svg { width: 22px; height: 22px; }
+
+  .dlx-tab:active { scale: 0.92; }
+
+  .dlx-tab[aria-current="page"] { color: var(--dlx-brand); }
+
+  .dlx-tab__label {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* The count on the cart tab. Positioned against the icon, not the tab, so a
+     longer label never moves it. */
+  .dlx-tab__count {
+    position: absolute;
+    translate: 12px -10px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--dlx-radius-full);
+    background: var(--dlx-accent);
+    color: var(--dlx-ink-inverse);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+  }
+
+  .dlx-tab__count:empty,
+  .dlx-tab__count[data-count="0"] { display: none; }
+
+  /* ---------------------------------------------------------------------
+     Desktop navigation — shown only where the tab bar is not
+     ------------------------------------------------------------------ */
+
+  .dlx-header__nav { display: none; }
+
+  @media (min-width: 1024px) {
+    .dlx-header__nav {
+      display: flex;
+      align-items: center;
+      gap: var(--dlx-space-lg);
+      margin-inline: var(--dlx-space-xl) auto;
+    }
+
+    .dlx-header__nav a {
+      position: relative;
+      padding-block: var(--dlx-space-2xs);
+      color: var(--dlx-ink-soft);
+      font-size: var(--dlx-text-md);
+      font-weight: 600;
+      transition: color var(--dlx-t-quick) var(--dlx-ease-out);
+    }
+
+    .dlx-header__nav a:hover { color: var(--dlx-ink); }
+
+    .dlx-header__nav a[aria-current="page"] { color: var(--dlx-brand); }
+
+    .dlx-header__nav a[aria-current="page"]::after {
+      content: "";
+      position: absolute;
+      inset-inline: 0;
+      bottom: -2px;
+      height: 2px;
+      border-radius: var(--dlx-radius-full);
+      background: var(--dlx-brand);
+    }
+
+    .dlx-header__brand { margin-inline-end: 0; }
+  }
+}
