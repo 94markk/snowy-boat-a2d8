@@ -28,9 +28,15 @@
      ------------------------------------------------------------------ */
 
   /* PHP states what it rendered; CSS derives the size from the tokens. Neither
-     side holds a number the other could disagree with. */
-  body.dlx-has-tabbar { --dlx-band: calc(var(--dlx-tabbar-h) + var(--dlx-safe-b)); }
-  body.dlx-has-dock   { --dlx-band: calc(var(--dlx-tabbar-h) + var(--dlx-dock-h) + var(--dlx-safe-b)); }
+     side holds a number the other could disagree with.
+
+     --dlx-tabbar-block is the whole vertical space the bar occupies: its own
+     height, the gap it floats above the edge on a tablet, and the device safe
+     area. Reading the total rather than its parts is what stops a change to any
+     one part - such as adding that tablet float - from silently leaving the
+     dock overlapping the bar. */
+  body.dlx-has-tabbar { --dlx-band: var(--dlx-tabbar-block); }
+  body.dlx-has-dock   { --dlx-band: calc(var(--dlx-tabbar-block) + var(--dlx-dock-h)); }
 
   /* On a desktop the bottom bars do not exist, so the band collapses and the
      page reclaims the space. One statement, not fifteen. */
@@ -165,10 +171,22 @@
       inset-inline: 50% auto;
       translate: -50% 0;
       width: min(calc(100% - (var(--dlx-gutter) * 2)), 460px);
-      margin-bottom: var(--dlx-space-sm);
+      /* The same float the band and the dock are reading. */
+      margin-bottom: var(--dlx-tabbar-float);
       border: 1px solid var(--dlx-line-soft);
       border-radius: var(--dlx-radius-xl);
       box-shadow: var(--dlx-shadow-lg);
+    }
+  }
+
+  /* With a dock stacked on it, the bar's top corners square off so the two
+     read as one control rather than two cards with a seam between them.
+     Cosmetic only - it changes no dimension, so the band is unaffected. */
+  @media (min-width: 560px) {
+    body.dlx-has-dock .dlx-tabbar {
+      border-start-start-radius: 0;
+      border-start-end-radius: 0;
+      border-top-color: transparent;
     }
   }
 

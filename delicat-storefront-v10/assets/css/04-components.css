@@ -418,9 +418,13 @@
   }
 
   .dlx-drawer__identity small {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    /* Stated, not inherited. A theme with a tight line height slices the tops
+       off clamped text, which is what happened to "Mon Portefeuille" in V9. */
     line-height: 1.35;
   }
 
@@ -514,9 +518,9 @@
   .dlx-dock {
     position: fixed;
     inset-inline: 0;
-    /* Sits on the tab bar, never over it. Both heights come from the tokens,
-       so the two cannot overlap however either is retuned. */
-    bottom: calc(var(--dlx-tabbar-h) + var(--dlx-safe-b));
+    /* Sits ON the tab bar, never over it: the offset is the whole space the bar
+       occupies, read as one token rather than reassembled from its parts. */
+    bottom: var(--dlx-tabbar-block);
     z-index: var(--dlx-z-dock);
 
     display: flex;
@@ -548,9 +552,29 @@
   .dlx-dock__price strong { font-size: var(--dlx-text-lg); }
   .dlx-dock .dlx-btn { flex: 1 1 auto; }
 
-  /* A desktop checkout has its own order button in the page; a phone action bar
-     across the bottom of a laptop is duplicate furniture. V9 shipped one,
-     and reserved 190px of page for it. */
+  /* On a tablet the dock takes the tab bar's shape and sits flush on top of it,
+     so the two read as one stacked control rather than a pill on a slab.
+
+     Flush, with no gap and no margin of its own, on purpose. A margin here
+     would be a second piece of vertical geometry that --dlx-tabbar-block does
+     not account for, and the band would once again be short by exactly that
+     amount - which is the same mistake as the tablet float, one element up.
+     The only vertical offset the dock has is the block it sits on. */
+  @media (min-width: 560px) {
+    .dlx-dock {
+      inset-inline: 50% auto;
+      translate: -50% 0;
+      width: min(calc(100% - (var(--dlx-gutter) * 2)), 460px);
+      border: 1px solid var(--dlx-line-soft);
+      border-bottom: 0;
+      border-radius: var(--dlx-radius-xl) var(--dlx-radius-xl) 0 0;
+      box-shadow: var(--dlx-shadow-md);
+    }
+  }
+
+  /* A desktop product page has its own add-to-cart button; a phone action bar
+     across the bottom of a laptop is duplicate furniture. V9 shipped one, and
+     reserved 190px of page for it. */
   @media (min-width: 1024px) {
     .dlx-dock { display: none; }
   }

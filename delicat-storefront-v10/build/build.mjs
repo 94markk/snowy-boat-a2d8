@@ -139,7 +139,22 @@ function check(name, ok, detail) {
   if (!ok) failures.push(name + (detail ? ': ' + detail : ''));
 }
 
-function assertCss(css) {
+function assertCss(source) {
+  /*
+   * The invariants are checked against a copy with the space after every colon
+   * removed. `collapse` deliberately does not remove it - a space after a colon
+   * is never meaning-bearing, but leaving it costs nothing and every removal is
+   * a chance to be wrong - so without this normalisation each check would have
+   * to spell ` ?` at every colon, and the first time one was forgotten the check
+   * would silently pass on everything.
+   *
+   * That is not hypothetical: two of the checks below were written without it
+   * and reported "ok" against stylesheets that violated them, including the
+   * one written specifically to catch a bug that was in the file at the time.
+   */
+  const css = source.replace(/:\s+/g, ':');
+
+
   /* 1. The layer order must be the first thing the browser sees. A @layer
         statement that arrives after a rule has been parsed establishes the
         layers in the wrong order, silently. */
@@ -163,7 +178,7 @@ function assertCss(css) {
   /* 4. A view-transition-name must be unique per document, or the browser
         abandons the transition for the whole page. */
   for (const name of ['dlx-header', 'dlx-tabbar', 'dlx-content', 'dlx-dock']) {
-    const found = (css.match(new RegExp('view-transition-name: ?' + name + '(?![\\w-])', 'g')) || []).length;
+    const found = (css.match(new RegExp('view-transition-name:' + name + '(?![\\w-])', 'g')) || []).length;
     check('view-transition-name ' + name + ' declared once', found === 1, 'found ' + found);
   }
 
@@ -184,7 +199,54 @@ function assertCss(css) {
   const bandWrites = (css.match(/--dlx-band:/g) || []).length;
   check('the band is written in one place only', bandWrites <= 4, bandWrites + ' declarations');
 
-  /* 8. Breakpoints come from the token layer's three tiers. A fourth number in
+  /* 8. Fixed chrome may not carry vertical margin the band does not know about.
+
+        Twice while building V10 a purely cosmetic offset was added to a fixed
+        element - 12px floating the tab bar on tablet, then 8px lifting the dock
+        off it - and each time the derived band came up short by exactly that
+        amount, so content ended up underneath. The band is a total; anything
+        adding to the total has to be part of it. --dlx-tabbar-float is, which
+        is why it is the one permitted value.
+
+        The check has to be in two passes. A first attempt looked only inside
+        rules that say position:fixed, and missed the very bug it was written
+        for: the offending margin was in a media-query override of .dlx-dock,
+        and that rule says nothing about position. So: collect the class names
+        that are ever positioned fixed, then audit every rule mentioning one of
+        them, wherever it lives. */
+  const rules = css.match(/[^{}]*\{[^{}]*\}/g) || [];
+
+  const fixedClasses = new Set();
+  for (const rule of rules) {
+    if (!/position:fixed/.test(rule)) continue;
+    const selector = rule.slice(0, rule.indexOf('{'));
+    for (const cls of selector.match(/\.[a-zA-Z][\w-]*/g) || []) fixedClasses.add(cls);
+  }
+
+  const strayMargin = [];
+  for (const rule of rules) {
+    const selector = rule.slice(0, rule.indexOf('{'));
+    const classes = selector.match(/\.[a-zA-Z][\w-]*/g) || [];
+    if (!classes.some((c) => fixedClasses.has(c))) continue;
+
+    const body = rule.slice(rule.indexOf('{') + 1);
+    for (const m of body.matchAll(/margin(?:-bottom|-top|-block|-block-end|-block-start)?:([^;}]+)/g)) {
+      const value = m[1].trim();
+      if (/var\(--dlx-tabbar-float\)/.test(value)) continue;
+      /* A margin shorthand's vertical components are its first and third (or
+         first, for a single value). `margin-inline` is horizontal and fine. */
+      const vertical = m[0].startsWith('margin:') ? value.split(/\s+/)[0] : value;
+      if (!/^0/.test(vertical)) strayMargin.push(selector.trim() + ' { ' + m[0] + ' }');
+    }
+  }
+
+  check(
+    'fixed chrome adds no vertical offset outside the band',
+    strayMargin.length === 0,
+    strayMargin.slice(0, 3).join(' | ')
+  );
+
+  /* 9. Breakpoints come from the token layer's three tiers. A fourth number in
         a media query is a tier nobody has designed. */
   const widths = [...new Set((css.match(/\(min-width: ?(\d+)px\)/g) || []).map((m) => m.replace(/\D/g, '')))];
   const allowed = ['560', '720', '1024'];

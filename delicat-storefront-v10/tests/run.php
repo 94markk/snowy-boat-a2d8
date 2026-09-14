@@ -132,8 +132,14 @@ ok( 'dark mode restates every light key', (function () {
 ok( 'light and dark differ for every key', (function () {
 	$t = Tokens::all();
 	foreach ( $t['color'] as $key => $value ) {
-		if ( in_array( $key, array( 'on-media' ), true ) ) {
-			continue; /* deliberately identical: it sits over a photograph */
+		/*
+		 * Three keys are deliberately identical in both themes: they describe
+		 * text and shade over a photograph, and the contrast they need comes
+		 * from the image underneath rather than from the page. Flipping them
+		 * with the theme would make one of the two unreadable.
+		 */
+		if ( in_array( $key, array( 'on-media', 'scrim', 'scrim-deep' ), true ) ) {
+			continue;
 		}
 		if ( strtolower( (string) $value ) === strtolower( (string) $t['color-dark'][ $key ] ) ) {
 			return false;

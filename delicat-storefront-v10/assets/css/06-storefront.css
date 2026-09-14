@@ -53,13 +53,20 @@
     position: absolute;
     inset: 0;
     z-index: -1;
+    /* Reaches full strength above the copy rather than at the very bottom:
+       the eyebrow is the first line of the block and the highest, so a
+       gradient that only darkens the last fifth leaves it unreadable. */
     background: linear-gradient(180deg,
       transparent 0%,
-      var(--dlx-scrim) 62%,
-      var(--dlx-scrim) 100%);
+      var(--dlx-scrim) 42%,
+      var(--dlx-scrim-deep) 78%,
+      var(--dlx-scrim-deep) 100%);
   }
 
   .dlx-hero:has(.dlx-hero__scrim) { color: var(--dlx-on-media); }
+  /* Over a photograph every drop of contrast counts, so the eyebrow keeps its
+     full opacity there even though it is dimmed on a flat background. */
+  .dlx-hero:has(.dlx-hero__scrim) .dlx-hero__eyebrow { opacity: 1; }
   .dlx-hero:has(.dlx-hero__scrim) .dlx-hero__title,
   .dlx-hero:has(.dlx-hero__scrim) .dlx-hero__sub { color: inherit; }
 

@@ -93,7 +93,8 @@ final class Tokens extends Module {
 				 * theme would make one of the two unreadable.
 				 */
 				'on-media'    => '#ffffff',
-				'scrim'       => 'rgb(8 10 20 / 0.55)',
+				'scrim'       => 'rgb(8 10 20 / 0.45)',
+				'scrim-deep'  => 'rgb(8 10 20 / 0.72)',
 			),
 
 			/*
@@ -125,7 +126,8 @@ final class Tokens extends Module {
 				'ink-inverse' => '#0b0d16',
 
 				'on-media'    => '#ffffff',
-				'scrim'       => 'rgb(8 10 20 / 0.62)',
+				'scrim'       => 'rgb(8 10 20 / 0.45)',
+				'scrim-deep'  => 'rgb(8 10 20 / 0.72)',
 			),
 
 			/* ---- Space: a 4px scale. Nothing uses a value off this scale. ---- */
@@ -176,7 +178,25 @@ final class Tokens extends Module {
 				'header'     => 60,
 				'tabbar'     => 64,
 				'dock'       => 76,
+				/*
+				 * How far the tab bar floats above the bottom edge. Zero on a
+				 * phone, where the bar is edge to edge; a gap on a tablet,
+				 * where it is a centred pill.
+				 *
+				 * This is a token because it is part of how much of the screen
+				 * the bar occupies, and anything sitting on the bar has to know
+				 * it. When it was written directly into the tablet rule the
+				 * dock overlapped the bar by exactly these 12 pixels at 768px -
+				 * caught by a browser measurement, but only because one was
+				 * taken. Derived, it cannot happen again.
+				 */
+				'tabbar-float'   => 0,
+				'tabbar-float-t' => 12,
 				'tablet-at'  => 720,
+				/* The tab bar becomes a centred pill at this width, which is
+				 * narrower than the tablet type tier: a 560px phone in
+				 * landscape already wants a thumb-reachable bar. */
+				'float-at'   => 560,
 				'desktop-at' => 1024,
 			),
 
@@ -335,7 +355,15 @@ final class Tokens extends Module {
 		$root[] = '--dlx-safe-b:env(safe-area-inset-bottom, 0px)';
 		$root[] = '--dlx-header-h:' . self::px( $chrome['header'] );
 		$root[] = '--dlx-tabbar-h:' . self::px( $chrome['tabbar'] );
+		$root[] = '--dlx-tabbar-float:' . self::px( $chrome['tabbar-float'] );
 		$root[] = '--dlx-dock-h:' . self::px( $chrome['dock'] );
+
+		/*
+		 * The total vertical space the tab bar occupies, float and safe area
+		 * included. Everything that sits on the bar or clears it reads THIS,
+		 * not its parts, so a change to any part reaches all of them at once.
+		 */
+		$root[] = '--dlx-tabbar-block:calc(var(--dlx-tabbar-h) + var(--dlx-tabbar-float) + var(--dlx-safe-b))';
 
 		/*
 		 * The occluded band: how much of the bottom of the viewport is covered
@@ -367,6 +395,7 @@ final class Tokens extends Module {
 		$css .= '@media (prefers-color-scheme:dark){:root:not([data-dlx-theme="light"]){' . $dark . '}}';
 		$css .= ':root[data-dlx-theme="dark"]{' . $dark . '}';
 
+		$css .= '@media (min-width:' . (int) $chrome['float-at'] . 'px){:root{--dlx-tabbar-float:' . self::px( $chrome['tabbar-float-t'] ) . '}}';
 		$css .= '@media (min-width:' . (int) $chrome['tablet-at'] . 'px){:root{--dlx-gutter:' . self::px( $gutter['tablet'] ) . '}}';
 		$css .= '@media (min-width:' . (int) $chrome['desktop-at'] . 'px){:root{--dlx-gutter:' . self::px( $gutter['desktop'] ) . '}}';
 
