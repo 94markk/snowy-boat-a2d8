@@ -72,8 +72,10 @@
   }
 
   function prefetchAllowed() {
-    // The current endpoint is private/no-store: speculative responses cannot
-    // be retained for a later click. Fail closed even with old saved settings.
+    // The server decides per response whether a fragment may be retained
+    // (no-store payloads never enter the cache); an in-flight prefetch is
+    // reused by the click that follows regardless. Old inline configs that
+    // predate this contract fail closed.
     if (cfg.fragmentPrefetch !== true) return false;
     if (!cfg.prefetch) return false;
     if (PREFETCH_BUDGET <= 0) return false;
@@ -85,7 +87,10 @@
      slow link we keep intent-based prefetch (pointerdown, which the user has
      already committed to) and drop speculative viewport prefetch. */
   function viewportPrefetchAllowed() {
-    return prefetchAllowed() && !slowLink() && !lowMemoryDevice();
+    // Speculative prefetch only when the server can answer from a shared
+    // cache; a signed-in visitor's fragments are rendered privately and are
+    // only fetched on intent (pointerdown / hover).
+    return prefetchAllowed() && !!cfg.fragmentCacheable && !slowLink() && !lowMemoryDevice();
   }
 
   /* ----------------------------------------------------------------- cache */
@@ -232,7 +237,9 @@
     });
     var task = fetch(fragmentUrl(url).href, {
       credentials: 'same-origin',
-      cache: 'no-store',
+      /* The response's own Cache-Control decides (public/private/no-store);
+         forcing no-store here threw away every cache layer on every switch. */
+      cache: 'default',
       redirect: 'follow',
       signal: controller ? controller.signal : signal,
       headers: {
@@ -578,7 +585,15 @@
       if (epoch !== cacheEpoch) throw new Error('session-changed');
       if (token !== navToken) return;
       remember(id, payload);
-      if (options.push !== false) history.pushState({ dbp: 1 }, '', url.href);
+      /* Scroll restoration is taken over only once this document has an
+         engine-made history entry to restore. Forcing 'manual' at start-up
+         also switched it off for ordinary document navigations (product
+         page -> back), so a shopper returning to the catalogue landed at
+         the top of the list instead of where they left it. */
+      if (options.push !== false) {
+        if (history.scrollRestoration && history.scrollRestoration !== 'manual') history.scrollRestoration = 'manual';
+        history.pushState({ dbp: 1 }, '', url.href);
+      }
       return commit(payload, url, options.restoreTo, token);
     })['catch'](function (error) {
       if (error && error.name === 'AbortError') return;
@@ -733,7 +748,6 @@
   /* --------------------------------------------------------------- start-up */
 
   indexExistingAssets();
-  history.scrollRestoration = 'manual';
   schedule(observeLinks);
 
   window.DBPNav = {

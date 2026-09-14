@@ -79,7 +79,7 @@ final class Delicat_Builder_V9_Express_Payment {
    if ( ! WC()->cart || WC()->cart->is_empty() ) { throw new RuntimeException( 'Votre panier est vide.' ); }
    WC()->cart->calculate_totals();
    if ( ! hash_equals( WC()->cart->get_cart_hash(), $hash ) ) { throw new RuntimeException( 'Le panier a changé. Actualisez pour vérifier le total.' ); }
-   $record = array( 'status' => 'pending', 'order_id' => 0, 'created' => time(), 'hash' => $hash, 'issued' => $issued, 'creating' => false );
+   $record = array( 'status' => 'pending', 'order_id' => 0, 'created' => time(), 'hash' => $hash, 'issued' => $issued, 'creating' => false, 'method' => self::input( 'payment_method' ), 'balance' => self::wallet_balance( $uid ) );
    if ( ! self::insert( $keys['key'], $record ) ) { throw new RuntimeException( 'Cette demande a déjà été envoyée.' ); }
    self::$context = array_merge( $keys, array( 'uid' => $uid, 'id' => $id, 'record' => $record ) );
   } catch ( Throwable $e ) { self::release( $keys['active'], $id ); throw $e; }
@@ -143,9 +143,76 @@ final class Delicat_Builder_V9_Express_Payment {
    self::$context = null; return;
   }
   // A failure strictly before order creation can be retried with a fresh review.
-  // Once creation begins, keep the durable guard until the outcome is reconciled.
   if ( empty( $c['record']['creating'] ) && empty( $c['record']['order_id'] ) ) {
    try { $r = $c['record']; $r['status'] = 'rejected'; self::save( $r ); self::release( $c['active'], $c['id'] ); } catch ( Throwable $e ) { /* Fail closed. */ }
+   return;
+  }
+  /*
+   * PRO16: once creation began, PRO14 kept the per-customer guard until an
+   * administrator released it by hand. That was right for an UNKNOWN outcome,
+   * but it also fired on the most common outcome of all — the gateway said no
+   * (insufficient wallet balance, refused card) — and every later checkout of
+   * that customer then failed with "Un paiement est déjà en cours" until an
+   * admin intervened. A decline is a known result: the request ran to
+   * completion without a fatal, WooCommerce never reported a successful
+   * payment, the order is unpaid, and the customer's wallet balance is
+   * exactly what it was before the attempt. Only then is the guard released;
+   * the intent record itself is kept (status "declined") so the same intent
+   * can never be replayed. Anything less certain still fails closed.
+   */
+  if ( ! self::declined_without_charge( $c ) ) { return; }
+  try {
+   $r = $c['record']; $r['status'] = 'declined'; self::save( $r );
+   $order = wc_get_order( (int) $c['record']['order_id'] );
+   if ( $order ) { $order->add_order_note( 'Paiement refusé par la passerelle, aucun débit constaté : protection paiement direct libérée automatiquement.' ); }
+   self::release( $c['active'], $c['id'] );
+  } catch ( Throwable $e ) { /* Fail closed. */ }
+ }
+ /** Wallet balance snapshot (TeraWallet API), or null when it cannot be read. */
+ private static function wallet_balance( int $uid ): ?string {
+  if ( $uid <= 0 || ! function_exists( 'woo_wallet' ) ) { return null; }
+  try {
+   $wallet = woo_wallet();
+   if ( ! is_object( $wallet ) || ! isset( $wallet->wallet ) || ! is_callable( array( $wallet->wallet, 'get_wallet_balance' ) ) ) { return null; }
+   return sprintf( '%.4F', (float) $wallet->wallet->get_wallet_balance( $uid, 'edit' ) );
+  } catch ( Throwable $e ) { return null; }
+ }
+ /** True only when the attempt verifiably ended as a decline with no charge. */
+ private static function declined_without_charge( array $c ): bool {
+  $error = error_get_last();
+  if ( is_array( $error ) && in_array( (int) ( $error['type'] ?? 0 ), array( E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR, E_RECOVERABLE_ERROR ), true ) ) { return false; }
+  $order_id = (int) ( $c['record']['order_id'] ?? 0 );
+  if ( $order_id <= 0 || ! function_exists( 'wc_get_order' ) ) { return false; }
+  $order = wc_get_order( $order_id );
+  if ( ! is_object( $order ) || ! is_callable( array( $order, 'is_paid' ) ) ) { return false; }
+  if ( $order->is_paid() || $order->get_date_paid() || '' !== (string) $order->get_transaction_id() ) { return false; }
+  if ( ! in_array( (string) $order->get_status(), array( 'pending', 'failed', 'cancelled' ), true ) ) { return false; }
+  $before = $c['record']['balance'] ?? null;
+  $after  = self::wallet_balance( (int) ( $c['uid'] ?? 0 ) );
+  if ( null === $before || null === $after ) {
+   // No verifiable balance: only a method that cannot touch the wallet may be released.
+   return false === stripos( (string) ( $c['record']['method'] ?? 'wallet' ), 'wallet' );
+  }
+  return abs( (float) $before - (float) $after ) < 0.00001;
+ }
+ /** Daily: drop finished intent records older than three days (nonces expire after one). */
+ public static function schedule_cleanup(): void {
+  if ( ! wp_next_scheduled( 'delicat_builder_v9_payment_cleanup' ) ) {
+   wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'delicat_builder_v9_payment_cleanup' );
+  }
+ }
+ public static function cleanup(): void {
+  global $wpdb;
+  $rows = $wpdb->get_results( $wpdb->prepare( "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s AND option_name NOT LIKE %s AND option_name NOT LIKE %s LIMIT 500", $wpdb->esc_like( 'delicat_payment_' ) . '%', $wpdb->esc_like( 'delicat_payment_active_' ) . '%', $wpdb->esc_like( 'delicat_payment_completed_' ) . '%' ) );
+  $cutoff = time() - 3 * DAY_IN_SECONDS;
+  foreach ( (array) $rows as $row ) {
+   $record = maybe_unserialize( $row->option_value );
+   $created = is_array( $record ) ? (int) ( $record['created'] ?? 0 ) : 0;
+   if ( $created <= 0 || $created > $cutoff || ! preg_match( '/^delicat_payment_(\d+)_(.+)$/', (string) $row->option_name, $m ) ) { continue; }
+   // Never remove the record behind a guard that is still held.
+   try { $active = self::read( 'delicat_payment_active_' . (int) $m[1] ); } catch ( Throwable $e ) { continue; }
+   if ( is_string( $active ) && hash_equals( $active, (string) $m[2] ) ) { continue; }
+   delete_option( (string) $row->option_name );
   }
  }
  public static function pay(): void {
@@ -169,7 +236,7 @@ final class Delicat_Builder_V9_Express_Payment {
    list( $id ) = self::credentials(); $keys = self::keys( get_current_user_id(), $id ); $record = self::read( $keys['key'] );
    $response = array( 'state' => 'unknown', 'ordersUrl' => wc_get_account_endpoint_url( 'orders' ) );
    if ( is_array( $record ) ) {
-    $response['state'] = in_array( $record['status'], array( 'rejected', 'confirmed', 'submitted' ), true ) ? $record['status'] : 'pending';
+    $response['state'] = in_array( $record['status'], array( 'rejected', 'declined', 'confirmed', 'submitted' ), true ) ? $record['status'] : 'pending';
     if ( ! empty( $record['order_id'] ) ) {
      $order = wc_get_order( $record['order_id'] );
      if ( $order && (int) $order->get_customer_id() === get_current_user_id() ) {
@@ -194,6 +261,8 @@ add_action( 'woocommerce_checkout_order_processed', array( 'Delicat_Builder_V9_E
 add_filter( 'woocommerce_payment_successful_result', array( 'Delicat_Builder_V9_Express_Payment', 'success' ), PHP_INT_MAX, 2 );
 add_filter( 'woocommerce_checkout_no_payment_needed_redirect', array( 'Delicat_Builder_V9_Express_Payment', 'no_payment' ), PHP_INT_MAX, 2 );
 register_shutdown_function( array( 'Delicat_Builder_V9_Express_Payment', 'shutdown' ) );
+add_action( 'init', array( 'Delicat_Builder_V9_Express_Payment', 'schedule_cleanup' ) );
+add_action( 'delicat_builder_v9_payment_cleanup', array( 'Delicat_Builder_V9_Express_Payment', 'cleanup' ) );
 
 add_action( 'admin_notices', static function () {
  if ( ! current_user_can( 'manage_woocommerce' ) ) { return; }

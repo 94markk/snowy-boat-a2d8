@@ -109,6 +109,40 @@ final class Delicat_Builder_V9_TurboNav {
 		return 'on' === $value;
 	}
 
+	/** True when the Pro navigation engine swaps catalogue pages in place. */
+	private static function pro_navigation_active() {
+		return class_exists( 'DBP_Kernel', false )
+			&& is_callable( array( 'DBP_Kernel', 'on' ) )
+			&& DBP_Kernel::on( 'navigation' );
+	}
+
+	/**
+	 * pro.16: which links may be prerendered.
+	 *
+	 * Alone, TurboNav prerenders every same-origin document. Next to the Pro
+	 * engine that was double work on WordPress 6.8+: Core printed prerender
+	 * rules for every guest link, the engine intercepted the same click and
+	 * fetched a fragment instead, and the prerendered document was thrown
+	 * away — a full page of bandwidth per hover on the 3G links this store
+	 * runs on. With the engine active the rules cover only the routes it
+	 * never swaps, product pages, where a prerendered document is the one
+	 * thing that makes the open instant.
+	 *
+	 * @return array<int,string> URL patterns, empty when nothing can be targeted.
+	 */
+	private static function prerender_targets() {
+		if ( ! self::pro_navigation_active() ) {
+			return array( '/*' );
+		}
+		$permalinks = get_option( 'woocommerce_permalinks', array() );
+		$base       = is_array( $permalinks ) && ! empty( $permalinks['product_base'] ) ? trim( (string) $permalinks['product_base'], '/' ) : 'product';
+		if ( '' === $base || false !== strpos( $base, '%' ) ) {
+			/* A category-based product permalink cannot be matched as a literal path. */
+			return array();
+		}
+		return array( '/' . $base . '/*' );
+	}
+
 	/**
 	 * Sitewide removal of legacy head overhead. Same set the Performance module
 	 * applies to managed surfaces; remove_action is idempotent so both may run.
@@ -218,6 +252,12 @@ final class Delicat_Builder_V9_TurboNav {
 		if ( ! self::active() || empty( self::settings()['prerender'] ) || self::save_data_requested() ) {
 			return $config;
 		}
+		if ( self::pro_navigation_active() ) {
+			/* Core's rules would prerender the very links the Pro engine swaps
+			 * as fragments. Switch Core off; print_speculation_rules() prints
+			 * the product-only set instead. */
+			return null;
+		}
 		if ( is_array( $config ) ) {
 			$config['mode']      = 'prerender';
 			$config['eagerness'] = 'moderate';
@@ -237,7 +277,14 @@ final class Delicat_Builder_V9_TurboNav {
 
 		// WordPress core (6.8+) prints its own rules for guests; it stays silent for
 		// signed-in users, so RC32 prints ours for privately-cached customers.
-		if ( function_exists( 'wp_get_speculation_rules' ) && ! is_user_logged_in() ) {
+		// With the Pro engine active Core is switched off (see
+		// upgrade_core_speculation) and this block owns every visitor.
+		if ( ! self::pro_navigation_active() && function_exists( 'wp_get_speculation_rules' ) && ! is_user_logged_in() ) {
+			return;
+		}
+
+		$targets = self::prerender_targets();
+		if ( empty( $targets ) ) {
 			return;
 		}
 
@@ -253,7 +300,7 @@ final class Delicat_Builder_V9_TurboNav {
 					'source'    => 'document',
 					'where'     => array(
 						'and' => array_merge(
-							array( array( 'href_matches' => '/*' ) ),
+							array( array( 'href_matches' => $targets ) ),
 							array_map(
 								static function ( $condition ) {
 									return array( 'not' => $condition );
@@ -270,7 +317,7 @@ final class Delicat_Builder_V9_TurboNav {
 					'source'    => 'document',
 					'where'     => array(
 						'and' => array_merge(
-							array( array( 'href_matches' => '/*' ) ),
+							array( array( 'href_matches' => $targets ) ),
 							array_map(
 								static function ( $condition ) {
 									return array( 'not' => $condition );

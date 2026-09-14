@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.15
+ * Version: 9.2.0-pro.16
 
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -151,7 +151,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.15' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.16' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -1456,6 +1456,16 @@ add_action(
 	}
 );
 
-require_once __DIR__ . '/includes/class-delicat-builder-express-payment.php';
-
-require_once __DIR__ . '/includes/class-delicat-builder-audit-fixes.php';
+/*
+ * pro.16: these two PRO14 modules were the only files pulled in with a bare
+ * require_once — on every request, including plugin activation and Safe Mode,
+ * and outside the guarded loader every other module goes through. A damaged
+ * upload of either file would have fataled every request without the
+ * circuit breaker being able to isolate it. Load them through the same guard
+ * (a Throwable quarantines the module and records Safe Mode) and never
+ * during the activation sandbox, which parses no class files by design.
+ */
+if ( ! $delicat_builder_v9_activating ) {
+	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-express-payment.php' );
+	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-audit-fixes.php' );
+}

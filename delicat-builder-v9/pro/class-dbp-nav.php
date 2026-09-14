@@ -130,7 +130,20 @@ final class DBP_Nav {
 	 * @return void
 	 */
 	public static function maybe_capture() {
-		if ( self::$capturing || ! self::fragment_allowed() ) {
+		if ( self::$capturing ) {
+			return;
+		}
+		self::redirect_stray_fragment_url();
+		if ( ! self::fragment_allowed() ) {
+			if ( DBP_Kernel::is_fragment_request() ) {
+				/* A fragment fetch the server declines (locked route, cross-site)
+				 * falls back to the full document; the engine then navigates
+				 * normally. That document must never be stored under the
+				 * fragment URL by any cache layer. */
+				if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
+				do_action( 'litespeed_control_set_nocache', 'Delicat navigation fallback document' );
+				if ( ! headers_sent() ) { nocache_headers(); }
+			}
 			return;
 		}
 
@@ -140,21 +153,133 @@ final class DBP_Nav {
 		if ( ! defined( 'LITESPEED_NO_OPTM' ) ) { define( 'LITESPEED_NO_OPTM', true ); }
 		add_filter( 'litespeed_comment', '__return_false', PHP_INT_MAX );
 
-		// Full rendered pages can contain personalized inline configuration.
-		// Never store navigation payloads in a shared cache, including legacy URLs.
-		if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
-		do_action( 'litespeed_control_set_nocache', 'Delicat navigation response' );
+		/*
+		 * pro.16: fragments were unconditionally no-store. Every in-app page
+		 * switch therefore paid for a full uncached WordPress + WooCommerce
+		 * render, while the same page as a plain document would have come
+		 * straight out of LiteSpeed's page cache — the "instant" engine was
+		 * the slowest way to reach a page, and prefetch had to stay disabled.
+		 *
+		 * A fragment is a reduction of the very document the shopper would
+		 * otherwise receive, so it can be cached exactly as that document is:
+		 * shared for a guest without private state (same policy as
+		 * Security::public_cache_allowed()), per-user in LiteSpeed's private
+		 * cache for a signed-in customer (same policy as private_cache_allowed()),
+		 * and no-store everywhere else. The fragment URL (?dbp_nav=1) is its own
+		 * cache key, and a stray visit to it without the engine header is
+		 * redirected (below) instead of rendered, so a cache can never hold
+		 * HTML under the JSON URL or the reverse.
+		 */
+		$mode = self::fragment_cache_mode();
 		if ( ! headers_sent() ) {
-			nocache_headers();
 			header( 'Content-Type: application/json; charset=utf-8' );
 			header( 'X-Content-Type-Options: nosniff' );
 			header( 'X-Robots-Tag: noindex, noarchive' );
 			header( 'Vary: Cookie, X-Delicat-Pro-Nav, Accept-Encoding', false );
-			header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0', true );
-			header( 'X-LiteSpeed-Cache-Control: no-cache', true );
+		}
+		if ( 'public' === $mode ) {
+			do_action( 'litespeed_control_set_cacheable', 'Delicat navigation fragment (public)' );
+			if ( ! headers_sent() ) {
+				header( 'Cache-Control: public, max-age=60', true );
+				header( 'X-Delicat-V9-Cache: public' );
+			}
+		} elseif ( 'private' === $mode ) {
+			do_action( 'litespeed_control_set_private', 'Delicat navigation fragment (signed-in)' );
+			if ( ! headers_sent() ) {
+				header( 'Cache-Control: private, no-cache, must-revalidate', true );
+				header( 'X-Delicat-V9-Cache: private' );
+			}
+		} else {
+			if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
+			do_action( 'litespeed_control_set_nocache', 'Delicat navigation response' );
+			if ( ! headers_sent() ) {
+				nocache_headers();
+				header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0', true );
+				header( 'X-LiteSpeed-Cache-Control: no-cache', true );
+			}
 		}
 
 		ob_start( array( __CLASS__, 'transform' ) );
+	}
+
+	/**
+	 * `?dbp_nav=1` is the engine's fragment URL, never a page a person should
+	 * land on. Without the engine header it cannot be a fragment fetch, so it
+	 * is answered with a redirect to the clean URL rather than a document.
+	 *
+	 * @return void
+	 */
+	private static function redirect_stray_fragment_url() {
+		if ( is_admin() || wp_doing_ajax() || headers_sent() ) {
+			return;
+		}
+		if ( 'GET' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ) ) {
+			return;
+		}
+		if ( ! isset( $_GET['dbp_nav'] ) || isset( $_SERVER['HTTP_X_DELICAT_PRO_NAV'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+			return;
+		}
+		$clean = remove_query_arg( 'dbp_nav' );
+		if ( ! is_string( $clean ) || '' === $clean ) {
+			return;
+		}
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) { define( 'DONOTCACHEPAGE', true ); }
+		do_action( 'litespeed_control_set_nocache', 'Delicat stray fragment URL' );
+		nocache_headers();
+		wp_safe_redirect( $clean, 302 );
+		exit;
+	}
+
+	/**
+	 * Cache policy for the fragment being rendered: 'public', 'private' or 'none'.
+	 * Mirrors the Security gates used for full documents, minus their blanket
+	 * "no query string" rule, because the navigation flag is the only parameter.
+	 *
+	 * @return string
+	 */
+	private static function fragment_cache_mode() {
+		if ( ! class_exists( 'Delicat_Builder_V9_Security', false ) || is_admin() || wp_doing_ajax() || wp_doing_cron() ) {
+			return 'none';
+		}
+		if ( 'GET' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ) ) {
+			return 'none';
+		}
+		foreach ( array_keys( (array) $_GET ) as $param ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache policy only.
+			if ( 'dbp_nav' !== $param ) {
+				return 'none';
+			}
+		}
+		if ( ! is_callable( array( 'Delicat_Builder_V9_Security', 'navigation_request_allowed' ) ) || ! Delicat_Builder_V9_Security::navigation_request_allowed() ) {
+			return 'none';
+		}
+		if ( ! is_user_logged_in() ) {
+			if ( is_callable( array( 'Delicat_Builder_V9_Security', 'has_private_cookie' ) ) && Delicat_Builder_V9_Security::has_private_cookie() ) {
+				return 'none';
+			}
+			if ( class_exists( 'Delicat_Builder_V9_Multi_Currency', false ) && is_callable( array( 'Delicat_Builder_V9_Multi_Currency', 'instance' ) ) ) {
+				$currency = Delicat_Builder_V9_Multi_Currency::instance();
+				if ( is_callable( array( $currency, 'public_cache_variant_required' ) ) && $currency->public_cache_variant_required() ) {
+					return 'none';
+				}
+			}
+			return 'public';
+		}
+		if ( ! (bool) apply_filters( 'delicat_builder_v9_private_cache', true ) ) {
+			return 'none';
+		}
+		if ( current_user_can( 'edit_posts' ) || is_admin_bar_showing() ) {
+			return 'none';
+		}
+		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
+			return 'none';
+		}
+		$path = strtolower( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '/' ), PHP_URL_PATH ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		foreach ( array( '/my-wallet', '/woo-wallet', '/wallet', '/my-account', '/checkout', '/cart', '/order' ) as $needle ) {
+			if ( false !== strpos( $path, $needle ) ) {
+				return 'none';
+			}
+		}
+		return 'private';
 	}
 
 	/**
@@ -454,8 +579,15 @@ final class DBP_Nav {
 			'blockParams' => array( 'add-to-cart', 'remove_item', 'undo_item', 'wc-ajax', 'download_file', 'logout', 'customer-logout', '_wpnonce', 'nonce', 'action', 'dip_action', 'key', 'token', 'code', 'payment_method', 'preview', 'delicat_builder_preview' ),
 			'cacheTtl'    => (int) $settings['nav_cache_ttl'] * 1000,
 			'cacheMax'    => (int) $settings['nav_cache_max'],
-			// Full fragments contain session data and cannot be reused after prefetch.
-			'fragmentPrefetch' => false,
+			/* pro.16: prefetch is on again. A no-store fragment is still never
+			 * kept in the engine's memory cache (the response header decides),
+			 * but the in-flight request started on pointerdown is reused by the
+			 * click that follows it, which is where the instant feel comes from.
+			 * Speculative (viewport) prefetch is reserved for visitors whose
+			 * fragments are shared-cacheable, so it never costs the server a
+			 * private render for a page nobody opens. */
+			'fragmentPrefetch' => true,
+			'fragmentCacheable' => ( ! is_user_logged_in() && class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'has_private_cookie' ) ) && ! Delicat_Builder_V9_Security::has_private_cookie() ) ? 1 : 0,
 			'prefetch'    => ! empty( $settings['prefetch'] ) ? 1 : 0,
 			'budget'      => (int) $settings['prefetch_budget'],
 			'transitions' => ! empty( $settings['transitions'] ) ? 1 : 0,

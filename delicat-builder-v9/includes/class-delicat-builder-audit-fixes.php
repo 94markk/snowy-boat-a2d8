@@ -15,10 +15,13 @@ final class Delicat_Builder_V9_Audit_Fixes {
   add_filter( 'woocommerce_locate_template', array( __CLASS__, 'result_count_template' ), PHP_INT_MAX, 3 );
  }
  public static function asset_url( $url ) {
-  if ( ! is_string( $url ) || strpos( $url, DELICAT_BUILDER_V9_URL ) !== 0 ) { return $url; }
+  if ( ! is_string( $url ) || '' === $url ) { return $url; }
+  // DELICAT_BUILDER_V9_URL is always https; an http or protocol-relative enqueue must still map.
+  $https = set_url_scheme( $url, 'https' );
+  if ( strpos( $https, DELICAT_BUILDER_V9_URL ) !== 0 ) { return $url; }
   static $map = null;
   if ( null === $map ) { $file = DELICAT_BUILDER_V9_DIR . 'asset-versions.php'; $map = is_file( $file ) ? require $file : array(); }
-  $parts = explode( '?', substr( $url, strlen( DELICAT_BUILDER_V9_URL ) ), 2 );
+  $parts = explode( '?', substr( $https, strlen( DELICAT_BUILDER_V9_URL ) ), 2 );
   return isset( $map[ $parts[0] ] ) ? DELICAT_BUILDER_V9_URL . $map[ $parts[0] ] : $url;
  }
  public static function script_exclusions( $list ): array {

@@ -403,9 +403,10 @@ final class DBP_Kernel {
 			wp_deregister_script( 'delicat-builder-v9-prefetch' );
 			wp_deregister_script( 'delicat-builder-v9-navigation' );
 
-			if ( class_exists( 'Delicat_Builder_V9_TurboNav', false ) ) {
-				remove_action( 'wp_footer', array( 'Delicat_Builder_V9_TurboNav', 'print_speculation_rules' ), 5 );
-			}
+			/* pro.16: TurboNav's speculation rules stay. They bind no clicks;
+			 * with the Pro engine active TurboNav restricts them to the routes
+			 * the engine never swaps (product pages), which is exactly where a
+			 * prerendered document makes the open instant. */
 			if ( class_exists( 'Delicat_Builder_V9_Shell_Nav', false ) ) {
 				remove_action( 'wp_enqueue_scripts', array( 'Delicat_Builder_V9_Shell_Nav', 'assets' ), 9 );
 			}

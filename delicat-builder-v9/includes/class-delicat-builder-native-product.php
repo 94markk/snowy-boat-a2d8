@@ -75,6 +75,13 @@ final class Delicat_Builder_V9_Native_Product {
 
 	/** Last front-end attempt, so the admin panel can show what actually happened on the storefront. */
 	public static function record_express( int $id, string $state, string $detail = '' ): void {
+		/* pro.16: this ran on every product view (cache miss) — two option
+		 * writes per guest pageview for a diagnostic panel. Only write when
+		 * the recorded product/state actually changes. */
+		$last = get_transient( 'delicat_builder_v9_express_last' );
+		if ( is_array( $last ) && (int) ( $last['product'] ?? 0 ) === $id && (string) ( $last['state'] ?? '' ) === $state && (string) ( $last['version'] ?? '' ) === DELICAT_BUILDER_V9_VERSION ) {
+			return;
+		}
 		set_transient(
 			'delicat_builder_v9_express_last',
 			array( 'product' => $id, 'state' => $state, 'detail' => $detail, 'time' => time(), 'version' => DELICAT_BUILDER_V9_VERSION ),
@@ -255,7 +262,15 @@ final class Delicat_Builder_V9_Native_Product {
 		$title = '' !== trim($m['title']) ? $m['title'] : $product->get_name();
 		$subtitle = '' !== trim($m['subtitle']) ? $m['subtitle'] : wp_strip_all_tags($product->get_short_description());
 		$image_id = $product->get_image_id();
-		if ( ! empty($m['hero_image']) ) $image_id = attachment_url_to_postid($m['hero_image']) ?: $image_id;
+		$hero_url = '';
+		if ( ! empty( $m['hero_image'] ) ) {
+			/* pro.16: the per-product banner URL only worked when it was the exact
+			 * original attachment URL; a resized (-1200x675), "-scaled" or external
+			 * URL silently fell back to the product image. Keep the attachment path
+			 * when it resolves (responsive srcset), otherwise print the URL itself. */
+			$hero_id = (int) attachment_url_to_postid( (string) $m['hero_image'] );
+			if ( $hero_id > 0 ) { $image_id = $hero_id; } else { $hero_url = esc_url( (string) $m['hero_image'] ); }
+		}
 		$identity_image_id = $product->get_image_id();
 		$variable = $product->is_type('variable');
 		/*
@@ -277,13 +292,13 @@ final class Delicat_Builder_V9_Native_Product {
 			<?php if ( ! empty($s['show_breadcrumbs']) ) : ?><nav class="dnp-breadcrumb"><?php woocommerce_breadcrumb(array('delimiter'=>'<span>›</span>')); ?></nav><?php endif; ?>
 			<section class="dnp-hero">
 				<div class="dnp-media">
-					<?php if($image_id) echo wp_get_attachment_image($image_id,'large',false,array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async','sizes'=>'(max-width:767px) 100vw, 520px','alt'=>$title)); else echo $product->get_image('large',array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async')); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+					<?php if('' !== $hero_url) echo '<img class="dnp-image" src="'.esc_url($hero_url).'" alt="'.esc_attr($title).'" loading="eager" fetchpriority="high" decoding="async">'; elseif($image_id) echo wp_get_attachment_image($image_id,'large',false,array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async','sizes'=>'(max-width:767px) 100vw, 520px','alt'=>$title)); else echo $product->get_image('large',array('class'=>'dnp-image','loading'=>'eager','fetchpriority'=>'high','decoding'=>'async')); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 				</div>
 				<div class="dnp-summary">
 					<div class="dnp-identity">
 						<?php if($identity_image_id): ?><span class="dnp-product-icon"><?php echo wp_get_attachment_image($identity_image_id,'woocommerce_thumbnail',false,array('loading'=>'eager','decoding'=>'async','alt'=>'')); ?></span><?php endif; ?>
 						<div class="dnp-identity-copy"><h1><?php echo esc_html($title); ?></h1><?php if(!empty($s['show_short_desc']) && $subtitle): ?><p class="dnp-subtitle"><?php echo esc_html($subtitle); ?></p><?php endif; ?></div>
-						<?php if($product->is_in_stock()): ?><span class="dnp-delivery-badge"><i aria-hidden="true">⚡</i> Livraison<br>instantanée</span><?php endif; ?>
+						<?php if($product->is_in_stock() && self::is_digital_product($product)): ?><span class="dnp-delivery-badge"><i aria-hidden="true">⚡</i> Livraison<br>instantanée</span><?php endif; ?>
 					</div>
 					<div class="dnp-meta">
 						<?php if(!empty($s['show_price'])): ?><div class="dnp-price" data-dnp-price><?php echo wp_kses_post($product->get_price_html()); ?></div><?php endif; ?>

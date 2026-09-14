@@ -89,6 +89,12 @@
         var retry = el('button', 'dnp-express-fallback', 'Revoir la commande'); retry.type = 'button';
         retry.addEventListener('click', function () { loadForm(); }); notice.appendChild(retry); return;
       }
+      if (res.ok && data && data.state === 'declined') {
+        uncertain = false;
+        setNotice('Le paiement a été refusé (solde insuffisant ou refus de la passerelle) et aucun débit n’a été effectué. Rechargez votre wallet si nécessaire, puis préparez une nouvelle vérification.');
+        var again = el('button', 'dnp-express-fallback', 'Revoir la commande'); again.type = 'button';
+        again.addEventListener('click', function () { loadForm(); }); notice.appendChild(again); return;
+      }
       setNotice('Résultat en cours de vérification. Consultez vos commandes ; ne payez pas une seconde fois.');
     }).catch(function () { checkingStatus = false; setNotice('Vérification momentanément indisponible. Consultez vos commandes ou contactez le support.'); });
   }
