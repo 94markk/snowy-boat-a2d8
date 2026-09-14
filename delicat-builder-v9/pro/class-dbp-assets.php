@@ -63,6 +63,21 @@ final class DBP_Assets {
 	/**
 	 * Bundles that belong to exactly one family of routes.
 	 *
+	 * This is a SAFETY NET, not a byte-saving layer. Every handle listed here is
+	 * already gated at its own enqueue site — native-product, swatches, the product
+	 * switcher, the field calculator, the native archive, the wallet guard and the
+	 * express sheet each return early off their route — so on a healthy install this
+	 * loop dequeues nothing at all. It exists to catch a module that forgets, and a
+	 * future reader should not assume it is what keeps product CSS off the homepage.
+	 *
+	 * pro.16 removed two entries that could never do anything: `delicat-wallet-tour`
+	 * is not a registered handle anywhere in the plugin (the tour prints inline, which
+	 * is why Audit_Fixes::document() strips it with a regex instead), and
+	 * `wc-add-to-cart-variation` is enqueued by WooCommerce during template rendering,
+	 * after wp_enqueue_scripts has already finished, so a dequeue here can never reach
+	 * it. The always-on sheets are deliberately absent: dequeuing them here would break
+	 * their cascade.
+	 *
 	 * Anything absent from this map is treated as global and left alone, so a
 	 * module added later is never silently starved of its assets. Filterable,
 	 * so one wrong entry can be corrected on the live site without a release.
@@ -78,7 +93,6 @@ final class DBP_Assets {
 			'delicat-direct-swatches'           => array( 'product' ),
 			'delicat-product-switcher'          => array( 'product' ),
 			'dmc-calc'                          => array( 'product' ),
-			'wc-add-to-cart-variation'          => array( 'product' ),
 			'delicat-builder-v9-express'        => array( 'product', 'shop', 'archive' ),
 
 			/* Listing surfaces. */
@@ -86,7 +100,6 @@ final class DBP_Assets {
 
 			/* Purchase surfaces. */
 			'delicat-builder-v9-wallet-guard'   => array( 'checkout', 'cart', 'account', 'wallet' ),
-			'delicat-wallet-tour'               => array( 'wallet' ),
 		);
 
 		return apply_filters( 'dbp_route_map', $map );
@@ -134,20 +147,60 @@ final class DBP_Assets {
 			return;
 		}
 
-		$id = get_post_thumbnail_id( get_the_ID() );
-		if ( ! $id ) {
-			return;
+		$post_id = (int) get_queried_object_id();
+		if ( $post_id <= 0 ) {
+			$post_id = (int) get_the_ID();
 		}
 
-		$src = wp_get_attachment_image_url( $id, 'woocommerce_single' );
-		if ( ! $src ) {
+		$src    = '';
+		$srcset = '';
+		$sizes  = '';
+
+		/*
+		 * Ask the native product engine what it is actually going to paint. This used
+		 * to guess — featured image at 'woocommerce_single' — while the page painted a
+		 * per-product banner, or the same image at 'large' chosen from a srcset. The
+		 * preload then fetched a full-size image at high priority that was never used,
+		 * on every product view, competing with the real LCP for connections.
+		 */
+		if (
+			class_exists( 'Delicat_Builder_V9_Native_Product', false )
+			&& is_callable( array( 'Delicat_Builder_V9_Native_Product', 'hero_source' ) )
+			&& is_callable( array( 'Delicat_Builder_V9_Native_Product', 'is_active_product' ) )
+			&& Delicat_Builder_V9_Native_Product::is_active_product( $post_id )
+		) {
+			$hero   = Delicat_Builder_V9_Native_Product::hero_source( $post_id );
+			$src    = (string) ( $hero['url'] ?? '' );
+			$srcset = (string) ( $hero['srcset'] ?? '' );
+			$sizes  = (string) ( $hero['sizes'] ?? '' );
+		} else {
+			/* A product the native template does not own still renders WooCommerce's
+			 * own single-product image. */
+			$id = get_post_thumbnail_id( $post_id );
+			if ( ! $id ) {
+				return;
+			}
+			$src    = (string) wp_get_attachment_image_url( $id, 'woocommerce_single' );
+			$srcset = (string) wp_get_attachment_image_srcset( $id, 'woocommerce_single' );
+		}
+
+		if ( '' === $src ) {
 			return;
 		}
 
 		add_action(
 			'wp_head',
-			static function () use ( $src ) {
-				echo '<link rel="preload" as="image" fetchpriority="high" href="' . esc_url( $src ) . '">' . "\n";
+			static function () use ( $src, $srcset, $sizes ) {
+				$tag = '<link rel="preload" as="image" fetchpriority="high" href="' . esc_url( $src ) . '"';
+				/* Without these the browser preloads the href while the <img> picks a
+				 * different candidate from its srcset — two downloads, one painted. */
+				if ( '' !== $srcset ) {
+					$tag .= ' imagesrcset="' . esc_attr( $srcset ) . '"';
+					if ( '' !== $sizes ) {
+						$tag .= ' imagesizes="' . esc_attr( $sizes ) . '"';
+					}
+				}
+				echo $tag . '>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- every part escaped above.
 			},
 			2
 		);

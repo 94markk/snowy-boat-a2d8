@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T09:06:10.986111+00:00",
+  "built": "2026-09-14T09:12:16.880283+00:00",
   "version": "9.2.0-pro.16",
-  "bytes": 5794645,
+  "bytes": 5803626,
   "count": 358,
   "files": {
     "PERFORMANCE-PRO11.md": {
@@ -39,7 +39,7 @@
     },
     "asset-versions.php": {
       "bytes": 9345,
-      "sha256": "c6e0ad9ed3a7d62380d6264c99ccb50ccd560063d4cb562b4e8b4bdf2e6737c9"
+      "sha256": "1c65535dbea8af9fb3baf7c2ed42aad0e5dcf084950db2be8220d91357a81cef"
     },
     "assets/components/all-components.min.css": {
       "bytes": 167942,
@@ -930,8 +930,8 @@
       "sha256": "faa6bbe999f273668594c43a4398a4300dcc66ad35690fdb98a0fc7b7e5ddbc5"
     },
     "includes/class-delicat-builder-app-tuning.php": {
-      "bytes": 11945,
-      "sha256": "30a64d9a7335242e3408f2fb9c26c1ed3aeb738310d14534d988b22131800f88"
+      "bytes": 12416,
+      "sha256": "e341fcd1618b95b46e91f967d0e82eeff59a6517080fede6ffbcfe85dd0e70d7"
     },
     "includes/class-delicat-builder-archive-builder.php": {
       "bytes": 65744,
@@ -1074,8 +1074,8 @@
       "sha256": "ae568d5dc502e10439ed844a4d689a837b34446630a7fa79af59ca0ab8baa05c"
     },
     "includes/class-delicat-builder-native-product.php": {
-      "bytes": 51180,
-      "sha256": "cd2a02550a8160deef327ad0547907834d747460a3123cf554f690976f305f1d"
+      "bytes": 52672,
+      "sha256": "711c379af7e137544c9008baf3b664fdc13bf09ccdc917c29119d1568cf7169d"
     },
     "includes/class-delicat-builder-notifications.php": {
       "bytes": 52959,
@@ -1293,13 +1293,13 @@
       "bytes": 4286,
       "sha256": "fe8be8e233621128cd4e9eda820dba7c970beefd010c845c846e2f05d7203f51"
     },
-    "pro/assets/dbp-nav.f60cc672c336.js": {
-      "bytes": 28651,
-      "sha256": "f60cc672c3360d7a00010a58ff028cd8e117c098b57f69cf0e22af7974de848f"
+    "pro/assets/dbp-nav.a50abeda5299.js": {
+      "bytes": 30813,
+      "sha256": "a50abeda5299ab339fbeac2dcb91ba5c292d95fa3deb947337edae2f6e8f1e45"
     },
     "pro/assets/dbp-nav.js": {
-      "bytes": 28651,
-      "sha256": "f60cc672c3360d7a00010a58ff028cd8e117c098b57f69cf0e22af7974de848f"
+      "bytes": 30813,
+      "sha256": "a50abeda5299ab339fbeac2dcb91ba5c292d95fa3deb947337edae2f6e8f1e45"
     },
     "pro/assets/dbp-state.3d92762ed0b8.js": {
       "bytes": 7568,
@@ -1322,8 +1322,8 @@
       "sha256": "47bfb7296f28f4abc0915400c9b87f141c849514b232cad693184acf0368012c"
     },
     "pro/class-dbp-assets.php": {
-      "bytes": 7754,
-      "sha256": "ab4fcd74305e8ad9b27d1cfb7165e48606fcab146a2c763217faea61d589fefc"
+      "bytes": 10448,
+      "sha256": "e6f1ebc66c5fd84d39235664811a3d3d47efc948baa4232a165572213e694127"
     },
     "pro/class-dbp-kernel.php": {
       "bytes": 14020,

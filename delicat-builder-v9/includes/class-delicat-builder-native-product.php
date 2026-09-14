@@ -284,16 +284,11 @@ final class Delicat_Builder_V9_Native_Product {
 		self::queue_structured_data( $product );
 		$title = '' !== trim($m['title']) ? $m['title'] : $product->get_name();
 		$subtitle = '' !== trim($m['subtitle']) ? $m['subtitle'] : wp_strip_all_tags($product->get_short_description());
-		$image_id = $product->get_image_id();
-		$hero_url = '';
-		if ( ! empty( $m['hero_image'] ) ) {
-			/* pro.16: the per-product banner URL only worked when it was the exact
-			 * original attachment URL; a resized (-1200x675), "-scaled" or external
-			 * URL silently fell back to the product image. Keep the attachment path
-			 * when it resolves (responsive srcset), otherwise print the URL itself. */
-			$hero_id = self::attachment_for_url( (string) $m['hero_image'] );
-			if ( $hero_id > 0 ) { $image_id = $hero_id; } else { $hero_url = esc_url( (string) $m['hero_image'] ); }
-		}
+		/* Resolved by hero_source() so the LCP preload in the Pro asset layer asks
+		 * for exactly the file this markup paints. */
+		$hero     = self::hero_source( $id );
+		$image_id = (int) $hero['attachment'] > 0 ? (int) $hero['attachment'] : (int) $product->get_image_id();
+		$hero_url = ( 0 === (int) $hero['attachment'] && '' !== (string) $hero['url'] ) ? esc_url( (string) $hero['url'] ) : '';
 		$identity_image_id = $product->get_image_id();
 		$variable = $product->is_type('variable');
 		/*
@@ -381,6 +376,44 @@ final class Delicat_Builder_V9_Native_Product {
 			if ( $id > 0 ) { return $id; }
 		}
 		return 0;
+	}
+
+	/**
+	 * The one resolver for the hero image, shared by render() and by the Pro asset
+	 * layer's LCP preload.
+	 *
+	 * They used to resolve it separately and disagreed: the preload asked for the
+	 * featured image at 'woocommerce_single' while the page painted either a
+	 * per-product banner or the image at 'large' with a srcset. The browser then
+	 * fetched a full-size image at high priority that was never painted, on every
+	 * product view, and took one of its six connection slots away from the real LCP.
+	 * One function means they cannot drift again.
+	 *
+	 * @return array{url:string,srcset:string,sizes:string,attachment:int}
+	 */
+	public static function hero_source( int $id ): array {
+		$out     = array( 'url' => '', 'srcset' => '', 'sizes' => '(max-width:767px) 100vw, 520px', 'attachment' => 0 );
+		$product = function_exists( 'wc_get_product' ) ? wc_get_product( $id ) : null;
+		if ( ! $product instanceof WC_Product ) { return $out; }
+		$m        = self::product_settings( $id );
+		$image_id = (int) $product->get_image_id();
+		if ( ! empty( $m['hero_image'] ) ) {
+			$hero_id = self::attachment_for_url( (string) $m['hero_image'] );
+			if ( $hero_id > 0 ) {
+				$image_id = $hero_id;
+			} else {
+				/* A genuinely external banner: one URL, no responsive candidates. */
+				$out['url'] = esc_url_raw( (string) $m['hero_image'] );
+				return $out;
+			}
+		}
+		if ( $image_id > 0 ) {
+			$out['attachment'] = $image_id;
+			$out['url']        = (string) wp_get_attachment_image_url( $image_id, 'large' );
+			$srcset            = wp_get_attachment_image_srcset( $image_id, 'large' );
+			$out['srcset']     = is_string( $srcset ) ? $srcset : '';
+		}
+		return $out;
 	}
 
 	private static function render_important( array $m ): void {

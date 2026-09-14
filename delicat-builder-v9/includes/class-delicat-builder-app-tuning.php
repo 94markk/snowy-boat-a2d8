@@ -20,11 +20,13 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    `delicat-slow-net` on <html> before the first paint. Three things then
  *    change, and each is a request the phone no longer has to make:
  *
- *      - Web fonts do not load. The Google Fonts stylesheet ships as
- *        media="print" and is promoted to media="all" only on a good link, so
- *        a slow visitor pays neither the two extra origin handshakes
- *        (fonts.googleapis.com, then fonts.gstatic.com) nor the font files,
- *        and the page paints immediately in the system stack.
+ *      - Web fonts never hold up the text. The Google Fonts request is given
+ *        display=swap, so every visitor paints immediately in the system stack
+ *        and the webfont swaps in when it arrives. (Until pro.16 this was done
+ *        by shipping the stylesheet as media="print" and promoting it from
+ *        JavaScript — a stylesheet that only applied because a script said so,
+ *        which LiteSpeed's combiner could silently break. See
+ *        defer_font_stylesheet().)
  *      - Speculation rules do not run. Prerendering the next page downloads a
  *        second full document over the same narrow pipe the shopper needs for
  *        the page in front of them. Worth it at 4G, a straight loss at 3G.
@@ -147,7 +149,6 @@ final class Delicat_Builder_V9_App_Tuning {
 		if ( empty( $s['slow_net'] ) ) {
 			return;
 		}
-		$fonts = ( ! empty( $s['defer_fonts'] ) && self::feature( 'defer_fonts' ) ) ? '1' : '0';
 		?>
 <script id="delicat-builder-v9-app-tuning-boot">
 (function(){
@@ -159,24 +160,15 @@ rt=c&&typeof c.rtt==='number'?c.rtt:0,
 slow=!!(c&&c.saveData)||t==='slow-2g'||t==='2g'||t==='3g'||(dl>0&&dl<1.5)||(rt>300&&dl>0&&dl<3);
 if(slow){r.className+=' delicat-slow-net delicat-low-power';}
 r.setAttribute('data-dbv9-net',slow?'slow':'ok');
-/* Fonts ship inert (media="print"). Promote them only on a link that can
-   afford two more origin handshakes and the font files themselves. */
-if(<?php echo $fonts; ?>&&!slow){
- var f=function(){
-  var l=document.querySelectorAll('link[data-dbv9-font]'),i=0;
-  for(;i<l.length;i++){l[i].media='all';}
- };
- if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',f);}else{f();}
-}
 }());
 </script>
 		<?php
 	}
 
 	/**
-	 * Ship the Google Fonts stylesheet as media="print" so it never blocks the
-	 * first paint, and tag it so the boot script can promote it. The HTML is
-	 * the same for every visitor, so the page stays publicly cacheable.
+	 * Give the Google Fonts request display=swap so the webfont never holds up
+	 * the text. The HTML is the same for every visitor, so the page stays
+	 * publicly cacheable, and no script is involved in making CSS apply.
 	 *
 	 * @param string $tag    Full link tag.
 	 * @param string $handle Style handle.
@@ -197,19 +189,37 @@ if(<?php echo $fonts; ?>&&!slow){
 		if ( false === strpos( $href, 'fonts.googleapis.com' ) ) {
 			return $tag;
 		}
-		if ( false !== strpos( $tag, 'data-dbv9-font' ) ) {
-			return $tag;
+		/*
+		 * pro.16: this used to rewrite the font stylesheet to media="print" and let an
+		 * inline boot script promote it back to media="all" on a fast connection. That
+		 * is the one technique this codebase bans outright — a stylesheet that only
+		 * applies because JavaScript made it apply — and the reason is on this exact
+		 * stack: when LiteSpeed's guest combiner folds the link into its combined
+		 * artefact the `link[data-dbv9-font]` selector stops matching and the fonts
+		 * silently never load, for everyone, with the <noscript> fallback powerless to
+		 * help because JavaScript is not what failed.
+		 *
+		 * The intent behind it was sound: do not let a webfont hold up first paint on a
+		 * 3G link. CSS already has that, with no script and nothing for an optimizer to
+		 * break — font-display: swap paints the text immediately in the fallback face
+		 * and swaps when the webfont arrives. Google Fonts emits it when the request
+		 * carries display=swap, so that is all this filter does now.
+		 */
+		$rewritten = preg_replace_callback(
+			'/(href=(["\']))(.*?)\2/i',
+			static function ( $match ) {
+				$url = html_entity_decode( (string) $match[3], ENT_QUOTES, 'UTF-8' );
+				if ( false === stripos( $url, 'fonts.googleapis.com' ) || false !== stripos( $url, 'display=' ) ) {
+					return $match[0];
+				}
+				return $match[1] . esc_attr( add_query_arg( 'display', 'swap', $url ) ) . $match[2];
+			},
+			$tag,
+			1
+		);
+		if ( is_string( $rewritten ) && '' !== $rewritten ) {
+			$tag = $rewritten;
 		}
-		/* A print stylesheet is fetched at low priority and never blocks
-		 * rendering; the boot script switches it to all on a good link. */
-		if ( preg_match( '/\smedia=(["\'])[^"\']*\1/', $tag ) ) {
-			$tag = (string) preg_replace( '/\smedia=(["\'])[^"\']*\1/', ' media="print"', $tag, 1 );
-		} else {
-			$tag = (string) preg_replace( '/\s*\/?>\s*$/', ' media="print">', $tag, 1 );
-		}
-		$tag = (string) preg_replace( '/<link\s/', '<link data-dbv9-font="1" ', $tag, 1 );
-		/* No-JS and old browsers still get the fonts. */
-		$tag .= '<noscript><link rel="stylesheet" href="' . esc_url( $href ) . '"></noscript>' . "\n";
 		unset( $handle, $media );
 		return $tag;
 	}

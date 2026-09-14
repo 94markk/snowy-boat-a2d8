@@ -438,7 +438,20 @@
     main.parentNode.replaceChild(next, main);
 
     if (payload.title) doc.title = payload.title;
-    if (payload.bodyClass) doc.body.className = payload.bodyClass;
+    if (payload.bodyClass) {
+      /* theme.js keeps the resolved theme on the BODY (dlc-theme-dark /
+         dlc-theme-light, plus the header-studio pair). The server cannot know
+         it, so replacing the class list wholesale flipped a dark-mode shopper
+         to light on every switch. Carry the client-managed classes across the
+         swap so there is no flash; theme.js's own resync then confirms them. */
+      var carried = [];
+      var previous = String(doc.body.className || '').split(/\s+/);
+      for (var ci = 0; ci < previous.length; ci++) {
+        if (/^[a-z0-9-]+-(theme|mode)-(dark|light)$/i.test(previous[ci])) carried.push(previous[ci]);
+      }
+      doc.body.className = payload.bodyClass;
+      for (var cj = 0; cj < carried.length; cj++) doc.body.classList.add(carried[cj]);
+    }
     if (payload.canonical) {
       var canonical = doc.querySelector('link[rel="canonical"]');
       if (canonical) canonical.href = payload.canonical;
@@ -546,6 +559,26 @@
     }).then(function () {
       if (token !== navToken) return;
       emit('dsb:content-updated', { source: 'pro-nav', url: url.href });
+      /*
+       * V9's modules re-bind on two older event names. The only scripts that ever
+       * dispatched them — navigation.js and shell-nav.js — are dequeued AND
+       * deregistered by DBP_Kernel::quiet_legacy_layers(), so under the Pro engine
+       * neither event could fire and twelve modules stayed dead on every swapped
+       * page: carousels never initialised (and islands.js's hydration scan never
+       * ran, so their images were never even requested), favourite hearts stayed
+       * unfilled, the dock cart badge froze, scroll-reveal motion never ran so
+       * revealed elements sat at opacity 0, and the hero search, currency switcher
+       * and notification bell were all inert. The Pro engine owns these names now.
+       *
+       * Order matters: content-updated first (the Player-ID calculators re-boot),
+       * then shell:navigated (express-checkout resets its arm/busy flags), then
+       * navigation-complete last so theme.js's resync runs after every other
+       * module has finished touching the DOM. Each handler was checked for
+       * idempotence: they guard on a ready flag (carousel data-delicat-ready,
+       * islands data-dlc-island-seen, hero-search, currency) or are pure re-reads.
+       */
+      emit('delicat:shell:navigated', { url: url.href, route: payload.route });
+      emit('delicat:navigation-complete', { url: url.href, route: payload.route });
       if (window.jQuery && window.jQuery.fn.wc_variation_form) {
         window.jQuery(currentMain()).find('.variations_form').each(function () {
           var form = window.jQuery(this);
