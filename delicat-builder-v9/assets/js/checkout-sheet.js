@@ -36,7 +36,68 @@
 	if (!sheet || !jq || typeof sheet.showModal !== 'function') return;
 
 	var body = sheet.querySelector('[data-dcs-body]');
+	var scroller = sheet.querySelector('[data-dcs-scroll]') || body;
+	var trust = sheet.querySelector('[data-dcs-trust]');
 	var busy = false;
+
+	/* ---------------------------------------------------------------------
+	   Keeping the pinned footer honest
+
+	   The pay button is position:fixed inside the sheet (see the stylesheet for
+	   why it cannot be sticky). Two heights therefore have to be measured
+	   rather than guessed, because both change with the customer's text size,
+	   their language, and whether the terms line wraps:
+
+	     --dcs-trust-h    how far above the sheet's bottom edge the footer sits
+	     --dcs-pad-bottom how much room the scroller leaves so the last field
+	                      can be scrolled out from under the footer
+
+	   The stylesheet carries a workable fallback for both, so a browser with no
+	   ResizeObserver gets a slightly roomier sheet rather than a broken one.
+	   ------------------------------------------------------------------ */
+
+	var observer = null;
+
+	function measure() {
+		if (trust) {
+			sheet.style.setProperty('--dcs-trust-h', (trust.hidden ? 0 : trust.offsetHeight) + 'px');
+		}
+
+		var footer = body.querySelector('#payment .place-order');
+		var height = footer ? footer.offsetHeight : 0;
+		/* 24px of air below the last field, so it never sits flush against the
+		   footer's edge and read as clipped. */
+		sheet.style.setProperty('--dcs-pad-bottom', (height ? height + 24 : 0) + 'px');
+	}
+
+	/*
+	 * WooCommerce replaces the whole of .woocommerce-checkout-review-order on
+	 * every update_checkout - a payment method change, a coupon - so the footer
+	 * element measured a moment ago is gone and a new one is in its place.
+	 * Re-observing on each update is what keeps the measurement attached to the
+	 * element that is actually on screen.
+	 */
+	function watchFooter() {
+		if (typeof ResizeObserver !== 'function') {
+			measure();
+			return;
+		}
+
+		if (observer) observer.disconnect();
+		observer = new ResizeObserver(measure);
+
+		var footer = body.querySelector('#payment .place-order');
+		if (footer) observer.observe(footer);
+		if (trust) observer.observe(trust);
+
+		measure();
+	}
+
+	function unwatchFooter() {
+		if (observer) { observer.disconnect(); observer = null; }
+		sheet.style.removeProperty('--dcs-trust-h');
+		sheet.style.removeProperty('--dcs-pad-bottom');
+	}
 
 	/* ---------------------------------------------------------------------
 	   Opening
@@ -55,6 +116,9 @@
 	sheet.addEventListener('close', function () {
 		document.documentElement.style.overflow = '';
 		busy = false;
+		if (trust) trust.hidden = true;
+		sheet.classList.remove('dcs--low');
+		unwatchFooter();
 	});
 
 	document.addEventListener('click', function (event) {
@@ -127,7 +191,10 @@
 			body: data,
 			credentials: 'same-origin',
 			redirect: 'follow',
-			headers: { 'X-Requested-With': 'XMLHttpRequest' }
+			/* X-Delicat-Sheet is what makes the server render the summary and
+			   wallet cards. An ordinary visit to the checkout page sends no such
+			   header and is unchanged. */
+			headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-Delicat-Sheet': '1' }
 		})
 			.then(function (response) {
 				if (!response.ok) throw new Error('http ' + response.status);
@@ -182,7 +249,16 @@
 		var notices = extractNotices(html);
 		if (notices) body.appendChild(notices);
 
+		/* The order and wallet cards, rendered by PHP from WooCommerce's cart
+		   and the wallet plugin's own balance. Lifted rather than rebuilt: no
+		   figure on this screen is computed in the browser. */
+		var summary = extractSummary(html);
+		if (summary) body.appendChild(summary);
+
 		body.appendChild(form);
+
+		/* The trust line only appears once there is something to trust. */
+		if (trust) trust.hidden = false;
 
 		/*
 		 * The one line that hands over control.
@@ -196,12 +272,35 @@
 		jq(document.body).trigger('init_checkout');
 		jq(document.body).trigger('update_checkout');
 
+		/* After the form is in the sheet, so the footer exists to be measured. */
+		watchFooter();
+
 		busy = false;
 
 		var first = form.querySelector('input:not([type=hidden]):not([disabled]), select, textarea');
 		if (first) {
 			try { first.focus({ preventScroll: true }); } catch (error) { /* older browsers */ }
 		}
+	}
+
+	/* WooCommerce has just swapped the order review - and with it the footer. */
+	jq(document.body).on('updated_checkout', function () {
+		if (sheet.open) watchFooter();
+	});
+
+	function extractSummary(html) {
+		var doc;
+		try {
+			doc = new DOMParser().parseFromString(html, 'text/html');
+		} catch (error) {
+			return null;
+		}
+
+		var summary = doc.querySelector('[data-dcs-summary]');
+		if (!summary) return null;
+
+		summary.querySelectorAll('script').forEach(function (node) { node.remove(); });
+		return summary;
 	}
 
 	function extractNotices(html) {
@@ -313,9 +412,13 @@
 		panel.appendChild(actions);
 
 		/* Above the form, not instead of it: the cart is intact and the customer
-		   may want to pick a different payment method rather than top up. */
+		   may want to pick a different payment method rather than top up. The
+		   class demotes the pay button so the two calls to action on screen are
+		   not both shouting; the stylesheet has the reasoning. */
 		body.insertBefore(panel, body.firstChild);
-		panel.scrollIntoView({ block: 'nearest' });
+		sheet.classList.add('dcs--low');
+		/* Scroll the sheet, not the page behind it. */
+		if (scroller && typeof scroller.scrollTo === 'function') scroller.scrollTo({ top: 0, behavior: 'smooth' });
 	}
 
 	document.addEventListener('click', function (event) {
@@ -324,5 +427,6 @@
 		event.preventDefault();
 		var panel = body.querySelector('[data-dcs-low]');
 		if (panel) panel.remove();
+		sheet.classList.remove('dcs--low');
 	});
 })();

@@ -64,6 +64,16 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 
 	public const HANDLE = 'delicat-builder-v9-checkout-sheet';
 
+	/**
+	 * The header the sheet's own fetch sends, and nothing else does.
+	 *
+	 * The summary and wallet cards below are rendered onto the checkout page
+	 * ONLY for a request carrying this. An ordinary visit to the checkout page
+	 * is byte-for-byte what it was, which matters because those cards are the
+	 * one part of this feature that costs a query.
+	 */
+	public const REQUEST_HEADER = 'HTTP_X_DELICAT_SHEET';
+
 	public static function boot(): void {
 		if ( is_admin() ) {
 			return;
@@ -71,6 +81,193 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue' ), 25 );
 		add_action( 'wp_footer', array( __CLASS__, 'render' ), 30 );
+
+		if ( self::is_sheet_request() ) {
+			/* Before the form, so it lands above it in the response and the
+			 * sheet can lift the two out together. */
+			add_action( 'woocommerce_before_checkout_form', array( __CLASS__, 'render_summary' ), 5 );
+
+			/* WooCommerce's own button, relabelled with the total the customer
+			 * is about to pay. Through Woo's filter, so it is still Woo's
+			 * button doing Woo's submit - only the words change. */
+			add_filter( 'woocommerce_order_button_text', array( __CLASS__, 'order_button_text' ) );
+		}
+	}
+
+	public static function is_sheet_request(): bool {
+		return ! empty( $_SERVER[ self::REQUEST_HEADER ] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presentation switch only; changes no state and gates no capability.
+	}
+
+	/** @param string $text */
+	public static function order_button_text( $text ): string {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return (string) $text;
+		}
+
+		$total = wp_strip_all_tags( (string) WC()->cart->get_total() );
+		return '' === $total
+			? (string) $text
+			: sprintf(
+				/* translators: %s: the order total. */
+				__( 'Payer maintenant %s', 'delicat-builder-v9' ),
+				$total
+			);
+	}
+
+	/* =====================================================================
+	 * The summary
+	 * =====================================================================
+	 * Everything below reads WooCommerce and the wallet plugin. Not one figure
+	 * is computed here: the line items are WC()->cart's, the formatted option
+	 * rows are wc_get_formatted_cart_item_data()'s - the same pairs WooCommerce
+	 * prints on its own cart page, so a custom field added by another plugin
+	 * appears here without this file knowing it exists - the total is
+	 * WC()->cart->get_total(), and the balance is the wallet plugin's own.
+	 * ===================================================================== */
+
+	public static function render_summary(): void {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart || WC()->cart->is_empty() ) {
+			return;
+		}
+
+		echo '<div class="dcs-summary" data-dcs-summary>';
+		self::render_order_card();
+		self::render_wallet_card();
+		echo '</div>';
+	}
+
+	private static function render_order_card(): void {
+		echo '<div class="dcs-card dcs-card--order">';
+
+		foreach ( WC()->cart->get_cart() as $item ) {
+			$product = $item['data'] ?? null;
+			if ( ! $product instanceof WC_Product ) {
+				continue;
+			}
+
+			self::row( __( 'Produit', 'delicat-builder-v9' ), esc_html( $product->get_name() ), 'strong' );
+
+			/*
+			 * The option rows - "1 mois", the Netflix account email, a Player
+			 * ID. This is WooCommerce's own formatter, so whatever another
+			 * plugin attached to the line shows up here in the merchant's own
+			 * wording, and nothing here has to know what any of it means.
+			 */
+			$meta = function_exists( 'wc_get_formatted_cart_item_data' )
+				? wc_get_formatted_cart_item_data( $item, true )
+				: '';
+
+			foreach ( self::parse_item_data( (string) $meta ) as $label => $value ) {
+				self::row( $label, esc_html( $value ) );
+			}
+		}
+
+		self::row(
+			__( 'Total', 'delicat-builder-v9' ),
+			'<span class="dcs-total">' . wp_kses_post( WC()->cart->get_total() ) . '</span>',
+			'strong'
+		);
+
+		echo '</div>';
+	}
+
+	/**
+	 * WooCommerce hands back "Label: value" lines. Split them so each becomes a
+	 * row rather than one run-on paragraph.
+	 *
+	 * @return array<string,string>
+	 */
+	private static function parse_item_data( string $formatted ): array {
+		$out = array();
+
+		foreach ( preg_split( '/\r\n|\r|\n/', wp_strip_all_tags( $formatted ) ) ?: array() as $line ) {
+			$line = trim( (string) $line );
+			if ( '' === $line || false === strpos( $line, ':' ) ) {
+				continue;
+			}
+			list( $label, $value ) = array_map( 'trim', explode( ':', $line, 2 ) );
+			if ( '' !== $label && '' !== $value ) {
+				$out[ $label ] = $value;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Balance, what is left after this order, and which method is selected.
+	 *
+	 * Omitted entirely when there is no wallet plugin, no signed-in customer or
+	 * no readable balance - a card that says nothing is worse than no card, and
+	 * a wrong balance on a payment screen is worse than both.
+	 */
+	private static function render_wallet_card(): void {
+		if ( ! is_user_logged_in() || ! function_exists( 'woo_wallet' ) ) {
+			return;
+		}
+
+		$balance = null;
+		try {
+			$balance = (float) woo_wallet()->wallet->get_wallet_balance( get_current_user_id(), 'edit' );
+		} catch ( Throwable $error ) {
+			unset( $error );
+			return;
+		}
+
+		if ( null === $balance ) {
+			return;
+		}
+
+		$total = (float) WC()->cart->get_total( 'edit' );
+		$after = $balance - $total;
+
+		echo '<div class="dcs-card dcs-card--wallet">';
+
+		self::row( __( 'Solde wallet', 'delicat-builder-v9' ), wp_kses_post( wc_price( $balance ) ), 'strong' );
+
+		printf(
+			'<div class="dcs-row"><span class="dcs-row__label">%1$s</span><span class="dcs-row__value dcs-row__value--%2$s">%3$s</span></div>',
+			esc_html__( 'Après paiement', 'delicat-builder-v9' ),
+			$after < 0 ? 'short' : 'ok',
+			wp_kses_post( wc_price( $after ) )
+		);
+
+		$gateway = self::selected_gateway_title();
+		if ( '' !== $gateway ) {
+			printf(
+				'<div class="dcs-row"><span class="dcs-row__label">%1$s</span><span class="dcs-row__value dcs-row__value--strong"><span class="dcs-dot" aria-hidden="true"></span>%2$s</span></div>',
+				esc_html__( 'Paiement', 'delicat-builder-v9' ),
+				esc_html( $gateway )
+			);
+		}
+
+		echo '</div>';
+	}
+
+	private static function selected_gateway_title(): string {
+		if ( ! function_exists( 'WC' ) || ! WC()->payment_gateways() ) {
+			return '';
+		}
+
+		$available = WC()->payment_gateways()->get_available_payment_gateways();
+		$chosen    = WC()->session ? (string) WC()->session->get( 'chosen_payment_method' ) : '';
+
+		if ( '' !== $chosen && isset( $available[ $chosen ] ) ) {
+			return wp_strip_all_tags( (string) $available[ $chosen ]->get_title() );
+		}
+
+		$first = is_array( $available ) ? reset( $available ) : null;
+		return $first ? wp_strip_all_tags( (string) $first->get_title() ) : '';
+	}
+
+	/** @param string $value Already-escaped markup. */
+	private static function row( string $label, string $value, string $modifier = '' ): void {
+		printf(
+			'<div class="dcs-row"><span class="dcs-row__label">%1$s</span><span class="dcs-row__value%2$s">%3$s</span></div>',
+			esc_html( $label ),
+			'' !== $modifier ? ' dcs-row__value--' . esc_attr( $modifier ) : '',
+			$value // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by every caller above.
+		);
 	}
 
 	/**
@@ -177,7 +374,10 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 				'balance is low', 'low balance', 'recharge',
 			),
 			'i18n'        => array(
-				'title'        => __( 'Finaliser la commande', 'delicat-builder-v9' ),
+				'title'        => __( 'Vérifiez votre commande', 'delicat-builder-v9' ),
+				'subtitle'     => __( 'Vérifiez tous les articles de votre panier.', 'delicat-builder-v9' ),
+				'secure'       => __( 'Paiement sécurisé WooCommerce', 'delicat-builder-v9' ),
+				'delay'        => __( 'Délai selon le produit', 'delicat-builder-v9' ),
 				'loading'      => __( 'Préparation de votre commande…', 'delicat-builder-v9' ),
 				'close'        => __( 'Fermer', 'delicat-builder-v9' ),
 				'lowTitle'     => __( 'Solde insuffisant', 'delicat-builder-v9' ),
@@ -234,20 +434,36 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 		$i18n = self::config()['i18n'];
 		?>
 		<dialog class="dcs" id="dcs-sheet" aria-label="<?php echo esc_attr( $i18n['title'] ); ?>">
-			<div class="dcs__grip" aria-hidden="true"></div>
+			<button type="button" class="dcs__close" data-dcs-close aria-label="<?php echo esc_attr( $i18n['close'] ); ?>">
+				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+			</button>
 
-			<div class="dcs__head">
-				<h2 class="dcs__title"><?php echo esc_html( $i18n['title'] ); ?></h2>
-				<button type="button" class="dcs__close" data-dcs-close aria-label="<?php echo esc_attr( $i18n['close'] ); ?>">
-					<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
-				</button>
+			<?php // tabindex/autofocus so opening the sheet focuses the panel itself.
+			// Without it the dialog focuses the first focusable child - the close
+			// button - and every customer opens the sheet to a focus ring on the one
+			// control that discards it. ?>
+			<div class="dcs__scroll" data-dcs-scroll tabindex="-1" autofocus>
+				<div class="dcs__grip" aria-hidden="true"></div>
+
+				<div class="dcs__head">
+					<span class="dcs__mark" aria-hidden="true">
+						<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+					</span>
+					<h2 class="dcs__title"><?php echo esc_html( $i18n['title'] ); ?></h2>
+					<p class="dcs__sub"><?php echo esc_html( $i18n['subtitle'] ); ?></p>
+				</div>
+
+				<div class="dcs__body" data-dcs-body>
+					<div class="dcs__loading" data-dcs-loading>
+						<span class="dcs__spinner" aria-hidden="true"></span>
+						<p><?php echo esc_html( $i18n['loading'] ); ?></p>
+					</div>
+				</div>
 			</div>
 
-			<div class="dcs__body" data-dcs-body>
-				<div class="dcs__loading" data-dcs-loading>
-					<span class="dcs__spinner" aria-hidden="true"></span>
-					<p><?php echo esc_html( $i18n['loading'] ); ?></p>
-				</div>
+			<div class="dcs__trust" data-dcs-trust hidden>
+				<span><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.2"/><path d="M8.2 10.5V7.6a3.8 3.8 0 0 1 7.6 0v2.9"/></svg><?php echo esc_html( $i18n['secure'] ); ?></span>
+				<span><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.2 2.5 5.4 13.1h5.6L10.8 21.5l7.8-10.6H13Z"/></svg><?php echo esc_html( $i18n['delay'] ); ?></span>
 			</div>
 		</dialog>
 		<?php
