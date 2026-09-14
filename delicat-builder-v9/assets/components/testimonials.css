@@ -3,7 +3,7 @@
 /* 9.1 RC9 — two-row auto-scrolling review marquee. */
 .delicat-testimonials__marquees{display:grid;gap:14px;margin-top:6px}
 .delicat-testimonials__marquee{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
-.delicat-testimonials__mtrack{display:flex;gap:var(--dbv9-test-gap,14px);width:max-content;animation:dbv9-tmarq 46s linear infinite;will-change:transform}
+.delicat-testimonials__mtrack{display:flex;gap:var(--dbv9-test-gap,14px);width:max-content;animation:dbv9-tmarq 46s linear infinite}@media(prefers-reduced-motion:reduce){.delicat-testimonials__mtrack{animation:none}}
 .delicat-testimonials__mtrack[data-dbv9-marquee-clone]:not(.is-loop-ready){animation:none}
 .delicat-testimonials__marquee--right .delicat-testimonials__mtrack{animation-direction:reverse}
 .delicat-testimonials__marquee:hover .delicat-testimonials__mtrack,.delicat-testimonials__marquee:focus-within .delicat-testimonials__mtrack{animation-play-state:paused}

@@ -172,7 +172,7 @@ final class Delicat_Builder_V9_PWA {
 		$chrome_css = is_file( DELICAT_BUILDER_V9_DIR . $chrome )
 			? array( $chrome )
 			: array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/drawer.css', 'assets/css/bottom-nav.css' );
-		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/drawer.js', 'assets/js/session.js', 'assets/js/shell-nav.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
+		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/drawer.js', 'assets/js/session.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
 		foreach ( $precache_files as $rel ) {
 			if ( is_file( DELICAT_BUILDER_V9_DIR . $rel ) ) {
 				$precache[] = add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, DELICAT_BUILDER_V9_URL . $rel );
