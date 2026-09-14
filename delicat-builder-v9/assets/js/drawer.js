@@ -10,22 +10,60 @@
   var doc = document, html = doc.documentElement;
   var drawer = null, panel = null, scroller = null, search = null, empty = null;
   var open = false, lastFocus = null, lockY = 0, closeTimer = null, enterTimer = null, drag = null, walletTimer = null, pointerOpenAt = 0, swipeEndedAt = 0;
+  var inertNodes = [], savedTop = '', bound = false;
   var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])';
   var raf = window.requestAnimationFrame || function (cb) { return window.setTimeout(cb, 16); };
 
   function closest(node, sel) { while (node && node.nodeType === 1) { if (node.matches ? node.matches(sel) : (node.msMatchesSelector && node.msMatchesSelector(sel))) return node; node = node.parentNode; } return null; }
-  function focusables() { return panel ? panel.querySelectorAll(FOCUSABLE) : []; }
+  /* A collapsed section and a filtered-out item are still in the DOM. Tabbing
+     into something invisible is a dead key press, so they are left out. */
+  function focusables() {
+    if (!panel) return [];
+    return Array.prototype.filter.call(panel.querySelectorAll(FOCUSABLE), function (node) {
+      return node.getClientRects().length && !closest(node, '[hidden]') && !closest(node, '.is-collapsed');
+    });
+  }
+  /*
+   * The page behind is made genuinely inert, not merely hidden from screen
+   * readers. aria-hidden tells assistive tech to ignore a region; it does not
+   * stop a tap or a Tab key reaching it. The `inert` property does both.
+   *
+   * The previous state of each node is kept and put back, rather than assumed
+   * to have been "not inert, no aria-hidden" - a page can legitimately have
+   * either already set, and closing the menu must not clear someone else's.
+   */
   function setInert(on) {
-    var kids = doc.body.children;
-    for (var i = 0; i < kids.length; i++) {
-      var k = kids[i];
-      if (k === drawer || k.tagName === 'SCRIPT' || k.tagName === 'STYLE') continue;
-      if (on) { if (!k.hasAttribute('data-dlx-inert')) { k.setAttribute('data-dlx-inert', k.getAttribute('aria-hidden') || ''); k.setAttribute('aria-hidden', 'true'); } }
-      else if (k.hasAttribute('data-dlx-inert')) { var prev = k.getAttribute('data-dlx-inert'); if (prev) k.setAttribute('aria-hidden', prev); else k.removeAttribute('aria-hidden'); k.removeAttribute('data-dlx-inert'); }
+    if (on) {
+      if (inertNodes.length) return;
+      Array.prototype.forEach.call(doc.body.children, function (node) {
+        if (node === drawer || node.contains(drawer) || /^(SCRIPT|STYLE|LINK)$/.test(node.tagName)) return;
+        inertNodes.push({ node: node, inert: node.inert, aria: node.getAttribute('aria-hidden') });
+        node.inert = true;
+        node.setAttribute('aria-hidden', 'true');
+      });
+      return;
+    }
+    for (var i = 0; i < inertNodes.length; i++) {
+      var saved = inertNodes[i];
+      saved.node.inert = saved.inert;
+      if (null === saved.aria) saved.node.removeAttribute('aria-hidden');
+      else saved.node.setAttribute('aria-hidden', saved.aria);
+    }
+    inertNodes = [];
+  }
+
+  /* The three bars say whether the menu they control is open. */
+  function expanded(value) {
+    var openers = doc.querySelectorAll('[data-dsb8-menu-trigger],[data-dlx-open],.dsb-menu-toggle');
+    for (var i = 0; i < openers.length; i++) {
+      openers[i].setAttribute('aria-expanded', value ? 'true' : 'false');
+      openers[i].setAttribute('aria-controls', drawer.id || 'delicat-drawer');
     }
   }
-  function lock() { lockY = window.pageYOffset || 0; html.classList.add('dlx-open'); doc.body.style.top = (-lockY) + 'px'; }
-  function unlock() { html.classList.remove('dlx-open'); doc.body.style.top = ''; window.scrollTo(0, lockY); }
+  /* savedTop, because body.style.top may not have been empty to begin with -
+     another overlay on the page may be holding the same lock. */
+  function lock() { lockY = window.pageYOffset || 0; savedTop = doc.body.style.top; html.classList.add('dlx-open'); doc.body.style.top = (-lockY) + 'px'; }
+  function unlock() { html.classList.remove('dlx-open'); doc.body.style.top = savedTop; window.scrollTo({ top: lockY, left: 0, behavior: 'instant' }); }
 
   /* Lay the panel out once while the page is idle, so the first three-bar tap
      only has to run a transform instead of a full layout + paint. The parked
@@ -50,6 +88,7 @@
   function show() {
     if (!drawer || open) return;
     open = true;
+    expanded(true);
     lastFocus = doc.activeElement;
     if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = null; }
     if (panel) panel.removeEventListener('transitionend', onCloseEnd);
@@ -91,7 +130,6 @@
         if (!open) return;
         setInert(true);
         try { (panel.querySelector('[data-dlx-close]') || panel).focus({ preventScroll: true }); } catch (e) { try { panel.focus(); } catch (e2) {} }
-        refreshWallet();
       });
     });
     doc.dispatchEvent(new CustomEvent('dlx:open'));
@@ -100,6 +138,9 @@
   function hide() {
     if (!drawer || !open) return;
     open = false;
+    expanded(false);
+    /* A drag in progress is abandoned, not carried into the next open. */
+    drag = null;
     entered();
     drawer.classList.remove('is-open');
     drawer.classList.remove('is-dragging');
@@ -115,7 +156,7 @@
      * transition ran at all (reduced motion, or a browser that skipped it).
      */
     if (closeTimer) { window.clearTimeout(closeTimer); }
-    closeTimer = window.setTimeout(park, 420);
+    closeTimer = window.setTimeout(park, 240);
     if (panel) panel.addEventListener('transitionend', onCloseEnd);
 
     if (lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) {} }
@@ -128,6 +169,9 @@
     if (enterTimer) { window.clearTimeout(enterTimer); enterTimer = null; }
     if (panel) panel.removeEventListener('transitionend', onEnterEnd);
     if (drawer) drawer.classList.remove('is-entering');
+    /* Once the panel has arrived, not while it is moving: a fetch kicked off on
+       the opening frame competes with the one animation that matters. */
+    if (open) refreshWallet();
   }
 
   function onEnterEnd(e) {
@@ -137,7 +181,7 @@
 
   function armEntered() {
     if (enterTimer) window.clearTimeout(enterTimer);
-    enterTimer = window.setTimeout(entered, 420);
+    enterTimer = window.setTimeout(entered, 240);
     if (panel) panel.addEventListener('transitionend', onEnterEnd);
   }
 
@@ -248,10 +292,12 @@
   }
   function onUp(e) {
     if (drag && e && e.pointerId !== undefined && drag.id !== undefined && e.pointerId !== drag.id) return;
-    if (drag && e && e.pointerId !== undefined) {
+    endDrag(true);
+    /* After endDrag, which may have closed the menu: releasing a capture on a
+       panel that is on its way out is harmless, the other order is not. */
+    if (e && e.pointerId !== undefined) {
       try { if (panel.releasePointerCapture && panel.hasPointerCapture && panel.hasPointerCapture(e.pointerId)) panel.releasePointerCapture(e.pointerId); } catch (err) {}
     }
-    endDrag(true);
   }
 
   function copy(button) {
@@ -264,7 +310,8 @@
 
   function bind() {
     drawer = doc.querySelector('[data-dlx-drawer]');
-    if (!drawer) return;
+    if (!drawer || bound) return;
+    bound = true;
     panel = drawer.querySelector('[data-dlx-panel]');
     scroller = drawer.querySelector('[data-dlx-scroll]');
     search = drawer.querySelector('[data-dlx-search]');

@@ -45,7 +45,7 @@ function boot(root){
   function resetVariable(){variationOK=false;currentPrice='Choisissez une option';setStock(null);scheduleSync()}
 
   if(dock){
-    dock.addEventListener('click',function(e){var btn=e.target.closest('[data-dnp-proxy]');if(!btn||btn.disabled)return;var real=btn.dataset.dnpProxy==='buy'?(liveBuy()||realBuy):(liveAdd()||realAdd);if(real&&!isDisabled(real))real.click();else scheduleSync()},{passive:true});
+    dock.addEventListener('click',function(e){var btn=e.target.closest('[data-dnp-proxy]');if(!btn||btn.disabled)return;var real=btn.dataset.dnpProxy==='buy'?(liveBuy()||realBuy):(liveAdd()||realAdd);if(real&&!isDisabled(real)){if(btn.dataset.dnpProxy==='buy'&&window.DelicatCheckoutSheetOpen){window.DelicatCheckoutSheetOpen(liveForm(),real)}else real.click()}else scheduleSync()},{passive:true});
   }
 
   if(window.jQuery){

@@ -141,12 +141,50 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 		return '--dcs-paying:"' . $label . '"';
 	}
 
+	/**
+	 * Does the wallet fall short of this order?
+	 *
+	 * Answered here, on the server, from the wallet plugin's own balance and
+	 * WooCommerce's own total - the same two figures the card below prints. The
+	 * browser is told the answer, never the arithmetic.
+	 *
+	 * @return bool True only when a balance is readable AND it will not cover
+	 *              the total. An unreadable balance is not a shortfall.
+	 */
+	private static function wallet_is_short(): bool {
+		if ( ! is_user_logged_in() || ! function_exists( 'woo_wallet' ) || ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return false;
+		}
+
+		try {
+			$balance = (float) woo_wallet()->wallet->get_wallet_balance( get_current_user_id(), 'edit' );
+		} catch ( Throwable $error ) {
+			unset( $error );
+			return false;
+		}
+
+		return $balance < (float) WC()->cart->get_total( 'edit' );
+	}
+
 	public static function render_summary(): void {
 		if ( ! function_exists( 'WC' ) || ! WC()->cart || WC()->cart->is_empty() ) {
 			return;
 		}
 
-		echo '<div class="dcs-summary" data-dcs-summary>';
+		/*
+		 * The shortfall is announced with the summary rather than waited for.
+		 *
+		 * WooCommerce will say "solde insuffisant" too, but only after the
+		 * customer has filled the form in and pressed pay. The balance and the
+		 * total are both known the moment this renders, so the customer is told
+		 * now, with the way out - and can still pick another payment method,
+		 * because nothing here refuses anything. WooCommerce remains the only
+		 * thing that decides whether a payment may proceed.
+		 */
+		printf(
+			'<div class="dcs-summary" data-dcs-summary%s>',
+			self::wallet_is_short() ? ' data-dcs-short="1"' : ''
+		);
 		self::render_order_card();
 		self::render_wallet_card();
 		echo '</div>';

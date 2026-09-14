@@ -1119,6 +1119,11 @@ final class Delicat_Builder_V9_Swatches {
 
         $available = $product->get_children();
         if ( empty( $available ) ) { return; }
+        // PRO21: fetch uncached variation posts/meta in bulk, avoiding one query
+        // per variation while retaining WooCommerce's live product objects.
+        if ( function_exists( '_prime_post_caches' ) ) {
+            _prime_post_caches( array_map( 'absint', $available ), false, true );
+        }
 
         $product_preset = $this->product_preset( $product->get_id() );
         $is_subscription_preset = 'delicat_abonnement_premium' === $product_preset;

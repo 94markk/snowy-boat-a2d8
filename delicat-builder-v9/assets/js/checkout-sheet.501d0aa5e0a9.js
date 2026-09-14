@@ -275,6 +275,17 @@
 		/* After the form is in the sheet, so the footer exists to be measured. */
 		watchFooter();
 
+		/*
+		 * The server already compared the wallet against the total and said so
+		 * on the summary. Telling the customer now, rather than after they have
+		 * filled the form in and pressed pay, is the difference between a top-up
+		 * and an abandoned order. Nothing is blocked: the panel sits above the
+		 * form, and another payment method still works.
+		 */
+		if (summary && summary.getAttribute('data-dcs-short') === '1' && config.walletUrl) {
+			showLowFunds();
+		}
+
 		busy = false;
 
 		var first = form.querySelector('input:not([type=hidden]):not([disabled]), select, textarea');

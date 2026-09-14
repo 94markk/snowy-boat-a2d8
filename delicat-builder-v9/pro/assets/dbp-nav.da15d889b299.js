@@ -787,6 +787,66 @@
     window.jQuery(document.body).on('added_to_cart removed_from_cart updated_cart_totals', forget);
   }
 
+  /* PRO21: native product navigation still gets its own complete document.
+     Warm only immutable assets and browser-managed, public product documents;
+     never put account/cart/checkout HTML in our JS cache. */
+  var productWarmSeen = {}, productWarmCount = 0, productAssetsWarmed = false, productVisibleObserver = null;
+  var nativePrefetch = (function () {
+    var link = doc.createElement('link');
+    return !!(link.relList && link.relList.supports && link.relList.supports('prefetch'));
+  })();
+  function productLink(node) {
+    var link = linkFrom(node);
+    if (!link || link.hasAttribute('download') || (link.target && link.target !== '_self') || link.closest('[data-no-turbo],.no-prerender') || link.hasAttribute('data-dbp-skip')) return null;
+    var url = eligible(link.href);
+    if (!url || url.search || url.hash || sameDocument(url)) return null;
+    return nativeProduct(url) || link.matches('[data-delicat-product-link],[data-delicat-instant-product]') ? url : null;
+  }
+  function warmProduct(url) {
+    if (!url || cfg.prefetch === 0 || saveData() || slowLink() || doc.hidden || doc.body.classList.contains('dbp-locked')) return;
+    if (!productAssetsWarmed) {
+      productAssetsWarmed = true;
+      (cfg.productWarm || []).forEach(function (href) {
+        var asset = parseUrl(href);
+        if (!asset || asset.origin !== location.origin || !/\.(css|js)$/.test(asset.pathname)) return;
+        if (nativePrefetch) {
+          var hint = doc.createElement('link'); hint.rel = 'prefetch'; hint.href = asset.href;
+          hint.as = /\.css$/.test(asset.pathname) ? 'style' : 'script'; doc.head.appendChild(hint);
+        } else {
+          fetch(asset.href, { credentials: 'same-origin', cache: 'default', priority: 'low' })
+            .then(function (response) { if (response.ok) return response.arrayBuffer(); }).catch(function () {});
+        }
+      });
+    }
+    // Existing speculation rules already own document warming in Chromium.
+    if (!cfg.publicProductWarm || !nativePrefetch || productWarmCount >= 3 || productWarmSeen[url.href] || doc.querySelector('script[type="speculationrules"]')) return;
+    productWarmSeen[url.href] = true; productWarmCount++;
+    var hint = doc.createElement('link'); hint.rel = 'prefetch'; hint.setAttribute('data-dbp-product-warm', '1'); hint.href = url.href; doc.head.appendChild(hint);
+  }
+  doc.addEventListener('pointerover', function (event) { warmProduct(productLink(event.target)); }, { passive: true });
+  doc.addEventListener('focusin', function (event) { warmProduct(productLink(event.target)); });
+  doc.addEventListener('pointerdown', function (event) { if (event.isPrimary !== false && !event.button) warmProduct(productLink(event.target)); }, { passive: true });
+  doc.addEventListener('click', function (event) {
+    if (event.defaultPrevented || event.button || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (productLink(event.target)) progressStart(); // No delay or click interception.
+  });
+  window.addEventListener('pageshow', progressDone);
+  function warmVisibleProduct() {
+    if (slowLink() || saveData() || !window.IntersectionObserver) return;
+    if (productVisibleObserver) productVisibleObserver.disconnect();
+    var visible = productVisibleObserver = new IntersectionObserver(function (entries) {
+      for (var i = 0; i < entries.length; i++) {
+        if (!entries[i].isIntersecting) continue;
+        var url = productLink(entries[i].target);
+        if (url) { warmProduct(url); visible.disconnect(); break; }
+      }
+    }, { threshold: 0.2 });
+    doc.querySelectorAll('a[data-delicat-product-link],a[data-delicat-instant-product],.product a[href],.delicat-woo-product-card a[href]').forEach(function (link) { visible.observe(link); });
+  }
+  if (doc.readyState === 'complete') schedule(warmVisibleProduct);
+  else window.addEventListener('load', function () { schedule(warmVisibleProduct); }, { once: true });
+  doc.addEventListener('delicat:pro:navigated', function () { schedule(warmVisibleProduct); });
+
   /* --------------------------------------------------------------- start-up */
 
   indexExistingAssets();

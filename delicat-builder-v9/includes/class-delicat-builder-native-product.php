@@ -40,7 +40,7 @@ final class Delicat_Builder_V9_Native_Product {
 		$mode = (string) ( self::product_settings( $id )['express_checkout'] ?? 'inherit' );
 		if ( '1' === $mode ) return true;
 		if ( 'off' === $mode ) return false;
-		return ! empty( self::settings()['express_checkout'] ); /* 'inherit' (and RC20's unticked '0') follow the global switch */
+		return ! empty( self::settings()['express_checkout'] ); /* Per-product off remains authoritative. */
 	}
 
 	/**
@@ -51,18 +51,9 @@ final class Delicat_Builder_V9_Native_Product {
 	public static function express_status( int $id = 0 ): array {
 		$checks = array();
 		$checks[] = array( 'WooCommerce actif', class_exists( 'WooCommerce' ), 'WooCommerce est requis.' );
-		$studio = class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) && is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'express_supported' ) )
-			? Delicat_Builder_V9_Purchase_Native::express_supported()
-			: false;
-		if ( ! class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) ) {
-			$saved  = get_option( 'delicat_builder_v9_purchase_ui', array() );
-			$saved  = is_array( $saved ) ? $saved : array();
-			$studio = ! empty( $saved['enabled'] ) && ! empty( $saved['native_checkout'] );
-		}
-		$checks[] = array( 'Purchase Studio + checkout natif', (bool) $studio, 'Delicat Builder → Purchase Studio : « Enable Purchase Studio » et « Woo-native checkout shell ».' );
 		$checks[] = array( 'Moteur produit natif', ! empty( self::settings()['enabled'] ), 'Cochez « Activer le moteur produit natif » ci-dessus.' );
 		$global = ! empty( self::settings()['express_checkout'] );
-		$checks[] = array( 'Commande express (global)', $global, 'Cochez « Commande express » ci-dessus, ou forcez « Activée » sur la fiche produit.' );
+		$checks[] = array( 'Commande express', $id > 0 ? self::express_enabled_for( $id ) : $global, 'Cochez « Commande express » ci-dessus, ou forcez « Activée » sur la fiche produit.' );
 		if ( $id > 0 ) {
 			$mode = (string) ( self::product_settings( $id )['express_checkout'] ?? 'inherit' );
 			$checks[] = array( 'Produit #' . $id . ' : rendu natif', self::is_active_product( $id ), 'Panneau « Native Product Builder » de la fiche produit : Rendu natif = Activé ou Hériter.' );
@@ -117,7 +108,7 @@ final class Delicat_Builder_V9_Native_Product {
 		if ( is_admin() || wp_doing_ajax() || ! function_exists( 'is_product' ) || ! is_product() ) return;
 		$id = absint( get_queried_object_id() );
 		if ( $id <= 0 || ! self::is_active_product( $id ) ) return;
-		self::record_express( $id, 'off', 'La commande express est retirée : WooCommerce gère le paiement.' );
+		self::record_express( $id, self::express_enabled_for( $id ) ? 'rendered' : 'off', self::express_enabled_for( $id ) ? 'Popup WooCommerce activée pour ce produit.' : 'Commande express désactivée pour ce produit.' );
 	}
 
 	/**
@@ -190,7 +181,7 @@ final class Delicat_Builder_V9_Native_Product {
 			'page_bg' => '#f6f7fb', 'card_bg' => '#ffffff', 'text' => '#111827', 'muted' => '#667085',
 			'primary' => '#6846ff', 'accent' => '#ff365d', 'line' => '#e7e9f2', 'radius' => 24,
 			'show_breadcrumbs' => 0, 'show_short_desc' => 1, 'show_price' => 1, 'show_stock' => 1,
-			'show_details' => 1, 'show_related' => 1, 'show_trust' => 1, 'show_steps' => 1, 'show_mobile_dock' => 1, 'mobile_floating_only' => 1, 'hide_quantity' => 1, 'express_checkout' => 0, 'show_reviews' => 1,
+			'show_details' => 1, 'show_related' => 1, 'show_trust' => 1, 'show_steps' => 1, 'show_mobile_dock' => 1, 'mobile_floating_only' => 1, 'hide_quantity' => 1, 'express_checkout' => 1, 'show_reviews' => 1,
 			'section_title' => 'Choisissez votre option', 'details_title' => 'Détails du produit',
 			'related_title' => 'Vous aimerez aussi', 'steps_title' => 'Comment ça marche ?', 'reviews_title' => 'Avis clients', 'add_text' => 'Ajouter au panier', 'buy_text' => 'Acheter maintenant',
 			'trust_1' => 'Livraison rapide', 'trust_2' => 'Paiement sécurisé',
@@ -545,7 +536,7 @@ final class Delicat_Builder_V9_Native_Product {
 	public static function add_to_cart_text( $text ) { if(!is_string($text))return $text; $s=$GLOBALS['delicat_native_product_settings']??self::settings(); return !empty($s['add_text'])?$s['add_text']:$text; }
 	public static function buy_button(): void { $s=$GLOBALS['delicat_native_product_settings']??self::settings(); echo '<button type="submit" class="button alt dnp-buy-now" name="delicat_native_buy_now" value="1">'.esc_html($s['buy_text']).'</button>'; }
 	/* RC18: Woo passes `false` as the default redirect; a string type hint was a guaranteed PHP 8 TypeError. */
-	public static function buy_now_redirect( $url ) { if(!empty($_REQUEST['dpn_express']))return $url; if(isset($_POST['delicat_native_buy_now']) && '1' === sanitize_text_field(wp_unslash($_POST['delicat_native_buy_now']))) return wc_get_checkout_url(); return $url; } // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Woo add-to-cart owns validation; this flag only selects the post-add redirect.
+	public static function buy_now_redirect( $url ) { if(!empty($_REQUEST['dpn_express']))return $url; if(isset($_POST['delicat_native_buy_now']) && '1' === sanitize_text_field(wp_unslash($_POST['delicat_native_buy_now']))) return isset($_POST['dcs_frame']) && '1' === $_POST['dcs_frame'] ? add_query_arg('dcs_frame', '1', wc_get_checkout_url()) : wc_get_checkout_url(); return $url; } // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Woo add-to-cart owns validation; this flag only selects the post-add redirect.
 
 	public static function assets(): void {
 		if(!function_exists('is_product')||!is_product())return; $id=absint(get_queried_object_id()); if(!self::is_active_product($id))return;
@@ -592,7 +583,7 @@ final class Delicat_Builder_V9_Native_Product {
 		<table class="form-table"><tbody>
 		<tr><th>Activation</th><td><label><input type="checkbox" name="dnp[enabled]" value="1" <?php checked($s['enabled']); ?>> Activer le moteur produit natif</label><br><label><input type="checkbox" name="dnp[force_native_template]" value="1" <?php checked($s['force_native_template']); ?>> Remplacer totalement le template produit WordPress/Elementor</label></td></tr>
 		<tr><th>Sections</th><td><?php foreach(array('show_breadcrumbs'=>'Fil d’Ariane','show_short_desc'=>'Description courte','show_price'=>'Prix inline (desktop)','show_stock'=>'Stock','show_details'=>'Détails','show_related'=>'Produits associés','show_trust'=>'Confiance','show_steps'=>'Comment ça marche','show_mobile_dock'=>'Barre achat mobile','mobile_floating_only'=>'Mobile : boutons flottants uniquement','hide_quantity'=>'Masquer la quantité (produits numériques)','show_reviews'=>'Avis clients (WooCommerce) + bouton « Laisser un avis »') as $k=>$l): ?><label style="display:inline-block;margin:0 18px 8px 0"><input type="checkbox" name="dnp[<?php echo esc_attr($k); ?>]" value="1" <?php checked($s[$k]); ?>> <?php echo esc_html($l); ?></label><?php endforeach; ?></td></tr>
-		<tr><th>Commande express</th><td><label><input type="checkbox" name="dnp[express_checkout]" value="1" <?php checked($s['express_checkout']); ?>> Activer sur tous les produits : « Acheter maintenant » ouvre une feuille de confirmation WooCommerce (clients connectés)</label><br><span style="color:#646970">Chaque fiche produit peut forcer Activée / Désactivée dans son panneau « Delicat native ».</span></td></tr>
+		<tr><th>Commande express</th><td><label><input type="checkbox" name="dnp[express_checkout]" value="1" <?php checked($s['express_checkout']); ?>> Activer sur tous les produits : « Acheter maintenant » ouvre une feuille de confirmation WooCommerce</label><br><span style="color:#646970">Chaque fiche produit peut forcer Activée / Désactivée dans son panneau « Delicat native ».</span></td></tr>
 		<tr><th>Largeur / rayon</th><td><input type="number" min="720" max="1440" name="dnp[max_width]" value="<?php echo esc_attr($s['max_width']); ?>"> px &nbsp; <input type="number" min="10" max="40" name="dnp[radius]" value="<?php echo esc_attr($s['radius']); ?>"> px</td></tr>
 		<tr><th>Couleurs</th><td><?php foreach(array('page_bg'=>'Fond','card_bg'=>'Carte','text'=>'Texte','muted'=>'Secondaire','primary'=>'Primaire','accent'=>'Achat','line'=>'Bordure') as $k=>$l): ?><label style="display:inline-flex;gap:6px;align-items:center;margin:0 14px 10px 0"><?php echo esc_html($l); ?><input type="color" name="dnp[<?php echo esc_attr($k); ?>]" value="<?php echo esc_attr($s[$k]); ?>"></label><?php endforeach; ?></td></tr>
 		<tr><th>Textes</th><td><?php foreach(array('section_title'=>'Titre options','details_title'=>'Titre détails','related_title'=>'Titre associés','steps_title'=>'Titre étapes','reviews_title'=>'Titre avis','add_text'=>'Ajouter','buy_text'=>'Acheter','trust_1'=>'Confiance 1','trust_2'=>'Confiance 2','trust_3'=>'Confiance 3','trust_4'=>'Confiance 4') as $k=>$l): ?><label style="display:block;max-width:620px;margin:8px 0"><?php echo esc_html($l); ?><input class="regular-text" type="text" name="dnp[<?php echo esc_attr($k); ?>]" value="<?php echo esc_attr($s[$k]); ?>"></label><?php endforeach; ?></td></tr>
@@ -631,7 +622,7 @@ final class Delicat_Builder_V9_Native_Product {
 			<?php else : ?>
 				<p style="margin:8px 0 0;color:#646970">Aucune visite enregistrée. Ouvrez une fiche produit sur le site (connecté), puis rechargez cette page.</p>
 			<?php endif; ?>
-			<p style="margin:8px 0 0;color:#646970">La feuille express n’est proposée qu’aux clients connectés ; les visiteurs gardent la page checkout. Pensez à purger LiteSpeed après un changement.</p>
+			<p style="margin:8px 0 0;color:#646970">WooCommerce applique les réglages de connexion et de commande des visiteurs. Pensez à purger LiteSpeed après un changement.</p>
 		</div>
 		<?php
 	}
@@ -658,7 +649,7 @@ final class Delicat_Builder_V9_Native_Product {
 		<p><label>Image bannière du hero (URL)<input style="width:100%" type="url" name="dnp_product[hero_image]" value="<?php echo esc_attr($m['hero_image']); ?>" placeholder="https://..."></label><span style="color:#646970">Format conseillé : 16:9, au moins 1200 × 675 px. L’image produit reste utilisée comme icône.</span></p>
 		<p><label>Titre personnalisé<input style="width:100%" type="text" name="dnp_product[title]" value="<?php echo esc_attr($m['title']); ?>"></label></p>
 		<p><label>Sous-titre<textarea style="width:100%" rows="3" name="dnp_product[subtitle]"><?php echo esc_textarea($m['subtitle']); ?></textarea></label></p>
-		<p><label>Commande express<select name="dnp_product[express_checkout]" style="width:100%"><option value="inherit" <?php selected(in_array($m['express_checkout'],array('inherit','','0'),true)); ?>>Hériter du réglage global</option><option value="1" <?php selected($m['express_checkout'],'1'); ?>>Activée</option><option value="off" <?php selected($m['express_checkout'],'off'); ?>>Désactivée</option></select></label><span style="color:#646970">« Acheter maintenant » ouvre la feuille de confirmation WooCommerce (clients connectés) au lieu de la page checkout.</span></p>
+		<p><label>Commande express<select name="dnp_product[express_checkout]" style="width:100%"><option value="inherit" <?php selected(in_array($m['express_checkout'],array('inherit','','0'),true)); ?>>Hériter du réglage global</option><option value="1" <?php selected($m['express_checkout'],'1'); ?>>Activée</option><option value="off" <?php selected($m['express_checkout'],'off'); ?>>Désactivée</option></select></label><span style="color:#646970">« Acheter maintenant » ouvre la feuille de confirmation WooCommerce au lieu de la page checkout.</span></p>
 		<?php $st=self::express_status($post->ID); ?><p style="padding:8px 10px;border-radius:6px;background:<?php echo $st['ok']?'#edfaef':'#fcf0f1'; ?>"><strong><?php echo $st['ok']?'Express actif sur ce produit':'Express inactif'; ?></strong><?php if(!$st['ok']): foreach($st['checks'] as $c){ if(empty($c[1])){ echo '<br><span style="color:#646970">'.esc_html($c[2]).'</span>'; break; } } endif; ?></p><?php
 	}
 	public static function important_meta_box(WP_Post $post): void {

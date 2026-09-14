@@ -175,7 +175,25 @@ html[data-delicat-theme="dark"] .dlx-social__link.is-tiktok,html.dlc-theme-dark 
 /* will-change stays off until the panel is actually moving. Promoting it while
    warm was measured over 13 taps a side and came out identical (87ms vs 86ms
    median), so it would be compositor memory held all session for nothing. */
-.dlx-drawer.is-open .dlx-drawer__panel,.dlx-drawer.is-dragging .dlx-drawer__panel{will-change:transform}
+.dlx-drawer.is-open .dlx-drawer__panel,.dlx-drawer.is-entering .dlx-drawer__panel,.dlx-drawer.is-dragging .dlx-drawer__panel{will-change:transform}
+
+/* ---- Faster, and one moving thing ----
+   160ms rather than 180ms, and the panel is the only thing that animates. The
+   cards inside used to fade and rise on their own, which is ten more animations
+   competing with the one that matters on the frame the menu opens. */
+.dlx-drawer__panel{transition-duration:160ms}
+.dlx-drawer__scroll>*{opacity:1;transform:none;transition:none}
+
+@media(prefers-reduced-motion:reduce){
+  .dlx-drawer__panel,.dlx-drawer__backdrop{transition-duration:1ms!important}
+}
+
+/* NOT `pointer-events:auto` on the overlay with `none` on the panel.
+   That arrangement leaves the BACKDROP catching taps during entry, and the
+   backdrop carries data-dlx-close - so the click belonging to the tap that
+   opened the menu lands on it and shuts the menu again in the same tap. It is
+   the exact bug the whole overlay being out of hit-testing exists to prevent,
+   and the drawer suite fails on it: one tap firing dlx:open then dlx:close. */
 
 /* --- assets/css/bottom-nav.css --- */
 /* Delicat Bottom Nav (RC30). Phones and tablets only. */

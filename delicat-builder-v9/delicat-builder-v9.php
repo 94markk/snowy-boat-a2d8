@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.19
+ * Version: 9.2.0-pro.22
 
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -151,7 +151,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.19' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.22' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -455,6 +455,12 @@ $delicat_builder_v9_wc_ajax = isset( $_REQUEST['wc-ajax'] ) // phpcs:ignore Word
 	: '';
 if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
+	if ( 'update_order_review' === $delicat_builder_v9_wc_ajax ) {
+		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-checkout-sheet.php' );
+		if ( class_exists( 'Delicat_Builder_V9_Checkout_Sheet', false ) ) {
+			add_filter( 'woocommerce_update_order_review_fragments', array( 'Delicat_Builder_V9_Checkout_Sheet', 'summary_fragments' ) );
+		}
+	}
 	if (
 		class_exists( 'Delicat_Builder_V9_Purchase_Native', false )
 		&& is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'activate_checkout_request' ) )
@@ -1183,7 +1189,11 @@ add_filter(
         // Native Product module itself only attaches at `wp`, after Woo has
         // already chosen the post-add redirect (the checkout-goes-to-cart bug).
         if ( ! empty($_REQUEST['dsb_buy_now']) || 'buy' === $intent || ! empty($_REQUEST['delicat_native_buy_now']) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-            return function_exists('wc_get_checkout_url') ? wc_get_checkout_url() : $url;
+            if ( ! function_exists('wc_get_checkout_url') ) return $url;
+            $checkout_url = wc_get_checkout_url();
+            // Must run before wp_loaded's native add-to-cart redirect.
+            return isset($_POST['dcs_frame']) && '1' === $_POST['dcs_frame']
+                ? add_query_arg('dcs_frame', '1', $checkout_url) : $checkout_url;
         }
         return $url;
     },
@@ -1464,3 +1474,14 @@ add_action(
 if ( ! $delicat_builder_v9_activating ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-audit-fixes.php' );
 }
+
+/* PRO21: enable the requested native popup once on an administrator's upgrade
+ * visit. Subsequent merchant changes and explicit per-product overrides persist. */
+add_action( 'admin_init', static function () {
+    if ( ! current_user_can( 'manage_options' ) || get_option( 'delicat_builder_pro21_popup_enabled' ) ) return;
+    $settings = get_option( 'delicat_builder_v9_native_product', array() );
+    if ( ! is_array( $settings ) ) $settings = array();
+    $settings['express_checkout'] = 1;
+    update_option( 'delicat_builder_v9_native_product', $settings );
+    update_option( 'delicat_builder_pro21_popup_enabled', 1, false );
+} );

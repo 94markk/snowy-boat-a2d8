@@ -32,7 +32,7 @@ function is_admin() { return false; }
 function add_action() {}
 function add_filter() {}
 function apply_filters( $tag, $value ) { return $value; }
-function is_user_logged_in() { return false; }
+function is_user_logged_in() { return (bool) $GLOBALS['stub_logged_in']; }
 function get_current_user_id() { return 0; }
 function absint( $n ) { return abs( (int) $n ); }
 function home_url( $p = '/' ) { return 'https://shop.test' . $p; }
@@ -63,7 +63,28 @@ class Stub_WC { public $cart; public $session = null;
 function WC() { return $GLOBALS['stub_wc']; }
 $GLOBALS['stub_wc'] = new Stub_WC();
 
+/* The wallet plugin, present only when the test says so. */
+$GLOBALS['stub_balance']   = null;
+$GLOBALS['stub_logged_in'] = true;
+class Stub_Wallet_Api {
+    public function get_wallet_balance( $uid, $ctx = 'view' ) {
+        if ( null === $GLOBALS['stub_balance'] ) { throw new RuntimeException( 'no wallet' ); }
+        return $GLOBALS['stub_balance'];
+    }
+}
+class Stub_Wallet { public $wallet; public function __construct() { $this->wallet = new Stub_Wallet_Api(); } }
+function woo_wallet() { return $GLOBALS['stub_woo_wallet']; }
+$GLOBALS['stub_woo_wallet'] = new Stub_Wallet();
+
 require_once __DIR__ . '/../delicat-builder-v9/includes/class-delicat-builder-checkout-sheet.php';
+
+/** wallet_is_short() is private; the summary markup is what it drives. */
+function summary_marks_short(): bool {
+    ob_start();
+    Delicat_Builder_V9_Checkout_Sheet::render_summary();
+    $html = (string) ob_get_clean();
+    return false !== strpos( $html, 'data-dcs-short="1"' );
+}
 
 /* ---- harness ---- */
 $pass = 0; $fail = 0;
@@ -169,6 +190,38 @@ ok(
     false !== strpos( html_entity_decode( esc_attr( $style ), ENT_QUOTES, 'UTF-8' ), '--dcs-paying:"Paiement en cours' ),
     esc_attr( $style )
 );
+
+/* =========================================================================
+   Telling the customer before they fill the form in
+   ====================================================================== */
+group( 'A wallet that will not cover the order' );
+
+$GLOBALS['stub_cart_total'] = 7400.0;
+
+$GLOBALS['stub_balance'] = 22002.0;
+ok( 'a wallet with enough in it is not flagged', ! summary_marks_short() );
+
+$GLOBALS['stub_balance'] = 450.0;
+ok(
+    'one that falls short is',
+    summary_marks_short(),
+    'the balance and the total are both known here; waiting for the gateway to say so costs the sale'
+);
+
+$GLOBALS['stub_balance'] = 7400.0;
+ok( 'exactly enough is not short', ! summary_marks_short() );
+
+$GLOBALS['stub_balance'] = null;   // the wallet plugin throws
+ok(
+    'an unreadable balance is not treated as a shortfall',
+    ! summary_marks_short(),
+    'warning someone their balance is too low when it cannot be read is worse than saying nothing'
+);
+
+$GLOBALS['stub_balance']   = 450.0;
+$GLOBALS['stub_logged_in'] = false;
+ok( 'and a guest is never told about a wallet they do not have', ! summary_marks_short() );
+$GLOBALS['stub_logged_in'] = true;
 
 echo "\n$pass passed, $fail failed\n";
 exit( $fail ? 1 : 0 );

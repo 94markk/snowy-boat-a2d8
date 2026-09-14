@@ -18,7 +18,7 @@ const CHECKOUT_PAGE = `<!doctype html><html><body>
   </div>
 
   <!-- what render_summary() prints when the request carries X-Delicat-Sheet -->
-  <div class="dcs-summary" data-dcs-summary>
+  <div class="dcs-summary" data-dcs-summary__SHORT__>
     <div class="dcs-card dcs-card--order">
       <div class="dcs-row"><span class="dcs-row__label">Produit</span>
         <span class="dcs-row__value dcs-row__value--strong">Free Fire 1080 Diamants</span></div>
@@ -140,7 +140,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
         posts.push(req.postData() || '');
         if (opts.serverFails) return route.fulfill({ status: 500, body: 'boom' });
         if (opts.noForm) return route.fulfill({ contentType: 'text/html', body: '<html><body>nope</body></html>' });
-        return route.fulfill({ contentType: 'text/html', body: CHECKOUT_PAGE });
+        return route.fulfill({ contentType: 'text/html',
+          body: CHECKOUT_PAGE.replace('__SHORT__', opts.short ? ' data-dcs-short="1"' : '') });
       }
       return route.fulfill({ contentType: 'text/html', body: PRODUCT_PAGE(opts) });
     });
@@ -470,6 +471,54 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     ok('a footer that grows after the swap is still being watched',
       after.reserved === after.footerHeight + 24,
       'reserved ' + after.reserved + 'px for a ' + after.footerHeight + 'px footer');
+    await ctx.close();
+  }
+
+  group('A wallet that will not cover the order');
+
+  {
+    /*
+     * Announced with the summary, not after the customer has filled the form in
+     * and pressed pay. The server compares the balance against the total and
+     * says so on the summary wrapper; nothing here does the arithmetic.
+     */
+    const { ctx, p } = await page({ short: true });
+    await p.click('.dnp-buy-now');
+    await p.waitForTimeout(400);
+
+    const r = await p.evaluate(() => {
+      const sheet = document.getElementById('dcs-sheet');
+      const panel = sheet.querySelector('[data-dcs-low]');
+      return {
+        shown: !!panel,
+        title: panel ? (panel.querySelector('h3') || {}).textContent : '',
+        wallet: panel ? (panel.querySelector('a.dcs__btn--primary') || {}).href : '',
+        formStillThere: !!sheet.querySelector('form.checkout'),
+        gatewaysStillThere: sheet.querySelectorAll('#payment input[name="payment_method"]').length,
+        payButtonUsable: !!document.getElementById('place_order') &&
+          getComputedStyle(document.getElementById('place_order')).pointerEvents !== 'none',
+        demoted: sheet.classList.contains('dcs--low')
+      };
+    });
+
+    ok('the customer is told before they fill anything in', r.shown);
+    ok('it says what happened', r.title === 'Solde insuffisant', r.title);
+    ok('and gives them the way out', r.wallet === 'https://shop.test/my-wallet/', r.wallet);
+    ok('WooCommerce\'s form is untouched', r.formStillThere && r.gatewaysStillThere === 2,
+      r.gatewaysStillThere + ' gateways');
+    ok('another payment method is still usable', r.payButtonUsable,
+      'a short wallet must not block a card');
+    ok('but the pay button stops competing with the top-up', r.demoted);
+    await ctx.close();
+  }
+
+  {
+    /* A wallet that covers it says nothing at all. */
+    const { ctx, p } = await page();
+    await p.click('.dnp-buy-now');
+    await p.waitForTimeout(400);
+    const shown = await p.evaluate(() => !!document.querySelector('#dcs-sheet [data-dcs-low]'));
+    ok('a wallet with enough in it is not warned about', !shown);
     await ctx.close();
   }
 

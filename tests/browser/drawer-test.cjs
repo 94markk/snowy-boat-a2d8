@@ -53,7 +53,16 @@ const BARS = { x: 36, y: 34 };
       warm: d.classList.contains('is-warm'), vis: d.style.visibility || 'visible',
       pe: d.style.pointerEvents || 'auto', locked: document.documentElement.classList.contains('dlx-open'),
       left: Math.round(panel.getBoundingClientRect().left), bodyTop: document.body.style.top || '',
-      scrollY: Math.round(window.scrollY), inertKids: document.querySelectorAll('body > [data-dlx-inert]').length
+      scrollY: Math.round(window.scrollY),
+      /* Genuinely inert, not merely hidden from screen readers: aria-hidden
+         tells assistive tech to skip a region, it does not stop a tap or a Tab
+         key landing in it. Both are asserted. */
+      inertKids: Array.prototype.filter.call(document.body.children,
+        (n) => n !== d && !/^(SCRIPT|STYLE|LINK)$/.test(n.tagName) && n.inert).length,
+      ariaHiddenKids: Array.prototype.filter.call(document.body.children,
+        (n) => n !== d && !/^(SCRIPT|STYLE|LINK)$/.test(n.tagName) && n.getAttribute('aria-hidden') === 'true').length,
+      openerExpanded: (document.querySelector('.dsb-menu-toggle') || {}).getAttribute
+        ? document.querySelector('.dsb-menu-toggle').getAttribute('aria-expanded') : null
     };
   });
 
@@ -73,7 +82,10 @@ const BARS = { x: 36, y: 34 };
     ok('one tap fires open, and nothing else', e.join(',') === 'dlx:open', e.join(',') || '(nothing)');
     ok('the panel is all the way on screen', s.isOpen && s.left === 0, JSON.stringify(s));
     ok('the page behind is locked', s.locked);
-    ok('and hidden from assistive tech', s.inertKids > 0);
+    ok('the page behind is genuinely inert, not just aria-hidden',
+      s.inertKids > 0 && s.ariaHiddenKids > 0,
+      'inert=' + s.inertKids + ' aria-hidden=' + s.ariaHiddenKids);
+    ok('and the three bars say the menu is open', s.openerExpanded === 'true', String(s.openerExpanded));
     ok('hit-testing is handed back once it has arrived', !s.entering, JSON.stringify(s));
     await ctx.close();
   }
@@ -145,7 +157,10 @@ const BARS = { x: 36, y: 34 };
     const s = await state(p);
     ok('a tap on the backdrop closes it', !s.isOpen && s.left < -300, JSON.stringify(s));
     ok('the scroll lock is released', !s.locked && s.bodyTop === '');
-    ok('aria-hidden comes back off the page', s.inertKids === 0);
+    ok('the page behind is handed back exactly as it was',
+      s.inertKids === 0 && s.ariaHiddenKids === 0,
+      'inert=' + s.inertKids + ' aria-hidden=' + s.ariaHiddenKids);
+    ok('and the three bars say it is closed', s.openerExpanded === 'false', String(s.openerExpanded));
     ok('and it parks itself for the next tap', s.warm && s.vis === 'hidden' && s.pe === 'none', JSON.stringify(s));
     await ctx.close();
   }
