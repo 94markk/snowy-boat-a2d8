@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T09:15:57.467026+00:00",
+  "built": "2026-09-14T09:54:00.104853+00:00",
   "version": "9.2.0-pro.16",
-  "bytes": 5808752,
+  "bytes": 5811494,
   "count": 358,
   "files": {
     "PERFORMANCE-PRO11.md": {
@@ -39,7 +39,7 @@
     },
     "asset-versions.php": {
       "bytes": 9345,
-      "sha256": "31f8b8e7a8ddb9b0e6885230c321492a890f6b300ac696dd1cc4dfe7aa18fcc7"
+      "sha256": "0215374e03ecc90480e27f640761402363dfecb7b8c2615add53426e6e9e5f45"
     },
     "assets/components/all-components.min.css": {
       "bytes": 167942,
@@ -313,13 +313,13 @@
       "bytes": 16446,
       "sha256": "37ddcc37240d7cb58e69e5f39e19c458ceab37a0c26af3b51dff4c222e3d7f67"
     },
-    "assets/css/drawer.c88a58469a80.css": {
-      "bytes": 15122,
-      "sha256": "c88a58469a80181d094bf8df01cf79bf150b96fcec14881d49fe9555d3b55e33"
+    "assets/css/drawer.0fff89ed678a.css": {
+      "bytes": 16048,
+      "sha256": "0fff89ed678a98d7592f22cc3cdecc66d4cb381cc69ea79c8423d41752c2cc5c"
     },
     "assets/css/drawer.css": {
-      "bytes": 15122,
-      "sha256": "c88a58469a80181d094bf8df01cf79bf150b96fcec14881d49fe9555d3b55e33"
+      "bytes": 16048,
+      "sha256": "0fff89ed678a98d7592f22cc3cdecc66d4cb381cc69ea79c8423d41752c2cc5c"
     },
     "assets/css/editor.css": {
       "bytes": 33712,
@@ -982,8 +982,8 @@
       "sha256": "e44b65b520ae57061ea08ac23d7df14cb141a356f89c096738cdba07d124545b"
     },
     "includes/class-delicat-builder-drawer.php": {
-      "bytes": 24570,
-      "sha256": "eaa56ff3996f782cef22eaa8e4b7163d836d809bdc6a338cce92504c5684ac5f"
+      "bytes": 25460,
+      "sha256": "490b23bf871e768880d5acdd58d22e8eb060f1335de26aa57751f5da15ee6d70"
     },
     "includes/class-delicat-builder-editor.php": {
       "bytes": 34616,

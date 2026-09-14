@@ -35,7 +35,7 @@ return array(
  'assets/css/bottom-nav.css' => 'assets/css/bottom-nav.699fe2732a87.css',
  'assets/css/currency.css' => 'assets/css/currency.8334671dccfa.css',
  'assets/css/design-studio.css' => 'assets/css/design-studio.37ddcc37240d.css',
- 'assets/css/drawer.css' => 'assets/css/drawer.c88a58469a80.css',
+ 'assets/css/drawer.css' => 'assets/css/drawer.0fff89ed678a.css',
  'assets/css/editor.css' => 'assets/css/editor.d6aaf6200823.css',
  'assets/css/express-checkout.css' => 'assets/css/express-checkout.8c4a133fbef3.css',
  'assets/css/live-selling.css' => 'assets/css/live-selling.fc707e93fe87.css',

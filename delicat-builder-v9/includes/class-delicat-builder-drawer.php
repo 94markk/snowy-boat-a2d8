@@ -357,9 +357,26 @@ final class Delicat_Builder_V9_Drawer {
 						<?php if ( '' !== $logo ) : ?>
 							<img class="dlx-brand__logo" src="<?php echo esc_url( $logo ); ?>" alt="" width="40" height="40" loading="eager" decoding="async">
 						<?php else : ?>
-							<span class="dlx-brand__mark" aria-hidden="true"><?php echo esc_html( function_exists( 'mb_substr' ) ? mb_substr( $title, 0, 1, 'UTF-8' ) : substr( $title, 0, 1 ) ); ?></span>
+							<?php
+							$brand_initial = '' !== $title ? $title : ( '' !== $subtitle ? $subtitle : 'D' );
+							$brand_initial = function_exists( 'mb_substr' ) ? mb_substr( $brand_initial, 0, 1, 'UTF-8' ) : substr( $brand_initial, 0, 1 );
+							?>
+							<span class="dlx-brand__mark" aria-hidden="true"><?php echo esc_html( function_exists( 'mb_strtoupper' ) ? mb_strtoupper( $brand_initial, 'UTF-8' ) : strtoupper( $brand_initial ) ); ?></span>
 						<?php endif; ?>
-						<span class="dlx-brand__copy"><strong><?php echo esc_html( $title ); ?></strong><?php if ( '' !== $subtitle ) : ?><small><?php echo esc_html( $subtitle ); ?></small><?php endif; ?></span>
+						<?php
+						/*
+						 * pro.17: never print an empty line. $title falls back to the WordPress
+						 * site name, and when that is blank too the old markup emitted an empty
+						 * <strong> — which is the unbalanced gap beside the logo the merchant
+						 * reported. With no title the subtitle becomes the primary line instead
+						 * of being left orphaned and grey halfway down the bar.
+						 */
+						$brand_primary   = '' !== $title ? $title : $subtitle;
+						$brand_secondary = '' !== $title ? $subtitle : '';
+						?>
+						<?php if ( '' !== $brand_primary ) : ?>
+							<span class="dlx-brand__copy"><strong><?php echo esc_html( $brand_primary ); ?></strong><?php if ( '' !== $brand_secondary ) : ?><small><?php echo esc_html( $brand_secondary ); ?></small><?php endif; ?></span>
+						<?php endif; ?>
 					</a>
 					<button type="button" class="dlx-drawer__close" data-dlx-close aria-label="<?php esc_attr_e( 'Fermer le menu', 'delicat-builder-v9' ); ?>"><?php echo self::icon( 'close' ); ?></button>
 				</header>
