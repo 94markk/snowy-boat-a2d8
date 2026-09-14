@@ -16,20 +16,32 @@ final class Delicat_Builder_V9_Audit_Fixes {
  }
  public static function asset_url( $url ) {
   if ( ! is_string( $url ) || '' === $url ) { return $url; }
-  // DELICAT_BUILDER_V9_URL is always https; an http or protocol-relative enqueue must still map.
-  $https = set_url_scheme( $url, 'https' );
-  if ( strpos( $https, DELICAT_BUILDER_V9_URL ) !== 0 ) { return $url; }
-  static $map = null;
-  if ( null === $map ) { $file = DELICAT_BUILDER_V9_DIR . 'asset-versions.php'; $map = is_file( $file ) ? require $file : array(); }
-  $parts = explode( '?', substr( $https, strlen( DELICAT_BUILDER_V9_URL ) ), 2 );
-  return isset( $map[ $parts[0] ] ) ? DELICAT_BUILDER_V9_URL . $map[ $parts[0] ] : $url;
+  /*
+   * DELICAT_BUILDER_V9_URL is forced to https at definition time, so a site genuinely
+   * served over http (staging, local) enqueues http URLs that would not match it.
+   * Compare without the scheme, and rebuild with the scheme the caller actually used —
+   * forcing https onto the output would point every mapped asset at a certificate that
+   * does not exist there, leaving the storefront unstyled and script-dead.
+   */
+  static $map = null, $base = null;
+  if ( null === $map ) {
+   $file = DELICAT_BUILDER_V9_DIR . 'asset-versions.php';
+   $map  = is_file( $file ) ? require $file : array();
+   $base = preg_replace( '#^https?://#i', '//', DELICAT_BUILDER_V9_URL );
+  }
+  $bare = preg_replace( '#^https?://#i', '//', $url );
+  if ( ! is_string( $bare ) || strpos( $bare, (string) $base ) !== 0 ) { return $url; }
+  $parts = explode( '?', substr( $bare, strlen( (string) $base ) ), 2 );
+  if ( ! isset( $map[ $parts[0] ] ) ) { return $url; }
+  $prefix = substr( $url, 0, strlen( $url ) - strlen( $parts[0] ) - ( isset( $parts[1] ) ? strlen( $parts[1] ) + 1 : 0 ) );
+  return $prefix . $map[ $parts[0] ];
  }
  public static function script_exclusions( $list ): array {
   $list = is_array( $list ) ? $list : array();
-  return array_values( array_unique( array_merge( $list, array( 'DelicatSessionConfig', 'DelicatExpress', 'DIPIdentityModal', 'DelicaBuilderV9', 'DelicatShell', 'DBPNavConfig', 'DBPStateConfig', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', '/delicat-builder-v9/', '/delicat-identity-pro/assets/' ) ) ) );
+  return array_values( array_unique( array_merge( $list, array( 'DelicatSessionConfig', 'DelicatExpress', 'DIPIdentityModal', 'DelicaBuilderV9', 'DelicatShell', 'DBPNavConfig', 'DBPStateConfig', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dbv9-speculation', '/delicat-builder-v9/', '/delicat-identity-pro/assets/' ) ) ) );
  }
  public static function inline_attributes( $attributes ): array {
-  if ( preg_match( '/^(delicat-|delica-|dbp-|dip-)/', (string) ( $attributes['id'] ?? '' ) ) ) {
+  if ( preg_match( '/^(delicat-|delica-|dbp-|dbv9-|dip-)/', (string) ( $attributes['id'] ?? '' ) ) ) {
    $attributes['data-no-optimize'] = '1'; $attributes['data-no-delay'] = '1'; $attributes['data-cfasync'] = 'false';
   }
   return $attributes;

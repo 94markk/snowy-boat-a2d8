@@ -79,7 +79,18 @@ final class Delicat_Builder_V9_Native_Product {
 		 * writes per guest pageview for a diagnostic panel. Only write when
 		 * the recorded product/state actually changes. */
 		$last = get_transient( 'delicat_builder_v9_express_last' );
-		if ( is_array( $last ) && (int) ( $last['product'] ?? 0 ) === $id && (string) ( $last['state'] ?? '' ) === $state && (string) ( $last['version'] ?? '' ) === DELICAT_BUILDER_V9_VERSION ) {
+		if (
+			is_array( $last )
+			&& (int) ( $last['product'] ?? 0 ) === $id
+			&& (string) ( $last['state'] ?? '' ) === $state
+			&& (string) ( $last['detail'] ?? '' ) === $detail
+			&& (string) ( $last['version'] ?? '' ) === DELICAT_BUILDER_V9_VERSION
+			/* Refresh hourly even when nothing changed: skipping the write entirely
+			 * also skips the TTL refresh, so on a store whose traffic is steady views
+			 * of one product the transient expired 24 h after the first view and the
+			 * diagnostics panel reported no attempt at all. */
+			&& ( time() - (int) ( $last['time'] ?? 0 ) ) < HOUR_IN_SECONDS
+		) {
 			return;
 		}
 		set_transient(

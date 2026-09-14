@@ -370,8 +370,8 @@ final class Delicat_Builder_V9_TurboNav {
 		 *
 		 * A script element only registers its rules when it is parsed with the
 		 * speculationrules type, so an inert copy costs nothing until swapped. */
-		$inert = '<script type="delicat/speculationrules" id="dbv9-speculation">' . $json . '</script>';
-		$swap  = '<script id="dbv9-speculation-gate">(function(){'
+		$inert = '<script type="delicat/speculationrules" id="dbv9-speculation" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $json . '</script>';
+		$swap  = '<script id="dbv9-speculation-gate" data-no-optimize="1" data-no-delay="1" data-cfasync="false">(function(){'
 			. 'var r=document.documentElement;'
 			. 'if(r.className.indexOf("delicat-slow-net")>-1)return;'
 			. 'var s=document.getElementById("dbv9-speculation");if(!s)return;'

@@ -50,6 +50,7 @@
   var progressTimer = null;
   var hoverTimer = null;
   var observer = null;
+  var hasSwapped = false;
 
   /* ---------------------------------------------------------------- device */
 
@@ -454,6 +455,7 @@
     next.setAttribute('tabindex', '-1');
     try { next.focus({ preventScroll: true }); } catch (e) { /* older engines */ }
 
+    hasSwapped = true;
     announce(payload.title || '');
     emit('delicat:pro:navigated', { url: url.href, route: payload.route, main: next });
 
@@ -557,6 +559,9 @@
   /* ---------------------------------------------------------------- navigate */
 
   function hardNavigate(url) {
+    /* Product links leave as real documents. Record where the shopper was, so a
+       later engine-handled Back can put them back on the same row of the list. */
+    try { scrollPositions[key(parseUrl(location.href))] = window.pageYOffset; } catch (e) { /* no-op */ }
     window.location.href = url.href;
   }
 
@@ -675,6 +680,12 @@
   }, true);
 
   window.addEventListener('popstate', function (event) {
+    /* Until this document has swapped something, its DOM is whatever the browser
+       gave us and already matches the address bar — a fresh load, or a bfcache
+       restore coming back from a product page. Re-navigating there would refetch
+       the page over the shopper's mobile data and then yank the scroll to the top,
+       undoing the position the browser had just restored. */
+    if (!hasSwapped) return;
     if (!currentMain() || doc.body.classList.contains('dbp-locked')) return;
     var url = parseUrl(location.href);
     if (!url) return;
