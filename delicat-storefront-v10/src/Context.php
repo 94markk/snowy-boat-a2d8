@@ -184,38 +184,67 @@ final class Context {
 	 * Getting this wrong in the permissive direction serves one customer's cart
 	 * or wallet balance to another, so every uncertain case answers "private".
 	 */
+	/** @var bool|null memoised per instance, never per method */
+	private $private = null;
+
 	public function is_private(): bool {
-		static $private = null;
-		if ( null !== $private ) {
-			return $private;
+		/*
+		 * Memoised on the instance rather than in a method-level static.
+		 *
+		 * A `static $private` inside this method would be shared by every
+		 * instance of the class for the life of the process, so reset() could
+		 * not clear it - and the first answer would be returned for every
+		 * subsequent question. In a single web request that happens to be
+		 * harmless, because there is only one URL to classify. It is not
+		 * harmless in a test, in WP-CLI, or under any persistent runtime, and
+		 * a cache decision that cannot be tested is how V9 ended up with four
+		 * modules disagreeing about which pages were personal.
+		 */
+		if ( null !== $this->private ) {
+			return $this->private;
 		}
 
-		$private = true;
+		$this->private = true;
 
 		if ( self::KIND_FRONT !== $this->kind && self::KIND_FEED !== $this->kind ) {
-			return $private;
+			return $this->private;
 		}
 		if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() ) {
-			return $private;
+			return $this->private;
 		}
 
 		$path = strtolower( (string) wp_parse_url( $this->request_uri(), PHP_URL_PATH ) );
-		foreach ( array( 'cart', 'panier', 'checkout', 'commande', 'my-account', 'mon-compte', 'wallet', 'portefeuille', 'order-received', 'commande-recue' ) as $needle ) {
+		foreach ( self::PRIVATE_SEGMENTS as $needle ) {
 			if ( false !== strpos( $path, '/' . $needle ) ) {
-				return $private;
+				return $this->private;
 			}
 		}
 
 		foreach ( array_keys( $_COOKIE ) as $name ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- shape detection only.
-			$name = (string) $name;
-			if ( preg_match( '/^(?:wordpress_logged_in|woocommerce_items_in_cart|wp_woocommerce_session|delicat_|dip_)/i', $name ) ) {
-				return $private;
+			if ( preg_match( '/^(?:wordpress_logged_in|woocommerce_items_in_cart|wp_woocommerce_session|delicat_|dip_)/i', (string) $name ) ) {
+				return $this->private;
 			}
 		}
 
-		$private = false;
-		return $private;
+		$this->private = false;
+		return $this->private;
 	}
+
+	/**
+	 * Path segments that make a response one person's.
+	 *
+	 * Both languages of every WooCommerce page this store uses, because a store
+	 * with translated permalinks that only listed the English ones would treat
+	 * its real cart URL as shared.
+	 */
+	private const PRIVATE_SEGMENTS = array(
+		'cart', 'panier',
+		'checkout', 'commande',
+		'my-account', 'mon-compte',
+		'wallet', 'portefeuille', 'my-wallet', 'mon-portefeuille',
+		'order-received', 'commande-recue',
+		'lost-password', 'mot-de-passe-perdu',
+	);
 
 	public function request_uri(): string {
 		return isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : '/';

@@ -58,6 +58,23 @@ function esc_url_raw( $t ) { return (string) $t; }
 function wp_unslash( $t ) { return is_string( $t ) ? stripslashes( $t ) : $t; }
 function wp_parse_url( $url, $component = -1 ) { return parse_url( $url, $component ); }
 function is_admin() { return false; }
+function is_user_logged_in() { return ! empty( $GLOBALS['dlx_logged_in'] ); }
+function is_rtl() { return false; }
+function get_bloginfo( $key = 'name', $filter = 'raw' ) { return $GLOBALS['dlx_bloginfo'][ $key ] ?? ''; }
+function set_transient( $k, $v, $t = 0 ) { $GLOBALS['dlx_options']['_t_' . $k] = $v; return true; }
+function get_transient( $k ) { return $GLOBALS['dlx_options']['_t_' . $k] ?? false; }
+function delete_transient( $k ) { unset( $GLOBALS['dlx_options']['_t_' . $k] ); return true; }
+function sanitize_html_class( $c ) { return preg_replace( '/[^A-Za-z0-9_-]/', '', (string) $c ); }
+function sanitize_title( $t ) { return strtolower( preg_replace( '/[^A-Za-z0-9_-]+/', '-', (string) $t ) ); }
+function sanitize_hex_color( $c ) { return preg_match( '/^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i', (string) $c ) ? $c : null; }
+function wp_strip_all_tags( $t, $break = false ) { return strip_tags( (string) $t ); }
+function esc_textarea( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES, 'UTF-8' ); }
+function has_filter( $hook, $cb = false ) { return ! empty( $GLOBALS['dlx_filters'][ $hook ] ); }
+function wp_kses_post( $t ) { return (string) $t; }
+function add_query_arg( ...$a ) { return '/'; }
+function wp_get_upload_dir() { return array( 'baseurl' => 'https://delicastoreha.com/wp-content/uploads' ); }
+function current_user_can( $c ) { return true; }
+function __return_zero() { return 0; }
 function __( $text, $domain = null ) { return $text; }
 function esc_html__( $text, $domain = null ) { return esc_html( $text ); }
 function esc_attr__( $text, $domain = null ) { return esc_attr( $text ); }
