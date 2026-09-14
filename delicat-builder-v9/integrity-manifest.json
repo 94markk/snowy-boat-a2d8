@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T13:21:05.744951+00:00",
+  "built": "2026-09-14T13:52:37.853932+00:00",
   "version": "9.2.0-pro.17",
-  "bytes": 5672218,
+  "bytes": 5676759,
   "count": 344,
   "files": {
     "PRO-README.md": {
@@ -15,7 +15,7 @@
     },
     "asset-versions.php": {
       "bytes": 9107,
-      "sha256": "3856ba03416d4590134197492d176b6c90a8d19bb10827fb291c4a550754c82f"
+      "sha256": "283d95dd2aae7781af5379ad678a5b63f14263f6ebae98bd78bb0d9bfd380e6b"
     },
     "assets/components/all-components.min.2e15b066a0f0.css": {
       "bytes": 176958,
@@ -233,13 +233,13 @@
       "bytes": 12899,
       "sha256": "58e75566b12ee893e4a88502c00ba1c3e4b5886111ab6aaa94a69b28f483d951"
     },
-    "assets/css/app-tuning.704739912742.css": {
-      "bytes": 18624,
-      "sha256": "7047399127420c5a554536e673558541d9c4310f47eefea97f9ef6f8fcb7d1ea"
-    },
     "assets/css/app-tuning.css": {
-      "bytes": 18624,
-      "sha256": "7047399127420c5a554536e673558541d9c4310f47eefea97f9ef6f8fcb7d1ea"
+      "bytes": 19686,
+      "sha256": "d2e86efda3963986dcc883a35e1667a62c069fc55cc7a5774fb6b00753e018f7"
+    },
+    "assets/css/app-tuning.d2e86efda396.css": {
+      "bytes": 19686,
+      "sha256": "d2e86efda3963986dcc883a35e1667a62c069fc55cc7a5774fb6b00753e018f7"
     },
     "assets/css/blocks/cart.64ac8c04c3a0.css": {
       "bytes": 913,
@@ -1022,8 +1022,8 @@
       "sha256": "f846fcef466b9fb36751d06dfa6808fdba443d77e87ecd60a7dc30c1263cf76c"
     },
     "includes/class-delicat-builder-notifications.php": {
-      "bytes": 52959,
-      "sha256": "2950df49274b08ad750e2eac531aa896d5997522302ae868f6366195dbcb2eeb"
+      "bytes": 55376,
+      "sha256": "7fffd929e1465ee68f804054167dcc1aa26028bc73ac74c6bb198f073d2c92e2"
     },
     "includes/class-delicat-builder-pages.php": {
       "bytes": 10794,

@@ -28,7 +28,7 @@ return array(
  'assets/css/announcement-admin.css' => 'assets/css/announcement-admin.9b7534037632.css',
  'assets/css/announcement.css' => 'assets/css/announcement.5f505da83c1a.css',
  'assets/css/app-polish.css' => 'assets/css/app-polish.58e75566b12e.css',
- 'assets/css/app-tuning.css' => 'assets/css/app-tuning.704739912742.css',
+ 'assets/css/app-tuning.css' => 'assets/css/app-tuning.d2e86efda396.css',
  'assets/css/blocks/cart.css' => 'assets/css/blocks/cart.64ac8c04c3a0.css',
  'assets/css/blocks/checkout.css' => 'assets/css/blocks/checkout.ae7ec08c3e6d.css',
  'assets/css/blocks/product-collection.css' => 'assets/css/blocks/product-collection.ff09561d6a98.css',

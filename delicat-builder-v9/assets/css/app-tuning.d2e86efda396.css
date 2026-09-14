@@ -134,10 +134,29 @@
 
 /* ---------- B. Slow network ---------- */
 
-/* No web font arrived, so set the system stack explicitly rather than
-   letting each component fall through to a different default. */
+/* No web font arrived, so set the system stack explicitly rather than letting
+   each component fall through to a different default.
+
+   pro.17: this was a list of seven selectors, and a list of selectors misses
+   things. Measured in a browser with the class applied: body, the carousel
+   title and the card name switched to the system stack, while h1, the section
+   titles and every button kept `Inter, -apple-system, ...`. A slow connection
+   was therefore rendering the page in two different stacks with two different
+   sets of metrics.
+
+   The storefront already routes almost every font-family through one variable
+   - theme-system.css and storefront-polish.css both resolve to
+   var(--delicat-font) - so redefining the variable reaches every one of those
+   selectors at once, including the ones nobody thought to list. Only the two
+   places that name a family literally still need naming. */
+html.delicat-slow-net {
+  --delicat-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* The literal stacks, which read no variable and so cannot be reached above. */
 html.delicat-slow-net body,
 html.delicat-slow-net .delicat-carousel__title,
+html.delicat-slow-net .delicat-testimonials .delicat-testimonial__quote,
 html.delicat-slow-net .delicat-product-card__name,
 html.delicat-slow-net .delicat-builder-hero__title,
 html.delicat-slow-net .delicat-process__card h3,

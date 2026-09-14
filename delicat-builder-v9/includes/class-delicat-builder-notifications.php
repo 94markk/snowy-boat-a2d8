@@ -27,6 +27,7 @@ final class Delicat_Builder_V9_Notifications {
 	private static bool $booted = false;
 	private static bool $event_hooks = false;
 	private static bool $legacy_bridge = false;
+	private static bool $loader_printed = false;
 	private static bool $assets_registered = false;
 	private static bool $shortcode_assets = false;
 	private static ?array $items_cache = null;
@@ -96,13 +97,72 @@ final class Delicat_Builder_V9_Notifications {
 		);
 	}
 
+	/**
+	 * Load the notification runtime on the first attempt to open the bell,
+	 * rather than on every page view.
+	 *
+	 * pro.17. The bell is 7.9KB of gzipped JavaScript that was downloaded by
+	 * every visitor on every page — and almost nobody opens it. Everything a
+	 * closed bell shows is already server-rendered: the icon, the unread count,
+	 * and a compact snapshot of the rows, all of it in the markup. This file's
+	 * own comment says the panel is only created after a real click. So the
+	 * script is only needed at that click.
+	 *
+	 * On a 2G link 7.9KB is over a second of a pipe the shopper needs for the
+	 * page in front of them.
+	 *
+	 * The loader is ~400 bytes, it re-fires the click once the script has run so
+	 * the first tap still opens the panel, and it marks the button busy while
+	 * fetching so a slow link does not feel like a dead button. If it fails, the
+	 * bell does not open — a degraded control, not a broken page, which is why
+	 * this is safe to do for a script and would not be for a stylesheet.
+	 */
+	private static function print_deferred_loader(): void {
+		if ( self::$loader_printed ) {
+			return;
+		}
+		self::$loader_printed = true;
+
+		self::register_assets();
+
+		$scripts = wp_scripts();
+		$handle  = 'delicat-builder-v9-notifications';
+		$src     = isset( $scripts->registered[ $handle ] ) ? (string) $scripts->registered[ $handle ]->src : '';
+		if ( '' === $src ) {
+			return;
+		}
+		$src = add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, $src );
+
+		/* Printed in the footer, after the bell markup exists. */
+		add_action(
+			'wp_footer',
+			static function () use ( $src ) {
+				printf(
+					'<script id="delicat-builder-v9-notifications-loader">'
+					. '(function(){var s=%s,l=0;'
+					. 'document.addEventListener("click",function(e){'
+					. 'var b=e.target.closest&&e.target.closest("[data-dbv9-notification-open]");'
+					. 'if(!b||l)return;l=1;e.preventDefault();b.setAttribute("aria-busy","true");'
+					. 'var t=document.createElement("script");t.src=s;t.defer=true;'
+					. 't.onload=function(){b.removeAttribute("aria-busy");b.click();};'
+					. 't.onerror=function(){b.removeAttribute("aria-busy");l=0;};'
+					. 'document.head.appendChild(t);},true);}());</script>' . "\n",
+					wp_json_encode( $src )
+				);
+			},
+			99
+		);
+	}
+
 	public static function maybe_enqueue_shell_assets(): void {
 		if ( is_admin() || ! class_exists( 'Delicat_Builder_V9_Shell', false ) || ! Delicat_Builder_V9_Shell::header_expected() ) { return; }
 		$settings = Delicat_Builder_V9_Shell::settings();
 		if ( empty( $settings['show_notifications'] ) ) { return; }
 		self::register_assets();
+		/* The stylesheet stays: the bell is visible at first paint and must be
+		 * styled then. Only the runtime waits for a click. */
 		wp_enqueue_style( 'delicat-builder-v9-notifications' );
-		wp_enqueue_script( 'delicat-builder-v9-notifications' );
+		self::print_deferred_loader();
 	}
 
 	public static function register_shortcodes(): void {
@@ -607,7 +667,7 @@ final class Delicat_Builder_V9_Notifications {
 		if ( ! (int) get_option( self::ENABLED_OPTION, 1 ) ) { return ''; }
 		self::register_assets();
 		wp_enqueue_style( 'delicat-builder-v9-notifications' );
-		wp_enqueue_script( 'delicat-builder-v9-notifications' );
+		self::print_deferred_loader();
 		self::$shortcode_assets = true;
 
 		$visible = self::bell_items();
