@@ -178,13 +178,18 @@ final class Delicat_Builder_V9_Legal {
 		return home_url( '/' . $docs[ $key ]['slug'] . '/' );
 	}
 
+	/** @var array<string,int> Per-request memo for page_id(); cleared by publish(). */
+	private static array $resolved_pages = array();
+
 	public static function page_id( string $key ): int {
 		/* tokens() resolves ten cross-reference URLs per rendered document and
-		 * the footer resolves them again; resolve each key once per request. */
-		static $resolved = array();
-		if ( array_key_exists( $key, $resolved ) ) {
-			return $resolved[ $key ];
+		 * the footer resolves them again; resolve each key once per request.
+		 * publish() clears this, so a document created earlier in the same
+		 * request is never reported missing by a later status() call. */
+		if ( array_key_exists( $key, self::$resolved_pages ) ) {
+			return self::$resolved_pages[ $key ];
 		}
+		$resolved =& self::$resolved_pages;
 
 		$s  = self::settings();
 		$id = isset( $s['pages'][ $key ] ) ? absint( $s['pages'][ $key ] ) : 0;
@@ -462,6 +467,9 @@ final class Delicat_Builder_V9_Legal {
 		$s                  = self::settings();
 		$s['pages'][ $key ] = $page_id;
 		update_option( self::OPTION, $s, true );
+		/* A "publish all" run resolves each document again to report its state;
+		 * without this the memo would still hold the pre-publish miss. */
+		self::$resolved_pages = array();
 
 		return $page_id === (int) $status['page_id'] ? 'updated' : 'created';
 	}

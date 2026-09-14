@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T02:59:19.149931+00:00",
+  "built": "2026-09-14T03:01:51.731078+00:00",
   "version": "9.2.0-pro.16",
-  "bytes": 5784770,
+  "bytes": 5785251,
   "count": 358,
   "files": {
     "PERFORMANCE-PRO11.md": {
@@ -1034,8 +1034,8 @@
       "sha256": "04f312cff4927b532a150c76e81fadb7cde3bfe9e88741b1199ca1e4d9a124c4"
     },
     "includes/class-delicat-builder-legal.php": {
-      "bytes": 23336,
-      "sha256": "0128b8e5d58980c07161dad48e2aafe365b39e7c2df036bb5eb4db74beaea63b"
+      "bytes": 23817,
+      "sha256": "dbf3ebfaf12ad8241746ea811dd04870e6d703b1445e9b6d7b51985c4966b87d"
     },
     "includes/class-delicat-builder-live-selling.php": {
       "bytes": 26328,
