@@ -10,12 +10,29 @@ things they cover cannot be reasoned about from the source alone:
   the wallet while an ordinary validation error does not, and that every failure
   mode ends on the real checkout page rather than nowhere.
 
+- **drawer-test.cjs** — the menu. Asserts that one tap opens it and leaves it
+  open, that nothing is tappable while the panel is still sliding in, that every
+  way of closing it works and hands the page back its scroll position, that the
+  search filter narrows and restores the list, and that a swipe dismisses the
+  menu without following the link it started on.
+
+  Use real input here — `page.touchscreen`, or CDP `Input.dispatch*`. An earlier
+  version dispatched `new PointerEvent(...)` and "found" a stuck half-open panel
+  that neither a real finger nor a real stylus can produce, because touch
+  pointers get implicit pointer capture. The swipe is exercised with a pen: CDP's
+  synthetic touch does not run Chromium's gesture pipeline, so the part the
+  browser decides is asserted as a `touch-action` declaration instead.
+
+  `DRAWER_JS=/path/to/drawer.js` runs the suite against a different build of the
+  script, which is how these cases were checked against the one that shipped.
+
 - **speculation-gate-test.cjs** — which speculation rules get registered on a
   fast connection and on a slow one.
 
 Run them with a Chromium on the machine:
 
     NODE_PATH=/path/to/node_modules node tests/browser/checkout-sheet-test.cjs
+    NODE_PATH=/path/to/node_modules node tests/browser/drawer-test.cjs
     NODE_PATH=/path/to/node_modules node tests/browser/speculation-gate-test.cjs
 
 They need `playwright` resolvable on NODE_PATH and a Chromium at the

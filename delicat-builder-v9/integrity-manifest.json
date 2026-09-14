@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T17:47:47.458453+00:00",
+  "built": "2026-09-14T18:26:09.395115+00:00",
   "version": "9.2.0-pro.17",
-  "bytes": 5780221,
+  "bytes": 5799019,
   "count": 349,
   "files": {
     "PRO-README.md": {
@@ -15,7 +15,7 @@
     },
     "asset-versions.php": {
       "bytes": 9267,
-      "sha256": "00df9e0907eaf1d0a0a797d0da257ec9802b9f436e2aa06f01687db1ad1dc39e"
+      "sha256": "412946caee7e7b6605efcc146a43ce74f9a36da7390400e5bcbeb675de1a0608"
     },
     "assets/components/all-components.min.351bbc99b97a.css": {
       "bytes": 177594,
@@ -297,13 +297,13 @@
       "bytes": 16446,
       "sha256": "37ddcc37240d7cb58e69e5f39e19c458ceab37a0c26af3b51dff4c222e3d7f67"
     },
-    "assets/css/drawer.0fff89ed678a.css": {
-      "bytes": 16048,
-      "sha256": "0fff89ed678a98d7592f22cc3cdecc66d4cb381cc69ea79c8423d41752c2cc5c"
-    },
     "assets/css/drawer.css": {
-      "bytes": 16048,
-      "sha256": "0fff89ed678a98d7592f22cc3cdecc66d4cb381cc69ea79c8423d41752c2cc5c"
+      "bytes": 17126,
+      "sha256": "e78470656ee30ebb7b2cb03ac54df075485878d36ee0f1a91cd2c037047df34b"
+    },
+    "assets/css/drawer.e78470656ee3.css": {
+      "bytes": 17126,
+      "sha256": "e78470656ee30ebb7b2cb03ac54df075485878d36ee0f1a91cd2c037047df34b"
     },
     "assets/css/editor.css": {
       "bytes": 33712,
@@ -473,13 +473,13 @@
       "bytes": 11642,
       "sha256": "52a62b377a0c14bde0506c1a4ae72b55d205a6338896c5dec86f0cd22de90532"
     },
-    "assets/css/storefront-chrome.min.68de3ce72d88.css": {
-      "bytes": 93618,
-      "sha256": "68de3ce72d882815d766c46ba0ced341374f43b2f9b3b7a9c2bfd4252923dbb3"
+    "assets/css/storefront-chrome.min.0f7bd88afd89.css": {
+      "bytes": 94696,
+      "sha256": "0f7bd88afd899e0f56f6e5628167912ffef08e42b057e1806d79bbfe29c29ecd"
     },
     "assets/css/storefront-chrome.min.css": {
-      "bytes": 93618,
-      "sha256": "68de3ce72d882815d766c46ba0ced341374f43b2f9b3b7a9c2bfd4252923dbb3"
+      "bytes": 94696,
+      "sha256": "0f7bd88afd899e0f56f6e5628167912ffef08e42b057e1806d79bbfe29c29ecd"
     },
     "assets/css/storefront-polish.b9b16958f28c.css": {
       "bytes": 23269,
@@ -641,13 +641,13 @@
       "bytes": 7939,
       "sha256": "97edbc14de2dcdbe37f686967d6ba1b271cb9de913b5374eb720ad9c535532c7"
     },
-    "assets/js/drawer.2284ffbe86a0.js": {
-      "bytes": 12286,
-      "sha256": "2284ffbe86a0ef81ed4f525016d2f719f13c9d1240b3483b5b9b5c1d1bcf655b"
+    "assets/js/drawer.2afe81f6a37f.js": {
+      "bytes": 19529,
+      "sha256": "2afe81f6a37fd7287208c326e4a3c8fa1a8ae4372fdeb5bd6100c9c4a0d3dd22"
     },
     "assets/js/drawer.js": {
-      "bytes": 12286,
-      "sha256": "2284ffbe86a0ef81ed4f525016d2f719f13c9d1240b3483b5b9b5c1d1bcf655b"
+      "bytes": 19529,
+      "sha256": "2afe81f6a37fd7287208c326e4a3c8fa1a8ae4372fdeb5bd6100c9c4a0d3dd22"
     },
     "assets/js/editor.950970965bf0.js": {
       "bytes": 49476,

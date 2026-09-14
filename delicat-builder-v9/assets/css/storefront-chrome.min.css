@@ -37,6 +37,18 @@ html.dlc-theme-dark .dsb8-header .dsb8-header__logo.has-dark-logo .dsb8-header__
 .dlx-drawer.is-open .dlx-drawer__backdrop{opacity:1}
 .dlx-drawer.is-open .dlx-drawer__panel{transform:none}
 .dlx-drawer.is-dragging .dlx-drawer__panel{transition:none}
+/* While the panel is still sliding in it is on screen but not where the
+   customer can see it, so nothing in it accepts a tap yet. See show(). */
+.dlx-drawer.is-entering{pointer-events:none}
+/* Sideways belongs to the swipe-to-close gesture, up and down to the scroll
+   region. Without this the browser claims horizontal panning for itself and
+   fires pointercancel on the first sideways move, which killed the drag before
+   it had travelled far enough to mean anything - traced as
+   pointerdown, pointermove, pointercancel, and nothing after. preventDefault on
+   pointermove cannot win that argument; declaring the intent here can. */
+.dlx-drawer__panel{touch-action:pan-y}
+/* The fields keep their own gestures: dragging inside a long value scrolls it. */
+.dlx-drawer input,.dlx-drawer textarea,.dlx-drawer select{touch-action:auto}
 html.dlx-open,html.dlx-open body{overflow:hidden!important}
 html.dlx-open body{position:fixed;width:100%}
 html.dlx-open .dap-floating,html.dlx-open .dnp-mobile-dock,html.dlx-open .dpn-checkout-dock,html.dlx-open .delicat-bottom-nav,html.dlx-open [data-delicat-assistant],html.dlx-open [class*="delicat-assistant"],html.dlx-open [id*="delicat-assistant"],html.dlx-open [class*="assistant-widget"],html.dlx-open [id*="assistant-widget"],html.dlx-open [class*="assistant-fab"],html.dlx-open [id*="assistant-fab"],html.dlx-open [class*="chatbot"],html.dlx-open [id*="chatbot"],html.dlx-open iframe[title*="chat" i],html.dlx-open iframe[title*="assistant" i]{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
@@ -160,6 +172,9 @@ html[data-delicat-theme="dark"] .dlx-social__link.is-tiktok,html.dlc-theme-dark 
 .dlx-drawer.is-warm{visibility:hidden;pointer-events:none}
 .dlx-drawer.is-warm .dlx-drawer__backdrop{opacity:0}
 .dlx-drawer__panel{contain:layout paint style;will-change:auto}
+/* will-change stays off until the panel is actually moving. Promoting it while
+   warm was measured over 13 taps a side and came out identical (87ms vs 86ms
+   median), so it would be compositor memory held all session for nothing. */
 .dlx-drawer.is-open .dlx-drawer__panel,.dlx-drawer.is-dragging .dlx-drawer__panel{will-change:transform}
 
 /* --- assets/css/bottom-nav.css --- */

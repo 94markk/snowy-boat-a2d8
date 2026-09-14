@@ -9,7 +9,7 @@
   'use strict';
   var doc = document, html = doc.documentElement;
   var drawer = null, panel = null, scroller = null, search = null, empty = null;
-  var open = false, lastFocus = null, lockY = 0, closeTimer = null, drag = null, walletTimer = null, openedOnPointer = false;
+  var open = false, lastFocus = null, lockY = 0, closeTimer = null, enterTimer = null, drag = null, walletTimer = null, pointerOpenAt = 0, swipeEndedAt = 0;
   var FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select,textarea,[tabindex]:not([tabindex="-1"])';
   var raf = window.requestAnimationFrame || function (cb) { return window.setTimeout(cb, 16); };
 
@@ -52,17 +52,41 @@
     open = true;
     lastFocus = doc.activeElement;
     if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = null; }
+    if (panel) panel.removeEventListener('transitionend', onCloseEnd);
     drawer.hidden = false;
     unwarm();
     drawer.setAttribute('aria-hidden', 'false');
 
-    /* Paint the moving panel first. Inerting every body child used to happen
-       before the first visual response and made the three-bar tap feel stuck. */
+    /*
+     * Not tappable until it is actually on screen.
+     *
+     * unwarm() above makes the drawer hit-testable immediately, but the panel
+     * spends the next 180ms sliding in from off screen. Anything tapped in that
+     * window hits menu markup the customer cannot see yet: a second quick tap
+     * on the three bars landed on the brand link at the top of the panel and
+     * navigated to the home page. is-entering keeps the whole overlay out of
+     * hit-testing until the slide has finished.
+     */
+    drawer.classList.add('is-entering');
+
+    /*
+     * Paint the moving panel first. Inerting every body child used to happen
+     * before the first visual response and made the three-bar tap feel stuck.
+     *
+     * The frame split below was measured, not assumed. Four other orderings
+     * were tried - starting the slide in the tap's own task, deferring the
+     * scroll lock by a frame, deferring it by a task, collapsing the two frames
+     * into one - and all four landed inside the run-to-run spread at 4x and 6x
+     * CPU throttling (medians 82-95ms, individual taps 66-138ms). There is no
+     * frame to win here: the tap already costs about one frame of real work.
+     * Leave it alone unless a measurement says otherwise.
+     */
     lock();
     if (scroller) scroller.scrollTop = 0;
     raf(function () {
       if (!open) return;
       drawer.classList.add('is-open');
+      armEntered();
       raf(function () {
         if (!open) return;
         setInert(true);
@@ -76,15 +100,57 @@
   function hide() {
     if (!drawer || !open) return;
     open = false;
+    entered();
     drawer.classList.remove('is-open');
     drawer.classList.remove('is-dragging');
     if (panel) panel.style.transform = '';
     setInert(false);
     unlock();
-		closeTimer = window.setTimeout(function () { if (!open) warm(); closeTimer = null; }, 180);
+
+    /*
+     * Parking the panel again waits for the slide-out to finish. The old fixed
+     * 180ms matched the transition's own 180ms exactly, so a single late frame
+     * made the panel disappear while it was still on screen. transitionend is
+     * the honest signal; the timer behind it only covers the case where no
+     * transition ran at all (reduced motion, or a browser that skipped it).
+     */
+    if (closeTimer) { window.clearTimeout(closeTimer); }
+    closeTimer = window.setTimeout(park, 420);
+    if (panel) panel.addEventListener('transitionend', onCloseEnd);
 
     if (lastFocus && lastFocus.focus) { try { lastFocus.focus({ preventScroll: true }); } catch (e) {} }
     doc.dispatchEvent(new CustomEvent('dlx:close'));
+  }
+
+  /* The slide-in is over: hand hit-testing back. transitionend is the honest
+     signal; the timer covers reduced motion and any browser that skips it. */
+  function entered() {
+    if (enterTimer) { window.clearTimeout(enterTimer); enterTimer = null; }
+    if (panel) panel.removeEventListener('transitionend', onEnterEnd);
+    if (drawer) drawer.classList.remove('is-entering');
+  }
+
+  function onEnterEnd(e) {
+    if (e.target !== panel || e.propertyName !== 'transform') return;
+    entered();
+  }
+
+  function armEntered() {
+    if (enterTimer) window.clearTimeout(enterTimer);
+    enterTimer = window.setTimeout(entered, 420);
+    if (panel) panel.addEventListener('transitionend', onEnterEnd);
+  }
+
+  function park() {
+    if (closeTimer) { window.clearTimeout(closeTimer); closeTimer = null; }
+    if (panel) panel.removeEventListener('transitionend', onCloseEnd);
+    if (!open) warm();
+  }
+
+  function onCloseEnd(e) {
+    /* Only the panel's own slide, not a colour fade on something inside it. */
+    if (e.target !== panel || e.propertyName !== 'transform') return;
+    park();
   }
 
   /* wallet: one refresh per open, through the existing nonce-protected action */
@@ -127,14 +193,52 @@
     if (empty) empty.hidden = !q || shown > 0;
   }
 
-  /* swipe to close (horizontal drag on the panel) */
+  /* ---------------------------------------------------------------------
+     Swipe to close
+
+     The panel captures the pointer explicitly. Chromium already delivers the
+     whole stream here without it - touch pointers get implicit capture, and a
+     swipe past the panel's edge was checked with real touch and real pen input
+     and ended cleanly either way - so this is not a fix for anything customers
+     hit. It is here because the drag writes an inline transform and turns the
+     transition off, and a stream that ends somewhere else would leave the menu
+     parked halfway across the screen; lostpointercapture covers the one case
+     the browser really can take the gesture away, a system back swipe or a
+     notification shade.
+     ------------------------------------------------------------------ */
+  function endDrag(commit) {
+    if (!drag) return;
+    var d = drag; drag = null;
+    drawer.classList.remove('is-dragging');
+    /* A swipe is not a tap. Whatever the finger started on - and on this panel
+       that is almost always a menu link - its click has to be thrown away, or
+       swiping the menu shut navigates somewhere on the way out. */
+    if (d.on) swipeEndedAt = Date.now();
+    if (commit && d.on && Math.abs(d.dx) > Math.min(110, panel.offsetWidth * 0.3)) { hide(); return; }
+    panel.style.transform = '';
+  }
+
   function onDown(e) {
     if (!open || e.pointerType === 'mouse' || e.button) return;
-    if (closest(e.target, 'input,textarea,select,button,a')) return;
-    drag = { x: e.clientX, y: e.clientY, dx: 0, on: false, left: drawer.classList.contains('is-left') };
+    /*
+     * Only the fields are excluded, not every control.
+     *
+     * This used to bail on `a` and `button` as well, which is nearly the whole
+     * panel: the account row, the quick tiles, every menu item. Swiping to
+     * close therefore did nothing unless the finger happened to land in a gap
+     * between cards. The drag does not arm until the finger has travelled 10px
+     * horizontally and more sideways than up, so a tap on a link is still a tap
+     * - and endDrag above discards the click of a gesture that did arm.
+     *
+     * Text fields keep their own horizontal gestures: dragging in one moves the
+     * caret and selects, and that must not slide the menu away instead.
+     */
+    if (closest(e.target, 'input,textarea,select')) return;
+    drag = { x: e.clientX, y: e.clientY, dx: 0, on: false, id: e.pointerId, left: drawer.classList.contains('is-left') };
+    try { if (panel.setPointerCapture) panel.setPointerCapture(e.pointerId); } catch (err) {}
   }
   function onMove(e) {
-    if (!drag) return;
+    if (!drag || (drag.id !== undefined && e.pointerId !== drag.id)) return;
     var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (!drag.on) { if (Math.abs(dx) < 10 || Math.abs(dx) < Math.abs(dy)) return; drag.on = true; drawer.classList.add('is-dragging'); }
     var out = drag.left ? Math.min(0, dx) : Math.max(0, dx);
@@ -142,12 +246,12 @@
     panel.style.transform = 'translateX(' + out + 'px)';
     if (e.cancelable) e.preventDefault();
   }
-  function onUp() {
-    if (!drag) return;
-    var d = drag; drag = null;
-    drawer.classList.remove('is-dragging');
-    if (d.on && Math.abs(d.dx) > Math.min(110, panel.offsetWidth * 0.3)) { hide(); return; }
-    panel.style.transform = '';
+  function onUp(e) {
+    if (drag && e && e.pointerId !== undefined && drag.id !== undefined && e.pointerId !== drag.id) return;
+    if (drag && e && e.pointerId !== undefined) {
+      try { if (panel.releasePointerCapture && panel.hasPointerCapture && panel.hasPointerCapture(e.pointerId)) panel.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    endDrag(true);
   }
 
   function copy(button) {
@@ -171,7 +275,16 @@
     doc.addEventListener('pointerdown', function (e) {
       var trigger = closest(e.target, '[data-dsb8-menu-trigger],[data-dlx-open],.dsb-menu-toggle');
       if (!trigger || open) return;
-      openedOnPointer = true;
+      /*
+       * A timestamp rather than a flag. The click that follows this pointerdown
+       * has to be swallowed, or the menu would open and shut in one tap - but a
+       * flag only clears when that click actually arrives on the trigger, and a
+       * tap that slides off the button never produces one. The flag then sat
+       * true for the rest of the page's life and swallowed the NEXT genuine
+       * activation: after one slid tap, opening the menu from the keyboard
+       * stopped working entirely. A timestamp expires on its own.
+       */
+      pointerOpenAt = Date.now();
       e.preventDefault();
       show();
     }, true);
@@ -180,7 +293,49 @@
     doc.addEventListener('click', function (e) {
       var t = e.target;
       if (!t || t.nodeType !== 1) return;
-      if (closest(t, '[data-dsb8-menu-trigger],[data-dlx-open],.dsb-menu-toggle')) { e.preventDefault(); if (e.stopImmediatePropagation) e.stopImmediatePropagation(); if (openedOnPointer) { openedOnPointer = false; return; } open ? hide() : show(); return; }
+
+      /*
+       * THE CLICK THAT BELONGS TO THE TAP THAT JUST OPENED THE MENU.
+       *
+       * Opening happens on pointerdown, which makes the drawer hit-testable
+       * straight away. The click for that same tap is dispatched at pointerup
+       * and hit-tests afresh - and by then the finger is over the drawer, not
+       * over the three bars. It landed on the backdrop, the backdrop carries
+       * data-dlx-close, and the menu shut itself in the same tap that opened
+       * it. Traced, not guessed: pointerdown@path, pointerup@path, click@DIV,
+       * with dlx:open and dlx:close both inside one tap.
+       *
+       * The tap has already been acted on, so its click is spent, wherever it
+       * landed. The window is generous because a slow phone can take a while to
+       * turn pointerup into click, and it clears itself either way.
+       */
+      if (pointerOpenAt) {
+        var age = Date.now() - pointerOpenAt;
+        pointerOpenAt = 0;
+        if (age < 700) {
+          e.preventDefault();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          return;
+        }
+      }
+
+      /* The click belonging to a swipe, not a tap. See endDrag. */
+      if (swipeEndedAt) {
+        var since = Date.now() - swipeEndedAt;
+        swipeEndedAt = 0;
+        if (since < 700) {
+          e.preventDefault();
+          if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+          return;
+        }
+      }
+
+      if (closest(t, '[data-dsb8-menu-trigger],[data-dlx-open],.dsb-menu-toggle')) {
+        e.preventDefault();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        open ? hide() : show();
+        return;
+      }
       if (!open) return;
       if (closest(t, '[data-dlx-close]')) { e.preventDefault(); hide(); return; }
       var toggle = closest(t, '[data-dlx-toggle]');
@@ -212,9 +367,11 @@
       panel.addEventListener('pointermove', onMove, { passive: false });
       panel.addEventListener('pointerup', onUp, { passive: true });
       panel.addEventListener('pointercancel', onUp, { passive: true });
+      /* The system can take the pointer away mid-swipe - a notification shade, a
+         back gesture. Without this the drag would never end. */
+      panel.addEventListener('lostpointercapture', function () { endDrag(false); }, { passive: true });
     }
     window.addEventListener('pageshow', function (e) { if (e.persisted && open) hide(); });
-    window.addEventListener('resize', function () { if (open && window.innerWidth >= 1280) { /* keep open; panel width is capped by CSS */ } });
     if (window.requestIdleCallback) window.requestIdleCallback(warm, { timeout: 2500 });
     else window.setTimeout(warm, 900);
   }
