@@ -58,7 +58,7 @@ return array(
  'assets/css/shell-admin.css' => 'assets/css/shell-admin.4d53af4f5c83.css',
  'assets/css/shell.css' => 'assets/css/shell.1ea8b90ec38a.css',
  'assets/css/site.css' => 'assets/css/site.52a62b377a0c.css',
- 'assets/css/storefront-chrome.min.css' => 'assets/css/storefront-chrome.min.71a2dfd5ef52.css',
+ 'assets/css/storefront-chrome.min.css' => 'assets/css/storefront-chrome.min.40e47a65213e.css',
  'assets/css/storefront-polish.css' => 'assets/css/storefront-polish.f9e8896af78b.css',
  'assets/css/swatch-product-admin.css' => 'assets/css/swatch-product-admin.c9717c10e666.css',
  'assets/css/swatch-studio-admin.css' => 'assets/css/swatch-studio-admin.cec94fe12c60.css',

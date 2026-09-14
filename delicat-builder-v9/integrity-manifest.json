@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T09:54:00.104853+00:00",
+  "built": "2026-09-14T10:38:34.027196+00:00",
   "version": "9.2.0-pro.16",
-  "bytes": 5811494,
+  "bytes": 5821042,
   "count": 358,
   "files": {
     "PERFORMANCE-PRO11.md": {
@@ -39,7 +39,7 @@
     },
     "asset-versions.php": {
       "bytes": 9345,
-      "sha256": "0215374e03ecc90480e27f640761402363dfecb7b8c2615add53426e6e9e5f45"
+      "sha256": "51873b0eae69c9c189d8c695281553734ffdcfc81ac139fd81f9560ef1bc4265"
     },
     "assets/components/all-components.min.css": {
       "bytes": 167942,
@@ -497,13 +497,13 @@
       "bytes": 11642,
       "sha256": "52a62b377a0c14bde0506c1a4ae72b55d205a6338896c5dec86f0cd22de90532"
     },
-    "assets/css/storefront-chrome.min.71a2dfd5ef52.css": {
-      "bytes": 86962,
-      "sha256": "71a2dfd5ef52b0d57eb49c8e194d73467ca8af52e60b4aa1d15f1941031ff26a"
+    "assets/css/storefront-chrome.min.40e47a65213e.css": {
+      "bytes": 91736,
+      "sha256": "40e47a65213e42cf4237116c4131eaf53a631119b288478a22b0e8d1d910d994"
     },
     "assets/css/storefront-chrome.min.css": {
-      "bytes": 86962,
-      "sha256": "71a2dfd5ef52b0d57eb49c8e194d73467ca8af52e60b4aa1d15f1941031ff26a"
+      "bytes": 91736,
+      "sha256": "40e47a65213e42cf4237116c4131eaf53a631119b288478a22b0e8d1d910d994"
     },
     "assets/css/storefront-polish.css": {
       "bytes": 23290,
