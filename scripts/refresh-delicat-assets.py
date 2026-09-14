@@ -97,7 +97,28 @@ manifest = {
     "count": len(files),
     "files": {k: files[k] for k in sorted(files)},
 }
-with open(os.path.join(ROOT, "integrity-manifest.json"), "w", encoding="utf-8") as fh:
+
+# Keep the previous build stamp when nothing else changed. Without this every
+# packaging run rewrites the manifest with a new timestamp and dirties the working
+# tree, which makes "is the package in sync with the source?" unanswerable from git.
+manifest_path = os.path.join(ROOT, "integrity-manifest.json")
+unchanged = False
+if os.path.exists(manifest_path):
+    try:
+        with open(manifest_path, encoding="utf-8") as fh:
+            previous = json.load(fh)
+        if {k: v for k, v in previous.items() if k != "built"} == {
+            k: v for k, v in manifest.items() if k != "built"
+        }:
+            manifest["built"] = previous.get("built", manifest["built"])
+            unchanged = True
+    except (OSError, ValueError):
+        pass
+
+with open(manifest_path, "w", encoding="utf-8") as fh:
     json.dump(manifest, fh, indent=2)
     fh.write("\n")
-print("wrote    integrity-manifest.json (%d files, version %s)" % (len(files), version))
+print(
+    "%s integrity-manifest.json (%d files, version %s)"
+    % ("verified" if unchanged else "wrote   ", len(files), version)
+)
