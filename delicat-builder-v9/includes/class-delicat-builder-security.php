@@ -345,29 +345,121 @@ final class Delicat_Builder_V9_Security {
 		return false;
 	}
 
-	public static function protect_private_response(): void {
+	/** Wallet and order routes are personal even though they are ordinary pages. */
+	private static function is_wallet_or_order_path(): bool {
+		$path = strtolower( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '/' ), PHP_URL_PATH ) ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		foreach ( array( '/my-wallet', '/woo-wallet', '/wallet', '/mon-portefeuille', '/order' ) as $needle ) {
+			if ( false !== strpos( $path, $needle ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Whether a signed-in shopper's catalogue pages may be stored in LiteSpeed's
+	 * per-user private cache. Off by default: it needs LiteSpeed's private cache to
+	 * be configured, and it should be validated on staging before it is switched on.
+	 */
+	public static function private_page_cache_enabled(): bool {
+		return (bool) apply_filters(
+			'delicat_builder_v9_private_page_cache',
+			(bool) get_option( 'delicat_builder_v9_private_page_cache', false )
+		);
+	}
+
+	/**
+	 * Two tiers, not one.
+	 *
+	 * Until pro.16 this sent `no-store` to every signed-in visitor and every guest
+	 * carrying a WooCommerce cookie — that is, to nearly everyone, on every page.
+	 * `no-store` on a main-frame document disqualifies it from the browser's
+	 * back/forward cache, so pressing Back from a product page, the single most
+	 * common movement on a storefront, meant a full network load and a full uncached
+	 * WordPress render instead of an instant restore. It also defined DONOTCACHEPAGE
+	 * at priority 0, which made private_cache_allowed() — and the whole RC32
+	 * private-cache design documented in its own docblock — permanently unreachable,
+	 * and stopped TurboNav printing speculation rules for signed-in customers.
+	 *
+	 * Tier A, unchanged: anything genuinely sensitive — cart, checkout, account,
+	 * wallet, order, a sensitive action, a preview, a navigation fragment — stays
+	 * no-store, uncacheable, everywhere.
+	 *
+	 * Tier B, new: a catalogue document (home, shop, category, product, information
+	 * page) belonging to someone with state gets `private, no-cache, must-revalidate`
+	 * and `Vary: Cookie`. `private` keeps it out of every shared cache; `no-cache`
+	 * forces revalidation before the browser may reuse it, so a stale wallet figure
+	 * can never be painted from the HTTP cache. What it does allow is the
+	 * back/forward cache, which is a same-tab, same-user, in-process restore of a
+	 * document that person already had — not a cache anyone else can read — and the
+	 * state layers already repaint on restore (pro/assets/dbp-state.js and
+	 * assets/js/session.js both refresh on a persisted pageshow).
+	 *
+	 * Server-side private caching stays off unless the merchant switches it on, so
+	 * this change by itself alters no cache storage at all.
+	 */
+	/**
+	 * Which of the three cache tiers this response belongs to.
+	 *
+	 * 'shared'    — nothing personal about it; this function says nothing about it.
+	 * 'personal'  — a catalogue document belonging to someone with state.
+	 * 'sensitive' — commerce, account, wallet, nonce, preview or navigation fragment.
+	 *
+	 * Separated from the header emission so the decision can be tested directly.
+	 */
+	public static function response_cache_tier(): string {
 		try {
-			$private = is_user_logged_in() || self::has_private_cookie() || isset( $_GET['dbp_nav'] ) || isset( $_SERVER['HTTP_X_DELICAT_PRO_NAV'] ) || self::is_private_context();
+			if (
+				self::is_private_context()
+				|| isset( $_GET['dbp_nav'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache policy only.
+				|| isset( $_SERVER['HTTP_X_DELICAT_PRO_NAV'] )
+				|| self::is_wallet_or_order_path()
+			) {
+				return 'sensitive';
+			}
+			return ( is_user_logged_in() || self::has_private_cookie() ) ? 'personal' : 'shared';
 		} catch ( Throwable $error ) {
 			/* RC18: context probes call into optional modules; never let one fatal
 			 * inside this critical file. Fail closed: treat the response as private. */
 			unset( $error );
-			$private = true;
+			return 'sensitive';
 		}
-		if ( ! $private ) {
+	}
+
+	public static function protect_private_response(): void {
+		$tier = self::response_cache_tier();
+		if ( 'shared' === $tier ) {
 			return;
 		}
 
-		// Do not let a page cache/CDN store commerce, nonce, account, wallet or
-		// authenticated action responses as public catalog HTML.
+		if ( 'sensitive' === $tier ) {
+			// Do not let a page cache/CDN store commerce, nonce, account, wallet or
+			// authenticated action responses as public catalog HTML.
+			if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+				define( 'DONOTCACHEPAGE', true );
+			}
+			nocache_headers();
+			header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0', true );
+			header( 'Pragma: no-cache', true );
+			header( 'X-Robots-Tag: noindex, noarchive', false );
+			do_action( 'litespeed_control_set_nocache', 'Delicat Builder private/sensitive response' );
+			return;
+		}
+
+		/* Tier B. Deliberately no nocache_headers(): its 1984 Expires and Pragma are
+		 * what make a response look unstorable to every layer, bfcache included. */
+		header( 'Cache-Control: private, no-cache, must-revalidate', true );
+		header( 'Vary: Cookie', false );
+		header( 'X-Robots-Tag: noindex, noarchive', false );
+
+		if ( self::private_page_cache_enabled() ) {
+			self::hint_private_cache( 'Delicat catalogue document (per-user)' );
+			return;
+		}
 		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
 			define( 'DONOTCACHEPAGE', true );
 		}
-		nocache_headers();
-		header( 'Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0', true );
-		header( 'Pragma: no-cache', true );
-		header( 'X-Robots-Tag: noindex, noarchive', false );
-		do_action( 'litespeed_control_set_nocache', 'Delicat Builder private/sensitive response' );
+		do_action( 'litespeed_control_set_nocache', 'Delicat catalogue document (browser-private only)' );
 	}
 
 	public static function secure_rest_response( $response, $server, $request ) {

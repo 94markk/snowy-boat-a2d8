@@ -204,6 +204,14 @@
   }
   doc.addEventListener('delicat:pro:refresh', function () { fetchState('manual'); });
 
+  /* A page restored from the back/forward cache is a snapshot of a moment that
+     may be minutes old — the cart, wallet balance and identity on it are stale,
+     and the customer may even have signed out in another tab. Repaint before
+     they can read it. session.js does the same for the V9 transport. */
+  window.addEventListener('pageshow', function (event) {
+    if (event && event.persisted) { fetchState('bfcache'); }
+  });
+
   doc.addEventListener('visibilitychange', function () {
     if (doc.visibilityState !== 'visible' || (!cfg.initial && !state)) return;
     if (!state || Date.now() - (state.time * 1000) < 30000) return;

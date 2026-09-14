@@ -116,6 +116,6 @@ return array(
  'pro/assets/dbp-app.css' => 'pro/assets/dbp-app.7a879c9be0ba.css',
  'pro/assets/dbp-critical.css' => 'pro/assets/dbp-critical.fe8be8e23362.css',
  'pro/assets/dbp-nav.js' => 'pro/assets/dbp-nav.a50abeda5299.js',
- 'pro/assets/dbp-state.js' => 'pro/assets/dbp-state.3d92762ed0b8.js',
+ 'pro/assets/dbp-state.js' => 'pro/assets/dbp-state.05c0c9f530f3.js',
  'pro/assets/dbp-type.css' => 'pro/assets/dbp-type.b55df9990c0e.css',
 );

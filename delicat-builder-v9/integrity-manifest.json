@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T09:12:16.880283+00:00",
+  "built": "2026-09-14T09:15:57.467026+00:00",
   "version": "9.2.0-pro.16",
-  "bytes": 5803626,
+  "bytes": 5808752,
   "count": 358,
   "files": {
     "PERFORMANCE-PRO11.md": {
@@ -39,7 +39,7 @@
     },
     "asset-versions.php": {
       "bytes": 9345,
-      "sha256": "1c65535dbea8af9fb3baf7c2ed42aad0e5dcf084950db2be8220d91357a81cef"
+      "sha256": "31f8b8e7a8ddb9b0e6885230c321492a890f6b300ac696dd1cc4dfe7aa18fcc7"
     },
     "assets/components/all-components.min.css": {
       "bytes": 167942,
@@ -914,8 +914,8 @@
       "sha256": "894a2032adc23434fd6c44bc6c2f752d09fe87f9142529ef7cca00e4920672fd"
     },
     "delicat-builder-v9.php": {
-      "bytes": 71950,
-      "sha256": "11b6defcf2a828b747b205732b3c54f57644cd0d7cd5b0dae39193175a7f53fd"
+      "bytes": 71994,
+      "sha256": "152910b09e13cd12ba585a7829de374168de497a1d46bd395077cf1b5b80e713"
     },
     "includes/class-delicat-builder-admin.php": {
       "bytes": 21151,
@@ -1158,8 +1158,8 @@
       "sha256": "025f2819b2e9e60ce0fbf30ae2b4746837f42c09dcc3962e6b223eac8d37bbf5"
     },
     "includes/class-delicat-builder-security.php": {
-      "bytes": 22786,
-      "sha256": "7631d20ff9608fa677d21ad0f381f531c901c011c8ce7e4283370421a8bb52f6"
+      "bytes": 26990,
+      "sha256": "eb9a2124424b29cfd04cdc555c338ef18583f27e41d625e8e769e8c2f05779ca"
     },
     "includes/class-delicat-builder-self-test.php": {
       "bytes": 18743,
@@ -1301,13 +1301,13 @@
       "bytes": 30813,
       "sha256": "a50abeda5299ab339fbeac2dcb91ba5c292d95fa3deb947337edae2f6e8f1e45"
     },
-    "pro/assets/dbp-state.3d92762ed0b8.js": {
-      "bytes": 7568,
-      "sha256": "3d92762ed0b8639a89d7bd58af7fca41354052f6edfee625a3027e4df705dfd4"
+    "pro/assets/dbp-state.05c0c9f530f3.js": {
+      "bytes": 8007,
+      "sha256": "05c0c9f530f3aac1601039e0f0774ebede2a57a4e6feaaaca30fd6d2eccb33b0"
     },
     "pro/assets/dbp-state.js": {
-      "bytes": 7568,
-      "sha256": "3d92762ed0b8639a89d7bd58af7fca41354052f6edfee625a3027e4df705dfd4"
+      "bytes": 8007,
+      "sha256": "05c0c9f530f3aac1601039e0f0774ebede2a57a4e6feaaaca30fd6d2eccb33b0"
     },
     "pro/assets/dbp-type.b55df9990c0e.css": {
       "bytes": 22359,

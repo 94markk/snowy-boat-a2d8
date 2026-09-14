@@ -294,6 +294,7 @@ if ( function_exists( 'wp_prime_option_caches' ) ) {
 			'delicat_builder_v9_last_runtime_failure',
 			'delicat_builder_v9_last_server_engine_failure',
 			'delicat_builder_v9_dependency_gate',
+			'delicat_builder_v9_private_page_cache',
 			'dsb8_beta2_header',
 			'dsb_menu_builder_settings',
 			'dsb_menu_builder_items',
