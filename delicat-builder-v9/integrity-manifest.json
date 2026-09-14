@@ -1,9 +1,9 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T21:49:52.211786+00:00",
-  "version": "9.2.0-pro.22",
-  "bytes": 5830690,
-  "count": 349,
+  "built": "2026-09-14T21:59:23.884826+00:00",
+  "version": "9.2.0-pro.23",
+  "bytes": 6001395,
+  "count": 355,
   "files": {
     "PRO-README.md": {
       "bytes": 1735,
@@ -277,6 +277,10 @@
       "bytes": 21509,
       "sha256": "2dfd09c24777acc07d0579b47d384e2a539e8c38521e12241f3f71da6b9153c5"
     },
+    "assets/css/checkout-sheet.89681590f23c.css": {
+      "bytes": 25633,
+      "sha256": "89681590f23cf4b9986b6eaf233e31052755bae32556e00de638b962052d1a5a"
+    },
     "assets/css/checkout-sheet.css": {
       "bytes": 21509,
       "sha256": "2dfd09c24777acc07d0579b47d384e2a539e8c38521e12241f3f71da6b9153c5"
@@ -300,6 +304,10 @@
     "assets/css/drawer.016b4d0ce41f.css": {
       "bytes": 18134,
       "sha256": "016b4d0ce41fb101232fcd59a2f19aa6972bdff3b6aaf99f0d540b4c012bfca3"
+    },
+    "assets/css/drawer.b903fbd48572.css": {
+      "bytes": 17739,
+      "sha256": "b903fbd485721a359749fd765770883c493a7b2fafe459b6cfc5e1c7b818fe9c"
     },
     "assets/css/drawer.css": {
       "bytes": 18134,
@@ -473,6 +481,10 @@
       "bytes": 11642,
       "sha256": "52a62b377a0c14bde0506c1a4ae72b55d205a6338896c5dec86f0cd22de90532"
     },
+    "assets/css/storefront-chrome.min.0f7bd88afd89.css": {
+      "bytes": 94696,
+      "sha256": "0f7bd88afd899e0f56f6e5628167912ffef08e42b057e1806d79bbfe29c29ecd"
+    },
     "assets/css/storefront-chrome.min.2f1b73433da4.css": {
       "bytes": 95704,
       "sha256": "2f1b73433da4ce2fdbefab5a85929d3b71f62268b2a885c6b294eb5221f7b37d"
@@ -609,9 +621,17 @@
       "bytes": 24152,
       "sha256": "d42494873b02095292af3dd330ace9c0eb70cf5d6a545b5c21c27a5d59ea0b78"
     },
+    "assets/js/checkout-sheet-frame.99aef7dcfea2.js": {
+      "bytes": 5430,
+      "sha256": "99aef7dcfea2bc0a312ef5055347aa3360f415748440490824e82c433da18e02"
+    },
     "assets/js/checkout-sheet.501d0aa5e0a9.js": {
       "bytes": 16466,
       "sha256": "501d0aa5e0a97f94c16f63cc2b8b5c7bbe4212a19c3f1f47c75956e950a68a60"
+    },
+    "assets/js/checkout-sheet.e5e605cadc53.js": {
+      "bytes": 6677,
+      "sha256": "e5e605cadc533348b0d9384fd85586cc5e5580039bc1f2d7c121d245d97b613c"
     },
     "assets/js/checkout-sheet.js": {
       "bytes": 16466,
@@ -640,6 +660,10 @@
     "assets/js/design-product.js": {
       "bytes": 7939,
       "sha256": "97edbc14de2dcdbe37f686967d6ba1b271cb9de913b5374eb720ad9c535532c7"
+    },
+    "assets/js/drawer.e1af3a432a47.js": {
+      "bytes": 20530,
+      "sha256": "e1af3a432a47f94bec051bce51aabea64607aa0def45ec98cb45a80a5d8cc088"
     },
     "assets/js/drawer.e98043afaeca.js": {
       "bytes": 21628,
@@ -883,7 +907,7 @@
     },
     "delicat-builder-v9.php": {
       "bytes": 72788,
-      "sha256": "2211dc6c3b08e8d44edd246100ad7526053e4dd1f3b585570edbe8dfc230722f"
+      "sha256": "5051096914b30ebca665b5a8bf80c05d610011512e68ea8a7769e16cbef4b651"
     },
     "includes/class-delicat-builder-admin.php": {
       "bytes": 23021,

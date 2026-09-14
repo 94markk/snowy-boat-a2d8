@@ -6,7 +6,8 @@ Run after editing any CSS/JS in the plugin:
     python3 scripts/refresh-delicat-assets.py [delicat-builder-v9]
 
 It (1) writes one `<name>.<12-hex-sha256>.<ext>` copy per source stylesheet/script
-under assets/, pro/assets/ and modules/**/assets/ (removing stale hashed copies),
+under assets/, pro/assets/ and modules/**/assets/ (superseded copies are KEPT so
+already-cached HTML still resolves; pass --prune to remove them),
 (2) regenerates asset-versions.php, and (3) regenerates integrity-manifest.json
 with the plugin version read from the main plugin header.
 """
@@ -119,10 +120,33 @@ for r in sorted(sources):
             dst.write(src.read())
         print("created  %s" % target)
 
+# ---- the previous generation stays ------------------------------------------
+# Content addressing only works if the files are ADDITIVE. HTML is cached in
+# places this build cannot reach - LiteSpeed, Cloudflare, and every phone that
+# has already loaded the shop - and all of it asks for the exact filenames that
+# were current when it was cached. Deleting the old hashed copy turns those into
+# 404s, and a 404 on storefront-chrome.min.<hash>.css is the whole shop rendered
+# with no styling at all. That is what "the site broke after updating" was: one
+# release dropped the copy the previous release's cached pages still asked for.
+#
+# So a superseded copy is kept by default and only removed with --prune, which
+# is a deliberate act for a release allowed to break in-flight HTML. Keeping
+# them costs a few KB per changed file. Removing them costs the storefront.
+PRUNE = "--prune" in sys.argv[1:]
+keep, dropped = 0, 0
 for r in hashed:
-    if r not in wanted.values():
+    if r in wanted.values():
+        continue
+    if PRUNE:
         os.remove(os.path.join(ROOT, r))
-        print("removed  %s (stale)" % r)
+        dropped += 1
+        print("removed  %s (stale, --prune)" % r)
+    else:
+        keep += 1
+if keep:
+    print("kept     %d superseded copy(ies) so already-cached pages still resolve" % keep)
+if dropped:
+    print("PRUNED   %d copy(ies): any HTML cached before this build will 404 on them" % dropped)
 
 # 2. asset-versions.php --------------------------------------------------------
 lines = ["<?php", "// Generated content-addressed assets. Original paths retained for compatibility.", "return array("]
