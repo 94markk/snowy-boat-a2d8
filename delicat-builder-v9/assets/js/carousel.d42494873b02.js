@@ -52,69 +52,57 @@ const cleanText = (value) => String(value || '')
 /* Same emoji ranges the server-side App Polish handles, mapped to the same
    Builder stroke icons so dynamically materialized cards never fall back to
    system emoji glyphs. Unmapped emoji are dropped. */
-const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{1F1E6}-\u{1F1FF}\u2190-\u21FF\u2300-\u23FF\u2460-\u24FF\u25A0-\u27BF\u2B00-\u2BFF\uFE0F\uFE0E\u20E3\u2122\u3030]/gu;
+/* pro.17: the badge icon set, served by the one badge engine.
+ *
+ * This replaced a 40-entry table that mapped emoji characters to SVG paths,
+ * which existed because badge text used to CONTAIN emoji and this file had to
+ * translate them back out. The engine no longer emits emoji anywhere, so both
+ * the table and the scanner are gone - about 2.7KB of JavaScript that only
+ * existed to undo a decision made on the server.
+ *
+ * The paths come from window.DelicatBadgeIcons, printed by the same PHP
+ * constant the server renders from, so a card built here and a card built there
+ * cannot disagree, and this file holds no icon of its own to fall out of date.
+ */
+const BADGE_ICONS = (typeof window !== 'undefined' && window.DelicatBadgeIcons) || {};
 
-const EMOJI_SVG = {
-	'🎮': '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3M15.5 12h.01M18 14h.01"/>',
-	'🕹': '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3M15.5 12h.01M18 14h.01"/>',
-	'🎁': '<rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 12h18M12 8v13M8 8a2.5 2.5 0 0 1 0-5c2 0 4 5 4 5s2-5 4-5a2.5 2.5 0 0 1 0 5"/>',
-	'👑': '<path d="M3 8l4 4 5-7 5 7 4-4-2 12H5z"/>',
-	'⚡': '<path d="M13 2 4.5 13.2h6.2L10 22l9-12h-6.3L13 2Z"/>',
-	'🔥': '<path d="M12 22a6 6 0 0 0 6-6c0-5-6-9-6-14 0 0-6 4-6 9a4 4 0 0 0 4 4 3 3 0 0 1-1 3 6 6 0 0 0 3 4Z"/>',
-	'💎': '<path d="M12 3l9 7-9 11L3 10z"/><path d="M3 10h18"/>',
-	'⭐': '<path d="M12 3l2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z"/>',
-	'🌟': '<path d="M12 3l2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z"/>',
-	'✨': '<path d="M12 3l2.7 5.7 6.3.8-4.6 4.3 1.2 6.2L12 17l-5.6 3 1.2-6.2L3 9.5l6.3-.8z"/>',
-	'💰': '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-	'💵': '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
-	'💳': '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>',
-	'🛒': '<circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l3 12h11l2-8H7"/>',
-	'🛍': '<circle cx="9" cy="20" r="1.6"/><circle cx="18" cy="20" r="1.6"/><path d="M2 3h3l3 12h11l2-8H7"/>',
-	'🔒': '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
-	'🔐': '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
-	'🛡': '<path d="M12 2l8 3v6c0 5-3 9-8 11-5-2-8-6-8-11V5z"/><path d="M9 11.5l2 2 4-4"/>',
-	'📱': '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M10 18h4"/>',
-	'🎧': '<path d="M4 13v-2a8 8 0 0 1 16 0v6h-4v-6h4M4 11v6h4v-6z"/><path d="M16 18h-4"/>',
-	'🌍': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9c-3-3-4-6-4-9s1-6 4-9z"/>',
-	'🌏': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9c-3-3-4-6-4-9s1-6 4-9z"/>',
-	'🌐': '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 4 6 4 9s-1 6-4 9c-3-3-4-6-4-9s1-6 4-9z"/>',
-	'🏷': '<path d="M3 4h8l10 10-7 7L4 11z"/><circle cx="8" cy="8" r="1.2"/>',
-	'🏆': '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 3M16 6h3a3 3 0 0 1-3 3M10 17h4M9 21h6M12 13v4"/>',
-	'🎟': '<path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v8a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2z"/><path d="M12 6v12"/>',
-	'❤': '<path d="M12 20.5S4.5 15.9 2.7 11C1.6 7.6 3.6 4.5 6.9 4.5c1.9 0 3.4 1 4.3 2.4.9-1.4 2.4-2.4 4.3-2.4 3.3 0 5.3 3.1 4.2 6.5-1.8 4.9-9.3 9.5-9.3 9.5Z"/>',
-	'♥': '<path d="M12 20.5S4.5 15.9 2.7 11C1.6 7.6 3.6 4.5 6.9 4.5c1.9 0 3.4 1 4.3 2.4.9-1.4 2.4-2.4 4.3-2.4 3.3 0 5.3 3.1 4.2 6.5-1.8 4.9-9.3 9.5-9.3 9.5Z"/>',
-	'💜': '<path d="M12 20.5S4.5 15.9 2.7 11C1.6 7.6 3.6 4.5 6.9 4.5c1.9 0 3.4 1 4.3 2.4.9-1.4 2.4-2.4 4.3-2.4 3.3 0 5.3 3.1 4.2 6.5-1.8 4.9-9.3 9.5-9.3 9.5Z"/>',
-	'✅': '<path d="M4 12.5l5 5L20 6.5"/>',
-	'🔎': '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
-	'🔍': '<circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/>',
-	'📺': '<rect x="2" y="6" width="20" height="12" rx="2"/><path d="M8 21h8"/>',
-	'▶': '<path d="M7 4l12 8-12 8z"/>',
-	'💬': '<path d="M5 5h14v10H9l-4 4z"/>',
-	'◉': '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
-	'🛡️': '<path d="M12 2l8 3v6c0 5-3 9-8 11-5-2-8-6-8-11V5z"/><path d="M9 11.5l2 2 4-4"/>',
-	'🏷️': '<path d="M3 4h8l10 10-7 7L4 11z"/><circle cx="8" cy="8" r="1.2"/>',
+/* The favourite marker's four choices, mapped onto the drawn set. Mirrors
+   Delicat_Builder_V9_Badges::heart(); both read the same icon table. */
+const heartIcon = (choice) => {
+	const name = String(choice || 'heart');
+	if (name === 'heart_outline') return 'heart-outline';
+	return ['heart', 'star', 'bolt'].includes(name) ? name : 'heart';
 };
 
-const renderIconText = (parent, text) => {
+const renderBadge = (parent, badge) => {
 	parent.textContent = '';
-	const str = String(text || '');
-	if (!str) return;
-	const parts = str.split(EMOJI_RE);
-	const emojis = str.match(EMOJI_RE) || [];
-	for (let i = 0; i < parts.length; i += 1) {
-		if (parts[i]) parent.appendChild(document.createTextNode(parts[i]));
-		if (emojis[i]) {
-			const markup = EMOJI_SVG[emojis[i]];
-			if (markup) {
-				const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-				svg.setAttribute('class', 'dbv9-emo');
-				svg.setAttribute('viewBox', '0 0 24 24');
-				svg.setAttribute('aria-hidden', 'true');
-				svg.setAttribute('focusable', 'false');
-				svg.innerHTML = markup;
-				parent.appendChild(svg);
-			}
-		}
+	if (!badge || (!badge.t && !badge.ic)) return;
+
+	const markup = BADGE_ICONS[String(badge.ic || '')];
+	if (markup) {
+		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+		svg.setAttribute('class', 'delicat-badge__icon');
+		svg.setAttribute('viewBox', '0 0 24 24');
+		svg.setAttribute('width', '14');
+		svg.setAttribute('height', '14');
+		svg.setAttribute('fill', 'none');
+		svg.setAttribute('stroke', 'currentColor');
+		svg.setAttribute('stroke-width', '1.75');
+		svg.setAttribute('stroke-linecap', 'round');
+		svg.setAttribute('stroke-linejoin', 'round');
+		svg.setAttribute('aria-hidden', 'true');
+		svg.setAttribute('focusable', 'false');
+		/* Server-authored: every string in this table comes from a PHP constant,
+		 * never from product data, a setting or anything a person can type. */
+		svg.innerHTML = markup;
+		parent.appendChild(svg);
+	}
+
+	if (badge.t) {
+		const text = document.createElement('span');
+		text.className = 'delicat-badge__text';
+		text.textContent = String(badge.t);
+		parent.appendChild(text);
 	}
 };
 
@@ -191,8 +179,8 @@ const renderIconText = (parent, text) => {
 
 	if (data.b?.t) {
 		const badge = document.createElement('span');
-		badge.className = `delicat-product-card__tag delicat-product-card__tag--${classToken(data.b.k, 'category')}`;
-		renderIconText(badge, data.b.t);
+		badge.className = `delicat-badge delicat-badge--topic delicat-badge--${classToken(data.b.o, 'topic')} delicat-badge--${classToken(data.b.k, 'topic')}`;
+		renderBadge(badge, data.b);
 		media.appendChild(badge);
 	}
 
@@ -217,8 +205,8 @@ const renderIconText = (parent, text) => {
 
 	if (data.st?.t) {
 		const status = document.createElement('span');
-		status.className = `delicat-product-card__status delicat-product-card__status--${classToken(data.st.k, 'new')}`;
-		renderIconText(status, data.st.t);
+		status.className = `delicat-badge delicat-badge--status delicat-badge--${classToken(data.st.o, 'status')} delicat-badge--${classToken(data.st.k, 'status')}`;
+		renderBadge(status, data.st);
 		media.appendChild(status);
 	}
 
@@ -247,7 +235,9 @@ const renderIconText = (parent, text) => {
 		const bubble = document.createElement('span');
 		bubble.className = 'delicat-product-card__bubble';
 		bubble.setAttribute('aria-hidden', 'true');
-		renderIconText(bubble, data.hi || '♥');
+		/* pro.17: data.hi is the icon NAME now, not a character. Drawn from the
+		   same table the server drew from. */
+		renderBadge(bubble, { ic: heartIcon(data.hi), t: '' });
 		mediaWrap.appendChild(bubble);
 	}
 

@@ -173,8 +173,8 @@ final class Delicat_Builder_V9_Carousel {
 		$media_title_d = min( 52, max( 14, absint( $atts['media_title_d'] ?? 30 ) ) );
 		$media_title_t = min( 44, max( 14, absint( $atts['media_title_t'] ?? 25 ) ) );
 		$media_title_m = min( 36, max( 12, absint( $atts['media_title_m'] ?? 20 ) ) );
-		$badge_mode = class_exists( 'Delicat_Builder_V9_Badge_Engine' )
-			? Delicat_Builder_V9_Badge_Engine::sanitize_mode( $atts['badge_mode'] ?? 'auto' )
+		$badge_mode = class_exists( 'Delicat_Builder_V9_Badges' )
+			? Delicat_Builder_V9_Badges::sanitize_mode( $atts['badge_mode'] ?? 'auto' )
 			: 'auto';
 		$badge_bg = sanitize_hex_color( (string) ( $atts['badge_bg'] ?? '' ) ) ?: '';
 		$badge_text = sanitize_hex_color( (string) ( $atts['badge_text'] ?? '' ) ) ?: '';
@@ -728,18 +728,19 @@ final class Delicat_Builder_V9_Carousel {
 		);
 	}
 
+	/**
+	 * pro.17: drawn, not typed.
+	 *
+	 * This returned one of four literal characters - the heart, the outline
+	 * heart, the star, the lightning bolt - and printed it into every product
+	 * card. They render as a different glyph on every phone, at whatever size
+	 * the font decides, and on Android several arrive as coloured bitmaps that
+	 * ignore the card's palette. The badge engine draws all four.
+	 */
 	private static function heart_symbol( string $icon = 'heart' ): string {
-		switch ( $icon ) {
-			case 'heart_outline':
-				return '♡';
-			case 'star':
-				return '★';
-			case 'bolt':
-				return '⚡';
-			case 'heart':
-			default:
-				return '♥';
-		}
+		return class_exists( 'Delicat_Builder_V9_Badges' )
+			? Delicat_Builder_V9_Badges::heart( $icon )
+			: '';
 	}
 
 	private static function heart_icon(): string {
@@ -778,12 +779,14 @@ final class Delicat_Builder_V9_Carousel {
 			? $style
 			: 'delicat_jeux';
 
-		$badge = ! empty( $design['tag'] ) && class_exists( 'Delicat_Builder_V9_Badge_Engine' )
-			? Delicat_Builder_V9_Badge_Engine::resolve( $product, $badge_mode, $tag_text )
-			: array();
-		$status = class_exists( 'Delicat_Builder_V9_Badge_Engine' )
-			? Delicat_Builder_V9_Badge_Engine::resolve_status( $product, $status_badge_mode, $status_new_days, $status_sales_min )
-			: array();
+		/* pro.17: one engine decides both badges. $tag_text and $status_new_days
+		 * are no longer consulted - free text could put arbitrary markup in a
+		 * badge, and "new for 30 days" said nothing a shopper acts on. */
+		$resolved = class_exists( 'Delicat_Builder_V9_Badges' )
+			? Delicat_Builder_V9_Badges::for_product( $product, array( 'mode' => $badge_mode, 'sales_min' => $status_sales_min ) )
+			: array( 'topic' => array(), 'status' => array() );
+		$badge  = ! empty( $design['tag'] ) ? $resolved['topic'] : array();
+		$status = $resolved['status'];
 
 		$heart_mode = in_array( $heart_mode, array( 'auto', 'on', 'off' ), true ) ? $heart_mode : 'auto';
 		$dynamic_heart = class_exists( 'Delicat_Builder_V9_Heart_Engine' ) && Delicat_Builder_V9_Heart_Engine::enabled();
@@ -820,13 +823,22 @@ final class Delicat_Builder_V9_Carousel {
 			'u'   => esc_url_raw( $link ),
 			'n'   => sanitize_text_field( $product->get_name() ),
 			'im'  => $image,
-			'b'   => ! empty( $badge['text'] ) ? array(
-				't' => sanitize_text_field( $badge['text'] ),
-				'k' => sanitize_key( $badge['type'] ?? 'category' ),
+			/* pro.17: the client payload carries the engine's own shape now -
+			 * label, key, and the icon NAME rather than any markup. carousel.js
+			 * looks the name up in the same table the server rendered from, so
+			 * a card built in the browser and a card built on the server are
+			 * the same card and neither can invent a badge. */
+			'b'   => ! empty( $badge['label'] ) ? array(
+				't' => sanitize_text_field( (string) $badge['label'] ),
+				'k' => sanitize_key( (string) ( $badge['key'] ?? '' ) ),
+				'o' => sanitize_key( (string) ( $badge['tone'] ?? 'topic' ) ),
+				'ic' => sanitize_key( (string) ( $badge['icon'] ?? '' ) ),
 			) : array(),
-			'st'  => ! empty( $status['text'] ) ? array(
-				't' => sanitize_text_field( $status['text'] ),
-				'k' => sanitize_key( $status['type'] ?? 'new' ),
+			'st'  => ! empty( $status['label'] ) ? array(
+				't' => sanitize_text_field( (string) $status['label'] ),
+				'k' => sanitize_key( (string) ( $status['key'] ?? '' ) ),
+				'o' => sanitize_key( (string) ( $status['tone'] ?? 'status' ) ),
+				'ic' => sanitize_key( (string) ( $status['icon'] ?? '' ) ),
 			) : array(),
 			'p'   => $price,
 			'sub' => 'delicat_abonnement' === $style ? 1 : 0,
@@ -834,7 +846,9 @@ final class Delicat_Builder_V9_Carousel {
 			'he'  => $heart_enabled ? 1 : 0,
 			'hf'  => $is_favorite ? 1 : 0,
 			'hs'  => $static_heart ? 1 : 0,
-			'hi'  => self::heart_symbol( $heart_icon ),
+			/* The name, not the mark: carousel.js draws it from the same table
+			 * the server drew from, so neither can invent a shape. */
+			'hi'  => sanitize_key( $heart_icon ),
 		);
 	}
 
@@ -855,12 +869,15 @@ final class Delicat_Builder_V9_Carousel {
 			$style = 'delicat_jeux';
 		}
 
-		$badge = ! empty( $design['tag'] )
-			? Delicat_Builder_V9_Badge_Engine::resolve( $product, $badge_mode, $tag_text )
-			: array();
-		$status_badge = class_exists( 'Delicat_Builder_V9_Badge_Engine' )
-			? Delicat_Builder_V9_Badge_Engine::resolve_status( $product, $status_badge_mode, $status_new_days, $status_sales_min )
-			: array();
+		/* pro.17: the same resolution as the card renderer above, through the
+		 * one engine. These two blocks had drifted: this one called the old
+		 * engine without the class_exists guard the other one had, so a
+		 * quarantined badge module fataled here and only warned there. */
+		$resolved = class_exists( 'Delicat_Builder_V9_Badges' )
+			? Delicat_Builder_V9_Badges::for_product( $product, array( 'mode' => $badge_mode, 'sales_min' => $status_sales_min ) )
+			: array( 'topic' => array(), 'status' => array() );
+		$badge        = ! empty( $design['tag'] ) ? $resolved['topic'] : array();
+		$status_badge = $resolved['status'];
 
 		$heart_mode = in_array( $heart_mode, array( 'auto', 'on', 'off' ), true ) ? $heart_mode : 'auto';
 		$dynamic_heart_available = class_exists( 'Delicat_Builder_V9_Heart_Engine' ) && Delicat_Builder_V9_Heart_Engine::enabled();
@@ -908,11 +925,11 @@ final class Delicat_Builder_V9_Carousel {
 		>
 			<div class="delicat-product-card__media-wrap">
 				<a class="delicat-product-card__media" href="<?php echo esc_url( $link ); ?>" data-delicat-prefetch data-delicat-product-link>
-					<?php if ( ! empty( $badge['text'] ) ) : ?>
-						<span class="delicat-product-card__tag delicat-product-card__tag--<?php echo esc_attr( sanitize_html_class( $badge['type'] ?? 'category' ) ); ?>">
-							<?php echo esc_html( $badge['text'] ); ?>
-						</span>
-					<?php endif; ?>
+					<?php
+					/* pro.17: rendered by the badge engine, which owns the
+					 * markup, the class names and the drawn SVG icon. */
+					echo Delicat_Builder_V9_Badges::render( $badge, 'topic' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render().
+					?>
 
 				<?php
 				if ( $image_id && Delicat_Builder_V9_Media::is_image_attachment( $image_id ) ) {
@@ -933,11 +950,7 @@ final class Delicat_Builder_V9_Carousel {
 				}
 				?>
 
-					<?php if ( ! empty( $status_badge['text'] ) ) : ?>
-						<span class="delicat-product-card__status delicat-product-card__status--<?php echo esc_attr( sanitize_html_class( $status_badge['type'] ?? 'new' ) ); ?>">
-							<?php echo esc_html( $status_badge['text'] ); ?>
-						</span>
-					<?php endif; ?>
+					<?php echo Delicat_Builder_V9_Badges::render( $status_badge, 'status' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render(). ?>
 
 					<?php /* RC39.3: product names belong in the content panel only. */ ?>
 				</a>
@@ -952,7 +965,7 @@ final class Delicat_Builder_V9_Carousel {
 						aria-label="<?php echo esc_attr( $is_favorite ? __( 'Remove from favorites', 'delicat-builder-v9' ) : __( 'Add to favorites', 'delicat-builder-v9' ) ); ?>"
 					><?php echo self::heart_icon(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></button>
 				<?php elseif ( ! empty( $design['bubble'] ) && 'off' !== $heart_mode ) : ?>
-					<span class="delicat-product-card__bubble" aria-hidden="true"><span><?php echo esc_html( $heart_symbol ); ?></span></span>
+					<span class="delicat-product-card__bubble" aria-hidden="true"><?php echo $heart_symbol; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- drawn SVG from the badge engine's fixed table. ?></span>
 				<?php endif; ?>
 			</div>
 

@@ -985,7 +985,7 @@ $delicat_builder_v9_admin_modules = array(
     'includes/class-delicat-builder-header-studio-8.php','includes/class-delicat-builder-woo-ui.php','includes/class-delicat-builder-purchase-ui.php',
     'includes/class-delicat-builder-performance.php','includes/class-delicat-builder-identity-bridge.php','includes/class-delicat-builder-production.php',
     'includes/class-delicat-builder-release.php','includes/class-delicat-builder-design.php','includes/class-delicat-builder-assets.php',
-    'includes/class-delicat-builder-badge-engine.php','includes/class-delicat-builder-heart-engine.php','includes/class-delicat-builder-carousel.php',
+    'includes/class-delicat-builder-badges.php','includes/class-delicat-builder-heart-engine.php','includes/class-delicat-builder-carousel.php',
     'includes/class-delicat-builder-schema.php','includes/class-delicat-builder-renderer.php','includes/class-delicat-builder-pages.php','includes/class-delicat-builder-native-pages.php','includes/class-delicat-builder-reviews.php','includes/class-delicat-builder-cloudflare.php','includes/class-delicat-builder-front-slim.php','includes/class-delicat-builder-storefront-fix.php',
     'includes/class-delicat-builder-unified-modules.php','includes/class-delicat-builder-site.php',
     /*

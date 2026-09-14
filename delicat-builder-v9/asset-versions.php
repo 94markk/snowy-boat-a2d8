@@ -1,7 +1,7 @@
 <?php
 // Generated content-addressed assets. Original paths retained for compatibility.
 return array(
- 'assets/components/all-components.min.css' => 'assets/components/all-components.min.2e15b066a0f0.css',
+ 'assets/components/all-components.min.css' => 'assets/components/all-components.min.351bbc99b97a.css',
  'assets/components/banner.css' => 'assets/components/banner.454d53639a95.css',
  'assets/components/base.css' => 'assets/components/base.ab2a0605ffbd.css',
  'assets/components/bon-kliyan.css' => 'assets/components/bon-kliyan.abe26ccdfb7a.css',
@@ -11,7 +11,7 @@ return array(
  'assets/components/hero.css' => 'assets/components/hero.50d12d1bdaa5.css',
  'assets/components/how-it-works.css' => 'assets/components/how-it-works.f34c2698fb2d.css',
  'assets/components/newsletter.css' => 'assets/components/newsletter.338da4b3caad.css',
- 'assets/components/products.css' => 'assets/components/products.9173b579b68c.css',
+ 'assets/components/products.css' => 'assets/components/products.f27d722b4258.css',
  'assets/components/spacer.css' => 'assets/components/spacer.a3dfcb179f9a.css',
  'assets/components/testimonials.css' => 'assets/components/testimonials.f5e84b9fd94b.css',
  'assets/components/text.css' => 'assets/components/text.b9dfa2347e26.css',
@@ -73,7 +73,7 @@ return array(
  'assets/js/announcement-admin.js' => 'assets/js/announcement-admin.c3a460989e6c.js',
  'assets/js/announcement.js' => 'assets/js/announcement.063091556ed9.js',
  'assets/js/archive-builder.js' => 'assets/js/archive-builder.178386147bd8.js',
- 'assets/js/carousel.js' => 'assets/js/carousel.f0609b9731f3.js',
+ 'assets/js/carousel.js' => 'assets/js/carousel.d42494873b02.js',
  'assets/js/core.js' => 'assets/js/core.d2d18e641204.js',
  'assets/js/currency.js' => 'assets/js/currency.653281aab725.js',
  'assets/js/design-product.js' => 'assets/js/design-product.97edbc14de2d.js',
@@ -101,7 +101,7 @@ return array(
  'assets/js/session.js' => 'assets/js/session.6a162f0efdc8.js',
  'assets/js/shell-admin.js' => 'assets/js/shell-admin.b8d356336d5e.js',
  'assets/js/shell-nav.js' => 'assets/js/shell-nav.4b27b6a775d2.js',
- 'assets/js/shell.js' => 'assets/js/shell.290e5842ced6.js',
+ 'assets/js/shell.js' => 'assets/js/shell.5230c2c6b326.js',
  'assets/js/storefront-commerce.js' => 'assets/js/storefront-commerce.86fe14fac2f0.js',
  'assets/js/swatch-product-admin.js' => 'assets/js/swatch-product-admin.7d00db0c3e8f.js',
  'assets/js/swatch-studio-admin.js' => 'assets/js/swatch-studio-admin.9a07f5b8d46c.js',

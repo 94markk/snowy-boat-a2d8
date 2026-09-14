@@ -169,7 +169,7 @@ final class Delicat_Builder_V9_Runtime_Router {
                 self::load('includes/class-delicat-builder-pages.php','Delicat_Builder_V9_Pages');
                 self::load('includes/class-delicat-builder-media.php','Delicat_Builder_V9_Media');
                 self::load('includes/class-delicat-builder-compiler.php','Delicat_Builder_V9_Compiler');
-                self::load('includes/class-delicat-builder-badge-engine.php','Delicat_Builder_V9_Badge_Engine');
+                self::load('includes/class-delicat-builder-badges.php','Delicat_Builder_V9_Badges');
                 self::load('includes/class-delicat-builder-schema.php','Delicat_Builder_V9_Schema');
                 self::load('includes/class-delicat-builder-renderer.php','Delicat_Builder_V9_Renderer');
                 self::load('includes/class-delicat-builder-assets.php','Delicat_Builder_V9_Assets');

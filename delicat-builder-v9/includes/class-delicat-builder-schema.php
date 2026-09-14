@@ -659,8 +659,8 @@ final class Delicat_Builder_V9_Schema {
 					'media_title_d'  => self::clamp_int( $content['media_title_d'] ?? 30, 14, 52 ),
 					'media_title_t'  => self::clamp_int( $content['media_title_t'] ?? 25, 14, 44 ),
 					'media_title_m'  => self::clamp_int( $content['media_title_m'] ?? 20, 12, 36 ),
-					'badge_mode'     => class_exists( 'Delicat_Builder_V9_Badge_Engine' )
-						? Delicat_Builder_V9_Badge_Engine::sanitize_mode( $content['badge_mode'] ?? 'auto' )
+					'badge_mode'     => class_exists( 'Delicat_Builder_V9_Badges' )
+						? Delicat_Builder_V9_Badges::sanitize_mode( $content['badge_mode'] ?? 'auto' )
 						: 'auto',
 					'tag_text'       => self::plain( $content['tag_text'] ?? '', 40 ),
 					'badge_bg'       => sanitize_hex_color( (string) ( $content['badge_bg'] ?? '' ) ) ?: '',

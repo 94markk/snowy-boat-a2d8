@@ -320,7 +320,17 @@ final class Delicat_Builder_V9_Native_Product {
 					<div class="dnp-identity">
 						<?php if($identity_image_id): ?><span class="dnp-product-icon"><?php echo wp_get_attachment_image($identity_image_id,'woocommerce_thumbnail',false,array('loading'=>'eager','decoding'=>'async','alt'=>'')); ?></span><?php endif; ?>
 						<div class="dnp-identity-copy"><h1><?php echo esc_html($title); ?></h1><?php if(!empty($s['show_short_desc']) && $subtitle): ?><p class="dnp-subtitle"><?php echo esc_html($subtitle); ?></p><?php endif; ?></div>
-						<?php if($product->is_in_stock() && self::is_digital_product($product)): ?><span class="dnp-delivery-badge"><i aria-hidden="true">⚡</i> Livraison<br>instantanée</span><?php endif; ?>
+						<?php
+						/* pro.17: the last emoji in the storefront. It was an
+						 * emoji, not an icon - a font glyph that renders
+						 * differently on every phone, ignores the badge colour,
+						 * and arrives on most Androids as a coloured bitmap. It
+						 * is now the same drawn icon set every other badge uses,
+						 * through the one engine. */
+						if ( $product->is_in_stock() && self::is_digital_product( $product ) && class_exists( 'Delicat_Builder_V9_Badges' ) ) {
+							echo Delicat_Builder_V9_Badges::render( Delicat_Builder_V9_Badges::instant_delivery(), 'topic' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render().
+						}
+						?>
 					</div>
 					<div class="dnp-meta">
 						<?php if(!empty($s['show_price'])): ?><div class="dnp-price" data-dnp-price><?php echo wp_kses_post($product->get_price_html()); ?></div><?php endif; ?>

@@ -282,7 +282,10 @@
 			seen.add(url);
 			const imageNode = card.querySelector('img');
 			const priceNode = card.querySelector('.delicat-product-card__price strong,.price');
-			const categoryNode = card.querySelector('.delicat-product-card__tag,.delicat-archive-category');
+			/* pro.17: the topic badge is .delicat-badge--topic now. The old class is
+			   kept in the list so a page still served from a cache written before
+			   this release keeps its category in the search index. */
+			const categoryNode = card.querySelector('.delicat-badge--topic .delicat-badge__text,.delicat-badge--topic,.delicat-product-card__tag,.delicat-archive-category');
 			items.push({
 				id: card.getAttribute('data-product-id') || url,
 				name,
