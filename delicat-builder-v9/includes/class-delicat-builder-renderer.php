@@ -347,6 +347,17 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 			$result_limit = max( 3, min( 8, absint( $content['search_results_limit'] ?? 5 ) ) );
 			$min_chars = max( 1, min( 4, absint( $content['search_min_chars'] ?? 2 ) ) );
 			$placeholder = (string) ( $content['search_placeholder'] ?? __( 'Rechercher un jeu, une carte ou un service…', 'delicat-builder-v9' ) );
+			/*
+			 * pro.17: the index class is listed only among the Builder admin modules,
+			 * so on the storefront this test always failed and the hero shipped an
+			 * empty suggestion list — the type-ahead could never match anything.
+			 * Load it here, where it is used, and only when a hero actually renders a
+			 * search field. index() is transient-cached for 15 minutes against the
+			 * Builder cache version, so this is one query per cache generation.
+			 */
+			if ( ! class_exists( 'Delicat_Builder_V9_Hero_Search' ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
+				delicat_builder_v9_safe_require( 'includes/class-delicat-builder-hero-search.php' );
+			}
 			$index = class_exists( 'Delicat_Builder_V9_Hero_Search' ) ? Delicat_Builder_V9_Hero_Search::index( $index_limit ) : array();
 			$search_data = wp_json_encode( $index, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
 			$copy .= '<div class="delicat-builder-hero-search" data-delicat-hero-search data-min-chars="' . esc_attr( (string) $min_chars ) . '" data-result-limit="' . esc_attr( (string) $result_limit ) . '">';

@@ -94,6 +94,7 @@ final class Delicat_Builder_V9_App_Tuning {
 			'section_gap_t'   => 22,
 			'section_gap_d'   => 40,
 			'edge_m'          => 14,
+			'edge_t'          => 20,
 			'edge_d'          => 24,
 			'card_m'          => 44,   /* card width as a % of the viewport on phones */
 			'header_m'        => 60,
@@ -288,6 +289,12 @@ r.setAttribute('data-dbv9-net',slow?'slow':'ok');
 			'--dbv9-app-body:' . self::px( $s, 'body_t', 12, 24 ),
 			'--dbv9-app-small:' . self::px( $s, 'small_t', 11, 20 ),
 			'--dbv9-app-gap:' . self::px( $s, 'section_gap_t', 6, 120 ),
+			/*
+			 * pro.17: the tablet tier defined no page edge, so 641-960px kept the
+			 * phone's 14px gutter and the homepage ran almost to the bezel before
+			 * jumping to 24px at 961px. Give the tier its own step.
+			 */
+			'--dbv9-app-edge:' . self::px( $s, 'edge_t', 0, 64 ),
 		);
 		$desktop = array(
 			'--dbv9-app-h1:' . self::px( $s, 'h1_d', 20, 110 ),

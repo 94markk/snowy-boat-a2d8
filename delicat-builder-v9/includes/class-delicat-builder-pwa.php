@@ -173,10 +173,25 @@ final class Delicat_Builder_V9_PWA {
 			? array( $chrome )
 			: array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/drawer.css', 'assets/css/bottom-nav.css' );
 		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/drawer.js', 'assets/js/session.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
+		/*
+		 * pro.17: every one of these files has a content-addressed twin, and the
+		 * page requests the twin — style_loader_src/script_loader_src are rewritten
+		 * to `<name>.<hash>.<ext>` with the query string dropped. The precache was
+		 * building `<name>.<ext>?ver=<plugin version>` instead, so the service worker
+		 * downloaded six files at install that no page would ever ask for, and every
+		 * request still went to the network. Resolve through the same map the page
+		 * uses; a file with no twin keeps its ?ver URL, which is what WordPress emits
+		 * for it.
+		 */
 		foreach ( $precache_files as $rel ) {
-			if ( is_file( DELICAT_BUILDER_V9_DIR . $rel ) ) {
-				$precache[] = add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, DELICAT_BUILDER_V9_URL . $rel );
+			if ( ! is_file( DELICAT_BUILDER_V9_DIR . $rel ) ) {
+				continue;
 			}
+			$url = add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, DELICAT_BUILDER_V9_URL . $rel );
+			if ( is_callable( array( 'Delicat_Builder_V9_Audit_Fixes', 'asset_url' ) ) ) {
+				$url = (string) Delicat_Builder_V9_Audit_Fixes::asset_url( $url );
+			}
+			$precache[] = $url;
 		}
 		$precache = (array) apply_filters( 'delicat_builder_v9_pwa_precache', array_values( array_unique( array_map( 'esc_url_raw', $precache ) ) ) );
 		?>
@@ -258,7 +273,12 @@ self.addEventListener('fetch',e=>{
      and media-library images that is pure data waste on a metered phone. A
      versioned URL never changes; an upload is revalidated at most once per 6 h.
      Everything else keeps the previous stale-while-revalidate behaviour. */
-  const versioned=/[?&]ver=/.test(u.search);
+  /* pro.17: every Builder asset is served as `<name>.<12 hex>.<ext>` with no
+     query string, so the ?ver test alone called the plugin's own CSS and JS
+     unversioned and re-fetched each one on every page view behind its own cache
+     hit. A content-addressed name is immutable by construction — a changed file
+     gets a different name — so treat it exactly like a ?ver stamp. */
+  const versioned=/[?&]ver=/.test(u.search)||/\.[0-9a-f]{12}\.(?:css|js)$/i.test(u.pathname);
   const upload=/\/wp-content\/uploads\//.test(u.pathname);
   e.respondWith(caches.open(DBV9_CACHE).then(async c=>{
     const hit=await c.match(r);

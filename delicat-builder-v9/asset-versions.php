@@ -1,7 +1,7 @@
 <?php
 // Generated content-addressed assets. Original paths retained for compatibility.
 return array(
- 'assets/components/all-components.min.css' => 'assets/components/all-components.min.95e5a3a7e197.css',
+ 'assets/components/all-components.min.css' => 'assets/components/all-components.min.9015ea0f6a6e.css',
  'assets/components/banner.css' => 'assets/components/banner.454d53639a95.css',
  'assets/components/base.css' => 'assets/components/base.ab2a0605ffbd.css',
  'assets/components/bon-kliyan.css' => 'assets/components/bon-kliyan.abe26ccdfb7a.css',
@@ -9,7 +9,7 @@ return array(
  'assets/components/faq.css' => 'assets/components/faq.f3fe412ab9a7.css',
  'assets/components/favorites.css' => 'assets/components/favorites.9748ff46a0c2.css',
  'assets/components/hero.css' => 'assets/components/hero.50d12d1bdaa5.css',
- 'assets/components/how-it-works.css' => 'assets/components/how-it-works.b1f0519c2338.css',
+ 'assets/components/how-it-works.css' => 'assets/components/how-it-works.f34c2698fb2d.css',
  'assets/components/newsletter.css' => 'assets/components/newsletter.338da4b3caad.css',
  'assets/components/products.css' => 'assets/components/products.e7bc4fe56c72.css',
  'assets/components/spacer.css' => 'assets/components/spacer.a3dfcb179f9a.css',
