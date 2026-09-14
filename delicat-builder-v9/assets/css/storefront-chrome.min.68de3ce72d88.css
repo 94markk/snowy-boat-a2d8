@@ -203,6 +203,12 @@ body.delicat-bottom-nav-active.dnp-dock-visible{padding-bottom:var(--dbv9-nav-ba
 body.dpn-checkout-dock-ready .delicat-bottom-nav,body.dnp-express-open .delicat-bottom-nav,body.dpn-wallet-modal-open .delicat-bottom-nav,html.dlx-open .delicat-bottom-nav,html.dsb-menu-open .delicat-bottom-nav,.dbn-hidden .delicat-bottom-nav{opacity:0;pointer-events:none;transform:translateY(20px)}
 /* dark */
 html[data-delicat-theme="dark"] .delicat-bottom-nav,html.dlc-theme-dark .delicat-bottom-nav{--dbn-bg:rgba(23,26,43,.97);--dbn-line:rgba(255,255,255,.08);--dbn-text:#a4abbd}
+/* pro.17: on a tablet the bar stretched the full width (left:12px;right:12px),
+   so at 768px it was a 744px-wide pill with its five items marooned at the far
+   edges. Cap it and centre it from 560px up, which is where that starts to look
+   wrong, and keep the phone behaviour untouched below that. */
+@media(min-width:560px){.delicat-bottom-nav{left:50%;right:auto;width:min(calc(100% - 24px),460px);transform:translateX(-50%)}}
+@media(min-width:560px){body.dbn-hidden .delicat-bottom-nav,body.dpn-checkout-dock-ready .delicat-bottom-nav,body.dnp-express-open .delicat-bottom-nav,body.dpn-wallet-modal-open .delicat-bottom-nav,html.dlx-open .delicat-bottom-nav,html.dsb-menu-open .delicat-bottom-nav{transform:translateX(-50%) translateY(20px)}}
 @media(min-width:821px){.delicat-bottom-nav{display:none!important}body.delicat-bottom-nav-active{padding-bottom:0!important}body.delicat-bottom-nav-active .dnp-mobile-dock,body.delicat-bottom-nav-active .delicat-mobile-purchase{bottom:max(8px,env(safe-area-inset-bottom,0px))!important}}
 @media(prefers-reduced-motion:reduce){.delicat-bottom-nav,.dbn-item,.dbn-icon{transition:none!important}}
 

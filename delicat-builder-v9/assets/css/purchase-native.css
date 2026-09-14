@@ -14,3 +14,21 @@ body.dpn-checkout .dpn-gate-card{max-width:480px!important;padding:28px 28px 22p
 body.dpn-checkout .dpn-gate-mark{width:48px!important;height:48px!important;border-radius:16px!important}
 body.dpn-checkout .dpn-gate-mark>svg{width:22px!important;height:22px!important;max-width:22px!important;max-height:22px!important}
 }
+
+/* pro.17: the checkout dock is the PHONE purchase affordance and carried no width
+   guard at all, so a laptop checkout got a full-bleed action bar pinned across the
+   whole screen, on top of a form that already shows its own Place Order button --
+   and reserved 190px of page for it. Both are scoped to the same 820px the rest of
+   the mobile chrome uses. Appended at the end of the file so nothing later in the
+   cascade can put them back. */
+@media(min-width:821px){
+/* Two !important rules reveal this dock -- body.dpn-checkout-dock-ready .dpn-checkout-dock
+   at (0,2,1) and .dpn-checkout-dock:not([hidden]) at (0,2,0). Among !important
+   declarations specificity decides before source order, so a plain
+   .dpn-checkout-dock rule here would lose to both however late it appears. These
+   selectors are deliberately one step more specific than each of them. */
+html body.dpn-checkout-dock-ready .dpn-checkout-dock,
+html body .dpn-checkout-dock:not([hidden]),
+html body .dpn-checkout-dock{display:none!important}
+body.dpn-checkout-dock-ready .delicat-native-page-main{padding-bottom:0!important}
+}
