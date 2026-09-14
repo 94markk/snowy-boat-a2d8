@@ -371,12 +371,37 @@ final class Delicat_Builder_V9_TurboNav {
 		 * A script element only registers its rules when it is parsed with the
 		 * speculationrules type, so an inert copy costs nothing until swapped. */
 		$inert = '<script type="delicat/speculationrules" id="dbv9-speculation" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $json . '</script>';
-		$swap  = '<script id="dbv9-speculation-gate" data-no-optimize="1" data-no-delay="1" data-cfasync="false">(function(){'
-			. 'var r=document.documentElement;'
-			. 'if(r.className.indexOf("delicat-slow-net")>-1)return;'
+
+		/*
+		 * pro.17: a slow connection is downgraded, not switched off.
+		 *
+		 * The gate above used to return without registering anything at all, so
+		 * on a 3G link the storefront had neither prerendering NOR prefetching -
+		 * every tap on a product was a cold document fetch over a 400ms-RTT
+		 * link. That is the connection where tapping a product feels slowest,
+		 * and it was the one getting no help whatsoever.
+		 *
+		 * The two are not the same cost. PRERENDER runs the next page for real:
+		 * its HTML, its CSS, its JavaScript, its images. Refusing that on a
+		 * narrow pipe is right. PREFETCH fetches one document and does nothing
+		 * with it - and at `moderate` eagerness it only fires once the pointer
+		 * has rested on a link or a finger has gone down on it, by which point
+		 * the customer has committed to the tap. It fetches the page they are
+		 * about to ask for, 200-300ms before they ask, which on a link with that
+		 * much round-trip latency is most of the wait.
+		 *
+		 * So: fast connections keep both. Slow connections keep the prefetch and
+		 * drop the prerender. Nobody gets nothing.
+		 */
+		$swap = '<script id="dbv9-speculation-gate" data-no-optimize="1" data-no-delay="1" data-cfasync="false">(function(){'
 			. 'var s=document.getElementById("dbv9-speculation");if(!s)return;'
+			. 'var rules=s.textContent;'
+			. 'if(document.documentElement.className.indexOf("delicat-slow-net")>-1){'
+			. 'try{var parsed=JSON.parse(rules);delete parsed.prerender;'
+			. 'if(!parsed.prefetch)return;rules=JSON.stringify(parsed);}'
+			. 'catch(e){return;}}'
 			. 'var n=document.createElement("script");n.type="speculationrules";'
-			. 'n.textContent=s.textContent;'
+			. 'n.textContent=rules;'
 			. 's.parentNode.replaceChild(n,s);'
 			. '}());</script>';
 

@@ -981,7 +981,7 @@ if ( $delicat_builder_v9_product_editor_request ) {
 $delicat_builder_v9_admin_modules = array(
     'includes/class-delicat-builder-cache.php','includes/class-delicat-builder-query-cache.php','includes/class-delicat-builder-turbo-diagnostics.php','includes/class-delicat-builder-security.php','includes/class-delicat-builder-server-engine.php','includes/class-delicat-builder-compiler.php',
     'includes/class-delicat-builder-media.php','includes/class-delicat-builder-hero-search.php','includes/class-delicat-builder-shell.php','includes/class-delicat-builder-footer.php',
-    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
+    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-checkout-sheet.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
     'includes/class-delicat-builder-header-studio-8.php','includes/class-delicat-builder-woo-ui.php','includes/class-delicat-builder-purchase-ui.php',
     'includes/class-delicat-builder-performance.php','includes/class-delicat-builder-identity-bridge.php','includes/class-delicat-builder-production.php',
     'includes/class-delicat-builder-release.php','includes/class-delicat-builder-design.php','includes/class-delicat-builder-assets.php',
