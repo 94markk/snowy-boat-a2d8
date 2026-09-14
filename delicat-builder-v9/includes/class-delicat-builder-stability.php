@@ -329,7 +329,7 @@ final class Delicat_Builder_V9_Stability {
 			. '}'
 			. '@media(max-width:820px){'
 			. 'html body.delicat-shell-mobile-nav-active,html body.delicat-builder-homepage-managed .delicat-page-layout,html body.delicat-bottom-nav-active.dnp-dock-visible'
-			. '{padding-bottom:96px!important;padding-bottom:calc(var(--dbv9-app-dock,66px) + 30px + env(safe-area-inset-bottom))!important}'
+			. '{padding-bottom:106px!important;padding-bottom:var(--dbv9-nav-band,calc(106px + env(safe-area-inset-bottom,0px)))!important}'
 			. '}';
 		echo '<style id="delicat-builder-v9-authoritative">' . $css . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed literal, no user input.
 	}

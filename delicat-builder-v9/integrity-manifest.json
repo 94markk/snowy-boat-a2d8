@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-14T10:38:34.027196+00:00",
+  "built": "2026-09-14T10:43:18.932445+00:00",
   "version": "9.2.0-pro.16",
-  "bytes": 5821042,
+  "bytes": 5825221,
   "count": 358,
   "files": {
     "PERFORMANCE-PRO11.md": {
@@ -39,7 +39,7 @@
     },
     "asset-versions.php": {
       "bytes": 9345,
-      "sha256": "51873b0eae69c9c189d8c695281553734ffdcfc81ac139fd81f9560ef1bc4265"
+      "sha256": "4465887fc46b85bc9569e6cfdbffe12a07b74e159b9bf74de0fe94332b6f6371"
     },
     "assets/components/all-components.min.css": {
       "bytes": 167942,
@@ -289,13 +289,13 @@
       "bytes": 2303,
       "sha256": "ff09561d6a98b466269e198070a23df58c6a74fe66bb6a2908c1dc18b594443d"
     },
-    "assets/css/bottom-nav.699fe2732a87.css": {
-      "bytes": 5161,
-      "sha256": "699fe2732a876eee0c4cbea8242f92485f8f27ac1c532eafab52c6c720f2a533"
+    "assets/css/bottom-nav.3d8d73b48982.css": {
+      "bytes": 6293,
+      "sha256": "3d8d73b48982d87cb130615ea083799f5abce5025548515ef5e7b96f837d9a06"
     },
     "assets/css/bottom-nav.css": {
-      "bytes": 5161,
-      "sha256": "699fe2732a876eee0c4cbea8242f92485f8f27ac1c532eafab52c6c720f2a533"
+      "bytes": 6293,
+      "sha256": "3d8d73b48982d87cb130615ea083799f5abce5025548515ef5e7b96f837d9a06"
     },
     "assets/css/currency.8334671dccfa.css": {
       "bytes": 1272,
@@ -361,13 +361,13 @@
       "bytes": 11334,
       "sha256": "b5dd7cdcf797473d9b3867d92637b04b42573346360ff56e3cd408f51c300ebc"
     },
-    "assets/css/mobile-dock.css": {
-      "bytes": 12987,
-      "sha256": "d53f1e6e68ee70433f00f30ccc6ece81736b530db04aa4f254dcfb05808eb107"
+    "assets/css/mobile-dock.4c801a73518d.css": {
+      "bytes": 12912,
+      "sha256": "4c801a73518dd2c78c2f7f0627c7f0ede4834fc94330e2c88e448356b47da0ec"
     },
-    "assets/css/mobile-dock.d53f1e6e68ee.css": {
-      "bytes": 12987,
-      "sha256": "d53f1e6e68ee70433f00f30ccc6ece81736b530db04aa4f254dcfb05808eb107"
+    "assets/css/mobile-dock.css": {
+      "bytes": 12912,
+      "sha256": "4c801a73518dd2c78c2f7f0627c7f0ede4834fc94330e2c88e448356b47da0ec"
     },
     "assets/css/native-archive.css": {
       "bytes": 11442,
@@ -409,13 +409,13 @@
       "bytes": 2652,
       "sha256": "f735903c319dfce0f67e6dd61de2494fe245f84a5f93f44f53a22c1c7933439f"
     },
-    "assets/css/native-product.9b7741b47bb7.css": {
-      "bytes": 23214,
-      "sha256": "9b7741b47bb7e37a962f16035468dfdb93c667684ec5a1bbcd2912e8ff839ed8"
+    "assets/css/native-product.12382de68495.css": {
+      "bytes": 23152,
+      "sha256": "12382de6849597aa65f8db3375ddd7f0160472ede6fc02994b5d497eef455f08"
     },
     "assets/css/native-product.css": {
-      "bytes": 23214,
-      "sha256": "9b7741b47bb7e37a962f16035468dfdb93c667684ec5a1bbcd2912e8ff839ed8"
+      "bytes": 23152,
+      "sha256": "12382de6849597aa65f8db3375ddd7f0160472ede6fc02994b5d497eef455f08"
     },
     "assets/css/notifications.css": {
       "bytes": 10633,
@@ -481,13 +481,13 @@
       "bytes": 794,
       "sha256": "4d53af4f5c83f2d368184401170d2bd1f05801d5b979119af638e76112eba302"
     },
-    "assets/css/shell.1ea8b90ec38a.css": {
-      "bytes": 24062,
-      "sha256": "1ea8b90ec38a237e9bd032ede020b3b30e5b3fb437748ca451108ead52e4f679"
+    "assets/css/shell.89dcdba014ac.css": {
+      "bytes": 24046,
+      "sha256": "89dcdba014ac01f902a9ca9d09bd36aab9d527fbdb81b164d18c7cf54109f814"
     },
     "assets/css/shell.css": {
-      "bytes": 24062,
-      "sha256": "1ea8b90ec38a237e9bd032ede020b3b30e5b3fb437748ca451108ead52e4f679"
+      "bytes": 24046,
+      "sha256": "89dcdba014ac01f902a9ca9d09bd36aab9d527fbdb81b164d18c7cf54109f814"
     },
     "assets/css/site.52a62b377a0c.css": {
       "bytes": 11642,
@@ -497,21 +497,21 @@
       "bytes": 11642,
       "sha256": "52a62b377a0c14bde0506c1a4ae72b55d205a6338896c5dec86f0cd22de90532"
     },
-    "assets/css/storefront-chrome.min.40e47a65213e.css": {
-      "bytes": 91736,
-      "sha256": "40e47a65213e42cf4237116c4131eaf53a631119b288478a22b0e8d1d910d994"
+    "assets/css/storefront-chrome.min.34d21c8eac7e.css": {
+      "bytes": 92868,
+      "sha256": "34d21c8eac7e46ce0ed8872de1a9ced5e5635a73dc7ed91b2beabf38ca0e52cd"
     },
     "assets/css/storefront-chrome.min.css": {
-      "bytes": 91736,
-      "sha256": "40e47a65213e42cf4237116c4131eaf53a631119b288478a22b0e8d1d910d994"
+      "bytes": 92868,
+      "sha256": "34d21c8eac7e46ce0ed8872de1a9ced5e5635a73dc7ed91b2beabf38ca0e52cd"
+    },
+    "assets/css/storefront-polish.b9b16958f28c.css": {
+      "bytes": 23269,
+      "sha256": "b9b16958f28c70ce765ad83132b2a4d18cd265687f45ccd6697093a72a6d90dc"
     },
     "assets/css/storefront-polish.css": {
-      "bytes": 23290,
-      "sha256": "f9e8896af78b560dbafb94667d39376a571fb9c94f256f7353446325bcc7a49e"
-    },
-    "assets/css/storefront-polish.f9e8896af78b.css": {
-      "bytes": 23290,
-      "sha256": "f9e8896af78b560dbafb94667d39376a571fb9c94f256f7353446325bcc7a49e"
+      "bytes": 23269,
+      "sha256": "b9b16958f28c70ce765ad83132b2a4d18cd265687f45ccd6697093a72a6d90dc"
     },
     "assets/css/swatch-product-admin.c9717c10e666.css": {
       "bytes": 2674,
@@ -1194,8 +1194,8 @@
       "sha256": "036f9c5713e753e7be99e36efd9dd966d3347fb1342d49c944a921e9ab32f9bd"
     },
     "includes/class-delicat-builder-stability.php": {
-      "bytes": 16240,
-      "sha256": "196638574516e0bdd031eacaa095c0639747e4358ad1624ad4616d717200412d"
+      "bytes": 16239,
+      "sha256": "33de5799595ea0810014d29183a5d894e14a61e7ac85230d51b579c89ab15e76"
     },
     "includes/class-delicat-builder-storefront-fix.php": {
       "bytes": 45201,
