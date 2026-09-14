@@ -1,0 +1,18 @@
+/*
+Theme Name: Delicat Store
+Theme URI: https://delicastoreha.com/
+Author: Delicat Store
+Author URI: https://delicastoreha.com/
+Description: Boutique WooCommerce mobile-first pour produits numériques (recharges de jeux, gift cards, abonnements, services d'échange). Header + barre d'onglets façon application, mode sombre, badges automatiques, champs Player ID sur les produits, programme Bon Kliyan, pages légales prêtes à l'emploi et intégration Wallet (TeraWallet).
+Version: 1.0.0
+Requires at least: 6.4
+Tested up to: 6.8
+Requires PHP: 7.4
+License: GNU General Public License v2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: delicat-store
+Tags: e-commerce, one-column, custom-logo, custom-menu, featured-images, threaded-comments, translation-ready, block-styles, wide-blocks
+
+Le CSS du thème est chargé depuis assets/css/theme.css (voir inc/assets.php).
+Ce fichier ne contient que l'en-tête requis par WordPress.
+*/

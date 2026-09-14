@@ -1,0 +1,35 @@
+/* Delicat Store — admin: setup screen and product-field editor. */
+
+.ds-setup__grid { display: grid; gap: 20px; margin-top: 16px; }
+@media (min-width: 1100px) { .ds-setup__grid { grid-template-columns: 1fr 1fr; align-items: start; } }
+.ds-setup__card { background: #fff; border: 1px solid #dcdcde; border-radius: 8px; padding: 20px 24px; }
+.ds-setup__card h2 { margin-top: 0; }
+.ds-setup__checks { margin: 0; display: grid; gap: 10px; }
+.ds-setup__checks li { display: flex; gap: 12px; align-items: flex-start; padding: 10px 12px; border-radius: 6px; background: #f6f7f7; }
+.ds-setup__checks li.is-ok { background: #edfaef; }
+.ds-setup__checks li p { margin: 2px 0 0; color: #50575e; }
+.ds-setup__mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 999px; flex: none; font-weight: 700; background: #dcdcde; color: #50575e; }
+.is-ok .ds-setup__mark { background: #00a32a; color: #fff; }
+.ds-setup__action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 0; border-bottom: 1px solid #f0f0f1; }
+.ds-setup__action .description { flex: 1 1 260px; }
+.ds-setup__next { margin: 8px 0 0 18px; }
+.ds-setup__next li { margin-bottom: 8px; }
+
+.ds-fields-admin__list { display: grid; gap: 12px; margin: 12px 0; }
+.ds-fields-admin__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.ds-fa-field { border: 1px solid #dcdcde; border-radius: 8px; background: #fbfbfc; }
+.ds-fa-field__head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #ececef; background: #fff; border-radius: 8px 8px 0 0; }
+.ds-fa-field__handle { cursor: grab; color: #a7aaad; letter-spacing: -2px; }
+.ds-fa-field__spacer { flex: 1; }
+.ds-fa-field.is-collapsed .ds-fa-grid { display: none; }
+.ds-fa-grid { display: grid; gap: 10px 14px; padding: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.ds-fa-grid label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: #3c434a; }
+.ds-fa-grid input[type="text"], .ds-fa-grid input[type="number"], .ds-fa-grid input[type="url"], .ds-fa-grid select, .ds-fa-grid textarea { width: 100%; font-weight: 400; }
+.ds-fa-grid .ds-fa-check { grid-auto-flow: column; justify-content: start; align-items: center; align-self: end; padding-bottom: 6px; }
+.ds-fa-grid .ds-fa-wide { grid-column: 1 / -1; }
+.ds-fa-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.ds-fa-pair:has(button) { grid-template-columns: 1fr auto; }
+.ds-fa-field[data-type="heading"] .ds-fa-grid > label:not([data-for~="heading"]),
+.ds-fa-field[data-type="content"] .ds-fa-grid > label:not([data-for~="content"]) { display: none; }
+.ds-admin-secrets { margin: 6px 0; font-size: 12px; }
+.ds-admin-secrets code { margin-right: 6px; }
