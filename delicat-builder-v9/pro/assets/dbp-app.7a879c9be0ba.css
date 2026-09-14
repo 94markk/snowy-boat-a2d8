@@ -1,0 +1,145 @@
+/* Delicat Builder V9 Pro — app layer.
+ *
+ * Same hard constraints as the critical file: no calc(), no clamp(), no
+ * backdrop-filter. This sheet holds everything that can arrive after first
+ * paint without causing a visible shift.
+ */
+
+/* ------------------------------------------------------- view transitions */
+
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root) {
+  animation: dbp-out 140ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+::view-transition-new(root) {
+  animation: dbp-in 200ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+
+@keyframes dbp-out {
+  to { opacity: 0; transform: translate3d(0, -4px, 0); }
+}
+
+@keyframes dbp-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+}
+
+/* The chrome is shared across pages and must not animate with the content. */
+.dsb8-header,
+.delicat-bottom-nav,
+.dlx-drawer,
+.dap-shell {
+  view-transition-name: none;
+}
+
+/* -------------------------------------------------------- mounted chrome */
+
+/* The header, drawer and dock survive a navigation. Marking them as their own
+   transition roots keeps them visually still while the content changes. */
+
+body.dbp-app .dsb8-header {
+  view-transition-name: dbp-header;
+  contain: layout style;
+}
+
+body.dbp-app .delicat-bottom-nav {
+  view-transition-name: dbp-dock;
+  contain: layout style;
+}
+
+/* ---------------------------------------------------------- content rails */
+
+/* Horizontal rails scroll by touch instead of animating. The RC90 notes
+   recorded two continuously animated marquees on mobile; a transform running
+   forever on a low-end handset is a permanent frame-rate tax. */
+
+@media (max-width: 782px) {
+  body.dbp-app [class*="marquee"],
+  body.dbp-app [class*="__track"] {
+    animation: none !important;
+    transform: none !important;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  body.dbp-app [class*="__track"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.dbp-app [class*="__track"] > * {
+    scroll-snap-align: start;
+  }
+}
+
+/* ------------------------------------------------------------- low data */
+
+/* When the server has detected Save-Data or a 2G/3G link, decoration stops
+   costing bytes and frames. Content is never hidden — only effects. */
+
+body.dbp-lowdata *,
+body.dbp-lowdata *::before,
+body.dbp-lowdata *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
+body.dbp-lowdata [class*="shadow"],
+body.dbp-lowdata [style*="box-shadow"] {
+  box-shadow: none !important;
+}
+
+body.dbp-lowdata video[autoplay] {
+  display: none;
+}
+
+/* --------------------------------------------------------- state binding */
+
+/* Counts are painted by the state store. Reserving their box stops the badge
+   from shifting the header when the first snapshot lands. */
+
+[data-dbp-cart-count],
+[data-dbp-alerts] {
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 9px;
+  display: inline-block;
+}
+
+[data-dbp-cart-count][data-empty="1"] {
+  display: none;
+}
+
+html[data-dbp-auth="out"] [data-dbp-requires-auth] {
+  display: none;
+}
+
+html[data-dbp-auth="in"] [data-dbp-requires-guest] {
+  display: none;
+}
+
+/* ------------------------------------------------------------ tap comfort */
+
+body.dbp-app a,
+body.dbp-app button {
+  -webkit-tap-highlight-color: rgba(40, 70, 150, 0.12);
+  touch-action: manipulation;
+}
+
+/* An element the engine will swap should not keep a stale :hover state on a
+   touch device after the swap. */
+@media (hover: none) {
+  body.dbp-app a:hover,
+  body.dbp-app button:hover {
+    filter: none;
+  }
+}
