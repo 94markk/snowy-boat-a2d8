@@ -585,7 +585,15 @@
       if (epoch !== cacheEpoch) throw new Error('session-changed');
       if (token !== navToken) return;
       remember(id, payload);
-      if (options.push !== false) history.pushState({ dbp: 1 }, '', url.href);
+      /* Scroll restoration is taken over only once this document has an
+         engine-made history entry to restore. Forcing 'manual' at start-up
+         also switched it off for ordinary document navigations (product
+         page -> back), so a shopper returning to the catalogue landed at
+         the top of the list instead of where they left it. */
+      if (options.push !== false) {
+        if (history.scrollRestoration && history.scrollRestoration !== 'manual') history.scrollRestoration = 'manual';
+        history.pushState({ dbp: 1 }, '', url.href);
+      }
       return commit(payload, url, options.restoreTo, token);
     })['catch'](function (error) {
       if (error && error.name === 'AbortError') return;
@@ -740,7 +748,6 @@
   /* --------------------------------------------------------------- start-up */
 
   indexExistingAssets();
-  history.scrollRestoration = 'manual';
   schedule(observeLinks);
 
   window.DBPNav = {

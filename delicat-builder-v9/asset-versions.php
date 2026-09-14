@@ -115,7 +115,7 @@ return array(
  'modules/product-fields/assets/js/calc-front.js' => 'modules/product-fields/assets/js/calc-front.b715a9b757a4.js',
  'pro/assets/dbp-app.css' => 'pro/assets/dbp-app.7a879c9be0ba.css',
  'pro/assets/dbp-critical.css' => 'pro/assets/dbp-critical.fe8be8e23362.css',
- 'pro/assets/dbp-nav.js' => 'pro/assets/dbp-nav.2c5b5efb7d57.js',
+ 'pro/assets/dbp-nav.js' => 'pro/assets/dbp-nav.830d7dce8b8d.js',
  'pro/assets/dbp-state.js' => 'pro/assets/dbp-state.3d92762ed0b8.js',
  'pro/assets/dbp-type.css' => 'pro/assets/dbp-type.b55df9990c0e.css',
 );

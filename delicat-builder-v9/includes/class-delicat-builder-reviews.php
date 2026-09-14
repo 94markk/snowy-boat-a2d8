@@ -405,6 +405,30 @@ final class Delicat_Builder_V9_Reviews {
 			return false;
 		}
 
+		/*
+		 * pro.16: honour the dismissal the popup already records.
+		 *
+		 * ajax_snooze() writes UMETA_SNOOZE on every "Plus tard", and
+		 * order_completed() deletes it when a new purchase is worth asking
+		 * about — both halves of a snooze were implemented. Nothing ever READ
+		 * it, and the cooldown below defaults to 0, so for a signed-in client
+		 * who has never left a review this method returned true on every
+		 * home, account and order-received view, for ever. Dismissing the
+		 * invitation bought the customer exactly one page load. On a store
+		 * where most customers never review, that is a permanent popup on the
+		 * homepage — the nag RC66's own comment says must never happen.
+		 *
+		 * Leaving a review still ends the invitation permanently
+		 * (client_has_reviewed above). A completed order still re-invites
+		 * immediately, because order_completed() clears this key as it queues
+		 * the product. The cooldown filter is untouched for a boutique that
+		 * configured its own rhythm.
+		 */
+		$snoozed_until = absint( get_user_meta( $user_id, self::UMETA_SNOOZE, true ) );
+		if ( $snoozed_until > time() ) {
+			return false;
+		}
+
 		$cooldown = (int) apply_filters( 'delicat_builder_v9_review_prompt_cooldown', 0, $user_id );
 		if ( $cooldown > 0 ) {
 			$last = absint( get_user_meta( $user_id, self::UMETA_SHOWN, true ) );

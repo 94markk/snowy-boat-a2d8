@@ -146,7 +146,7 @@ final class Delicat_Builder_V9_Admin {
 	}
 
 	private static function status_items(): array {
-		return array(
+		$items = array(
 			array(
 				'label' => 'HTTPS',
 				'ok'    => is_ssl(),
@@ -173,6 +173,73 @@ final class Delicat_Builder_V9_Admin {
 				'text'  => wp_using_ext_object_cache() ? 'Detected' : 'Optional',
 			),
 		);
+
+		/*
+		 * pro.16: three failure ledgers were written and never read by anything.
+		 *
+		 * The worst of them is the Pro Kernel boot error. When DBP_Kernel::boot()
+		 * throws, the bootstrap catches it on purpose, records this option and
+		 * carries on as plain V9 — which silently switches off the instant
+		 * navigation engine, the route-scoped asset pipeline and the shared state
+		 * layer. The storefront still works, just slowly, and nothing anywhere
+		 * told the merchant why. The same was true of a maintenance-module boot
+		 * failure and of the bootstrap circuit breaker having deactivated the
+		 * plugin. Each row appears only when its ledger is non-empty, so a
+		 * healthy install shows exactly what it showed before.
+		 */
+		$pro_error = get_option( 'delicat_builder_v9_pro_boot_error', array() );
+		if ( is_array( $pro_error ) && ! empty( $pro_error ) ) {
+			$items[] = array(
+				'label' => 'Pro Kernel',
+				'ok'    => false,
+				'text'  => sprintf(
+					'Boot failed %s — %s:%d %s. Instant navigation and route-scoped assets are OFF until this is fixed.',
+					(string) ( $pro_error['time'] ?? 'unknown' ),
+					(string) ( $pro_error['file'] ?? 'unknown' ),
+					absint( $pro_error['line'] ?? 0 ),
+					(string) ( $pro_error['message'] ?? '' )
+				),
+			);
+		} elseif ( class_exists( 'DBP_Kernel', false ) && is_callable( array( 'DBP_Kernel', 'on' ) ) ) {
+			$items[] = array(
+				'label' => 'Pro Kernel',
+				'ok'    => DBP_Kernel::on( 'navigation' ),
+				'text'  => DBP_Kernel::on( 'navigation' ) ? 'Instant navigation active' : 'Loaded, navigation layer switched off',
+			);
+		} else {
+			$items[] = array(
+				'label' => 'Pro Kernel',
+				'ok'    => false,
+				'text'  => 'Not loaded — the storefront is running without the instant navigation engine.',
+			);
+		}
+
+		$tripped = absint( get_option( 'delicat_builder_v9_circuit_breaker_tripped', 0 ) );
+		if ( $tripped > 0 ) {
+			$items[] = array(
+				'label' => 'Circuit breaker',
+				'ok'    => false,
+				'text'  => sprintf(
+					'Builder deactivated itself after a fatal on %s. Clear delicat_builder_v9_circuit_breaker_tripped once the cause is fixed.',
+					gmdate( 'Y-m-d H:i', $tripped ) . ' UTC'
+				),
+			);
+		}
+
+		$maintenance_error = get_option( 'delicat_builder_v9_maintenance_boot_failure', array() );
+		if ( is_array( $maintenance_error ) && ! empty( $maintenance_error ) ) {
+			$items[] = array(
+				'label' => 'Maintenance module',
+				'ok'    => false,
+				'text'  => sprintf(
+					'Boot failed %s — %s',
+					(string) ( $maintenance_error['time'] ?? 'unknown' ),
+					(string) ( $maintenance_error['message'] ?? '' )
+				),
+			);
+		}
+
+		return $items;
 	}
 
 	public static function page(): void {

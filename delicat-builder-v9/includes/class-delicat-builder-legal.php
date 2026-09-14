@@ -179,17 +179,56 @@ final class Delicat_Builder_V9_Legal {
 	}
 
 	public static function page_id( string $key ): int {
+		/* tokens() resolves ten cross-reference URLs per rendered document and
+		 * the footer resolves them again; resolve each key once per request. */
+		static $resolved = array();
+		if ( array_key_exists( $key, $resolved ) ) {
+			return $resolved[ $key ];
+		}
+
 		$s  = self::settings();
 		$id = isset( $s['pages'][ $key ] ) ? absint( $s['pages'][ $key ] ) : 0;
 		if ( $id > 0 && 'page' === get_post_type( $id ) && 'trash' !== get_post_status( $id ) ) {
+			$resolved[ $key ] = $id;
 			return $id;
 		}
 		$docs = self::documents();
 		if ( ! isset( $docs[ $key ] ) ) {
+			$resolved[ $key ] = 0;
 			return 0;
 		}
 		$found = get_page_by_path( $docs[ $key ]['slug'] );
-		return ( $found instanceof WP_Post ) ? (int) $found->ID : 0;
+		if ( $found instanceof WP_Post ) {
+			$resolved[ $key ] = (int) $found->ID;
+			return $resolved[ $key ];
+		}
+
+		/*
+		 * pro.16: publish() stamps every generated document with META_DOC, but
+		 * nothing ever read it, so resolution ended at the slug. Rename a legal
+		 * page in WordPress — or lose the stored option row — and the plugin
+		 * stopped finding its own page: url() then returned
+		 * home_url( '/<original-slug>/' ), which is a 404 in the footer and
+		 * inside the cross-references of every other legal document.
+		 *
+		 * The stamp is the durable identifier, so it is the last-resort lookup.
+		 * It runs only when both fast paths have already failed, so the normal
+		 * request pays nothing for it.
+		 */
+		$stamped = get_posts(
+			array(
+				'post_type'        => 'page',
+				'post_status'      => array( 'publish', 'private', 'draft', 'pending' ),
+				'numberposts'      => 1,
+				'fields'           => 'ids',
+				'meta_key'         => self::META_DOC, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- last-resort recovery lookup, never on the fast path.
+				'meta_value'       => $key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'no_found_rows'    => true,
+				'suppress_filters' => false,
+			)
+		);
+		$resolved[ $key ] = ! empty( $stamped[0] ) ? (int) $stamped[0] : 0;
+		return $resolved[ $key ];
 	}
 
 	private static function tokens(): array {
