@@ -1,0 +1,70 @@
+/* Announcement Studio admin — model selector and true storefront preview. */
+
+.dbv9-annc-model-help{margin:-2px 0 14px!important}
+.dbv9-annc-model-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+  max-width:1120px;
+  margin:0 0 28px;
+}
+.dbv9-annc-model-card{
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-height:190px;
+  padding:17px;
+  border:1px solid #dcdcde;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 1px 2px rgba(16,24,40,.03);
+  cursor:pointer;
+  transition:border-color .15s ease,box-shadow .15s ease,transform .15s ease;
+}
+.dbv9-annc-model-card:hover{border-color:#a9a9ae;box-shadow:0 7px 18px rgba(16,24,40,.07);transform:translateY(-1px)}
+.dbv9-annc-model-card.is-selected{border:2px solid #4f5bd5;padding:16px;box-shadow:0 0 0 3px rgba(79,91,213,.08)}
+.dbv9-annc-model-card__head{display:flex;align-items:center;gap:10px;font-size:16px;color:#1d2327}
+.dbv9-annc-model-card__head input{margin:0}
+.dbv9-annc-model-card__desc{display:block;min-height:42px;color:#50575e;font-size:13px;line-height:1.42}
+.dbv9-annc-model-preview{align-self:flex-start;margin-top:auto!important;font-weight:650!important}
+
+.dbv9-annc-model-card__sample{
+  position:relative;
+  display:block;
+  height:54px;
+  overflow:hidden;
+  border-radius:12px;
+  border:1px solid rgba(17,24,39,.08);
+  background:#fff;
+}
+.dbv9-annc-model-card__sample i,
+.dbv9-annc-model-card__sample b,
+.dbv9-annc-model-card__sample em{position:absolute;display:block;border-radius:999px;content:""}
+.dbv9-annc-model-card__sample i{left:12px;top:12px;width:25px;height:25px}
+.dbv9-annc-model-card__sample b{left:47px;right:12px;top:14px;height:7px}
+.dbv9-annc-model-card__sample em{left:47px;right:36px;top:29px;height:6px}
+.dbv9-annc-model-card__sample--aurora{background:linear-gradient(135deg,#f3f5ff,#fff8f4)}
+.dbv9-annc-model-card__sample--aurora i{background:linear-gradient(135deg,#6b5cff,#ff5a1f)}
+.dbv9-annc-model-card__sample--aurora b{background:#2e3979}.dbv9-annc-model-card__sample--aurora em{background:#a6aac1}
+.dbv9-annc-model-card__sample--flash{background:#11152f;border-color:#343c78}
+.dbv9-annc-model-card__sample--flash i{background:#ff5a1f}.dbv9-annc-model-card__sample--flash b{background:#fff}.dbv9-annc-model-card__sample--flash em{background:#777f9f}
+.dbv9-annc-model-card__sample--midnight{background:radial-gradient(circle at 50% 0,#322d76,#0b0c28)}
+.dbv9-annc-model-card__sample--midnight i{background:#7367ff}.dbv9-annc-model-card__sample--midnight b{background:#f4f5ff}.dbv9-annc-model-card__sample--midnight em{background:#9098bb}
+.dbv9-annc-model-card__sample--minimal{background:#fff;border-color:#dfe2e9}
+.dbv9-annc-model-card__sample--minimal i{background:#111827}.dbv9-annc-model-card__sample--minimal b{background:#242b37}.dbv9-annc-model-card__sample--minimal em{background:#c2c5cb}
+.dbv9-annc-model-card__sample--boutique{background:linear-gradient(180deg,#fff0e8 0 7px,#fffaf7 7px 100%)}
+.dbv9-annc-model-card__sample--boutique i{background:#ff5a1f}.dbv9-annc-model-card__sample--boutique b{background:#432d27}.dbv9-annc-model-card__sample--boutique em{background:#b9a39a}
+.dbv9-annc-model-card__sample--spotlight{background:radial-gradient(circle at 50% 0,#5144a2,#090c1d 58%)}
+.dbv9-annc-model-card__sample--spotlight i{background:#fff}.dbv9-annc-model-card__sample--spotlight b{background:#fff}.dbv9-annc-model-card__sample--spotlight em{background:#7f879e}
+
+/* Admin preview shares the exact storefront CSS but must appear over wp-admin. */
+#dbv9-annc-admin-preview{z-index:2147483646}
+#dbv9-annc-admin-preview .dbv9-annc__btn{pointer-events:none}
+body.dbv9-annc-admin-preview-open{overflow:hidden}
+
+@media(max-width:1050px){.dbv9-annc-model-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){
+  .dbv9-annc-model-grid{grid-template-columns:1fr}
+  .dbv9-annc-model-card{min-height:170px}
+}
