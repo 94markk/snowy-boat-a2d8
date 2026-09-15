@@ -1,8 +1,8 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-15T05:12:27.000000+00:00",
+    "built": "2026-09-15T05:15:54.000000+00:00",
     "version": "9.2.0-pro.29",
-    "bytes": 5941539,
+    "bytes": 5943387,
     "count": 356,
     "files": {
         "PRO-README.md": {
@@ -1138,8 +1138,8 @@
             "sha256": "025f2819b2e9e60ce0fbf30ae2b4746837f42c09dcc3962e6b223eac8d37bbf5"
         },
         "includes/class-delicat-builder-security.php": {
-            "bytes": 33486,
-            "sha256": "3d2dfee75729cf4b6eac0ca92efa39d743740be46fbd4ec6a5a170a5410424b8"
+            "bytes": 35334,
+            "sha256": "b0f840e04c6f8697c0dd3a7f398879624d6a196efc988ff9a5d711fd00d0d621"
         },
         "includes/class-delicat-builder-self-test.php": {
             "bytes": 18743,

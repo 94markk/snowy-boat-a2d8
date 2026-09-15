@@ -794,3 +794,39 @@ add_action( 'woocommerce_after_order_itemmeta', static function ( $item_id, $ite
 	}
 	echo '</div>';
 }, 20, 2 );
+
+/*
+ * CART-AWARE CACHE VARIANT
+ * ------------------------
+ * Several modules decide what to ship by reading WooCommerce's cart cookie:
+ * Performance::dequeue_managed_noncritical(), TurboNav::drop_guest_cart_fragments(),
+ * Native_Product::slim_assets() and Storefront_Fix all drop `wc-cart-fragments`
+ * for a logged-out visitor whose cart is empty, because for that visitor the
+ * script synchronises nothing and still costs an admin-ajax POST per page view.
+ *
+ * That decision changes the emitted document, so once these pages are publicly
+ * cached (see public_cache_allowed()) it has to be part of the cache key.
+ * Otherwise a shopper with items can be served the copy built for an empty
+ * cart, and the consequence is not cosmetic: session.js asks WooCommerce to
+ * refresh the mini-cart by triggering `wc_fragment_refresh`, an event only
+ * wc-cart-fragments listens for. Without that script on the page the trigger
+ * goes nowhere and the cart panel keeps saying "Votre panier est vide" while
+ * the badge, corrected from the cookie, shows items.
+ *
+ * LiteSpeed's WooCommerce integration generally varies on this cookie already,
+ * but the storefront's correctness should not rest on another plugin's default
+ * staying as it is. Declaring it here makes the variant explicit: two cached
+ * copies per URL -- empty cart and non-empty -- instead of one wrong one.
+ *
+ * The cart count and the cart panel itself stay out of the document regardless;
+ * a count is unbounded and two shoppers with three items each still have
+ * different baskets, so those are restored on the client. See shared_document().
+ */
+add_filter(
+	'litespeed_vary_cookies',
+	static function ( $cookies ) {
+		$cookies = is_array( $cookies ) ? $cookies : array();
+		$cookies[] = 'woocommerce_items_in_cart';
+		return array_values( array_unique( $cookies ) );
+	}
+);
