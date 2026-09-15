@@ -509,7 +509,7 @@ final class DBP_Nav {
 			'nativeProducts' => true,
 			'productWarm' => array_map( static function ( $path ) { return DBP_Kernel::asset_url( $path ); }, array(
 				'assets/css/native-product.css', 'assets/css/native-product-pro15.css',
-				'assets/js/native-product.js', 'assets/css/checkout-sheet.css', 'assets/js/checkout-sheet.js',
+				'assets/js/native-product.js', 'assets/css/express-sheet.css', 'assets/js/express-sheet.js',
 			) ),
 			'publicProductWarm' => ! is_user_logged_in() && empty( $_COOKIE['woocommerce_items_in_cart'] ) && empty( $_COOKIE['wp_woocommerce_session_' . COOKIEHASH] ),
 			'productPaths' => array_values( array_unique( $product_paths ) ),

@@ -1,0 +1,682 @@
+/* =============================================================================
+   The express review sheet.
+   -----------------------------------------------------------------------------
+   A panel around WooCommerce's own checkout form. Everything below the summary
+   cards is WooCommerce's markup, so most of this file is restraint: give the
+   form room, make its controls reachable with a thumb, and otherwise leave it
+   alone.
+
+   Three decisions worth stating, because all three are load-bearing:
+
+   1. THE PAY BUTTON IS PINNED WITH position:fixed, and stays a DOM child of
+      form.checkout. WooCommerce binds its submit handler to the form, so moving
+      the button into a footer element would stop it submitting; CSS positioning
+      changes where a box paints, not where it lives.
+
+      position:sticky cannot do this job. A sticky box is confined to its
+      PARENT's box, and the button's parent is WooCommerce's #payment, which
+      begins only a little above it - so a sticky button clamps at the top of
+      #payment and never reaches the bottom of the panel. Measured, not assumed:
+      it sat 220px below the fold with the panel freshly opened.
+
+      .dxs always carries a `translate`, which makes it the containing block for
+      its fixed descendants. That is what anchors the footer to the panel rather
+      than to the window. Do not remove it.
+
+   2. EVERY COLOUR IS A CUSTOM PROPERTY on .dxs. A merchant who wants a
+      different accent changes one value, not fourteen rules.
+
+   3. NOTHING HERE IS NAMED dcs. The module this replaces used that prefix, and
+      a page cached from any earlier version still carries its stylesheet. New
+      names mean the old one cannot reach this panel.
+   ========================================================================== */
+
+/* Stated rather than inherited. Every width here - the inputs, the pay button,
+   the pinned footer - expects the border box, which is what WooCommerce themes
+   set globally. Saying so means the panel renders the same under one that does
+   not. */
+.dxs, .dxs *, .dxs *::before, .dxs *::after { box-sizing: border-box; }
+
+.dxs {
+  /* ---- The palette, declared once ---- */
+  --dxs-accent: #f97316;
+  --dxs-accent-ink: #fff;
+  --dxs-ok: #16a34a;
+  --dxs-ok-soft: #d1fae5;
+  --dxs-ink: #111827;
+  --dxs-ink-soft: #6b7280;
+  --dxs-line: #e9ebf2;
+  --dxs-line-soft: #f1f2f7;
+  --dxs-surface: #fff;
+  --dxs-sunken: #f5f6fa;
+  --dxs-danger: #d7263d;
+  --dxs-radius: 16px;
+
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 2147483000;
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  /* Deliberately short of the full height: the strip of page left showing at
+     the top is what tells a customer this is a panel over something, not a new
+     screen they have navigated to. */
+  max-height: 92svh;
+
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 26px 26px 0 0;
+
+  background: var(--dxs-surface);
+  color: var(--dxs-ink);
+  box-shadow: 0 -12px 54px rgb(6 10 32 / .28);
+
+  translate: 0 100%;
+  transition: translate .28s cubic-bezier(.32, .72, 0, 1),
+              overlay .28s allow-discrete,
+              display .28s allow-discrete;
+}
+
+.dxs[open] { translate: 0 0; }
+
+/* The entry animation needs a start value that exists before the dialog is
+   shown; without it the panel appears in place and only animates away. */
+@starting-style { .dxs[open] { translate: 0 100%; } }
+
+.dxs::backdrop {
+  background: rgb(8 10 24 / .44);
+  opacity: 0;
+  transition: opacity .28s cubic-bezier(.32, .72, 0, 1),
+              overlay .28s allow-discrete,
+              display .28s allow-discrete;
+}
+
+.dxs[open]::backdrop { opacity: 1; }
+@starting-style { .dxs[open]::backdrop { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .dxs, .dxs::backdrop { transition-duration: 1ms; }
+}
+
+/* ---- Close ----
+   Outside the scroller, so it stays put while the summary scrolls under it. */
+
+.dxs__close {
+  position: absolute;
+  inset-block-start: 14px;
+  inset-inline-end: 14px;
+  z-index: 3;
+
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+
+  border: 0;
+  border-radius: 15px;
+  background: var(--dxs-sunken);
+  color: var(--dxs-ink-soft);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: scale .09s cubic-bezier(.32, .72, 0, 1);
+}
+
+.dxs__close:active { scale: .92; }
+
+.dxs__close:focus-visible,
+.dxs #place_order:focus-visible,
+.dxs .dxs__btn:focus-visible {
+  outline: 2px solid var(--dxs-accent);
+  outline-offset: 2px;
+}
+
+/* ---- Scroller ---- */
+
+.dxs__scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  /* A flick at the end of the form must not scroll the product page behind. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* The pay button is pinned over the bottom of this box, so the last field has
+     to be scrollable past it. JS measures the footer into --dxs-pad-bottom; the
+     fallback covers the button, the terms line and a margin. */
+  padding: 0 18px var(--dxs-pad-bottom, 190px);
+}
+
+/* Opening the panel focuses this rather than the close button - a sheet should
+   not open with a focus ring on the one control that throws it away. */
+.dxs__scroll:focus { outline: none; }
+
+.dxs__grip {
+  width: 44px;
+  height: 4px;
+  margin: 12px auto 0;
+  border-radius: 999px;
+  background: #dcdfe8;
+}
+
+/* ---- Head ---- */
+
+.dxs__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  /* Short enough that the top of the order card is visible the moment the panel
+     opens - a customer should see what they are buying without scrolling. */
+  padding: 12px 30px 18px;
+  text-align: center;
+}
+
+.dxs__mark {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--dxs-ok-soft);
+  color: var(--dxs-ok);
+}
+
+.dxs__title {
+  margin: 0;
+  font-size: 1.42rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  line-height: 1.2;
+  color: var(--dxs-ink);
+}
+
+.dxs__sub {
+  margin: 0;
+  font-size: .95rem;
+  line-height: 1.45;
+  color: var(--dxs-ink-soft);
+}
+
+/* ---- The summary cards ---- */
+
+.dxs-card {
+  margin-bottom: 14px;
+  padding: 4px 16px;
+  border-radius: var(--dxs-radius);
+  background: var(--dxs-surface);
+  border: 1px solid var(--dxs-line);
+}
+
+/* The wallet block is sunken rather than outlined, so the two read as "what you
+   are buying" and "what it costs you" rather than as two lists. */
+.dxs-card--wallet {
+  border-color: transparent;
+  background: var(--dxs-sunken);
+}
+
+.dxs-row {
+  display: flex;
+  /* Wraps rather than squeezing: an email address that will not fit beside its
+     label drops to its own full-width line instead of breaking mid-domain. */
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 14px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--dxs-line-soft);
+}
+
+.dxs-card--wallet .dxs-row { border-bottom-color: #e6e8ef; }
+.dxs-row:last-child { border-bottom: 0; }
+
+.dxs-row__label {
+  flex: 0 0 auto;
+  font-size: .95rem;
+  color: var(--dxs-ink-soft);
+}
+
+.dxs-row__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: .95rem;
+  /* Only words that cannot fit a line of their own are broken: an address cut
+     off mid-domain is not a confirmation. */
+  overflow-wrap: break-word;
+  text-align: right;
+  color: var(--dxs-ink);
+}
+
+.dxs-row__value--strong { font-weight: 750; }
+.dxs-row__value--ok { color: var(--dxs-ok); font-weight: 750; }
+/* A balance that will not cover the order is stated before the gateway has to
+   say so. */
+.dxs-row__value--short { color: var(--dxs-danger); font-weight: 750; }
+
+/* The last row of the order card is the figure being charged, so its label
+   carries the same weight as the number beside it. */
+.dxs-row--total { border-bottom: 0; }
+.dxs-row--total .dxs-row__label { font-weight: 800; color: var(--dxs-ink); }
+
+.dxs-total {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--dxs-accent);
+}
+
+.dxs-total .woocommerce-Price-amount { color: inherit; }
+
+.dxs-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-inline-end: 7px;
+  border-radius: 50%;
+  background: var(--dxs-ok);
+}
+
+/* ---- While WooCommerce's reply is on its way ---- */
+
+.dxs__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 30px 0 60px;
+  color: var(--dxs-ink-soft);
+  text-align: center;
+}
+
+.dxs__spinner {
+  width: 26px;
+  height: 26px;
+  border: 2.5px solid var(--dxs-line);
+  border-top-color: var(--dxs-accent);
+  border-radius: 50%;
+  animation: dxs-spin .7s linear infinite;
+}
+
+@keyframes dxs-spin { to { rotate: 360deg; } }
+@media (prefers-reduced-motion: reduce) { .dxs__spinner { animation-duration: 2.4s; } }
+
+/* ---- Insufficient funds ----
+   Above WooCommerce's own message, never instead of it. */
+
+.dxs__low {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding: 20px 18px;
+  border: 1px solid #f2d3a0;
+  border-radius: var(--dxs-radius);
+  background: #fff8ec;
+  color: #6b4a10;
+  text-align: center;
+}
+
+.dxs__low-icon { color: #b9781a; }
+.dxs__low h3 { margin: 0; font-size: 1.05rem; font-weight: 780; line-height: 1.3; }
+.dxs__low p { margin: 0; max-width: 38ch; font-size: .88rem; line-height: 1.5; }
+.dxs__low-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 6px; }
+
+.dxs__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 13px;
+  font-size: .92rem;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: scale .09s cubic-bezier(.32, .72, 0, 1);
+}
+
+.dxs__btn:active { scale: .97; }
+.dxs__btn--primary { background: var(--dxs-accent); color: var(--dxs-accent-ink); }
+.dxs__btn--ghost { background: transparent; border: 1px solid #e0c391; color: #6b4a10; }
+
+/* =============================================================================
+   WooCommerce's form
+   ========================================================================== */
+
+.dxs .checkout.woocommerce-checkout { margin: 0; }
+.dxs .col2-set, .dxs .col-1, .dxs .col-2 { float: none; width: 100%; }
+
+/* ---- What the checkout page carries and this panel does not want ----
+   Hidden here rather than unhooked in PHP, on purpose: these rules are scoped
+   to .dxs, so the real checkout page keeps every one of them. A customer who
+   wants a coupon, or the privacy notice, still has the full page - this is the
+   express path. */
+
+.dxs .woocommerce-form-coupon-toggle,
+.dxs form.checkout_coupon { display: none !important; }
+
+.dxs .woocommerce-privacy-policy-text { display: none !important; }
+
+/* A heading the template prints OUTSIDE the field cards - a second
+   "Coordonnées" above the card already titled the same thing. Only headings
+   that are direct children of the form or the column wrappers go: the ones
+   inside .woocommerce-billing-fields and its siblings are the card titles. */
+.dxs form.checkout > h2,
+.dxs form.checkout > h3,
+.dxs #customer_details > h2,
+.dxs #customer_details > h3,
+.dxs #customer_details > .col-1 > h2,
+.dxs #customer_details > .col-1 > h3,
+.dxs #customer_details > .col-2 > h2,
+.dxs #customer_details > .col-2 > h3 { display: none; }
+
+/* WooCommerce's own headings become the card's title, so the fields sit in a
+   card like the summary rather than running loose down the panel. */
+.dxs .woocommerce-billing-fields,
+.dxs .woocommerce-additional-fields,
+.dxs .woocommerce-shipping-fields {
+  margin-bottom: 14px;
+  padding: 16px;
+  border: 1px solid var(--dxs-line);
+  border-radius: var(--dxs-radius);
+}
+
+.dxs .woocommerce-billing-fields h3,
+.dxs .woocommerce-additional-fields h3,
+.dxs #order_review_heading {
+  margin: 0 0 14px;
+  font-size: .82rem;
+  font-weight: 750;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--dxs-ink-soft);
+}
+
+/* .place-order is excluded: WooCommerce gives it the form-row class too, and a
+   declared width overrides the one its inset-inline pinning derives - it ends
+   up wider than the panel and its button hangs off the right edge. */
+.dxs .form-row:not(.place-order) { margin: 0 0 14px; padding: 0; float: none; width: 100%; }
+.dxs .form-row:not(.place-order):last-child { margin-bottom: 0; }
+
+.dxs .form-row label {
+  display: block;
+  margin-bottom: 7px;
+  font-size: .9rem;
+  font-weight: 700;
+  color: var(--dxs-ink);
+}
+
+/* WooCommerce marks required fields with <abbr title="required">*</abbr>. The
+   browser's own styling for a titled abbr is a dotted underline, which next to
+   an asterisk reads as a rendering fault rather than a mark. */
+.dxs abbr.required,
+.dxs abbr[title] { border: 0; text-decoration: none; cursor: help; }
+.dxs abbr.required { color: var(--dxs-danger); }
+
+.dxs .input-text,
+.dxs select,
+.dxs textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--dxs-line);
+  border-radius: 13px;
+  background: var(--dxs-surface);
+  color: var(--dxs-ink);
+  /* 16px or larger, or iOS zooms the page on focus and leaves the customer
+     scrolled sideways in the middle of paying. */
+  font-size: max(16px, .98rem);
+}
+
+.dxs .input-text:focus,
+.dxs select:focus,
+.dxs textarea:focus {
+  border-color: var(--dxs-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(249 115 22 / .16);
+}
+
+.dxs textarea { min-height: 92px; padding: 12px 14px; }
+
+/* ---- Payment methods ----
+   WooCommerce puts the radio BEFORE the label as a sibling, not inside it, so
+   the row has to be laid out on the li - flexing the label only puts the radio
+   on a line of its own above the method name. */
+
+.dxs #payment { background: transparent; border-radius: 0; }
+.dxs #payment ul.payment_methods { margin: 0 0 14px; padding: 0; border: 0; list-style: none; }
+
+.dxs #payment ul.payment_methods li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 11px;
+
+  margin-bottom: 8px;
+  padding: 12px 15px;
+  border: 1.5px solid var(--dxs-line);
+  border-radius: 14px;
+  background: var(--dxs-surface);
+  list-style: none;
+}
+
+.dxs #payment ul.payment_methods li:has(input:checked) { border-color: var(--dxs-accent); }
+
+.dxs #payment ul.payment_methods input[type="radio"] {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--dxs-accent);
+}
+
+.dxs #payment ul.payment_methods label {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  margin: 0;
+  font-weight: 700;
+}
+
+/* The explanation belongs under the whole row, not beside the label. */
+.dxs #payment div.payment_box {
+  flex: 1 0 100%;
+  margin-top: 9px;
+  padding: 11px 13px;
+  border-radius: 11px;
+  background: var(--dxs-sunken);
+  font-size: .86rem;
+}
+
+.dxs #payment div.payment_box p:last-child { margin-bottom: 0; }
+.dxs #payment div.payment_box::before { display: none; }
+
+/* ---- The pinned footer ---- */
+
+.dxs #payment .place-order {
+  position: fixed;
+  inset-inline: 0;
+  /* Above the trust line, whose height JS measures into --dxs-trust-h. The
+     fallback is an over-estimate on purpose: better a little dead space than a
+     pay button sitting on top of the words underneath it. */
+  bottom: var(--dxs-trust-h, 54px);
+  z-index: 4;
+
+  display: flex;
+  flex-direction: column;
+
+  margin: 0;
+  padding: 14px 18px 12px;
+
+  background: var(--dxs-surface);
+  border-top: 1px solid var(--dxs-line);
+}
+
+.dxs #place_order {
+  order: 1;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+
+  width: 100%;
+  min-height: 58px;
+  margin: 0;
+  padding: 0 22px;
+
+  border: 0;
+  border-radius: 15px;
+  background: var(--dxs-accent);
+  color: var(--dxs-accent-ink);
+
+  font-size: 1.02rem;
+  font-weight: 780;
+  letter-spacing: -.01em;
+
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: scale .09s cubic-bezier(.32, .72, 0, 1), opacity .16s;
+}
+
+.dxs #place_order:active { scale: .985; }
+.dxs #place_order[disabled] { opacity: .55; pointer-events: none; }
+
+/* An arrow drawn in CSS rather than typed as a character: a font glyph renders
+   at a size the font decides and on Android often as a coloured bitmap. */
+.dxs #place_order::after {
+  content: "";
+  width: 18px;
+  height: 10px;
+  background: currentColor;
+  clip-path: polygon(0 40%, 62% 40%, 62% 0, 100% 50%, 62% 100%, 62% 60%, 0 60%);
+}
+
+/* ---- While WooCommerce is taking the payment ----
+   It blocks the form with an overlay, but the pay button is pinned outside the
+   form's painted box, so it would sit there bright and tappable over the top.
+   It says what is happening instead.
+
+   The words come from --dxs-paying, which PHP sets from the translated string:
+   CSS content cannot be translated, and a French storefront should not be the
+   one place an English default leaks through. The guard against a second submit
+   is WooCommerce's own - checkout.js returns early while the form carries
+   .processing - and this only makes that visible. */
+
+.dxs .checkout.processing #place_order {
+  pointer-events: none;
+  /* Hides the button's own label without touching the markup, so the pseudo
+     elements below can stand in for it. Each sets its own size back. */
+  font-size: 0;
+}
+
+.dxs .checkout.processing #place_order::before {
+  content: var(--dxs-paying, "Paiement en cours…");
+  font-size: 1.02rem;
+  font-weight: 780;
+  letter-spacing: -.01em;
+}
+
+/* The arrow becomes the spinner: same element, so the button does not change
+   width as it switches. */
+.dxs .checkout.processing #place_order::after {
+  content: "";
+  width: 22px;
+  height: 22px;
+  background: none;
+  clip-path: none;
+  border: 2.5px solid rgb(255 255 255 / .4);
+  border-top-color: var(--dxs-accent-ink);
+  border-radius: 50%;
+  animation: dxs-spin .7s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dxs .checkout.processing #place_order::after { animation-duration: 2.4s; }
+}
+
+/* While the wallet is short, "Recharger mon compte" is the action that gets the
+   customer paid - two orange buttons on one screen just ask them to guess. The
+   pay button is demoted, not disabled: the cart is untouched and another
+   payment method may well go through. */
+.dxs.dxs--low #place_order {
+  background: var(--dxs-sunken);
+  color: var(--dxs-ink);
+  box-shadow: inset 0 0 0 1.5px var(--dxs-line);
+}
+
+/* Terms, under the button. */
+.dxs .woocommerce-terms-and-conditions-wrapper {
+  order: 2;
+  margin-top: 12px;
+  font-size: .92rem;
+}
+
+.dxs .woocommerce-terms-and-conditions-wrapper .form-row { margin-bottom: 0; }
+.dxs .woocommerce-terms-and-conditions-wrapper label { display: flex; align-items: flex-start; gap: 10px; font-weight: 500; }
+.dxs .woocommerce-terms-and-conditions-wrapper input[type="checkbox"] { width: 24px; height: 24px; margin: 0; flex: 0 0 24px; accent-color: var(--dxs-accent); }
+.dxs .woocommerce-terms-and-conditions-wrapper a { color: var(--dxs-accent); font-weight: 750; }
+
+/* WooCommerce's own notices, in the panel's shape. */
+.dxs .woocommerce-error,
+.dxs .woocommerce-message,
+.dxs .woocommerce-info {
+  margin: 0 0 14px;
+  padding: 13px 15px;
+  border: 1px solid var(--dxs-line);
+  border-inline-start: 3px solid var(--dxs-accent);
+  border-radius: 13px;
+  background: var(--dxs-surface);
+  font-size: .88rem;
+  list-style: none;
+}
+
+.dxs .woocommerce-error { border-inline-start-color: var(--dxs-danger); }
+.dxs .woocommerce-error li, .dxs .woocommerce-message li, .dxs .woocommerce-info li { list-style: none; }
+
+/* ---- Trust line ----
+   In flow at the bottom of the dialog, below the pinned footer. Positioned so
+   it paints over the page rather than under the footer's border. */
+
+.dxs__trust {
+  position: relative;
+  z-index: 3;
+  background: var(--dxs-surface);
+
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 20px;
+
+  padding: 10px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--dxs-line-soft);
+
+  font-size: .76rem;
+  color: var(--dxs-ink-soft);
+}
+
+.dxs__trust span { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---- Wide windows ----
+   A panel pinned to the bottom edge of a laptop is phone furniture. */
+
+@media (min-width: 760px) {
+  .dxs {
+    inset: 50% auto auto 50%;
+    width: min(540px, calc(100vw - 48px));
+    max-height: min(88svh, 900px);
+    border-radius: 22px;
+    translate: -50% -46%;
+  }
+  .dxs[open] { translate: -50% -50%; }
+  @starting-style { .dxs[open] { translate: -50% -46%; } }
+  .dxs__grip { display: none; }
+  .dxs__head { padding-top: 26px; }
+}

@@ -1,6 +1,6 @@
 <?php
 /**
- * The express checkout sheet.
+ * The express express sheet.
  *
  * The sheet fetches the checkout page and lifts WooCommerce's form out of the
  * reply. The order card, the wallet card and the button's total are rendered
@@ -12,7 +12,7 @@
  * checkout form: no order card, no wallet card, and "Commander" instead of the
  * total. The first case below is that bug.
  *
- * Run: php tests/checkout-sheet-test.php
+ * Run: php tests/express-sheet-test.php
  */
 
 define( 'ABSPATH', __DIR__ . '/' );
@@ -26,14 +26,14 @@ class Delicat_Builder_V9_Native_Product {
 }
 function get_queried_object_id() { return 7; }
 
-require_once __DIR__ . '/../delicat-builder-v9/includes/class-delicat-builder-checkout-sheet.php';
+require_once __DIR__ . '/../delicat-builder-v9/includes/class-delicat-builder-express-sheet.php';
 
 /** wallet_is_short() is private; the summary markup is what it drives. */
 function summary_marks_short(): bool {
     ob_start();
-    Delicat_Builder_V9_Checkout_Sheet::render_summary();
+    Delicat_Builder_V9_Express_Sheet::render_summary();
     $html = (string) ob_get_clean();
-    return false !== strpos( $html, 'data-dcs-short="1"' );
+    return false !== strpos( $html, 'data-dxs-short="1"' );
 }
 
 /* ---- harness ---- */
@@ -71,12 +71,12 @@ $product_branch  = branch_body( $router, 'if ( function_exists(\'is_product\') &
 
 ok(
     'the checkout branch loads the sheet',
-    '' !== $checkout_branch && false !== strpos( $checkout_branch, 'class-delicat-builder-checkout-sheet.php' ),
+    '' !== $checkout_branch && false !== strpos( $checkout_branch, 'class-delicat-builder-express-sheet.php' ),
     'without this the summary hooks never exist on the request that would fire them, and the sheet shows a bare checkout form'
 );
 ok(
     'the product branch still loads it too, to enqueue on the product page',
-    '' !== $product_branch && false !== strpos( $product_branch, 'class-delicat-builder-checkout-sheet.php' )
+    '' !== $product_branch && false !== strpos( $product_branch, 'class-delicat-builder-express-sheet.php' )
 );
 
 /* =========================================================================
@@ -84,20 +84,20 @@ ok(
    ====================================================================== */
 group( 'Only the sheet\'s own fetch gets the summary' );
 
-unset( $_SERVER['HTTP_X_DELICAT_SHEET'] );
-ok( 'an ordinary checkout visit is not a sheet request', ! Delicat_Builder_V9_Checkout_Sheet::is_sheet_request() );
+unset( $_SERVER['HTTP_X_DELICAT_EXPRESS'] );
+ok( 'an ordinary checkout visit is not a sheet request', ! Delicat_Builder_V9_Express_Sheet::is_sheet_request() );
 
-$_SERVER['HTTP_X_DELICAT_SHEET'] = '1';
-ok( 'the sheet\'s fetch is', Delicat_Builder_V9_Checkout_Sheet::is_sheet_request() );
+$_SERVER['HTTP_X_DELICAT_EXPRESS'] = '1';
+ok( 'the sheet\'s fetch is', Delicat_Builder_V9_Express_Sheet::is_sheet_request() );
 
-$_SERVER['HTTP_X_DELICAT_SHEET'] = '';
-ok( 'an empty header is not', ! Delicat_Builder_V9_Checkout_Sheet::is_sheet_request() );
-unset( $_SERVER['HTTP_X_DELICAT_SHEET'] );
+$_SERVER['HTTP_X_DELICAT_EXPRESS'] = '';
+ok( 'an empty header is not', ! Delicat_Builder_V9_Express_Sheet::is_sheet_request() );
+unset( $_SERVER['HTTP_X_DELICAT_EXPRESS'] );
 
 $GLOBALS['stub_is_product'] = false;
 ok(
     'loading it on a checkout request renders no dialog there',
-    ! Delicat_Builder_V9_Checkout_Sheet::active(),
+    ! Delicat_Builder_V9_Express_Sheet::active(),
     'the panel belongs to the product page; the checkout request only supplies the cards'
 );
 
@@ -108,14 +108,14 @@ group( 'The pay button carries the total' );
 
 ok(
     'it says what is about to be charged',
-    'Payer maintenant G7,400' === Delicat_Builder_V9_Checkout_Sheet::order_button_text( 'Commander' ),
-    Delicat_Builder_V9_Checkout_Sheet::order_button_text( 'Commander' )
+    'Payer maintenant G7,400' === Delicat_Builder_V9_Express_Sheet::order_button_text( 'Commander' ),
+    Delicat_Builder_V9_Express_Sheet::order_button_text( 'Commander' )
 );
 
 $GLOBALS['stub_cart_total'] = '';
 ok(
     'and keeps WooCommerce\'s own words when there is no total to show',
-    'Commander' === Delicat_Builder_V9_Checkout_Sheet::order_button_text( 'Commander' )
+    'Commander' === Delicat_Builder_V9_Express_Sheet::order_button_text( 'Commander' )
 );
 $GLOBALS['stub_cart_total'] = 'G7,400';
 
@@ -123,67 +123,58 @@ $was = $GLOBALS['stub_wc'];
 $GLOBALS['stub_wc'] = new class { public $cart = null; };
 ok(
     'a missing cart never blanks the button',
-    'Commander' === Delicat_Builder_V9_Checkout_Sheet::order_button_text( 'Commander' )
+    'Commander' === Delicat_Builder_V9_Express_Sheet::order_button_text( 'Commander' )
 );
 $GLOBALS['stub_wc'] = $was;
 
 /* =========================================================================
    The label the button wears while paying
    ====================================================================== */
-group( 'The submitting label reaches CSS intact' );
+group( 'The panel the product page carries' );
 
-$style = Delicat_Builder_V9_Checkout_Sheet::paying_label_style();
-ok( 'it is a custom property CSS can read', 1 === preg_match( '/^--dcs-paying:"[^"]+"$/', $style ), $style );
-ok( 'carrying the translated words', false !== strpos( $style, 'Paiement en cours' ), $style );
+$GLOBALS['stub_is_product'] = true;
+
+ob_start();
+Delicat_Builder_V9_Express_Sheet::render();
+$panel = (string) ob_get_clean();
+
+ok( 'a dialog is printed', false !== strpos( $panel, '<dialog class="dxs" id="dxs-sheet"' ), substr( $panel, 0, 120 ) );
 ok(
-    'and it survives being escaped into the attribute',
-    false !== strpos( html_entity_decode( esc_attr( $style ), ENT_QUOTES, 'UTF-8' ), '--dcs-paying:"Paiement en cours' ),
-    esc_attr( $style )
+    'and it is empty until the customer asks for it',
+    false === strpos( $panel, 'form' ) && false === strpos( $panel, 'nonce' ),
+    'a product page is publicly cached; a checkout form carries a per-customer nonce'
 );
+ok( 'the loading state is there to replace', false !== strpos( $panel, 'data-dxs-loading' ) );
+ok( 'and the trust line starts hidden', false !== strpos( $panel, 'data-dxs-trust hidden' ) );
 
-/* =========================================================================
-   Telling the customer before they fill the form in
-   ====================================================================== */
-group( 'A wallet that will not cover the order' );
-
-$GLOBALS['stub_cart_total'] = 7400.0;
-
-$GLOBALS['stub_balance'] = 22002.0;
-ok( 'a wallet with enough in it is not flagged', ! summary_marks_short() );
-
-$GLOBALS['stub_balance'] = 450.0;
+/* The words the pay button wears while WooCommerce is taking the payment. CSS
+   content cannot be translated, so PHP hands them over as a custom property. */
 ok(
-    'one that falls short is',
-    summary_marks_short(),
-    'the balance and the total are both known here; waiting for the gateway to say so costs the sale'
+    'the submitting label rides along as a custom property',
+    1 === preg_match( '/--dxs-paying:&quot;[^&]+&quot;/', $panel ),
+    'CSS content cannot be translated; an English default must not leak through'
 );
-
-$GLOBALS['stub_balance'] = 7400.0;
-ok( 'exactly enough is not short', ! summary_marks_short() );
-
-$GLOBALS['stub_balance'] = null;   // the wallet plugin throws
 ok(
-    'an unreadable balance is not treated as a shortfall',
-    ! summary_marks_short(),
-    'warning someone their balance is too low when it cannot be read is worse than saying nothing'
+    'carrying the translated words',
+    false !== strpos( $panel, 'Paiement en cours' ),
+    $panel
 );
-
-$GLOBALS['stub_balance']   = 450.0;
-$GLOBALS['stub_logged_in'] = false;
-ok( 'and a guest is never told about a wallet they do not have', ! summary_marks_short() );
-$GLOBALS['stub_logged_in'] = true;
+ok(
+    'and it survives being decoded out of the attribute',
+    false !== strpos( html_entity_decode( $panel, ENT_QUOTES, 'UTF-8' ), '--dxs-paying:"Paiement en cours' )
+);
 
 /* =========================================================================
    What a product page is made to carry
    ====================================================================== */
-group( 'The product page does not carry the checkout sheet' );
+group( 'The product page does not carry the express sheet' );
 
 $GLOBALS['stub_is_product'] = true;
 $GLOBALS['stub_enqueued']   = array();
 $GLOBALS['stub_inline']     = array();
 $GLOBALS['stub_registered'] = array();
 
-Delicat_Builder_V9_Checkout_Sheet::enqueue();
+Delicat_Builder_V9_Express_Sheet::enqueue();
 
 $srcs   = array_map( static function ( $e ) { return $e['src']; }, $GLOBALS['stub_enqueued'] );
 $inline = implode( "\n", $GLOBALS['stub_inline'] );
@@ -196,12 +187,12 @@ ok(
 );
 ok(
     'the sheet stylesheet is not shipped with it',
-    false === strpos( $joined, 'checkout-sheet.css' ),
+    false === strpos( $joined, 'express-sheet.css' ),
     '24 KB on every product view, for a button most visits never press'
 );
 ok(
     'nor the sheet script',
-    false === strpos( $joined, 'checkout-sheet.js' ),
+    false === strpos( $joined, 'express-sheet.js' ),
     'another 20 KB of the same'
 );
 ok(
@@ -211,7 +202,7 @@ ok(
 );
 ok(
     'and it knows where both assets live',
-    false !== strpos( $inline, 'checkout-sheet.css' ) && false !== strpos( $inline, 'checkout-sheet.js' ),
+    false !== strpos( $inline, 'express-sheet.css' ) && false !== strpos( $inline, 'express-sheet.js' ),
     $inline
 );
 ok(

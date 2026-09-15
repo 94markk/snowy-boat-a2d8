@@ -110,10 +110,10 @@ final class Delicat_Builder_V9_Runtime_Router {
             $pb = class_exists('Delicat_Builder_V9_Native_Product', false) && Delicat_Builder_V9_Native_Product::is_active_product($id);
             if ( $pb ) {
                 self::load('includes/class-delicat-builder-swatches.php','Delicat_Builder_V9_Swatches');
-                /* pro.17: the checkout sheet. It decides for itself whether the
+                /* pro.27: the express review sheet. It decides for itself whether the
                  * merchant has it switched on for this product; loading it here
                  * only means the class exists in time to enqueue. */
-                self::load('includes/class-delicat-builder-checkout-sheet.php','Delicat_Builder_V9_Checkout_Sheet');
+                self::load('includes/class-delicat-builder-express-sheet.php','Delicat_Builder_V9_Express_Sheet');
             } else {
                 self::load('includes/class-delicat-builder-woo-ui.php','Delicat_Builder_V9_Woo_UI');
                 self::load('includes/class-delicat-builder-purchase-ui.php','Delicat_Builder_V9_Purchase_UI');
@@ -134,7 +134,7 @@ final class Delicat_Builder_V9_Runtime_Router {
             self::load('includes/class-delicat-builder-purchase-native.php','Delicat_Builder_V9_Purchase_Native');
 
             /*
-             * pro.18: the checkout sheet, again - and this is the request that
+             * pro.27: the express review sheet, again - and this is the request that
              * actually needs it.
              *
              * The sheet fetches the checkout page and lifts the form out of the
@@ -147,7 +147,7 @@ final class Delicat_Builder_V9_Runtime_Router {
              * only a request carrying the sheet's own header gets the cards, so
              * an ordinary visit to the checkout page is untouched.
              */
-            self::load('includes/class-delicat-builder-checkout-sheet.php','Delicat_Builder_V9_Checkout_Sheet');
+            self::load('includes/class-delicat-builder-express-sheet.php','Delicat_Builder_V9_Express_Sheet');
         }
 
         /*

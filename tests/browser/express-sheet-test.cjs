@@ -1,11 +1,11 @@
-/* The checkout sheet drives the money path, so it is tested against a stubbed
+/* The express sheet drives the money path, so it is tested against a stubbed
    server rather than reasoned about. Each case asserts one property that, if it
    broke, would either lose a sale or take a payment wrongly. */
 const { chromium } = require('playwright');
 const fs = require('fs');
 
-const JS = fs.readFileSync('/home/user/snowy-boat-a2d8/delicat-builder-v9/assets/js/checkout-sheet.js', 'utf8');
-const CSS = fs.readFileSync('/home/user/snowy-boat-a2d8/delicat-builder-v9/assets/css/checkout-sheet.css', 'utf8');
+const JS = fs.readFileSync('/home/user/snowy-boat-a2d8/delicat-builder-v9/assets/js/express-sheet.js', 'utf8');
+const CSS = fs.readFileSync('/home/user/snowy-boat-a2d8/delicat-builder-v9/assets/css/express-sheet.css', 'utf8');
 
 /* What WooCommerce replies with after a buy-now POST: the checkout page. */
 const CHECKOUT_PAGE = `<!doctype html><html><body>
@@ -17,21 +17,21 @@ const CHECKOUT_PAGE = `<!doctype html><html><body>
       <a href="#" class="showcoupon">Cliquez ici pour saisir votre code</a></div>
   </div>
 
-  <!-- what render_summary() prints when the request carries X-Delicat-Sheet -->
-  <div class="dcs-summary" data-dcs-summary__SHORT__>
-    <div class="dcs-card dcs-card--order">
-      <div class="dcs-row"><span class="dcs-row__label">Produit</span>
-        <span class="dcs-row__value dcs-row__value--strong">Free Fire 1080 Diamants</span></div>
-      <div class="dcs-row"><span class="dcs-row__label">Player ID</span>
-        <span class="dcs-row__value">PLAYER-999</span></div>
-      <div class="dcs-row"><span class="dcs-row__label">Total</span>
-        <span class="dcs-row__value dcs-row__value--strong"><span class="dcs-total">G450</span></span></div>
+  <!-- what render_summary() prints when the request carries X-Delicat-Express -->
+  <div class="dxs-summary" data-dxs-summary__SHORT__>
+    <div class="dxs-card dxs-card--order">
+      <div class="dxs-row"><span class="dxs-row__label">Produit</span>
+        <span class="dxs-row__value dxs-row__value--strong">Free Fire 1080 Diamants</span></div>
+      <div class="dxs-row"><span class="dxs-row__label">Player ID</span>
+        <span class="dxs-row__value">PLAYER-999</span></div>
+      <div class="dxs-row"><span class="dxs-row__label">Total</span>
+        <span class="dxs-row__value dxs-row__value--strong"><span class="dxs-total">G450</span></span></div>
     </div>
-    <div class="dcs-card dcs-card--wallet">
-      <div class="dcs-row"><span class="dcs-row__label">Solde wallet</span>
-        <span class="dcs-row__value dcs-row__value--strong">G1,250</span></div>
-      <div class="dcs-row"><span class="dcs-row__label">Après paiement</span>
-        <span class="dcs-row__value dcs-row__value--ok">G800</span></div>
+    <div class="dxs-card dxs-card--wallet">
+      <div class="dxs-row"><span class="dxs-row__label">Solde wallet</span>
+        <span class="dxs-row__value dxs-row__value--strong">G1,250</span></div>
+      <div class="dxs-row"><span class="dxs-row__label">Après paiement</span>
+        <span class="dxs-row__value dxs-row__value--ok">G800</span></div>
     </div>
   </div>
 
@@ -77,18 +77,18 @@ const PRODUCT_PAGE = (extra) => `<!doctype html><html><head><style>${CSS}</style
     <button type="submit" class="button alt dnp-buy-now" name="delicat_native_buy_now" value="1">Acheter maintenant</button>
   </form>
 
-  <dialog class="dcs" id="dcs-sheet" aria-label="Vérifiez votre commande" style='--dcs-paying:"Paiement en cours…"'>
-    <button type="button" class="dcs__close" data-dcs-close aria-label="Fermer">x</button>
-    <div class="dcs__scroll" data-dcs-scroll tabindex="-1" autofocus>
-      <div class="dcs__grip" aria-hidden="true"></div>
-      <div class="dcs__head">
-        <span class="dcs__mark" aria-hidden="true">v</span>
-        <h2 class="dcs__title">Vérifiez votre commande</h2>
-        <p class="dcs__sub">Vérifiez tous les articles de votre panier.</p>
+  <dialog class="dxs" id="dxs-sheet" aria-label="Vérifiez votre commande" style='--dxs-paying:"Paiement en cours…"'>
+    <button type="button" class="dxs__close" data-dxs-close aria-label="Fermer">x</button>
+    <div class="dxs__scroll" data-dxs-scroll tabindex="-1" autofocus>
+      <div class="dxs__grip" aria-hidden="true"></div>
+      <div class="dxs__head">
+        <span class="dxs__mark" aria-hidden="true">v</span>
+        <h2 class="dxs__title">Vérifiez votre commande</h2>
+        <p class="dxs__sub">Vérifiez tous les articles de votre panier.</p>
       </div>
-      <div class="dcs__body" data-dcs-body><div class="dcs__loading" data-dcs-loading><p>Préparation…</p></div></div>
+      <div class="dxs__body" data-dxs-body><div class="dxs__loading" data-dxs-loading><p>Préparation…</p></div></div>
     </div>
-    <div class="dcs__trust" data-dcs-trust hidden>
+    <div class="dxs__trust" data-dxs-trust hidden>
       <span>Paiement sécurisé WooCommerce</span><span>Délai selon le produit</span>
     </div>
   </dialog>
@@ -104,7 +104,7 @@ const PRODUCT_PAGE = (extra) => `<!doctype html><html><head><style>${CSS}</style
         on: function (name, fn) { (window.__handlers[name] = window.__handlers[name] || []).push(fn); return this; }
       };
     };
-    window.DelicatCheckoutSheet = {
+    window.DelicatExpressSheet = {
       checkoutUrl: 'https://shop.test/checkout/',
       walletUrl: ${extra.wallet === false ? "''" : "'https://shop.test/my-wallet/'"},
       lowFunds: ['insufficient', 'solde', 'insuffisant', 'fonds', 'not enough'],
@@ -141,7 +141,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
         if (opts.serverFails) return route.fulfill({ status: 500, body: 'boom' });
         if (opts.noForm) return route.fulfill({ contentType: 'text/html', body: '<html><body>nope</body></html>' });
         return route.fulfill({ contentType: 'text/html',
-          body: CHECKOUT_PAGE.replace('__SHORT__', opts.short ? ' data-dcs-short="1"' : '') });
+          body: CHECKOUT_PAGE.replace('__SHORT__', opts.short ? ' data-dxs-short="1"' : '') });
       }
       return route.fulfill({ contentType: 'text/html', body: PRODUCT_PAGE(opts) });
     });
@@ -162,7 +162,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(300);
 
     const body = posts[0] || '';
-    ok('the sheet opens on the tap', await p.evaluate(() => document.getElementById('dcs-sheet').open));
+    ok('the sheet opens on the tap', await p.evaluate(() => document.getElementById('dxs-sheet').open));
     ok('the POST carries the Player ID field', body.includes('dmc_player_id') && body.includes('PLAYER-999'),
       'a custom product field lost here is an order the supplier cannot fulfil');
     ok('the POST carries the chosen variation', body.includes('variation_id') && body.includes('42'));
@@ -181,15 +181,15 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(300);
 
     const r = await p.evaluate(() => ({
-      hasForm: !!document.querySelector('#dcs-sheet form.checkout'),
-      nonce: (document.querySelector('#dcs-sheet [name="woocommerce-process-checkout-nonce"]') || {}).value || '',
-      hasPayment: !!document.querySelector('#dcs-sheet #payment'),
-      hasPlaceOrder: !!document.querySelector('#dcs-sheet #place_order'),
-      notice: !!document.querySelector('#dcs-sheet .woocommerce-message'),
-      scripts: document.querySelectorAll('#dcs-sheet script').length,
+      hasForm: !!document.querySelector('#dxs-sheet form.checkout'),
+      nonce: (document.querySelector('#dxs-sheet [name="woocommerce-process-checkout-nonce"]') || {}).value || '',
+      hasPayment: !!document.querySelector('#dxs-sheet #payment'),
+      hasPlaceOrder: !!document.querySelector('#dxs-sheet #place_order'),
+      notice: !!document.querySelector('#dxs-sheet .woocommerce-message'),
+      scripts: document.querySelectorAll('#dxs-sheet script').length,
       evilRan: !!window.__EVIL_RAN,
       triggered: window.__triggered,
-      loadingGone: !document.querySelector('#dcs-sheet [data-dcs-loading]')
+      loadingGone: !document.querySelector('#dxs-sheet [data-dxs-loading]')
     }));
 
     ok('WooCommerce\'s own checkout form is mounted', r.hasForm);
@@ -214,17 +214,17 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(300);
 
     const r = await p.evaluate(() => {
-      const sheet = document.getElementById('dcs-sheet');
-      const body = sheet.querySelector('[data-dcs-body]');
-      const summary = sheet.querySelector('[data-dcs-summary]');
+      const sheet = document.getElementById('dxs-sheet');
+      const body = sheet.querySelector('[data-dxs-body]');
+      const summary = sheet.querySelector('[data-dxs-summary]');
       const kids = Array.from(body.children).map((n) => n.className.split(' ')[0]);
       return {
         mounted: !!summary,
-        total: (sheet.querySelector('.dcs-total') || {}).textContent || '',
-        rows: sheet.querySelectorAll('.dcs-row').length,
-        wallet: !!sheet.querySelector('.dcs-card--wallet'),
+        total: (sheet.querySelector('.dxs-total') || {}).textContent || '',
+        rows: sheet.querySelectorAll('.dxs-row').length,
+        wallet: !!sheet.querySelector('.dxs-card--wallet'),
         order: kids,
-        trustShown: !sheet.querySelector('[data-dcs-trust]').hidden
+        trustShown: !sheet.querySelector('[data-dxs-trust]').hidden
       };
     });
 
@@ -233,8 +233,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
       'a total recomputed in the browser is a total that can disagree with the one being charged');
     ok('every summary row survives', r.rows === 5, r.rows + ' rows');
     ok('notices sit above the summary, and the form below it',
-      r.order.indexOf('dcs__notices') < r.order.indexOf('dcs-summary') &&
-      r.order.indexOf('dcs-summary') < r.order.indexOf('checkout'), r.order.join(','));
+      r.order.indexOf('dxs__notices') < r.order.indexOf('dxs-summary') &&
+      r.order.indexOf('dxs-summary') < r.order.indexOf('checkout'), r.order.join(','));
     ok('the trust line appears only once there is a form to trust', r.trustShown);
     await ctx.close();
   }
@@ -254,7 +254,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(300);
 
     const r = await p.evaluate(() => {
-      const sheet = document.getElementById('dcs-sheet');
+      const sheet = document.getElementById('dxs-sheet');
       const shows = (sel) => {
         const el = sheet.querySelector(sel);
         return el ? el.getBoundingClientRect().height > 0 : false;
@@ -305,7 +305,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
                        after: getComputedStyle(btn, '::after').content };
 
       /* The class WooCommerce puts on its form while it submits. */
-      document.querySelector('#dcs-sheet form.checkout').classList.add('processing');
+      document.querySelector('#dxs-sheet form.checkout').classList.add('processing');
 
       const cs = getComputedStyle(btn);
       const ring = getComputedStyle(btn, '::after');
@@ -326,7 +326,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     ok('its own label is out of the way', r.ownLabelHidden);
     ok('a second tap cannot reach it', r.untappable);
     ok('and the arrow has become a spinner',
-      r.ringRound === '50%' && r.spinning === 'dcs-spin', JSON.stringify(r));
+      r.ringRound === '50%' && r.spinning === 'dxs-spin', JSON.stringify(r));
     await ctx.close();
   }
 
@@ -342,10 +342,10 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(400);
 
     const r = await p.evaluate(() => {
-      const sheet = document.getElementById('dcs-sheet');
+      const sheet = document.getElementById('dxs-sheet');
       const btn = document.getElementById('place_order');
-      const scroll = sheet.querySelector('[data-dcs-scroll]');
-      const trust = sheet.querySelector('[data-dcs-trust]');
+      const scroll = sheet.querySelector('[data-dxs-scroll]');
+      const trust = sheet.querySelector('[data-dxs-trust]');
       const s = sheet.getBoundingClientRect();
       const b = btn.getBoundingClientRect();
       const t = trust.getBoundingClientRect();
@@ -360,7 +360,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
            and bordered, so an overlap paints over the trust line even when the
            button's own glyphs happen to clear it. */
         aboveTrust: btn.closest('.place-order').getBoundingClientRect().bottom <= t.top + .5,
-        padBottom: getComputedStyle(sheet).getPropertyValue('--dcs-pad-bottom').trim(),
+        padBottom: getComputedStyle(sheet).getPropertyValue('--dxs-pad-bottom').trim(),
         footerHeight: Math.round(btn.closest('.place-order').getBoundingClientRect().height),
         scrollPadBottom: Math.round(parseFloat(getComputedStyle(scroll).paddingBottom)),
         position: getComputedStyle(btn.closest('.place-order')).position,
@@ -390,8 +390,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     /* Scrolled to the very end, the last field must not be stuck under the
        footer - which is what the measured padding is for. */
     const r = await p.evaluate(() => {
-      const sheet = document.getElementById('dcs-sheet');
-      const scroll = sheet.querySelector('[data-dcs-scroll]');
+      const sheet = document.getElementById('dxs-sheet');
+      const scroll = sheet.querySelector('[data-dxs-scroll]');
       scroll.scrollTop = scroll.scrollHeight;
       const last = document.querySelectorAll('#payment ul.payment_methods li');
       const l = last[last.length - 1].getBoundingClientRect();
@@ -413,12 +413,12 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(400);
 
     const r = await p.evaluate(async () => {
-      const sheet = document.getElementById('dcs-sheet');
-      const before = getComputedStyle(sheet).getPropertyValue('--dcs-pad-bottom').trim();
+      const sheet = document.getElementById('dxs-sheet');
+      const before = getComputedStyle(sheet).getPropertyValue('--dxs-pad-bottom').trim();
 
       /* Stand in for WooCommerce's own replacement, then announce it the way it
          does. */
-      const review = document.querySelector('#dcs-sheet .woocommerce-checkout-review-order');
+      const review = document.querySelector('#dxs-sheet .woocommerce-checkout-review-order');
       review.innerHTML = '<div id="payment"><div class="form-row place-order">' +
         '<div class="woocommerce-terms-and-conditions-wrapper"><p class="form-row">' +
         '<label class="checkbox"><input type="checkbox" name="terms"><span>' +
@@ -433,10 +433,10 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
       const btn = document.getElementById('place_order');
       const b = btn.getBoundingClientRect();
       const s = sheet.getBoundingClientRect();
-      const scroll = sheet.querySelector('[data-dcs-scroll]');
+      const scroll = sheet.querySelector('[data-dxs-scroll]');
       return {
         before,
-        after: getComputedStyle(sheet).getPropertyValue('--dcs-pad-bottom').trim(),
+        after: getComputedStyle(sheet).getPropertyValue('--dxs-pad-bottom').trim(),
         footerHeight: Math.round(btn.closest('.place-order').getBoundingClientRect().height),
         scrollPadBottom: Math.round(parseFloat(getComputedStyle(scroll).paddingBottom)),
         stillPinned: b.bottom <= s.bottom && b.top >= s.top && b.bottom <= window.innerHeight + .5
@@ -452,8 +452,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
        after the swap too - a longer terms line, a gateway that adds a note - and
        the replacement element has to be under observation, not just read once. */
     const after = await p.evaluate(async () => {
-      const sheet = document.getElementById('dcs-sheet');
-      const scroll = sheet.querySelector('[data-dcs-scroll]');
+      const sheet = document.getElementById('dxs-sheet');
+      const scroll = sheet.querySelector('[data-dxs-scroll]');
       const footer = document.querySelector('#payment .place-order');
 
       const note = document.createElement('p');
@@ -487,17 +487,17 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(400);
 
     const r = await p.evaluate(() => {
-      const sheet = document.getElementById('dcs-sheet');
-      const panel = sheet.querySelector('[data-dcs-low]');
+      const sheet = document.getElementById('dxs-sheet');
+      const panel = sheet.querySelector('[data-dxs-low]');
       return {
         shown: !!panel,
         title: panel ? (panel.querySelector('h3') || {}).textContent : '',
-        wallet: panel ? (panel.querySelector('a.dcs__btn--primary') || {}).href : '',
+        wallet: panel ? (panel.querySelector('a.dxs__btn--primary') || {}).href : '',
         formStillThere: !!sheet.querySelector('form.checkout'),
         gatewaysStillThere: sheet.querySelectorAll('#payment input[name="payment_method"]').length,
         payButtonUsable: !!document.getElementById('place_order') &&
           getComputedStyle(document.getElementById('place_order')).pointerEvents !== 'none',
-        demoted: sheet.classList.contains('dcs--low')
+        demoted: sheet.classList.contains('dxs--low')
       };
     });
 
@@ -517,7 +517,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     const { ctx, p } = await page();
     await p.click('.dnp-buy-now');
     await p.waitForTimeout(400);
-    const shown = await p.evaluate(() => !!document.querySelector('#dcs-sheet [data-dcs-low]'));
+    const shown = await p.evaluate(() => !!document.querySelector('#dxs-sheet [data-dxs-low]'));
     ok('a wallet with enough in it is not warned about', !shown);
     await ctx.close();
   }
@@ -535,12 +535,12 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     });
 
     const r = await p.evaluate(() => {
-      const low = document.querySelector('[data-dcs-low]');
+      const low = document.querySelector('[data-dxs-low]');
       return {
         shown: !!low,
         title: low ? low.querySelector('h3').textContent : '',
         href: low ? low.querySelector('a').getAttribute('href') : '',
-        formStillThere: !!document.querySelector('#dcs-sheet form.checkout')
+        formStillThere: !!document.querySelector('#dxs-sheet form.checkout')
       };
     });
 
@@ -555,12 +555,12 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
       (window.__handlers.checkout_error || []).forEach((fn) => fn({}, 'solde insuffisant'));
     });
     ok('a second decline does not stack a second panel',
-      1 === (await p.evaluate(() => document.querySelectorAll('[data-dcs-low]').length)));
+      1 === (await p.evaluate(() => document.querySelectorAll('[data-dxs-low]').length)));
 
     /* Dismiss returns to the form. */
-    await p.click('[data-dcs-dismiss-low]');
+    await p.click('[data-dxs-dismiss-low]');
     ok('dismissing it returns to the form',
-      0 === (await p.evaluate(() => document.querySelectorAll('[data-dcs-low]').length)));
+      0 === (await p.evaluate(() => document.querySelectorAll('[data-dxs-low]').length)));
     await ctx.close();
   }
 
@@ -573,7 +573,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
         fn({}, '<ul class="woocommerce-error"><li>Veuillez renseigner votre numéro de téléphone.</li></ul>'));
     });
     ok('an ordinary validation error does NOT offer a top-up',
-      0 === (await p.evaluate(() => document.querySelectorAll('[data-dcs-low]').length)),
+      0 === (await p.evaluate(() => document.querySelectorAll('[data-dxs-low]').length)),
       'offering a top-up for a missing phone number would be nonsense');
     await ctx.close();
   }
@@ -586,7 +586,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
       (window.__handlers.checkout_error || []).forEach((fn) => fn({}, 'solde insuffisant'));
     });
     ok('a store with no wallet page shows no dead button',
-      0 === (await p.evaluate(() => document.querySelectorAll('[data-dcs-low]').length)));
+      0 === (await p.evaluate(() => document.querySelectorAll('[data-dxs-low]').length)));
     await ctx.close();
   }
 
@@ -619,7 +619,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
        this assertion was written the first time. */
     await p.click('button[name="add-to-cart"]');
     await p.waitForTimeout(400);
-    const navigated = await p.evaluate(() => !document.getElementById('dcs-sheet'));
+    const navigated = await p.evaluate(() => !document.getElementById('dxs-sheet'));
     ok('plain "Ajouter au panier" is left alone and submits normally',
       navigated && posts.length === 1,
       'only the buy-now button opens the sheet');
@@ -631,7 +631,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.evaluate(() => { document.querySelector('[name="variation_id"]').value = ''; });
     await p.click('.dnp-buy-now');
     await p.waitForTimeout(400);
-    const wentToServer = await p.evaluate(() => !document.getElementById('dcs-sheet'));
+    const wentToServer = await p.evaluate(() => !document.getElementById('dxs-sheet'));
     ok('a variable product with nothing chosen is left to WooCommerce',
       wentToServer, 'WooCommerce explains that better than a sheet could');
     await ctx.close();

@@ -1,4 +1,4 @@
-/* The checkout sheet is not on the product page until someone reaches for it.
+/* The express sheet is not on the product page until someone reaches for it.
    ---------------------------------------------------------------------------
    Its CSS and JS are about 44 KB, and they existed on every product page to
    support one button most visits never press. On the connections this shop
@@ -11,9 +11,9 @@
    customer used a finger or a keyboard.
 
    The loader under test is the REAL one, printed by the plugin through
-   scripts/emit-checkout-loader.php - not a copy of it.
+   scripts/emit-express-loader.php - not a copy of it.
 
-   Run: NODE_PATH=/path/to/node_modules node tests/browser/checkout-loader-test.cjs
+   Run: NODE_PATH=/path/to/node_modules node tests/browser/express-loader-test.cjs
 */
 const { chromium } = require('playwright');
 const { execFileSync } = require('child_process');
@@ -21,15 +21,15 @@ const fs = require('fs');
 
 const ROOT = '/home/user/snowy-boat-a2d8';
 const BASE = 'https://shop.test/plugin/';
-const LOADER = execFileSync('php', [ROOT + '/scripts/emit-checkout-loader.php', BASE], { encoding: 'utf8' });
-const SHEET_JS = fs.readFileSync(ROOT + '/delicat-builder-v9/assets/js/checkout-sheet.js', 'utf8');
-const SHEET_CSS = fs.readFileSync(ROOT + '/delicat-builder-v9/assets/css/checkout-sheet.css', 'utf8');
+const LOADER = execFileSync('php', [ROOT + '/scripts/emit-express-loader.php', BASE], { encoding: 'utf8' });
+const SHEET_JS = fs.readFileSync(ROOT + '/delicat-builder-v9/assets/js/express-sheet.js', 'utf8');
+const SHEET_CSS = fs.readFileSync(ROOT + '/delicat-builder-v9/assets/css/express-sheet.css', 'utf8');
 
 const CHECKOUT_PAGE = `<!doctype html><html><body>
-  <div class="dcs-summary" data-dcs-summary>
-    <div class="dcs-card dcs-card--order">
-      <div class="dcs-row"><span class="dcs-row__label">Produit</span>
-        <span class="dcs-row__value dcs-row__value--strong">Free Fire</span></div>
+  <div class="dxs-summary" data-dxs-summary>
+    <div class="dxs-card dxs-card--order">
+      <div class="dxs-row"><span class="dxs-row__label">Produit</span>
+        <span class="dxs-row__value dxs-row__value--strong">Free Fire</span></div>
     </div>
   </div>
   <form name="checkout" method="post" class="checkout woocommerce-checkout" action="/commander/">
@@ -50,12 +50,12 @@ const PRODUCT_PAGE = `<!doctype html><html><head><meta charset="utf-8"></head><b
     <button type="submit" class="button alt dnp-buy-now" name="delicat_native_buy_now" value="1">Acheter maintenant</button>
   </form>
 
-  <dialog class="dcs" id="dcs-sheet" aria-label="Vérifiez votre commande" style='--dcs-paying:"Paiement en cours…"'>
-    <button type="button" class="dcs__close" data-dcs-close>x</button>
-    <div class="dcs__scroll" data-dcs-scroll tabindex="-1" autofocus>
-      <div class="dcs__body" data-dcs-body><div class="dcs__loading" data-dcs-loading><p>…</p></div></div>
+  <dialog class="dxs" id="dxs-sheet" aria-label="Vérifiez votre commande" style='--dxs-paying:"Paiement en cours…"'>
+    <button type="button" class="dxs__close" data-dxs-close>x</button>
+    <div class="dxs__scroll" data-dxs-scroll tabindex="-1" autofocus>
+      <div class="dxs__body" data-dxs-body><div class="dxs__loading" data-dxs-loading><p>…</p></div></div>
     </div>
-    <div class="dcs__trust" data-dcs-trust hidden><span>sécurisé</span></div>
+    <div class="dxs__trust" data-dxs-trust hidden><span>sécurisé</span></div>
   </dialog>
 
   <script>
@@ -81,8 +81,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await ctx.route('https://shop.test/**', async (route) => {
       const req = route.request();
       const u = new URL(req.url());
-      if (u.pathname.endsWith('checkout-sheet.js')) return route.fulfill({ contentType: 'text/javascript', body: SHEET_JS });
-      if (u.pathname.endsWith('checkout-sheet.css')) return route.fulfill({ contentType: 'text/css', body: SHEET_CSS });
+      if (u.pathname.endsWith('express-sheet.js')) return route.fulfill({ contentType: 'text/javascript', body: SHEET_JS });
+      if (u.pathname.endsWith('express-sheet.css')) return route.fulfill({ contentType: 'text/css', body: SHEET_CSS });
       if (req.method() === 'POST') { posts.push(req.postData() || ''); return route.fulfill({ contentType: 'text/html', body: CHECKOUT_PAGE }); }
       if (u.pathname.startsWith('/commander')) return route.fulfill({ contentType: 'text/html', body: '<html><body id="real-checkout">checkout</body></html>' });
       return route.fulfill({ contentType: 'text/html', body: PRODUCT_PAGE });
@@ -93,9 +93,9 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
   }
 
   const loaded = (p) => p.evaluate(() => ({
-    css: !!document.querySelector('link[href*="checkout-sheet.css"]'),
-    js: !!document.querySelector('script[src*="checkout-sheet.js"]'),
-    config: !!window.DelicatCheckoutSheet
+    css: !!document.querySelector('link[href*="express-sheet.css"]'),
+    js: !!document.querySelector('script[src*="express-sheet.js"]'),
+    config: !!window.DelicatExpressSheet
   }));
 
   group('The product page does not carry the checkout');
@@ -131,9 +131,9 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(900);
 
     const r = await p.evaluate(() => ({
-      open: document.getElementById('dcs-sheet').open,
-      form: !!document.querySelector('#dcs-sheet form.checkout'),
-      nonce: (document.querySelector('#dcs-sheet [name="woocommerce-process-checkout-nonce"]') || {}).value || '',
+      open: document.getElementById('dxs-sheet').open,
+      form: !!document.querySelector('#dxs-sheet form.checkout'),
+      nonce: (document.querySelector('#dxs-sheet [name="woocommerce-process-checkout-nonce"]') || {}).value || '',
       onRealCheckout: !!document.getElementById('real-checkout')
     }));
     ok('the sheet opens', r.open && r.form, JSON.stringify(r));
@@ -155,8 +155,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(900);
 
     const r = await p.evaluate(() => ({
-      open: document.getElementById('dcs-sheet').open,
-      form: !!document.querySelector('#dcs-sheet form.checkout'),
+      open: document.getElementById('dxs-sheet').open,
+      form: !!document.querySelector('#dxs-sheet form.checkout'),
       onRealCheckout: !!document.getElementById('real-checkout')
     }));
     ok('a submit with nothing warmed still opens the sheet', r.open && r.form, JSON.stringify(r));
@@ -172,8 +172,8 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     const p = await ctx.newPage();
     await ctx.route('https://shop.test/**', async (route) => {
       const u = new URL(route.request().url());
-      if (u.pathname.endsWith('checkout-sheet.js')) return route.fulfill({ status: 500, body: 'boom' });
-      if (u.pathname.endsWith('checkout-sheet.css')) return route.fulfill({ contentType: 'text/css', body: '' });
+      if (u.pathname.endsWith('express-sheet.js')) return route.fulfill({ status: 500, body: 'boom' });
+      if (u.pathname.endsWith('express-sheet.css')) return route.fulfill({ contentType: 'text/css', body: '' });
       if (u.pathname.startsWith('/commander')) return route.fulfill({ contentType: 'text/html', body: '<html><body id="real-checkout">checkout</body></html>' });
       if (route.request().method() === 'POST') return route.fulfill({ contentType: 'text/html', body: '<html><body id="real-checkout">checkout</body></html>' });
       return route.fulfill({ contentType: 'text/html', body: PRODUCT_PAGE });
@@ -182,7 +182,7 @@ const group = (n) => console.log('\n' + n + '\n' + '-'.repeat(n.length));
     await p.waitForTimeout(150);
     await p.tap('.dnp-buy-now');
     await p.waitForTimeout(1200);
-    const landed = await p.evaluate(() => !!document.getElementById('real-checkout') || document.getElementById('dcs-sheet') === null);
+    const landed = await p.evaluate(() => !!document.getElementById('real-checkout') || document.getElementById('dxs-sheet') === null);
     ok('a dead script sends the customer to the real checkout', landed,
       'the button must never simply do nothing');
     await ctx.close();

@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.26
+ * Version: 9.2.0-pro.27
 
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -151,7 +151,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.26' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.27' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -456,9 +456,9 @@ $delicat_builder_v9_wc_ajax = isset( $_REQUEST['wc-ajax'] ) // phpcs:ignore Word
 if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
 	if ( 'update_order_review' === $delicat_builder_v9_wc_ajax ) {
-		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-checkout-sheet.php' );
-		if ( class_exists( 'Delicat_Builder_V9_Checkout_Sheet', false ) ) {
-			add_filter( 'woocommerce_update_order_review_fragments', array( 'Delicat_Builder_V9_Checkout_Sheet', 'summary_fragments' ) );
+		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-express-sheet.php' );
+		if ( class_exists( 'Delicat_Builder_V9_Express_Sheet', false ) ) {
+			add_filter( 'woocommerce_update_order_review_fragments', array( 'Delicat_Builder_V9_Express_Sheet', 'summary_fragments' ) );
 		}
 	}
 	if (
@@ -987,7 +987,7 @@ if ( $delicat_builder_v9_product_editor_request ) {
 $delicat_builder_v9_admin_modules = array(
     'includes/class-delicat-builder-cache.php','includes/class-delicat-builder-query-cache.php','includes/class-delicat-builder-turbo-diagnostics.php','includes/class-delicat-builder-security.php','includes/class-delicat-builder-server-engine.php','includes/class-delicat-builder-compiler.php',
     'includes/class-delicat-builder-media.php','includes/class-delicat-builder-hero-search.php','includes/class-delicat-builder-shell.php','includes/class-delicat-builder-footer.php',
-    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-checkout-sheet.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
+    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-express-sheet.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
     'includes/class-delicat-builder-header-studio-8.php','includes/class-delicat-builder-woo-ui.php','includes/class-delicat-builder-purchase-ui.php',
     'includes/class-delicat-builder-performance.php','includes/class-delicat-builder-identity-bridge.php','includes/class-delicat-builder-production.php',
     'includes/class-delicat-builder-release.php','includes/class-delicat-builder-design.php','includes/class-delicat-builder-assets.php',

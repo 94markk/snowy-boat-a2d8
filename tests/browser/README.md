@@ -3,20 +3,20 @@
 These run against a real Chromium with a stubbed server. They exist because the
 things they cover cannot be reasoned about from the source alone:
 
-- **checkout-sheet-test.cjs** — the money path. Asserts that the request
+- **express-sheet-test.cjs** — the money path. Asserts that the request
   WooCommerce receives is the one the button would have sent (every custom field
   included), that WooCommerce's own form and nonce are what land in the sheet,
   that no script from the response executes, that a low-balance decline offers
   the wallet while an ordinary validation error does not, and that every failure
   mode ends on the real checkout page rather than nowhere.
 
-- **checkout-loader-test.cjs** — the sheet's 44 KB of CSS and JS no longer sit on
+- **express-loader-test.cjs** — the sheet's 44 KB of CSS and JS no longer sit on
   every product page; they load when someone reaches for the buy button. Which
   puts a loader between a customer and their purchase, so these cases are about
   that: the tap works once, whether or not the download has arrived, by finger or
   by keyboard, and a script that fails to load still lands them on the real
   checkout rather than doing nothing. It runs the REAL loader, printed by
-  `scripts/emit-checkout-loader.php`, not a copy.
+  `scripts/emit-express-loader.php`, not a copy.
 
 - **drawer-test.cjs** — the menu. Asserts that one tap opens it and leaves it
   open, that nothing is tappable while the panel is still sliding in, that every
@@ -45,8 +45,8 @@ things they cover cannot be reasoned about from the source alone:
 
 Run them with a Chromium on the machine:
 
-    NODE_PATH=/path/to/node_modules node tests/browser/checkout-sheet-test.cjs
-    NODE_PATH=/path/to/node_modules node tests/browser/checkout-loader-test.cjs
+    NODE_PATH=/path/to/node_modules node tests/browser/express-sheet-test.cjs
+    NODE_PATH=/path/to/node_modules node tests/browser/express-loader-test.cjs
     NODE_PATH=/path/to/node_modules node tests/browser/drawer-test.cjs
     NODE_PATH=/path/to/node_modules node tests/browser/shell-nav-test.cjs
     NODE_PATH=/path/to/node_modules node tests/browser/speculation-gate-test.cjs
