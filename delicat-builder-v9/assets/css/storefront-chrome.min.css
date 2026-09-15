@@ -59,7 +59,15 @@ html.dlc-theme-dark .dsb8-header .dsb8-header__logo.has-dark-logo .dsb8-header__
 
 	position: fixed;
 	inset: 0;
-	z-index: 99990;
+	/* Above everything the storefront floats: the sticky header and its cart
+	 * panel (2147483000), the bottom bar (2147482000), the assistant and
+	 * WhatsApp launchers. The old drawer sat here for the same reason, and the
+	 * engine no longer makes the rest of the page inert - putting `inert` on
+	 * every body child forced a style recalculation of the whole document on
+	 * the tap, which is exactly the frame this rebuild is trying to give back.
+	 * The scrim covers them instead, and the focus trap keeps the keyboard in
+	 * the panel. */
+	z-index: 2147483100;
 	display: block;
 	visibility: hidden;
 	/* The panel and the scrim animate; visibility only flips once they are
@@ -1092,7 +1100,8 @@ html.dmenu-open body {
 	position: fixed;
 	inset-inline: 12px;
 	bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-	z-index: 99980;
+	/* Beside the storefront's own bottom bar, never above the menu. */
+	z-index: 2147482000;
 	display: flex;
 	justify-content: space-around;
 	padding: 7px;
