@@ -7,7 +7,7 @@
  * The old uncached JSON endpoint remains available for already-open pro.30
  * documents until they reload; new clients no longer request it.
  *
- * PHP 7.4 compatible.
+ * PHP 8.5.
  *
  * @package Delicat_Builder_V9_Pro
  */

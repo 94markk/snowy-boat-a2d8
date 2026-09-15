@@ -7,7 +7,7 @@
  * decision to show it is taken client-side from a cookie, never from PHP.
  *
  * Constraints honoured here:
- *  - PHP 7.4 (no match, no nullsafe, no str_contains)
+ *  - PHP 8.5
  *  - no backdrop-filter, no localStorage / sessionStorage
  *  - vanilla ES5 runtime
  */

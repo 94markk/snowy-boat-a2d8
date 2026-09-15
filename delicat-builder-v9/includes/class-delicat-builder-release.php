@@ -364,7 +364,7 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 			),
 			'php' => array(
 				'label' => 'PHP',
-				'status'=> version_compare( PHP_VERSION, '8.0', '>=' ) ? 'pass' : 'blocker',
+				'status'=> version_compare( PHP_VERSION, '8.5', '>=' ) ? 'pass' : 'blocker',
 				'text'  => PHP_VERSION,
 			),
 			'https' => array(

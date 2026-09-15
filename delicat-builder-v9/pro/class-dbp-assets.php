@@ -24,7 +24,7 @@
  * What remains is where the real weight was and where the risk is not:
  * route-scoped shipping, additive inline shell CSS, and a narrow opt-in defer.
  *
- * PHP 7.4 compatible.
+ * PHP 8.5.
  *
  * @package Delicat_Builder_V9_Pro
  */

@@ -164,7 +164,7 @@ final class Delicat_Builder_V9_Admin {
 			),
 			array(
 				'label' => 'PHP',
-				'ok'    => version_compare( PHP_VERSION, '8.0', '>=' ),
+				'ok'    => version_compare( PHP_VERSION, '8.5', '>=' ),
 				'text'  => PHP_VERSION,
 			),
 			array(

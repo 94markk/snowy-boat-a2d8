@@ -7,7 +7,7 @@
  * session state. Feature modules are untouched; only the coordination layers
  * are replaced, so every V9 shortcode, option key and render path is preserved.
  *
- * PHP 7.4 compatible. No match expressions, no nullsafe operators, no enums.
+ * PHP 8.5.
  *
  * @package Delicat_Builder_V9_Pro
  */

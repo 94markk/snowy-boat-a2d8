@@ -45,7 +45,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    source: they win, every time, on every host, in every combine order.
  *    Roughly 2 KB inline, and the storefront becomes predictable.
  *
- * PHP 7.4.
+ * PHP 8.5.
  */
 final class Delicat_Builder_V9_Stability {
 

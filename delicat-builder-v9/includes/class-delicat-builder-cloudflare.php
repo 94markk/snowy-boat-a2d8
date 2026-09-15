@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Security: the API token is write-only in the admin UI (never echoed back),
  * should be scoped to "Zone → Cache Purge" only, and all admin actions are
- * capability + nonce gated. PHP 7.4 compatible.
+ * capability + nonce gated. PHP 8.5.
  */
 final class Delicat_Builder_V9_Cloudflare {
 

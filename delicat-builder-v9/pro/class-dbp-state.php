@@ -15,7 +15,7 @@
  * at the tick. The state response carries fresh nonces and the client patches
  * them into the document.
  *
- * PHP 7.4 compatible.
+ * PHP 8.5.
  *
  * @package Delicat_Builder_V9_Pro
  */

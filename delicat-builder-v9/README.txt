@@ -1,3 +1,43 @@
+DELICAT BUILDER V9 — 9.3.0-pro.1
+
+Requires PHP 8.5 (was 7.4) and WordPress 6.4.
+
+Check the PHP version your host runs BEFORE updating. WordPress reads the
+requirement from the plugin header and will refuse to install this build on an
+older PHP, and if a host downgrades PHP under an already-active copy the kernel
+stands down with an admin notice instead of fataling — WordPress and WooCommerce
+keep serving the storefront either way.
+
+What changed in 9.3.0-pro.1
+---------------------------
+1. Menu: the three engines that shared the storefront menu (the modern-menu
+   runtime, its duplicate inside the Menu Builder admin file, and the RC29
+   drawer) are deleted and replaced by one Menu Engine. The panel now ships
+   inside an inert <template> and is hydrated in idle time, so a page load
+   carries about twelve nodes of menu chrome instead of two hundred live ones,
+   and the first tap on the three bars is a transform and nothing else. The menu
+   is printed at the end of the document instead of beside the header. No blur
+   anywhere; only transform and opacity animate. 42 KB of preset CSS, 13 KB of
+   legacy JS and the 45-second signed-in wallet poller are gone — the balance
+   refreshes when the menu opens.
+   The design is unchanged: same cards, same colours, same sections.
+2. Menu Builder: the controls whose engine no longer exists (glass presets,
+   light/dark "models", the blur slider, the stagger and hover pickers) are
+   removed rather than left on screen doing nothing. Every menu item, quick
+   action, social link and colour is kept exactly as saved.
+3. Like button: rebuilt. The mark is one shape drawn twice, so "liked" is a
+   spring on something already on the card. The press lands on the touch, the
+   state flips before the network, a ring and six sparks fly, and the device
+   buzzes where it can. Five quick taps now cost one request instead of five,
+   and a write the server refuses returns the button to the truth with a shake
+   instead of lying. Slow connections, low-power mode and reduced-motion get the
+   state change with no celebration.
+4. PHP 8.5 is the floor. Health checks in Builder Admin, the Release Center and
+   the Production Center report against it.
+
+Purge existing page/CDN caches after updating, including LiteSpeed's optimized
+CSS/JS cache, and Cloudflare if used.
+
 9.2.0-pro.10: security fixes and validation notes are in SECURITY-AUDIT-PRO10.md. Purge existing page/CDN caches after updating.
 
 RC88: see AUDIT-RC88.md for the full live-site repair follow-up, secure product-field handling, deterministic customer-facing icons, coordinated Tutoriels hardening and staging validation requirements.

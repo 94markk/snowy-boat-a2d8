@@ -324,7 +324,7 @@ final class Delicat_Builder_V9_Multi_Currency {
 	private function persist( string $code ): void {
 		if ( function_exists( 'WC' ) && WC() && WC()->session ) { WC()->session->set( self::COOKIE, $code ); }
 		if ( ! headers_sent() ) {
-			// PHP 7.4+ options syntax lets the preference carry SameSite=Lax;
+			// The array options syntax lets the preference carry SameSite=Lax;
 			// WooCommerce's compatibility wrapper cannot express SameSite here.
 			setcookie( self::COOKIE, $code, $this->cookie_options( time() + MONTH_IN_SECONDS ) );
 		}

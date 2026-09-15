@@ -11,7 +11,7 @@
  * all emit inline configuration, and a policy that blocks them would break the
  * store rather than protect it.
  *
- * PHP 7.4 compatible.
+ * PHP 8.5.
  *
  * @package Delicat_Builder_V9_Pro
  */

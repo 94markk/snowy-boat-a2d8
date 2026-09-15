@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Cache safety: the popup CSS/JS are enqueued only for logged-in users, so the
  * anonymous page HTML served from LiteSpeed/Cloudflare stays byte-identical.
  * The submit nonce is never printed into page HTML; it is returned by the
- * per-user prompt endpoint. PHP 7.4 compatible; no match()/?->/str_contains.
+ * per-user prompt endpoint. PHP 8.5.
  */
 final class Delicat_Builder_V9_Reviews {
 

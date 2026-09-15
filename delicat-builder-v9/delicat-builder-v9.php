@@ -3,10 +3,10 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.32
+ * Version: 9.3.0-pro.1
 
  * Requires at least: 6.4
- * Requires PHP: 7.4
+ * Requires PHP: 8.5
  * Author: Delicat Store
  * Text Domain: delicat-builder-v9
  */
@@ -151,7 +151,45 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.32' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.3.0-pro.1' );
+
+/*
+ * PHP FLOOR — 8.5
+ * ---------------
+ * WordPress reads "Requires PHP" from the header and refuses to activate or
+ * update the plugin on anything older. That covers the ways a site is supposed
+ * to arrive here; it does not cover a host that downgrades PHP under a plugin
+ * that is already active, and on that path the first typed property or match
+ * expression would be a fatal on every request instead of a message anyone can
+ * act on.
+ *
+ * So the kernel stands down instead: nothing is defined, nothing is required,
+ * WordPress and WooCommerce keep running, and an administrator is told what to
+ * change. The same posture the bootstrap circuit breaker above takes.
+ */
+if ( PHP_VERSION_ID < 80500 ) {
+	add_action(
+		'admin_notices',
+		static function () {
+			if ( ! current_user_can( 'activate_plugins' ) ) {
+				return;
+			}
+			printf(
+				'<div class="notice notice-error"><p><strong>%1$s</strong> %2$s</p></div>',
+				esc_html__( 'Delicat Builder V9 is standing down.', 'delicat-builder-v9' ),
+				esc_html(
+					sprintf(
+						/* translators: 1: required PHP version, 2: PHP version in use. */
+						__( 'It needs PHP %1$s or newer; this server runs PHP %2$s. The storefront is being served by WordPress and WooCommerce alone until PHP is updated.', 'delicat-builder-v9' ),
+						'8.5',
+						PHP_VERSION
+					)
+				)
+			);
+		}
+	);
+	return;
+}
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -1291,9 +1329,9 @@ add_action(
 register_activation_hook(
 	__FILE__,
 	static function () {
-		if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+		if ( PHP_VERSION_ID < 80500 ) {
 			deactivate_plugins( plugin_basename( __FILE__ ) );
-			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 7.4 or newer.', 'delicat-builder-v9' ) );
+			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 8.5 or newer.', 'delicat-builder-v9' ) );
 		}
 
 		/* RC17: activation is deliberately boring. Seed only primitive options;
@@ -1740,9 +1778,9 @@ add_action(
 register_activation_hook(
 	__FILE__,
 	static function () {
-		if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+		if ( PHP_VERSION_ID < 80500 ) {
 			deactivate_plugins( plugin_basename( __FILE__ ) );
-			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 7.4 or newer.', 'delicat-builder-v9' ) );
+			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 8.5 or newer.', 'delicat-builder-v9' ) );
 		}
 
 		/* RC17: activation is deliberately boring. Seed only primitive options;

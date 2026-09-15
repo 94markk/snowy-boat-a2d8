@@ -8,7 +8,7 @@
  * Author URI: https://delicastoreha.com
  * Text Domain: delicat-swatches
  * Requires at least: 6.0
- * Requires PHP: 7.4
+ * Requires PHP: 8.5
  * WC requires at least: 7.0
  */
 
