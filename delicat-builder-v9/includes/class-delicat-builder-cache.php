@@ -5,7 +5,14 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 final class Delicat_Builder_V9_Cache {
 	private static bool $product_invalidation_done = false;
+	/** Set when a version change purged what it could reach. */
+	public const UPGRADE_NOTICE = 'delicat_builder_v9_upgrade_purge_notice';
+
 	public static function boot(): void {
+		if ( is_admin() ) {
+			add_action( 'admin_notices', array( __CLASS__, 'upgrade_notice' ) );
+			add_action( 'admin_post_delicat_builder_v9_dismiss_upgrade_notice', array( __CLASS__, 'dismiss_upgrade_notice' ) );
+		}
 		/* RC80: nothing purged on upgrade, so a new plugin version never
 		 * reached the browser until somebody clicked the manual purge button.
 		 * The live homepage was serving HTML cached before RC72, which is why
@@ -32,6 +39,51 @@ final class Delicat_Builder_V9_Cache {
 			add_action( 'delete_' . $taxonomy, array( __CLASS__, 'taxonomy_changed' ), 20, 4 );
 		}
 		add_action( 'admin_post_delicat_builder_v9_purge', array( __CLASS__, 'handle_manual_purge' ) );
+	}
+
+	/**
+	 * Tell the merchant what this plugin could not clear for them.
+	 *
+	 * Deliberately not dismissed automatically after a page load: an upgrade is
+	 * exactly when someone is looking at the site on their phone, seeing the
+	 * previous version, and concluding the update broke it.
+	 */
+	public static function upgrade_notice(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$version = (string) get_transient( self::UPGRADE_NOTICE );
+		if ( '' === $version ) {
+			return;
+		}
+
+		$cf      = get_option( 'delicat_builder_v9_cloudflare', array() );
+		$cf_here = is_array( $cf ) && ! empty( $cf['enabled'] ) && ! empty( $cf['zone_id'] );
+
+		printf(
+			'<div class="notice notice-info"><p><strong>%1$s</strong> %2$s</p><p>%3$s</p><p>'
+			. '<a class="button" href="%4$s">%5$s</a></p></div>',
+			esc_html( sprintf( /* translators: %s: plugin version. */ __( 'Delicat Builder %s installed.', 'delicat-builder-v9' ), $version ) ),
+			esc_html__( 'Its stylesheets and scripts have new filenames, so any page cached before the update still asks for the old ones and still shows the old interface.', 'delicat-builder-v9' ),
+			esc_html(
+				$cf_here
+					? __( 'LiteSpeed and Cloudflare have been purged. If the site still looks wrong on your phone, it is that phone\'s own cache: reload the page or open it in a private tab.', 'delicat-builder-v9' )
+					: __( 'LiteSpeed has been purged. Cloudflare has not, because no API token is set here — purge it from your Cloudflare dashboard. Then reload on your phone, or open the site in a private tab.', 'delicat-builder-v9' )
+			),
+			esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=delicat_builder_v9_dismiss_upgrade_notice' ), 'delicat_builder_v9_dismiss_upgrade_notice' ) ),
+			esc_html__( 'Got it', 'delicat-builder-v9' )
+		);
+	}
+
+	public static function dismiss_upgrade_notice(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'delicat-builder-v9' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'delicat_builder_v9_dismiss_upgrade_notice' );
+		delete_transient( self::UPGRADE_NOTICE );
+		wp_safe_redirect( wp_get_referer() ?: admin_url() );
+		exit;
 	}
 
 	public static function version(): int {
@@ -323,6 +375,21 @@ public static function purge_product_archives( int $product_id = 0 ): void {
 		}
 		update_option( 'delicat_builder_v9_purged_version', $current, true );
 		self::purge_everything();
+
+		/*
+		 * LiteSpeed has just been told, and so has Cloudflare IF the merchant
+		 * put its API token in this plugin. Nothing here can reach a Cloudflare
+		 * that was never configured, a different CDN, or the copy already sitting
+		 * on a customer's phone.
+		 *
+		 * That gap is not theoretical. Assets are content-addressed, so an
+		 * upgrade changes their filenames - and a page cached before the upgrade
+		 * goes on asking for the old ones and rendering the old interface. It is
+		 * why "the site looks wrong after updating" keeps coming back, and why
+		 * the answer keeps being "purge your caches". Say so, once per version,
+		 * where the person who can do it will see it.
+		 */
+		set_transient( self::UPGRADE_NOTICE, $current, WEEK_IN_SECONDS );
 		/**
 		 * Fires once after the plugin version changes and caches are cleared.
 		 *

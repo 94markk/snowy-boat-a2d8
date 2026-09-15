@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-15T01:40:28.785132+00:00",
-  "version": "9.2.0-pro.25",
-  "bytes": 6010515,
+  "built": "2026-09-15T01:49:55.317344+00:00",
+  "version": "9.2.0-pro.26",
+  "bytes": 6013849,
   "count": 356,
   "files": {
     "PRO-README.md": {
@@ -911,7 +911,7 @@
     },
     "delicat-builder-v9.php": {
       "bytes": 72788,
-      "sha256": "5e073d06a3ac4ba58043c85bf268192a98e9c8b3439223aed30299b96bf31796"
+      "sha256": "9feea211edad8f45afd2467a43b9c1748e42fd284b566135a6072a32a99cb5fb"
     },
     "includes/class-delicat-builder-admin.php": {
       "bytes": 23021,
@@ -950,8 +950,8 @@
       "sha256": "ea7f6d0517ab5dda634d5ce58d6a28a05ffdac980ceb3a0f8cce6349b3a3a881"
     },
     "includes/class-delicat-builder-cache.php": {
-      "bytes": 12337,
-      "sha256": "3560a8a99e942c4232ac935b64a903987e37c92101af8fdec84533737ba1f0b0"
+      "bytes": 15671,
+      "sha256": "c1d02b045b7d5cf652fa37794f0e7a1df8599aba4636075648a0fa862e581a74"
     },
     "includes/class-delicat-builder-carousel.php": {
       "bytes": 41983,
