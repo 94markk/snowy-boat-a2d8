@@ -1,0 +1,45 @@
+---
+import { DEFAULT_LOCALE } from "../i18n/ui";
+import { getLocaleFromUrl, localePath, useTranslations } from "../i18n/utils";
+import Base from "../layouts/Base.astro";
+
+// A 404 can be served for any path, so infer the language from the URL the
+// visitor actually asked for and fall back to French.
+const locale = getLocaleFromUrl(Astro.url) ?? DEFAULT_LOCALE;
+const t = useTranslations(locale);
+---
+
+<Base title={t("error.404Title")} description={t("error.404Text")} locale={locale} noindex>
+  <div class="container section">
+    <div class="not-found">
+      <p class="eyebrow">404</p>
+      <h1>{t("error.404Title")}</h1>
+      <p class="lead">{t("error.404Text")}</p>
+      <div class="actions">
+        <a class="btn btn-primary" href={localePath(locale)}>{t("error.home")}</a>
+        <a class="btn btn-outline" href={localePath(locale, "shop")}>{t("nav.shop")}</a>
+      </div>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .not-found {
+    max-width: 34rem;
+    margin-inline: auto;
+    text-align: center;
+    padding-block: clamp(2rem, 1rem + 5vw, 5rem);
+  }
+
+  .not-found .lead {
+    margin-inline: auto;
+    margin-bottom: 1.75rem;
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+</style>

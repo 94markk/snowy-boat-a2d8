@@ -1,0 +1,53 @@
+---
+import CategoryNav from "../../../../components/CategoryNav.astro";
+import ProductCard from "../../../../components/ProductCard.astro";
+import { categories, productsInCategory } from "../../../../data/catalog";
+import { LOCALES, type Locale } from "../../../../i18n/ui";
+import { useTranslations } from "../../../../i18n/utils";
+import Base from "../../../../layouts/Base.astro";
+
+/** One page per locale × category. */
+export function getStaticPaths() {
+  return LOCALES.flatMap((lang) =>
+    categories.map((category) => ({
+      params: { lang, category: category.slug },
+      props: { categoryId: category.id },
+    })),
+  );
+}
+
+const locale = Astro.params.lang as Locale;
+const { categoryId } = Astro.props;
+const t = useTranslations(locale);
+
+const category = categories.find((c) => c.id === categoryId)!;
+const items = productsInCategory(categoryId);
+---
+
+<Base title={category.name[locale]} description={category.blurb[locale]} locale={locale}>
+  <div class="container section">
+    <h1>{category.name[locale]}</h1>
+    <p class="lead">{category.blurb[locale]}</p>
+
+    <div class="spacer"></div>
+    <CategoryNav locale={locale} active={categoryId} />
+
+    {
+      items.length === 0 ? (
+        <p class="lead">{t("shop.empty")}</p>
+      ) : (
+        <div class="product-grid">
+          {items.map((product, index) => (
+            <ProductCard product={product} locale={locale} eager={index < 4} />
+          ))}
+        </div>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .spacer {
+    height: 1.75rem;
+  }
+</style>

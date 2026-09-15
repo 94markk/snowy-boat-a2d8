@@ -1,0 +1,27 @@
+---
+import { categories, type CategoryId } from "../data/catalog";
+import type { Locale } from "../i18n/ui";
+import { localePath, useTranslations } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+  active?: CategoryId;
+}
+
+const { locale, active } = Astro.props;
+const t = useTranslations(locale);
+---
+
+<nav class="filter-row" aria-label={t("shop.title")}>
+  <a href={localePath(locale, "shop")} aria-current={active ? undefined : "page"}>{t("shop.all")}</a>
+  {
+    categories.map((category) => (
+      <a
+        href={localePath(locale, `shop/c/${category.slug}`)}
+        aria-current={active === category.id ? "page" : undefined}
+      >
+        {category.name[locale]}
+      </a>
+    ))
+  }
+</nav>

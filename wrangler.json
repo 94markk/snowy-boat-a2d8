@@ -1,5 +1,5 @@
 {
-  "name": "snowy-boat-a2d8",
+  "name": "delicastoreha",
   "compatibility_date": "2024-11-01",
   "compatibility_flags": ["nodejs_compat"],
   "main": "./dist/_worker.js/index.js",
@@ -10,5 +10,13 @@
   "observability": {
     "enabled": true
   },
-  "upload_source_maps": true
+  "upload_source_maps": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "delicastoreha",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID",
+      "migrations_dir": "db/migrations"
+    }
+  ]
 }

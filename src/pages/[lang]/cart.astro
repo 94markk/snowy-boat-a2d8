@@ -1,0 +1,263 @@
+---
+import type { Locale } from "../../i18n/ui";
+import { formatMoney, localePath, useTranslations } from "../../i18n/utils";
+import Base from "../../layouts/Base.astro";
+
+/** On demand, so the wallet balance and sign-in state are current. */
+export const prerender = false;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+const user = Astro.locals.user;
+---
+
+<Base title={t("cart.title")} description={t("cart.title")} locale={locale} noindex>
+  <div
+    class="container section"
+    data-region
+    data-loading="true"
+    data-locale={locale}
+    data-shop-url={localePath(locale, "shop")}
+    data-wallet-url={localePath(locale, "wallet")}
+    data-account-url={localePath(locale, "account")}
+    data-signed-in={user ? "true" : "false"}
+    data-balance={user ? String(user.balanceCentimes) : "0"}
+  >
+    <h1>{t("cart.title")}</h1>
+
+    {
+      user && (
+        <p class="balance-line">
+          {t("cart.balance")}: <strong>{formatMoney(user.balanceCentimes, locale)}</strong>
+        </p>
+      )
+    }
+
+    <div data-cart-body>
+      <p class="lead">{t("cart.updating")}</p>
+    </div>
+  </div>
+</Base>
+
+<script>
+  import { getVariant } from "../../data/catalog";
+  import type { Locale } from "../../i18n/ui";
+  import { formatMoney, isLocale, useTranslations } from "../../i18n/utils";
+  import { onCartChange, readCart, removeAt, setQty } from "../../lib/cart";
+
+  const region = document.querySelector<HTMLElement>("[data-region]");
+  const body = document.querySelector<HTMLElement>("[data-cart-body]");
+
+  if (region && body) {
+    const raw = region.dataset.locale;
+    const locale: Locale = isLocale(raw) ? raw : "fr";
+    const t = useTranslations(locale);
+
+    const shopUrl = region.dataset.shopUrl ?? "/";
+    const walletUrl = region.dataset.walletUrl ?? "/";
+    const accountUrl = region.dataset.accountUrl ?? "/";
+    const signedIn = region.dataset.signedIn === "true";
+    const balance = Number(region.dataset.balance ?? 0);
+
+    /** Built with DOM APIs rather than innerHTML, so nothing stored in the cart
+     *  can ever be parsed as markup. */
+    const el = <K extends keyof HTMLElementTagNameMap>(
+      tag: K,
+      props: Record<string, string | undefined> = {},
+      children: (Node | string)[] = [],
+    ): HTMLElementTagNameMap[K] => {
+      const node = document.createElement(tag);
+      for (const [key, value] of Object.entries(props)) {
+        if (value === undefined) continue;
+        if (key === "class") node.className = value;
+        else if (key === "text") node.textContent = value;
+        else node.setAttribute(key, value);
+      }
+      for (const child of children) node.append(child);
+      return node;
+    };
+
+    function renderEmpty() {
+      body!.replaceChildren(
+        el("div", { class: "empty-state" }, [
+          el("p", { text: t("cart.empty") }),
+          el("a", { class: "btn btn-primary", href: shopUrl, text: t("cart.emptyCta") }),
+        ]),
+      );
+      region!.dataset.loading = "false";
+    }
+
+    function render() {
+      const stored = readCart();
+      if (stored.length === 0) return renderEmpty();
+
+      const list = el("ul", { class: "cart-lines" });
+      let total = 0;
+
+      stored.forEach((line, index) => {
+        const found = getVariant(line.variantId);
+        // A variant that has left the catalog cannot be priced, so drop it.
+        if (!found) {
+          removeAt(index);
+          return;
+        }
+
+        const { product, variant } = found;
+        const lineTotal = variant.priceCentimes * line.qty;
+        total += lineTotal;
+
+        const decrement = el("button", { type: "button", "aria-label": "-", text: "−" });
+        decrement.addEventListener("click", () => setQty(index, line.qty - 1));
+
+        const increment = el("button", { type: "button", "aria-label": "+", text: "+" });
+        increment.addEventListener("click", () => setQty(index, line.qty + 1));
+
+        const remove = el("button", { class: "link-button", type: "button", text: t("cart.remove") });
+        remove.addEventListener("click", () => removeAt(index));
+
+        // Show the details the customer typed, so a wrong player id is visible
+        // before they pay rather than after.
+        const detailText = Object.values(line.fields).filter(Boolean).join(" · ");
+
+        list.append(
+          el("li", { class: "cart-line" }, [
+            el("div", { class: "cart-line-media" }, [
+              el("img", {
+                src: product.image,
+                alt: product.name,
+                width: "68",
+                height: "68",
+                loading: "lazy",
+                decoding: "async",
+              }),
+            ]),
+            el("div", {}, [
+              el("p", {
+                class: "cart-line-name",
+                text: `${product.name}${product.region ? ` (${product.region})` : ""} — ${variant.label[locale]}`,
+              }),
+              el("p", {
+                class: "cart-line-meta",
+                text: detailText || formatMoney(variant.priceCentimes, locale),
+              }),
+              el("div", { class: "qty-control" }, [
+                decrement,
+                el("output", { text: String(line.qty) }),
+                increment,
+              ]),
+              remove,
+            ]),
+            el("span", { class: "cart-line-total", text: formatMoney(lineTotal, locale) }),
+          ]),
+        );
+      });
+
+      const payButton = el("button", {
+        class: "btn btn-primary btn-block",
+        type: "button",
+        text: t("cart.pay"),
+      });
+
+      const alertBox = el("p", { class: "form-alert", "data-tone": "error", hidden: "hidden" });
+
+      const summaryChildren: (Node | string)[] = [
+        el("div", { class: "summary-row total" }, [
+          el("span", { text: t("cart.total") }),
+          el("span", { text: formatMoney(total, locale) }),
+        ]),
+      ];
+
+      if (!signedIn) {
+        summaryChildren.push(
+          el("p", { class: "form-alert", "data-tone": "error", text: t("cart.signInFirst") }),
+          el("a", { class: "btn btn-primary btn-block", href: accountUrl, text: t("account.signIn") }),
+        );
+      } else if (balance < total) {
+        summaryChildren.push(
+          el("div", { class: "summary-row" }, [
+            el("span", { text: t("cart.balance") }),
+            el("span", { text: formatMoney(balance, locale) }),
+          ]),
+          el("p", { class: "form-alert", "data-tone": "error", text: t("cart.insufficient") }),
+          el("a", { class: "btn btn-primary btn-block", href: walletUrl, text: t("cart.topUpCta") }),
+        );
+      } else {
+        summaryChildren.push(
+          el("div", { class: "summary-row" }, [
+            el("span", { text: t("cart.balance") }),
+            el("span", { text: formatMoney(balance, locale) }),
+          ]),
+          payButton,
+          alertBox,
+        );
+        payButton.addEventListener("click", () => pay(payButton, alertBox));
+      }
+
+      summaryChildren.push(
+        el("p", { class: "summary-continue" }, [
+          el("a", { href: shopUrl, text: t("cart.continue") }),
+        ]),
+      );
+
+      body!.replaceChildren(
+        el("div", { class: "cart-layout" }, [list, el("aside", { class: "summary" }, summaryChildren)]),
+      );
+      region!.dataset.loading = "false";
+    }
+
+    async function pay(button: HTMLButtonElement, alertBox: HTMLElement) {
+      button.disabled = true;
+      button.textContent = t("cart.processing");
+      alertBox.hidden = true;
+
+      try {
+        const response = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            locale,
+            items: readCart().map((line) => ({
+              variantId: line.variantId,
+              qty: line.qty,
+              fields: line.fields,
+            })),
+          }),
+        });
+
+        const payload = (await response.json()) as { ok?: boolean; reference?: string; error?: string };
+
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.error ?? "failed");
+        }
+
+        // The order is placed; clear the basket and show it in the account.
+        localStorage.removeItem("delica.cart.v2");
+        window.location.assign(`${accountUrl}?order=${encodeURIComponent(payload.reference ?? "")}`);
+      } catch (error) {
+        alertBox.textContent =
+          error instanceof Error && error.message === "insufficient_funds"
+            ? t("cart.insufficient")
+            : t("cart.error");
+        alertBox.hidden = false;
+        button.disabled = false;
+        button.textContent = t("cart.pay");
+      }
+    }
+
+    render();
+    onCartChange(render);
+  }
+</script>
+
+<style>
+  .balance-line {
+    color: var(--text-muted);
+    margin-bottom: 1.5rem;
+  }
+
+  .summary-continue {
+    margin-top: 1rem;
+    text-align: center;
+    font-size: 0.875rem;
+  }
+</style>

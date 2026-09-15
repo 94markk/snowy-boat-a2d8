@@ -1,47 +1,85 @@
 ---
-// Import the global.css file here so that it is included on
-// all pages through the use of the <BaseHead /> component.
-import '../styles/global.css';
+/**
+ * Everything that belongs in <head>: metadata, hreflang and structured data.
+ *
+ * The Content-Security-Policy is not set here — Astro emits it, because it is
+ * the only thing that knows the hash of every inline script it generates. See
+ * `experimental.csp` in astro.config.mjs.
+ */
+import { SITE } from "../config";
+import { LOCALE_TAGS, LOCALES, type Locale } from "../i18n/ui";
+import { swapLocale } from "../i18n/utils";
+import "../styles/global.css";
 
 interface Props {
-	title: string;
-	description: string;
-	image?: string;
+  title: string;
+  description: string;
+  locale: Locale;
+  /** Optional absolute or root-relative image for social cards. */
+  image?: string;
+  /** Extra JSON-LD to publish alongside the site-wide Organization node. */
+  schema?: Record<string, unknown>;
+  /** Set on pages that should not be indexed (checkout results, 404). */
+  noindex?: boolean;
 }
 
-const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+const { title, description, locale, image, schema, noindex = false } = Astro.props;
 
-const { title, description, image = '/blog-placeholder-1.jpg' } = Astro.props;
+const canonical = new URL(Astro.url.pathname.replace(/\/+$/, "") || "/", SITE.url).href;
+const socialImage = new URL(image ?? "/images/og.svg", SITE.url).href;
+const fullTitle = title === SITE.name ? `${SITE.name} — ${SITE.shortName}` : `${title} | ${SITE.name}`;
+
+const organization = {
+  "@context": "https://schema.org",
+  "@type": "OnlineStore",
+  name: SITE.name,
+  legalName: SITE.legalName,
+  url: SITE.url,
+  email: SITE.email,
+  telephone: SITE.phone,
+  areaServed: "HT",
+};
+
+const graph = schema ? [organization, schema] : [organization];
+const jsonLd = JSON.stringify(graph.length === 1 ? graph[0] : graph);
+
 ---
 
-<!-- Global Metadata -->
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<meta name="generator" content={Astro.generator} />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<!-- Font preloads -->
-<link rel="preload" href="/fonts/atkinson-regular.woff" as="font" type="font/woff" crossorigin />
-<link rel="preload" href="/fonts/atkinson-bold.woff" as="font" type="font/woff" crossorigin />
-
-<!-- Canonical URL -->
-<link rel="canonical" href={canonicalURL} />
-
-<!-- Primary Meta Tags -->
-<title>{title}</title>
-<meta name="title" content={title} />
+<title>{fullTitle}</title>
 <meta name="description" content={description} />
+<link rel="canonical" href={canonical} />
+{noindex && <meta name="robots" content="noindex, nofollow" />}
 
-<!-- Open Graph / Facebook -->
+{/* Tell search engines about every translation of this exact page. */}
+{
+  LOCALES.map((alt) => (
+    <link
+      rel="alternate"
+      hreflang={LOCALE_TAGS[alt]}
+      href={new URL(swapLocale(Astro.url, alt), SITE.url).href}
+    />
+  ))
+}
+<link rel="alternate" hreflang="x-default" href={new URL(swapLocale(Astro.url, "fr"), SITE.url).href} />
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="sitemap" href="/sitemap-index.xml" />
+
 <meta property="og:type" content="website" />
-<meta property="og:url" content={Astro.url} />
-<meta property="og:title" content={title} />
+<meta property="og:site_name" content={SITE.name} />
+<meta property="og:title" content={fullTitle} />
 <meta property="og:description" content={description} />
-<meta property="og:image" content={new URL(image, Astro.url)} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={socialImage} />
+<meta property="og:locale" content={LOCALE_TAGS[locale].replace("-", "_")} />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={fullTitle} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={socialImage} />
 
-<!-- Twitter -->
-<meta property="twitter:card" content="summary_large_image" />
-<meta property="twitter:url" content={Astro.url} />
-<meta property="twitter:title" content={title} />
-<meta property="twitter:description" content={description} />
-<meta property="twitter:image" content={new URL(image, Astro.url)} />
+<meta name="theme-color" content="#c26f0a" />
+
+<script type="application/ld+json" is:inline set:html={jsonLd} />

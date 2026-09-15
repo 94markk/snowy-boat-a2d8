@@ -1,0 +1,285 @@
+---
+import { PAYMENT_ACCOUNTS, WALLET } from "../../config";
+import type { Locale } from "../../i18n/ui";
+import { formatDate, formatMoney, localePath, useTranslations } from "../../i18n/utils";
+import { recentEntries } from "../../lib/wallet";
+import Base from "../../layouts/Base.astro";
+
+export const prerender = false;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+const user = Astro.locals.user;
+const db = Astro.locals.runtime?.env?.DB as D1Database | undefined;
+
+// The wallet is meaningless without an account, so send visitors to sign in.
+if (!user) {
+  return Astro.redirect(localePath(locale, "account"), 302);
+}
+
+const entries = db ? await recentEntries(db, user.id, 25) : [];
+
+const kindLabel = (kind: string) =>
+  ({
+    topup: t("wallet.kind.topup"),
+    purchase: t("wallet.kind.purchase"),
+    refund: t("wallet.kind.refund"),
+    adjustment: t("wallet.kind.adjustment"),
+  })[kind] ?? kind;
+
+/** Amounts offered as quick picks, in centimes. */
+const presets = [250_00, 500_00, 1_000_00, 2_500_00];
+---
+
+<Base title={t("wallet.title")} description={t("wallet.title")} locale={locale} noindex>
+  <div class="container section">
+    <h1>{t("wallet.title")}</h1>
+
+    <div class="wallet-layout">
+      <div>
+        <div class="balance-card">
+          <span>{t("wallet.balance")}</span>
+          <strong>{formatMoney(user.balanceCentimes, locale)}</strong>
+        </div>
+
+        <section class="topup" data-topup data-locale={locale}>
+          <h2 class="section-title">{t("wallet.topUpTitle")}</h2>
+
+          <p class="form-alert" data-tone="error" data-topup-error hidden></p>
+
+          <form data-topup-form>
+            <label class="field">
+              <span>{t("wallet.provider")}</span>
+              <select name="provider" required>
+                {
+                  Object.entries(PAYMENT_ACCOUNTS).map(([id, account]) => (
+                    <option value={id}>{account.label}</option>
+                  ))
+                }
+              </select>
+            </label>
+
+            <label class="field">
+              <span>{t("wallet.amount")}</span>
+              <input
+                type="number"
+                name="amount"
+                min={WALLET.minTopUpCentimes / 100}
+                max={WALLET.maxTopUpCentimes / 100}
+                step="1"
+                inputmode="numeric"
+                value="500"
+                required
+              />
+            </label>
+
+            <div class="presets">
+              {
+                presets.map((amount) => (
+                  <button class="btn btn-quiet" type="button" data-preset={String(amount / 100)}>
+                    {formatMoney(amount, locale)}
+                  </button>
+                ))
+              }
+            </div>
+
+            <label class="field">
+              <span>{t("wallet.payerPhone")}</span>
+              <input
+                type="tel"
+                name="payerMsisdn"
+                inputmode="tel"
+                placeholder="3412 3456"
+                maxlength="20"
+                required
+              />
+              <span class="field-help">{t("wallet.payerPhoneHelp")}</span>
+            </label>
+
+            <button class="btn btn-primary btn-block" type="submit" data-topup-submit>
+              {t("wallet.createRequest")}
+            </button>
+          </form>
+
+          <div class="pay-instructions" data-instructions hidden>
+            <h3>{t("wallet.instructionsTitle")}</h3>
+            <p>{t("wallet.instructionsBody")}</p>
+            <dl>
+              <div>
+                <dt>{t("wallet.sendTo")}</dt>
+                <dd data-pay-to></dd>
+              </div>
+              <div>
+                <dt>{t("wallet.exactAmount")}</dt>
+                <dd data-pay-amount></dd>
+              </div>
+              <div>
+                <dt>{t("wallet.expiresIn")}</dt>
+                <dd data-pay-expiry></dd>
+              </div>
+            </dl>
+            <p class="waiting">{t("wallet.waiting")}</p>
+          </div>
+
+          <template
+            data-topup-strings
+            data-error={t("wallet.error")}
+            data-minutes={t("wallet.minutes")}
+          ></template>
+        </section>
+      </div>
+
+      <aside>
+        <h2 class="section-title">{t("wallet.history")}</h2>
+        {
+          entries.length === 0 ? (
+            <p class="lead">{t("wallet.noHistory")}</p>
+          ) : (
+            <ul class="ledger">
+              {entries.map((entry) => (
+                <li>
+                  <span>
+                    <span class="ledger-kind">{kindLabel(entry.kind)}</span>
+                    <span class="ledger-date">{formatDate(entry.createdAt, locale)}</span>
+                  </span>
+                  <span
+                    class="ledger-amount"
+                    data-sign={entry.amountCentimes > 0 ? "credit" : "debit"}
+                  >
+                    {entry.amountCentimes > 0 ? "+" : ""}
+                    {formatMoney(entry.amountCentimes, locale)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )
+        }
+      </aside>
+    </div>
+  </div>
+</Base>
+
+<script>
+  const root = document.querySelector<HTMLElement>("[data-topup]");
+
+  if (root) {
+    const strings = root.querySelector<HTMLTemplateElement>("[data-topup-strings]")!.dataset;
+    const form = root.querySelector<HTMLFormElement>("[data-topup-form]")!;
+    const submit = root.querySelector<HTMLButtonElement>("[data-topup-submit]")!;
+    const errorBox = root.querySelector<HTMLElement>("[data-topup-error]")!;
+    const instructions = root.querySelector<HTMLElement>("[data-instructions]")!;
+    const amountInput = form.elements.namedItem("amount") as HTMLInputElement;
+
+    for (const button of root.querySelectorAll<HTMLButtonElement>("[data-preset]")) {
+      button.addEventListener("click", () => {
+        amountInput.value = button.dataset.preset ?? "";
+      });
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+
+      submit.disabled = true;
+      errorBox.hidden = true;
+
+      const data = new FormData(form);
+      // The API works in centimes; the form collects whole gourdes.
+      const amountCentimes = Math.round(Number(data.get("amount")) * 100);
+
+      try {
+        const response = await fetch("/api/wallet/topup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: String(data.get("provider") ?? ""),
+            amountCentimes,
+            payerMsisdn: String(data.get("payerMsisdn") ?? ""),
+          }),
+        });
+
+        const result = (await response.json()) as any;
+
+        if (!response.ok || !result.ok) {
+          errorBox.textContent = strings.error!;
+          errorBox.hidden = false;
+          submit.disabled = false;
+          return;
+        }
+
+        root.querySelector<HTMLElement>("[data-pay-to]")!.textContent =
+          `${result.payTo.label} — ${result.payTo.number}`;
+        root.querySelector<HTMLElement>("[data-pay-amount]")!.textContent =
+          new Intl.NumberFormat("fr-HT").format(result.amountCentimes / 100).replace(/^/, "G");
+
+        const minutes = Math.max(1, Math.round((result.expiresAt - Date.now() / 1000) / 60));
+        root.querySelector<HTMLElement>("[data-pay-expiry]")!.textContent =
+          `${minutes} ${strings.minutes}`;
+
+        instructions.hidden = false;
+        instructions.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        submit.disabled = false;
+
+        // The wallet is credited by the incoming SMS, not by this page, so poll
+        // for the balance rather than pretending the payment already landed.
+        pollForCredit();
+      } catch {
+        errorBox.textContent = strings.error!;
+        errorBox.hidden = false;
+        submit.disabled = false;
+      }
+    });
+
+    /** Reloads once the balance changes, up to a few minutes. */
+    function pollForCredit() {
+      let attempts = 0;
+      const timer = window.setInterval(() => {
+        attempts += 1;
+        if (attempts > 40) return window.clearInterval(timer);
+        // A reload is enough: the balance is rendered server-side.
+        fetch(window.location.href, { method: "HEAD" }).then(() => {
+          if (document.visibilityState === "visible" && attempts % 4 === 0) {
+            window.location.reload();
+          }
+        });
+      }, 15_000);
+    }
+  }
+</script>
+
+<style>
+  .wallet-layout {
+    display: grid;
+    gap: 2rem;
+    align-items: start;
+    margin-top: 1.5rem;
+  }
+
+  @media (min-width: 900px) {
+    .wallet-layout {
+      grid-template-columns: minmax(0, 1fr) 340px;
+    }
+  }
+
+  .topup {
+    margin-top: 2rem;
+  }
+
+  .topup h2 {
+    margin-bottom: 1.1rem;
+  }
+
+  .presets {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin: -0.4rem 0 1rem;
+  }
+
+  .waiting {
+    margin-top: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+</style>

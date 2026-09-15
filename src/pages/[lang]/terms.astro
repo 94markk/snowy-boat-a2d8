@@ -1,0 +1,14 @@
+---
+import LegalPage from "../../components/LegalPage.astro";
+import { termsSections } from "../../data/legal";
+import { localeStaticPaths } from "../../i18n/paths";
+import type { Locale } from "../../i18n/ui";
+import { useTranslations } from "../../i18n/utils";
+
+export const getStaticPaths = localeStaticPaths;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+---
+
+<LegalPage title={t("legal.termsTitle")} locale={locale} sections={termsSections} />

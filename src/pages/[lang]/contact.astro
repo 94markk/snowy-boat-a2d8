@@ -1,0 +1,70 @@
+---
+import { SITE } from "../../config";
+import { localeStaticPaths } from "../../i18n/paths";
+import type { Locale } from "../../i18n/ui";
+import { useTranslations } from "../../i18n/utils";
+import Base from "../../layouts/Base.astro";
+
+export const getStaticPaths = localeStaticPaths;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+---
+
+<Base title={t("contact.title")} description={t("contact.intro")} locale={locale}>
+  <div class="container section">
+    <h1>{t("contact.title")}</h1>
+    <p class="lead">{t("contact.intro")}</p>
+
+    <div class="contact-grid">
+      <a class="contact-card" href={`https://wa.me/${SITE.whatsapp}`} rel="noopener noreferrer" target="_blank">
+        <h3>WhatsApp</h3>
+        <p>{t("contact.whatsapp")}</p>
+      </a>
+      <a class="contact-card" href={`mailto:${SITE.email}`}>
+        <h3>{t("contact.email")}</h3>
+        <p>{SITE.email}</p>
+      </a>
+      <a class="contact-card" href={`tel:${SITE.phone}`}>
+        <h3>{t("contact.phone")}</h3>
+        <p>{SITE.phone}</p>
+      </a>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .contact-grid {
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    margin-top: 2rem;
+  }
+
+  .contact-card {
+    display: block;
+    padding: 1.25rem;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    text-decoration: none;
+    color: var(--text);
+  }
+
+  .contact-card:hover {
+    border-color: var(--violet-500);
+    color: var(--text);
+  }
+
+  .contact-card h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    margin-bottom: 0.35rem;
+  }
+
+  .contact-card p {
+    font-weight: 700;
+  }
+</style>

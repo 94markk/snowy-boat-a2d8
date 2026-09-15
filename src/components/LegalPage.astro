@@ -1,0 +1,45 @@
+---
+import { LEGAL_LAST_UPDATED, type LegalSection } from "../data/legal";
+import type { Locale } from "../i18n/ui";
+import { useTranslations } from "../i18n/utils";
+import Base from "../layouts/Base.astro";
+
+interface Props {
+  title: string;
+  locale: Locale;
+  sections: LegalSection[];
+}
+
+const { title, locale, sections } = Astro.props;
+const t = useTranslations(locale);
+const updated = new Intl.DateTimeFormat(locale === "en" ? "en-US" : "fr-FR", {
+  dateStyle: "long",
+}).format(new Date(LEGAL_LAST_UPDATED));
+---
+
+<Base title={title} description={title} locale={locale}>
+  <div class="container section">
+    <article class="prose">
+      <h1>{title}</h1>
+      <p class="updated">{t("legal.lastUpdated")}: {updated}</p>
+      {
+        sections.map((section) => (
+          <>
+            <h2>{section.heading[locale]}</h2>
+            {section.body[locale].map((paragraph) => (
+              <p>{paragraph}</p>
+            ))}
+          </>
+        ))
+      }
+    </article>
+  </div>
+</Base>
+
+<style>
+  .updated {
+    font-size: 0.875rem;
+    color: var(--text-faint);
+    margin-bottom: 1.5rem;
+  }
+</style>

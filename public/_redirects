@@ -1,0 +1,32 @@
+# Redirects run before static assets are served.
+
+/                              /fr/                  302
+
+# --- Legacy WordPress / WooCommerce paths -----------------------------------
+# Adjust these once you can export the old URL list; see DEPLOYMENT.md.
+/shop                          /fr/shop              301
+/boutique                      /fr/shop              301
+/product/*                     /fr/shop              301
+/produit/*                     /fr/shop              301
+/product-category/*            /fr/shop              301
+/categorie-produit/*           /fr/shop              301
+/cart                          /fr/cart              301
+/panier                        /fr/cart              301
+/checkout                      /fr/cart              301
+/mon-compte                    /fr/account           301
+/my-account                    /fr/account           301
+/wallet                        /fr/wallet            301
+/contact                       /fr/contact           301
+/privacy-policy                /fr/privacy           301
+/politique-de-confidentialite  /fr/privacy           301
+/terms                         /fr/terms             301
+/conditions-generales          /fr/terms             301
+
+# WordPress infrastructure that no longer exists. Redirecting rather than
+# 404-ing also stops bots probing for a login form.
+/wp-admin/*                    /fr/                  301
+/wp-login.php                  /fr/                  301
+/wp-content/*                  /fr/                  301
+/wp-includes/*                 /fr/                  301
+/xmlrpc.php                    /fr/                  301
+/feed                          /fr/                  301

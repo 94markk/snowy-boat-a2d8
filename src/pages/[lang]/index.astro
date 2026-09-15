@@ -1,0 +1,196 @@
+---
+import ProductCard from "../../components/ProductCard.astro";
+import SearchForm from "../../components/SearchForm.astro";
+import { SITE } from "../../config";
+import { categories, countInCategory, productsInCategory, rankedProducts } from "../../data/catalog";
+import { localeStaticPaths } from "../../i18n/paths";
+import type { Locale } from "../../i18n/ui";
+import { localePath, useTranslations } from "../../i18n/utils";
+import Base from "../../layouts/Base.astro";
+
+export const getStaticPaths = localeStaticPaths;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+
+const ranked = rankedProducts(6);
+/** One rail per category, in the order the current site shows them. */
+const rails = categories.map((category) => ({
+  category,
+  items: productsInCategory(category.id).slice(0, 8),
+}));
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: SITE.name,
+  url: SITE.url,
+  inLanguage: locale,
+};
+---
+
+<Base title={SITE.name} description={t("home.intro")} locale={locale} schema={schema}>
+  <div class="container">
+    <section class="hero">
+      <p class="hero-eyebrow">{t("home.eyebrow")}</p>
+      <h1>
+        {t("home.tagline")}<br />
+        <span class="accent">{t("home.taglineAccent")}</span>
+      </h1>
+      <p>{t("home.intro")}</p>
+
+      <a class="btn btn-primary" href={localePath(locale, "shop")}>
+        {t("home.cta")}
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 12h13m-5.5-5.5L19 12l-6.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+      </a>
+
+      <div class="hero-trust">
+        <div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M13 3 5 13.5h5.5L11 21l8-10.5h-5.5L13 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+          </svg>
+          {t("home.trust.fast")}
+        </div>
+        <div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 3.2 19 6v5.4c0 4.1-2.9 7.5-7 8.4-4.1-.9-7-4.3-7-8.4V6l7-2.8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+            <path d="m9 12 2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+          </svg>
+          {t("home.trust.secure")}
+        </div>
+        <div>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M5 13a7 7 0 0 1 14 0M4 13h2.5v5H5.5A1.5 1.5 0 0 1 4 16.5V13Zm16 0h-2.5v5h1A1.5 1.5 0 0 0 20 16.5V13Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+          </svg>
+          {t("home.trust.support")}
+        </div>
+      </div>
+
+      <SearchForm locale={locale} />
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-head-text">
+          <p class="section-label">{t("home.categoriesLabel")}</p>
+          <h2 class="section-title">{t("home.categories")}</h2>
+        </div>
+      </div>
+
+      <div class="category-grid">
+        {
+          categories.map((category) => (
+            <a class="category-tile" href={localePath(locale, `shop/c/${category.slug}`)}>
+              <span class="category-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d={category.icon} stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" />
+                </svg>
+              </span>
+              <span>
+                <b>{category.name[locale]}</b>
+                <span>
+                  {`${countInCategory(category.id)} ${countInCategory(category.id) === 1 ? t("shop.product") : t("shop.products")}`}
+                </span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+
+    {
+      ranked.length > 0 && (
+        <section class="section">
+          <div class="section-head">
+            <div class="section-head-text">
+              <p class="section-label">{t("home.rankingLabel")}</p>
+              <h2 class="section-title">{t("home.ranking")}</h2>
+              <p class="section-blurb">{t("home.rankingBlurb")}</p>
+            </div>
+            <a class="see-all" href={localePath(locale, "shop")}>
+              {t("home.viewAll")} →
+            </a>
+          </div>
+
+          <div class="product-rail">
+            {ranked.map((product, index) => (
+              <ProductCard product={product} locale={locale} showRank eager={index < 2} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      rails.map(({ category, items }) =>
+        items.length === 0 ? null : (
+          <section class="section">
+            <div class="section-head">
+              <div class="section-head-text">
+                <h2 class="section-title">{category.name[locale]}</h2>
+                <p class="section-blurb">{category.blurb[locale]}</p>
+              </div>
+              <a class="see-all" href={localePath(locale, `shop/c/${category.slug}`)}>
+                {t("home.viewAll")} →
+              </a>
+            </div>
+
+            <div class="product-rail">
+              {items.map((product) => (
+                <ProductCard product={product} locale={locale} />
+              ))}
+            </div>
+          </section>
+        ),
+      )
+    }
+
+    <section class="section">
+      <div class="section-head">
+        <div class="section-head-text">
+          <p class="section-label">{t("home.howEyebrow")}</p>
+          <h2 class="section-title">{t("home.howTitle")}</h2>
+          <p class="section-blurb">{t("home.howBlurb")}</p>
+        </div>
+      </div>
+
+      <ol class="steps">
+        <li class="step">
+          <span class="step-index" aria-hidden="true">01</span>
+          <span class="step-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M4 9h16v10.5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9ZM3 5.5h18L20 9H4L3 5.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+            </svg>
+          </span>
+          <h3>{t("home.step1Title")}</h3>
+          <p>{t("home.step1Body")}</p>
+        </li>
+
+        <li class="step">
+          <span class="step-index" aria-hidden="true">02</span>
+          <span class="step-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="6" width="18" height="12.5" rx="2.5" stroke="currentColor" stroke-width="1.8"></rect>
+              <path d="M3 10.5h18" stroke="currentColor" stroke-width="1.8"></path>
+            </svg>
+          </span>
+          <h3>{t("home.step2Title")}</h3>
+          <p>{t("home.step2Body")}</p>
+        </li>
+
+        <li class="step">
+          <span class="step-index" aria-hidden="true">03</span>
+          <span class="step-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M13 3 5 13.5h5.5L11 21l8-10.5h-5.5L13 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+            </svg>
+          </span>
+          <h3>{t("home.step3Title")}</h3>
+          <p>{t("home.step3Body")}</p>
+        </li>
+      </ol>
+    </section>
+  </div>
+</Base>

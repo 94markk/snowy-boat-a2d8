@@ -1,60 +1,76 @@
-# Astro Starter Kit: Blog
+# Delicat Store Haiti
 
-![Astro Template Preview](https://github.com/withastro/astro/assets/2244813/ff10799f-a816-4703-b967-c78997e8323d)
+Digital goods storefront for [delicastoreha.com](https://delicastoreha.com):
+game top-ups, gift cards, streaming subscriptions and exchange services, priced
+in gourdes and paid for from a wallet funded by MonCash or NatCash.
 
-<!-- dash-content-start -->
+Trilingual — French, English and Haitian Creole.
 
-Create a blog with Astro and deploy it on Cloudflare Workers as a [static website](https://developers.cloudflare.com/workers/static-assets/).
+## Stack
 
-Features:
+| Layer | Choice | Why |
+| --- | --- | --- |
+| Pages | [Astro](https://astro.build) | Ships almost no JavaScript; product pages are static HTML served from the edge. |
+| Hosting | Cloudflare Workers | Runs in Cloudflare's network, close to Haiti. No server to patch. |
+| Database | Cloudflare D1 (SQLite) | Same platform as the Worker, so no cross-network latency per query. |
+| Payments | MonCash / NatCash via SMS matching | Stripe does not operate in Haiti and cannot charge in gourdes. |
 
-- ✅ Minimal styling (make it your own!)
-- ✅ 100/100 Lighthouse performance
-- ✅ SEO-friendly with canonical URLs and OpenGraph data
-- ✅ Sitemap support
-- ✅ RSS Feed support
-- ✅ Markdown & MDX support
+Only four routes need a request at all — cart, wallet, account and search, plus
+the API endpoints. Everything else is pre-rendered.
 
-<!-- dash-content-end -->
-
-## Getting Started
-
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
+## Getting started
 
 ```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/snowy-boat-a2d8
+npm install
+npx wrangler d1 migrations apply delicastoreha --local
+npm run dev
 ```
 
-A live public deployment of this template is available at [https://snowy-boat-a2d8.templates.workers.dev](https://snowy-boat-a2d8.templates.workers.dev)
+Then open http://localhost:4321.
 
-## 🚀 Project Structure
+For deployment, the SMS forwarder contract and the domain cutover, see
+**[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## How it fits together
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+```
+src/
+  config.ts              Site details, currency, payment numbers, limits
+  data/
+    catalog.ts           Products, denominations and prices — the one source of truth
+    legal.ts             Terms and privacy copy, in all three languages
+  i18n/                  Locale routing and the full string table
+  lib/
+    auth.ts              Password hashing, sessions, login throttling
+    wallet.ts            The append-only ledger
+    orders.ts            Pricing, payment and fulfilment
+    payments/            SMS parsing and matching to pending top-ups
+    suppliers/           Distributor adapters (one stub today)
+  middleware.ts          Attaches the signed-in user; sets security headers
+  pages/
+    [lang]/              The site, rendered once per locale
+    api/                 Auth, wallet top-up, orders, SMS webhook
+db/migrations/           Database schema
+tests/                   Unit tests and a full browser run
+```
 
-The `src/content/` directory contains "collections" of related Markdown and MDX documents. Use `getCollection()` to retrieve posts from `src/content/blog/`, and type-check your frontmatter using an optional schema. See [Astro's Content Collections docs](https://docs.astro.build/en/guides/content-collections/) to learn more.
+## The two rules worth knowing
 
-Any static assets, like images, can be placed in the `public/` directory.
+**Prices are never taken from the browser.** The cart holds variant ids and
+quantities; `src/lib/orders.ts` looks up what each one costs and charges that.
+A tampered cart changes nothing.
 
-## 🧞 Commands
+**The wallet is a ledger, not a number.** Every movement is a row that is written
+once and never edited; a correction is a new row with the opposite sign. The
+balance column is a cache, written in the same transaction as the row, and
+`reconcile()` can prove the two agree at any time.
 
-All commands are run from the root of the project, from a terminal:
+## Tests
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-| `npm run deploy`          | Deploy your production site to Cloudflare        |
+```bash
+npm test         # wallet, order pricing, SMS parsing and matching, i18n parity
+npm run test:e2e # register → top up → forwarded SMS → wallet credited → buy
+```
 
-## 👀 Want to learn more?
-
-Check out [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
-
-## Credit
-
-This theme is based off of the lovely [Bear Blog](https://github.com/HermanMartinus/bearblog/).
+The end-to-end run needs `npm run dev` going in another terminal. It drives a
+real browser and fails on any console error or CSP violation.

@@ -1,0 +1,44 @@
+---
+import ProductCard from "../../../components/ProductCard.astro";
+import SearchForm from "../../../components/SearchForm.astro";
+import { searchProducts } from "../../../data/catalog";
+import type { Locale } from "../../../i18n/ui";
+import { useTranslations } from "../../../i18n/utils";
+import Base from "../../../layouts/Base.astro";
+
+/** Rendered on demand: the query string decides the result. */
+export const prerender = false;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+
+const query = (Astro.url.searchParams.get("q") ?? "").slice(0, 60);
+const results = searchProducts(query, locale);
+---
+
+<Base title={t("shop.searchTitle")} description={t("shop.searchTitle")} locale={locale} noindex>
+  <div class="container section">
+    <h1>{t("shop.searchTitle")}</h1>
+    <SearchForm locale={locale} value={query} />
+
+    <div class="spacer"></div>
+
+    {
+      results.length === 0 ? (
+        <p class="lead">{t("shop.noResults")}</p>
+      ) : (
+        <div class="product-grid">
+          {results.map((product, index) => (
+            <ProductCard product={product} locale={locale} eager={index < 4} />
+          ))}
+        </div>
+      )
+    }
+  </div>
+</Base>
+
+<style>
+  .spacer {
+    height: 1.5rem;
+  }
+</style>

@@ -1,0 +1,35 @@
+---
+import type { Locale } from "../i18n/ui";
+import { localePath, useTranslations } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+  value?: string;
+}
+
+const { locale, value = "" } = Astro.props;
+const t = useTranslations(locale);
+---
+
+{/* A plain GET form, so search works with JavaScript disabled and the result
+    page is linkable. */}
+<form class="search-form" role="search" action={localePath(locale, "shop/search")} method="get">
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.9"></circle>
+    <path d="m16 16 4 4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"></path>
+  </svg>
+  <input
+    type="search"
+    name="q"
+    value={value}
+    placeholder={t("nav.search")}
+    aria-label={t("nav.search")}
+    maxlength="60"
+    autocomplete="off"
+  />
+  <button type="submit" aria-label={t("nav.search")}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M5 12h13m-5.5-5.5L19 12l-6.5 5.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
+    </svg>
+  </button>
+</form>

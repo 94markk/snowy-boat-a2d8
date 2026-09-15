@@ -1,0 +1,374 @@
+---
+import type { Locale } from "../../../i18n/ui";
+import { formatDate, formatMoney, localePath, useTranslations } from "../../../i18n/utils";
+import Base from "../../../layouts/Base.astro";
+
+export const prerender = false;
+
+const locale = Astro.params.lang as Locale;
+const t = useTranslations(locale);
+const user = Astro.locals.user;
+const db = Astro.locals.runtime?.env?.DB as D1Database | undefined;
+
+/** Reference of an order just placed, so it can be highlighted. */
+const justPlaced = Astro.url.searchParams.get("order");
+
+interface OrderRow {
+  reference: string;
+  status: string;
+  total_centimes: number;
+  created_at: number;
+  lines: { label: string; qty: number; fulfilment_status: string; delivered_payload: string | null }[];
+}
+
+let orders: OrderRow[] = [];
+
+if (user && db) {
+  const { results } = await db
+    .prepare(
+      `SELECT id, reference, status, total_centimes, created_at
+         FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`,
+    )
+    .bind(user.id)
+    .all<any>();
+
+  for (const order of results ?? []) {
+    const { results: lines } = await db
+      .prepare(
+        `SELECT label, qty, fulfilment_status, delivered_payload
+           FROM order_lines WHERE order_id = ?`,
+      )
+      .bind(order.id)
+      .all<any>();
+    orders.push({ ...order, lines: lines ?? [] });
+  }
+}
+
+const statusLabel = (status: string) =>
+  ({
+    pending: t("status.pending"),
+    paid: t("status.paid"),
+    fulfilling: t("status.fulfilling"),
+    delivered: t("status.delivered"),
+    failed: t("status.failed"),
+    refunded: t("status.refunded"),
+  })[status] ?? status;
+---
+
+<Base title={t("account.title")} description={t("account.title")} locale={locale} noindex>
+  <div class="container section">
+    {
+      !user ? (
+        <div class="form-card" data-auth-card data-locale={locale} data-redirect={localePath(locale, "account")}>
+          <h1 data-auth-title>{t("account.signIn")}</h1>
+
+          <p class="form-alert" data-tone="error" data-auth-error hidden />
+
+          <form data-auth-form>
+            <label class="field">
+              <span>{t("account.email")}</span>
+              <input type="email" name="email" autocomplete="email" required maxlength="120" />
+            </label>
+
+            <label class="field">
+              <span>{t("account.password")}</span>
+              <input
+                type="password"
+                name="password"
+                autocomplete="current-password"
+                required
+                minlength="10"
+                maxlength="200"
+              />
+              <span class="field-help" data-password-hint hidden>
+                {t("account.passwordHint")}
+              </span>
+            </label>
+
+            <label class="field" data-phone-field hidden>
+              <span>{t("account.phone")}</span>
+              <input type="tel" name="phone" autocomplete="tel" maxlength="20" />
+            </label>
+
+            <button class="btn btn-primary btn-block" type="submit" data-auth-submit>
+              {t("account.signIn")}
+            </button>
+          </form>
+
+          <p class="form-switch">
+            <span data-switch-text>{t("account.noAccount")}</span>
+            <button class="link-button" type="button" data-auth-toggle>
+              {t("account.signUp")}
+            </button>
+          </p>
+
+          <template
+            data-auth-strings
+            data-sign-in={t("account.signIn")}
+            data-sign-up={t("account.signUp")}
+            data-no-account={t("account.noAccount")}
+            data-has-account={t("account.hasAccount")}
+            data-error-invalid={t("account.errorInvalid")}
+            data-error-taken={t("account.errorTaken")}
+            data-error-locked={t("account.errorLocked")}
+            data-error-generic={t("account.errorGeneric")}
+            data-error-password={t("account.errorShortPassword")}
+            data-error-email={t("account.errorEmail")}
+            data-error-phone={t("account.errorPhone")}
+          ></template>
+        </div>
+      ) : (
+        <>
+          <div class="account-head">
+            <div>
+              <h1>{t("account.title")}</h1>
+              <p class="lead">{user.email}</p>
+            </div>
+            <button class="btn btn-ghost" type="button" data-sign-out>
+              {t("account.signOut")}
+            </button>
+          </div>
+
+          <p class="balance-line">
+            {t("cart.balance")}: <strong>{formatMoney(user.balanceCentimes, locale)}</strong>
+            <a href={localePath(locale, "wallet")}>{t("wallet.topUp")} →</a>
+          </p>
+
+          {justPlaced && (
+            <p class="form-alert" data-tone="success">
+              {t("account.orderRef")}: {justPlaced}
+            </p>
+          )}
+
+          <h2 class="section-title">{t("account.orders")}</h2>
+
+          {orders.length === 0 ? (
+            <p class="lead">{t("account.noOrders")}</p>
+          ) : (
+            <div class="orders">
+              {orders.map((order) => (
+                <article class="order-card">
+                  <header>
+                    <div>
+                      <b>{order.reference}</b>
+                      <span>{formatDate(order.created_at, locale)}</span>
+                    </div>
+                    <div class="order-card-right">
+                      <span class="status-pill" data-status={order.status}>
+                        {statusLabel(order.status)}
+                      </span>
+                      <b>{formatMoney(order.total_centimes, locale)}</b>
+                    </div>
+                  </header>
+
+                  <ul>
+                    {order.lines.map((line) => (
+                      <li>
+                        <span>
+                          {line.label}
+                          {line.qty > 1 ? ` × ${line.qty}` : ""}
+                        </span>
+                        {line.delivered_payload ? (
+                          <code class="delivered-code">{line.delivered_payload}</code>
+                        ) : (
+                          <span class="status-pill" data-status={line.fulfilment_status}>
+                            {statusLabel(line.fulfilment_status)}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+          )}
+        </>
+      )
+    }
+  </div>
+</Base>
+
+<script>
+  /* ---------------------------------------------------------------------- */
+  /* Sign out                                                                */
+  /* ---------------------------------------------------------------------- */
+
+  document.querySelector<HTMLButtonElement>("[data-sign-out]")?.addEventListener("click", async () => {
+    await fetch("/api/auth/logout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    });
+    window.location.reload();
+  });
+
+  /* ---------------------------------------------------------------------- */
+  /* Sign in / register                                                      */
+  /* ---------------------------------------------------------------------- */
+
+  const card = document.querySelector<HTMLElement>("[data-auth-card]");
+
+  if (card) {
+    const strings = card.querySelector<HTMLTemplateElement>("[data-auth-strings]")!.dataset;
+    const form = card.querySelector<HTMLFormElement>("[data-auth-form]")!;
+    const title = card.querySelector<HTMLElement>("[data-auth-title]")!;
+    const submit = card.querySelector<HTMLButtonElement>("[data-auth-submit]")!;
+    const toggle = card.querySelector<HTMLButtonElement>("[data-auth-toggle]")!;
+    const switchText = card.querySelector<HTMLElement>("[data-switch-text]")!;
+    const errorBox = card.querySelector<HTMLElement>("[data-auth-error]")!;
+    const phoneField = card.querySelector<HTMLElement>("[data-phone-field]")!;
+    const passwordHint = card.querySelector<HTMLElement>("[data-password-hint]")!;
+    const passwordInput = form.elements.namedItem("password") as HTMLInputElement;
+
+    let mode: "login" | "register" = "login";
+
+    function applyMode() {
+      const registering = mode === "register";
+      title.textContent = registering ? strings.signUp! : strings.signIn!;
+      submit.textContent = registering ? strings.signUp! : strings.signIn!;
+      toggle.textContent = registering ? strings.signIn! : strings.signUp!;
+      switchText.textContent = registering ? strings.hasAccount! : strings.noAccount!;
+      phoneField.hidden = !registering;
+      passwordHint.hidden = !registering;
+      passwordInput.autocomplete = registering ? "new-password" : "current-password";
+      errorBox.hidden = true;
+    }
+
+    toggle.addEventListener("click", () => {
+      mode = mode === "login" ? "register" : "login";
+      applyMode();
+    });
+
+    /** Maps an API error code to a message the customer can act on. */
+    function messageFor(code: string | undefined): string {
+      switch (code) {
+        case "invalid_credentials":
+          return strings.errorInvalid!;
+        case "email_taken":
+          return strings.errorTaken!;
+        case "locked_out":
+        case "rate_limited":
+          return strings.errorLocked!;
+        case "too_short":
+        case "too_long":
+          return strings.errorPassword!;
+        case "invalid_email":
+          return strings.errorEmail!;
+        case "invalid_phone":
+          return strings.errorPhone!;
+        default:
+          return strings.errorGeneric!;
+      }
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!form.reportValidity()) return;
+
+      submit.disabled = true;
+      errorBox.hidden = true;
+
+      const data = new FormData(form);
+      const payload: Record<string, string> = {
+        email: String(data.get("email") ?? ""),
+        password: String(data.get("password") ?? ""),
+        locale: card.dataset.locale ?? "fr",
+      };
+      const phone = String(data.get("phone") ?? "").trim();
+      if (mode === "register" && phone) payload.phone = phone;
+
+      try {
+        const response = await fetch(`/api/auth/${mode === "login" ? "login" : "register"}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const result = (await response.json()) as { ok?: boolean; error?: string };
+
+        if (!response.ok || !result.ok) {
+          errorBox.textContent = messageFor(result.error);
+          errorBox.hidden = false;
+          submit.disabled = false;
+          return;
+        }
+
+        window.location.assign(card.dataset.redirect ?? "/");
+      } catch {
+        errorBox.textContent = strings.errorGeneric!;
+        errorBox.hidden = false;
+        submit.disabled = false;
+      }
+    });
+
+    applyMode();
+  }
+</script>
+
+<style>
+  .account-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+
+  .balance-line {
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+  }
+
+  .orders {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+
+  .order-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    padding: 1rem 1.15rem;
+  }
+
+  .order-card header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .order-card header span {
+    display: block;
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+  }
+
+  .order-card-right {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .order-card ul {
+    list-style: none;
+    padding: 0;
+    margin-top: 0.75rem;
+    display: grid;
+    gap: 0.6rem;
+  }
+
+  .order-card li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 0.9375rem;
+  }
+</style>

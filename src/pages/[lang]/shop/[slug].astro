@@ -1,0 +1,263 @@
+---
+import ProductCard from "../../../components/ProductCard.astro";
+import { CURRENCY, SITE } from "../../../config";
+import { getCategory, products, startingPrice } from "../../../data/catalog";
+import { LOCALES, type Locale } from "../../../i18n/ui";
+import { formatMoney, localePath, useTranslations } from "../../../i18n/utils";
+import Base from "../../../layouts/Base.astro";
+
+/** One page per locale × product. */
+export function getStaticPaths() {
+  return LOCALES.flatMap((lang) =>
+    products.map((product) => ({
+      params: { lang, slug: product.slug },
+      props: { productId: product.id },
+    })),
+  );
+}
+
+const locale = Astro.params.lang as Locale;
+const { productId } = Astro.props;
+const t = useTranslations(locale);
+
+const product = products.find((p) => p.id === productId)!;
+const category = getCategory(product.category);
+const related = products
+  .filter((p) => p.category === product.category && p.id !== product.id)
+  .slice(0, 4);
+
+const available = product.variants.filter((v) => v.available);
+const firstAvailable = available[0];
+
+const schema = {
+  "@context": "https://schema.org",
+  "@type": "Product",
+  name: `${product.name}${product.region ? ` (${product.region})` : ""}`,
+  description: product.description[locale],
+  sku: product.id,
+  image: new URL(product.image, SITE.url).href,
+  brand: { "@type": "Brand", name: product.name },
+  offers: {
+    "@type": "AggregateOffer",
+    priceCurrency: CURRENCY.code,
+    lowPrice: (startingPrice(product) / CURRENCY.minorUnits).toFixed(2),
+    highPrice: (
+      Math.max(...product.variants.map((v) => v.priceCentimes)) / CURRENCY.minorUnits
+    ).toFixed(2),
+    offerCount: product.variants.length,
+    availability:
+      available.length > 0 ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
+    url: new URL(localePath(locale, `shop/${product.slug}`), SITE.url).href,
+  },
+};
+---
+
+<Base
+  title={`${product.name}${product.region ? ` (${product.region})` : ""}`}
+  description={product.short[locale]}
+  locale={locale}
+  image={product.image}
+  schema={schema}
+>
+  <div class="container section">
+    <p class="breadcrumb">
+      <a href={localePath(locale, "shop")}>{t("shop.title")}</a>
+      {category && <> / <a href={localePath(locale, `shop/c/${category.slug}`)}>{category.name[locale]}</a></>}
+    </p>
+
+    <div class="product-layout">
+      <div class="product-hero">
+        <img
+          src={product.image}
+          alt={product.name}
+          width="640"
+          height="640"
+          fetchpriority="high"
+          decoding="async"
+        />
+      </div>
+
+      <div class="product-detail">
+        {product.region && <p class="product-region">{product.region}</p>}
+        <h1>{product.name}</h1>
+        <p class="lead">{product.short[locale]}</p>
+
+        <p class="fulfilment-note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M13 3 5 13.5h5.5L11 21l8-10.5h-5.5L13 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+          </svg>
+          {product.fulfilment === "supplier_api" ? t("product.instant") : t("product.manual")}
+        </p>
+
+        {
+          available.length === 0 ? (
+            <p class="form-alert" data-tone="error">
+              {t("product.unavailable")}
+            </p>
+          ) : (
+            <form data-buy-form data-product={product.id}>
+              <fieldset class="fieldset">
+                <legend>{t("product.choosePack")}</legend>
+                <div class="variant-grid">
+                  {product.variants.map((variant) => (
+                    <label class="variant">
+                      <input
+                        type="radio"
+                        name="variant"
+                        value={variant.id}
+                        disabled={!variant.available}
+                        checked={variant.id === firstAvailable?.id}
+                        required
+                      />
+                      <span class="variant-body">
+                        <span class="variant-label">{variant.label[locale]}</span>
+                        <span class="variant-price">{formatMoney(variant.priceCentimes, locale)}</span>
+                        {variant.compareAtCentimes && (
+                          <span class="variant-compare">
+                            {formatMoney(variant.compareAtCentimes, locale)}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
+              {
+                (product.requiredFields ?? []).length > 0 && (
+                  <fieldset class="fieldset">
+                    <legend>{t("product.yourDetails")}</legend>
+                    {(product.requiredFields ?? []).map((field) => (
+                      <label class="field">
+                        <span>{field.label[locale]}</span>
+                        <input
+                          type={field.inputMode === "email" ? "email" : "text"}
+                          name={field.name}
+                          inputmode={field.inputMode}
+                          pattern={field.pattern}
+                          maxlength={field.maxLength}
+                          autocomplete="off"
+                          required
+                        />
+                        {field.help && <span class="field-help">{field.help[locale]}</span>}
+                      </label>
+                    ))}
+                  </fieldset>
+                )
+              }
+
+              <button
+                class="btn btn-primary btn-block"
+                type="submit"
+                data-label-idle={t("product.addToCart")}
+                data-label-added={t("product.added")}
+              >
+                {t("product.addToCart")}
+              </button>
+            </form>
+          )
+        }
+
+        <div class="description">
+          <h2>{t("product.description")}</h2>
+          <p>{product.description[locale]}</p>
+        </div>
+      </div>
+    </div>
+
+    {
+      related.length > 0 && (
+        <section class="related">
+          <h2 class="section-title">{t("product.related")}</h2>
+          <div class="product-rail">
+            {related.map((item) => (
+              <ProductCard product={item} locale={locale} />
+            ))}
+          </div>
+        </section>
+      )
+    }
+  </div>
+</Base>
+
+<script>
+  import { addToCart } from "../../../lib/cart";
+
+  const form = document.querySelector<HTMLFormElement>("[data-buy-form]");
+  const button = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+
+  form?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+
+    const data = new FormData(form);
+    const variantId = String(data.get("variant") ?? "");
+    if (!variantId) return;
+
+    // Everything except the variant is a customer-supplied field.
+    const fields: Record<string, string> = {};
+    for (const [name, value] of data.entries()) {
+      if (name !== "variant" && typeof value === "string") fields[name] = value.trim();
+    }
+
+    addToCart(variantId, fields, 1);
+
+    if (!button) return;
+    const idle = button.dataset.labelIdle ?? "";
+    button.textContent = button.dataset.labelAdded ?? "";
+    button.disabled = true;
+    window.setTimeout(() => {
+      button.textContent = idle;
+      button.disabled = false;
+    }, 1400);
+  });
+</script>
+
+<style>
+  .breadcrumb {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-bottom: 1.25rem;
+  }
+
+  .breadcrumb a {
+    color: var(--text-muted);
+  }
+
+  .fulfilment-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.75rem;
+    padding: 0.35rem 0.8rem;
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    color: var(--text-muted);
+    font-size: 0.8125rem;
+    font-weight: 700;
+  }
+
+  .description {
+    margin-top: 2rem;
+  }
+
+  .description h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-faint);
+    margin-bottom: 0.5rem;
+  }
+
+  .description p {
+    color: var(--text-muted);
+  }
+
+  .related {
+    margin-top: clamp(2.5rem, 2rem + 3vw, 4rem);
+  }
+
+  .related h2 {
+    margin-bottom: 1.25rem;
+  }
+</style>
