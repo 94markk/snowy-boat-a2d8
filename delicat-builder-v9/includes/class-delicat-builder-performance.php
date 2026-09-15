@@ -16,6 +16,24 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Delicat_Builder_V9_Performance {
 	public const OPTION = 'delicat_builder_v9_performance';
 
+	/**
+	 * Smallest inline critical-CSS budget that still works.
+	 *
+	 * critical_css() appends whole files and skips any that would cross the
+	 * budget, so a budget slightly too small does not trim the tail -- it drops
+	 * an entire route stylesheet and says nothing. At the old 7000 floor the
+	 * archive lost exactly that: shell minifies to 5309 bytes and woo-archive to
+	 * 2246, so the 7555-byte pair overflowed and the archive sheet was dropped
+	 * on every shop and category page. That sheet is what carries
+	 * `display:grid` and grid-template-columns, so archives painted in
+	 * WooCommerce's float layout and snapped into a grid only once woo-ui.css
+	 * arrived. Product pages lost purchase-single the same way (7344).
+	 *
+	 * 8000 clears the largest route with room to spare. tests/test-critical-budget.php
+	 * fails if any route's sheets stop fitting.
+	 */
+	public const MIN_CRITICAL_BYTES = 8000;
+
 	private static ?array $settings_cache = null;
 	private static int $builder_page_id = 0;
 	private static array $layout = array();
@@ -51,7 +69,7 @@ final class Delicat_Builder_V9_Performance {
 		return array(
 			'enabled'                  => 1,
 			'critical_css'             => 1,
-			'critical_max_bytes'       => 7000,
+			'critical_max_bytes'       => 10000,
 			'high_confidence_preloads' => 1,
 			'predictive_navigation'    => 1,
 			'intent_delay_ms'          => 140,
@@ -87,7 +105,7 @@ final class Delicat_Builder_V9_Performance {
 		return array(
 			'enabled'                  => 1,
 			'critical_css'             => 1,
-			'critical_max_bytes'       => 7000,
+			'critical_max_bytes'       => 10000,
 			'high_confidence_preloads' => 1,
 			'predictive_navigation'    => 1,
 			'intent_delay_ms'          => 160,
@@ -510,7 +528,7 @@ final class Delicat_Builder_V9_Performance {
 			return '';
 		}
 
-		$budget = min( 20000, max( 4000, absint( self::settings()['critical_max_bytes'] ?? 7000 ) ) );
+		$budget = min( 20000, max( self::MIN_CRITICAL_BYTES, absint( self::settings()['critical_max_bytes'] ?? 10000 ) ) );
 		// Preserve discovery order because CSS cascade order is intentional.
 		$keys = array_values( array_unique( array_map( 'strval', self::$critical_keys ) ) );
 

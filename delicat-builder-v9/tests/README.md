@@ -45,8 +45,30 @@ JSON/no-cache responder.
 It also pins that `shared_document()` still defers to `public_cache_allowed()`
 rather than drifting into a second opinion about what is cacheable.
 
-Both suites exit non-zero on failure, so they can gate a deploy:
+## test-critical-budget.php
+
+`Performance::critical_css()` appends whole stylesheets and skips any that
+would cross the inline byte budget, so a budget slightly too small does not
+trim the tail — it drops an entire route stylesheet, silently, on every request
+for that route.
+
+That is what the old 7000-byte floor did to the archive: shell minifies to 5309
+bytes and woo-archive to 2246, so the pair overflowed by 555 bytes and the
+archive sheet was dropped on every shop and category page. Since it carries
+`display:grid` and `grid-template-columns`, archives painted in WooCommerce's
+float layout and only snapped into a grid once `woo-ui.css` had arrived.
+
+None of that is visible in the code — the budget check reads as a sensible
+guard, and the numbers that make it misfire live in the CSS files. This test
+puts them under assertion, so growing `shell.css`, or adding a sheet to a
+route, fails here instead of quietly costing a route its layout. It reads
+`MIN_CRITICAL_BYTES` from the source rather than hardcoding it, and checks the
+admin input's floor agrees with the runtime clamp.
+
+All three suites exit non-zero on failure, so they can gate a deploy:
 
 ```
-php tests/test-cache-gate.php && php tests/test-shared-document.php
+php tests/test-cache-gate.php \
+  && php tests/test-shared-document.php \
+  && php tests/test-critical-budget.php
 ```

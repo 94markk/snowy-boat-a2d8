@@ -40,7 +40,7 @@ final class Delicat_Builder_V9_Performance_Admin {
 		return array(
 			'enabled'                  => empty( $input['enabled'] ) ? 0 : 1,
 			'critical_css'             => empty( $input['critical_css'] ) ? 0 : 1,
-			'critical_max_bytes'       => min( 20000, max( 4000, absint( $input['critical_max_bytes'] ?? 7000 ) ) ),
+			'critical_max_bytes'       => min( 20000, max( Delicat_Builder_V9_Performance::MIN_CRITICAL_BYTES, absint( $input['critical_max_bytes'] ?? 10000 ) ) ),
 			'high_confidence_preloads' => empty( $input['high_confidence_preloads'] ) ? 0 : 1,
 			'predictive_navigation'    => empty( $input['predictive_navigation'] ) ? 0 : 1,
 			'intent_delay_ms'          => min( 350, max( 40, absint( $input['intent_delay_ms'] ?? 140 ) ) ),
@@ -155,7 +155,7 @@ final class Delicat_Builder_V9_Performance_Admin {
 
 						<div class="delicat-field">
 							<label><strong><?php esc_html_e( 'Critical CSS byte budget', 'delicat-builder-v9' ); ?></strong></label>
-							<input type="number" min="4000" max="20000" step="500" name="<?php echo esc_attr( Delicat_Builder_V9_Performance::OPTION ); ?>[critical_max_bytes]" value="<?php echo esc_attr( (string) $s['critical_max_bytes'] ); ?>">
+							<input type="number" min="8000" max="20000" step="500" name="<?php echo esc_attr( Delicat_Builder_V9_Performance::OPTION ); ?>[critical_max_bytes]" value="<?php echo esc_attr( (string) $s['critical_max_bytes'] ); ?>">
 							<small><?php esc_html_e( '7,000 bytes is recommended for the storefront. Sources that would exceed the cap are skipped rather than bloating the head.', 'delicat-builder-v9' ); ?></small>
 						</div>
 

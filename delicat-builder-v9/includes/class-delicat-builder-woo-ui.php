@@ -19,6 +19,7 @@ final class Delicat_Builder_V9_Woo_UI {
 	private static int $archive_image_index = 0;
 	private static ?array $settings_cache = null;
 	private static ?array $effective_archive_cache = null;
+	private static ?string $archive_sizes_cache = null;
 	private static ?array $effective_single_cache = null;
 
 	public static function boot(): void {
@@ -473,11 +474,57 @@ public static function archive_loop_item_close(): void {
 	self::$inside_archive_product = false;
 }
 
+	/**
+	 * The `sizes` attribute for an archive card image.
+	 *
+	 * This was the fixed string "(max-width:640px) 46vw, (max-width:1024px)
+	 * 31vw, 23vw", which describes the default grid -- 2 columns on a phone, 3
+	 * on a tablet, 4 on desktop -- and only that grid. The columns are settings
+	 * (mobile 1-2, tablet 2-4, desktop 2-6), so any other choice made `sizes` a
+	 * lie and the browser chose the wrong candidate from srcset. A merchant
+	 * setting one column per phone got images declared at 46vw for a slot twice
+	 * that wide, and shipped visibly soft product photos; six desktop columns
+	 * got the opposite, paying for pixels it then threw away.
+	 *
+	 * Derived from the same grid values body_class() uses, so the two cannot
+	 * drift, and shared with preload_archive_image(): if the preload's
+	 * imagesizes disagreed with the img's sizes, the browser would preload one
+	 * candidate and then fetch a different one, downloading the LCP image
+	 * twice.
+	 *
+	 * Breakpoints match the grid tiers in woo-ui.css and
+	 * critical/woo-archive.css (<=640 phone, <=1024 tablet). The subtraction
+	 * covers gutters and page padding; with the default columns the result is
+	 * byte-identical to the string it replaces.
+	 */
+	private static function archive_image_sizes(): string {
+		if ( null !== self::$archive_sizes_cache ) {
+			return self::$archive_sizes_cache;
+		}
+
+		$settings = self::effective_archive_settings();
+		$desktop  = self::grid_value( $settings['grid_desktop'] ?? 4, 2, 6 );
+		$tablet   = self::grid_value( $settings['grid_tablet'] ?? 3, 2, 4 );
+		$mobile   = self::grid_value( $settings['grid_mobile'] ?? 2, 1, 2 );
+
+		$slot = static function ( int $columns, int $gutter ): int {
+			return max( 5, (int) floor( 100 / max( 1, $columns ) ) - $gutter );
+		};
+
+		self::$archive_sizes_cache = sprintf(
+			'(max-width:640px) %1$dvw, (max-width:1024px) %2$dvw, %3$dvw',
+			$slot( $mobile, 4 ),
+			$slot( $tablet, 2 ),
+			$slot( $desktop, 2 )
+		);
+		return self::$archive_sizes_cache;
+	}
+
 public static function archive_image_attributes( $attr, $attachment = null, $size = '' ) {
 	if ( is_array( $attr ) && self::$archive_active && self::$inside_archive_product ) {
 		$index = self::$archive_image_index++;
 		$attr['decoding'] = 'async';
-		$attr['sizes'] = '(max-width:640px) 46vw, (max-width:1024px) 31vw, 23vw';
+		$attr['sizes'] = self::archive_image_sizes();
 
 		if ( 0 === $index ) {
 			$attr['loading'] = 'eager';
@@ -537,7 +584,7 @@ public static function preload_archive_image(): void {
 	?>
 	<link rel="preload" as="image" href="<?php echo esc_url( $url ); ?>" fetchpriority="high"<?php
 	if ( $srcset ) {
-		echo ' imagesrcset="' . esc_attr( $srcset ) . '" imagesizes="(max-width:640px) 46vw, (max-width:1024px) 31vw, 23vw"';
+		echo ' imagesrcset="' . esc_attr( $srcset ) . '" imagesizes="' . esc_attr( self::archive_image_sizes() ) . '"';
 	}
 	?>>
 	<?php
