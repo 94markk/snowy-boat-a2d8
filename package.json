@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250204.0",
+    "vitest": "^2.1.9",
     "wrangler": "3.107.3"
   },
   "scripts": {
@@ -31,7 +32,11 @@
     "deploy": "astro build && wrangler deploy",
     "dev": "astro dev",
     "preview": "astro build && wrangler dev",
-    "types": "wrangler types"
+    "types": "wrangler types",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "backtest": "node --experimental-strip-types scripts/backtest.ts",
+    "watch": "node --experimental-strip-types scripts/watch.ts"
   },
   "type": "module"
 }
