@@ -387,7 +387,16 @@ final class Delicat_Builder_V9_Security {
 		/* A site with its own content-neutral parameters can add them; the
 		 * filter cannot be used to widen the gate to a private key because
 		 * request_has_sensitive_action() is checked independently. */
-		$safe = array_map( 'strtolower', (array) apply_filters( 'delicat_builder_v9_cache_safe_query_keys', $safe ) );
+		$filtered = apply_filters( 'delicat_builder_v9_cache_safe_query_keys', $safe );
+		$safe     = array();
+		foreach ( (array) $filtered as $key ) {
+			/* Coerce defensively: a filter returning nested arrays would make
+			 * strtolower() emit a warning and yield null, and a null entry
+			 * would then match a query key cast to ''. */
+			if ( is_string( $key ) && '' !== $key ) {
+				$safe[] = strtolower( $key );
+			}
+		}
 
 		foreach ( array_keys( (array) $_GET ) as $key ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache gate only.
 			$name = strtolower( (string) $key );

@@ -1,13 +1,13 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-15T08:25:33.000000+00:00",
+    "built": "2026-09-15T08:27:27.000000+00:00",
     "version": "9.2.0-pro.29",
-    "bytes": 5955147,
+    "bytes": 5958237,
     "count": 358,
     "files": {
         "OPTIMIZATION.md": {
-            "bytes": 6310,
-            "sha256": "cbf51fedecf64e30f7881e62535cc6a595a7bf98fa5c6d045d6d9d7590965903"
+            "bytes": 9091,
+            "sha256": "e4284d1d88980fab73baa55408a012c47cd60d7520dab358a50ad26c20fe75c8"
         },
         "PRO-README.md": {
             "bytes": 1735,
@@ -1142,8 +1142,8 @@
             "sha256": "025f2819b2e9e60ce0fbf30ae2b4746837f42c09dcc3962e6b223eac8d37bbf5"
         },
         "includes/class-delicat-builder-security.php": {
-            "bytes": 35334,
-            "sha256": "b0f840e04c6f8697c0dd3a7f398879624d6a196efc988ff9a5d711fd00d0d621"
+            "bytes": 35643,
+            "sha256": "2cfd911cb5aebc1086732caa97965607ba6d8cb2e6900867ad7f06576dc1024e"
         },
         "includes/class-delicat-builder-self-test.php": {
             "bytes": 18743,
