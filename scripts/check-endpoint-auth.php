@@ -66,6 +66,12 @@ $AUTH = array(
     'current_user_can', 'is_user_logged_in', 'manage_options',
     'can_manage_global_security', 'require_recent_for_security_change',
     'ajax_mutation_allowed', 'rest_auth',
+    /* A named capability gate: `if ( ! dipes_admin_capable() ) wp_die(...)` is
+     * the same check as current_user_can(), one indirection away. Reported as
+     * three unprotected endpoints in Identity Pro, all three of which open with
+     * exactly that call followed by check_admin_referer(). A tool that cries
+     * wolf about real code teaches you to ignore it. */
+    '_capable(', '_can(', 'user_can(',
 );
 
 /*

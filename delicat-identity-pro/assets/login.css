@@ -1,0 +1,56 @@
+.dip-login-wrap{margin:16px 0;max-width:520px}.dip-align-left{margin-right:auto}.dip-align-center{margin-left:auto;margin-right:auto}.dip-align-right{margin-left:auto}.dip-align-stretch{max-width:520px}.dip-divider{display:flex;align-items:center;gap:12px;margin:12px 0;color:#7b8190;font-size:12px;text-transform:uppercase;letter-spacing:.08em}.dip-divider:before,.dip-divider:after{content:"";height:1px;background:#e5e7eb;flex:1}.dip-google-button{display:flex;align-items:center;justify-content:center;gap:10px;width:var(--dip-width,100%);min-height:var(--dip-height,50px);padding:0 18px;border:1px solid var(--dip-border,#d9dde5);border-radius:var(--dip-radius,14px);font-size:var(--dip-font,15px);font-weight:var(--dip-weight,700);text-decoration:none!important;box-sizing:border-box;transition:transform .18s ease,box-shadow .18s ease,filter .18s ease}.dip-align-center .dip-google-button{margin-left:auto;margin-right:auto}.dip-align-right .dip-google-button{margin-left:auto}.dip-theme-light{background:#fff;color:#1f2937!important}.dip-theme-dark{background:#15171a;color:#fff!important;border-color:#31353b}.dip-theme-brand{background:#1a73e8;color:#fff!important;border-color:#1a73e8}.dip-theme-custom{background:var(--dip-bg)!important;color:var(--dip-color)!important;border-color:var(--dip-border)!important}.dip-shadow-none{box-shadow:none}.dip-shadow-soft{box-shadow:0 8px 24px rgba(15,23,42,.08)}.dip-shadow-strong{box-shadow:0 14px 34px rgba(15,23,42,.18)}.dip-motion-lift:hover{transform:translateY(-2px);filter:brightness(1.02)}.dip-motion-pulse:hover{animation:dipPulse 1.2s ease-in-out infinite}.dip-google-button:focus-visible{outline:3px solid rgba(26,115,232,.3);outline-offset:3px}.dip-g{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#fff;color:#4285f4;font:800 16px Arial;box-shadow:inset 0 0 0 1px #e5e7eb}.login .dip-login-wrap{margin:18px 24px 0;width:auto}.dip-checkout-login .dip-login-wrap{margin:12px 0 0}.dip-connected-account{padding:20px;border:1px solid rgba(127,127,127,.25);border-radius:16px}.dip-connected-account img{margin-bottom:10px}.dip-connected-account form{margin-top:14px}@keyframes dipPulse{50%{transform:scale(1.018)}}@media(prefers-reduced-motion:reduce){.dip-google-button{transition:none!important;animation:none!important}.dip-google-button:hover{transform:none!important}}@media(max-width:600px){.dip-mobile-full,.dip-mobile-full .dip-google-button{width:100%;max-width:none}.dip-mobile-full .dip-google-button{--dip-width:100%}}
+
+
+/* Native account link/panel integration; the isolated modal is provided by identity-modal-v3.css/js. */
+.dip-native-account-button,
+.dip-native-login-link {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-height:46px;
+  padding:11px 20px;
+  border:1px solid var(--dip-border,#d9dde5);
+  border-radius:var(--dip-radius,14px);
+  background:var(--dip-bg,#fff);
+  color:var(--dip-color,#1f2937);
+  font-size:var(--dip-font,15px);
+  font-weight:var(--dip-weight,700);
+  line-height:1.2;
+  text-decoration:none!important;
+  box-sizing:border-box;
+  transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;
+}
+.dip-native-account-button:hover,
+.dip-native-login-link:hover {transform:translateY(-1px);box-shadow:0 8px 22px rgba(15,23,42,.12)}
+.dip-native-login-panel{max-width:520px;padding:22px;border:1px solid #e5e7eb;border-radius:18px;background:#fff;box-shadow:0 12px 32px rgba(15,23,42,.08)}
+.dip-native-login-panel h3{margin:0 0 16px;font-size:20px;line-height:1.3;color:#111827}
+.dip-native-login-panel .dip-native-login-link{width:100%;margin-top:12px;background:#f8fafc}
+.dip-native-login-panel .dip-login-wrap{margin:10px 0}
+@media (max-width:600px){.dip-native-account-button,.dip-native-login-panel{width:100%}.dip-native-login-panel{padding:18px}}
+@media (prefers-reduced-motion:reduce){.dip-native-account-button,.dip-native-login-link{transition:none}.dip-native-account-button:hover,.dip-native-login-link:hover{transform:none}}
+.dip-layout-icon .dip-google-button{width:48px!important;min-width:48px;height:48px;padding:0!important;justify-content:center;border-radius:50%!important}
+.dip-layout-icon .dip-google-button>span:last-child{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+.dip-comment-social,.dip-lost-password-social{margin:16px 0;padding:14px;border:1px solid #e5e7eb;border-radius:14px;background:#fff}
+.dip-shortcode-buttons{display:flex;gap:10px;flex-wrap:wrap}.dip-shortcode-buttons.dip-layout-wide{display:block}
+
+
+/* Phase 2 — connected accounts */
+.dip-connected-accounts{max-width:720px;margin:20px 0;padding:20px;border:1px solid rgba(148,163,184,.28);border-radius:20px;background:var(--dip-bg,#fff);box-shadow:0 12px 32px rgba(15,23,42,.08)}
+.dip-connected-head h3{margin:0 0 4px;font-size:20px}.dip-connected-head p{margin:0 0 16px;color:#64748b}.dip-connected-list{display:grid;gap:10px}.dip-connected-row{display:flex;align-items:center;gap:12px;padding:13px;border:1px solid rgba(148,163,184,.25);border-radius:15px}.dip-provider-mark{width:38px;height:38px;display:grid;place-items:center;border-radius:12px;background:#f1f5f9;font-weight:800}.dip-connected-copy{display:flex;flex:1;flex-direction:column}.dip-connected-copy small{color:#64748b}.dip-connected-row.is-connected .dip-connected-copy small{color:#15803d}.dip-provider-action{padding:9px 12px;border-radius:10px;text-decoration:none;font-weight:700;background:#0f172a;color:#fff}.dip-provider-action.is-danger{background:#fff1f2;color:#be123c}.dip-connected-notice{padding:12px;border-radius:12px;background:#fff7ed;color:#9a3412}@media(max-width:520px){.dip-connected-accounts{padding:14px}.dip-connected-row{align-items:flex-start;flex-wrap:wrap}.dip-provider-action{width:100%;text-align:center}}
+
+/* Unified shortcode layout overrides (6.1.0). */
+.dip-shortcode-buttons.dip-layout-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dip-shortcode-buttons.dip-shortcode-align-left{justify-content:flex-start}
+.dip-shortcode-buttons.dip-shortcode-align-center{justify-content:center}
+.dip-shortcode-buttons.dip-shortcode-align-right{justify-content:flex-end}
+.dip-shortcode-buttons.dip-shortcode-align-stretch{align-items:stretch}
+.dip-shortcode-buttons.dip-layout-row>.dip-login-wrap{margin:0;flex:0 1 auto}
+.dip-shortcode-buttons.dip-layout-row.dip-shortcode-align-stretch>.dip-login-wrap{flex:1 1 220px;max-width:none}
+
+/* 6.2 — POST-safe connected-account actions */
+.dip-provider-inline-form{margin:0 0 0 auto;padding:0;display:inline-flex;align-items:center}
+button.dip-provider-action{border:0;font:inherit;font-weight:700;line-height:1.2;cursor:pointer;-webkit-appearance:none;appearance:none}
+@media(max-width:520px){.dip-provider-inline-form{width:100%;margin-left:0}.dip-provider-inline-form .dip-provider-action{width:100%}}
+
+/* v6.7.0 — optional TOTP field for WordPress/WooCommerce password login */
+.dip-2fa-login-field{margin:14px 0!important}.dip-2fa-login-field label{display:block;margin:0 0 6px;font-size:13px;font-weight:700}.dip-2fa-login-field input{box-sizing:border-box;width:100%;min-height:46px;border-radius:10px}

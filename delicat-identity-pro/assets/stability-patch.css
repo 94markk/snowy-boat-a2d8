@@ -1,0 +1,8 @@
+/* v6.0.2 focused UI and accessibility corrections */
+.dip-auth-box,.dip-auth-card,.dip-security-center,.dip-connected-accounts{box-sizing:border-box}
+.dip-auth-box input,.dip-auth-box select,.dip-auth-box button{font:inherit}
+.dip-auth-box input:focus,.dip-auth-box select:focus{outline:3px solid rgba(37,99,235,.18);outline-offset:1px;border-color:#2563eb}
+.dip-auth-box button:focus-visible,.dip-auth-provider:focus-visible,.dip-auth-primary:focus-visible{outline:3px solid rgba(37,99,235,.32);outline-offset:3px}
+.dip-auth-notice{border:1px solid rgba(37,99,235,.16);color:#17345f}
+@media(max-width:480px){.dip-auth-box{width:auto;max-width:none;margin:12px 0;padding:18px 14px;border-radius:16px}.dip-auth-box input,.dip-auth-box button{min-height:46px}}
+@media(prefers-reduced-motion:reduce){.dip-auth-box *,.dip-auth-card *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
