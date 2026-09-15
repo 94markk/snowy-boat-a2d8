@@ -9,7 +9,18 @@ final class Delicat_Builder_V9_Express_Payment {
   global $wpdb;
   $raw = $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $key ) );
   if ( $wpdb->last_error ) { throw new RuntimeException( 'Vérification du paiement indisponible. Réessayez plus tard.' ); }
-  return null === $raw ? null : maybe_unserialize( $raw );
+  if ( null === $raw ) { return null; }
+  /*
+   * Everything this class stores is an array or a string - never an object. A
+   * serialized object reaching unserialize() is how PHP object injection turns
+   * a database write into code execution, so one is refused outright rather
+   * than trusted because "only we write here". Refusing fails the payment
+   * closed, which is the safe direction.
+   */
+  if ( is_string( $raw ) && preg_match( '/(^|;|{)O:\d+:"/', $raw ) ) {
+   throw new RuntimeException( 'Vérification du paiement indisponible.' );
+  }
+  return maybe_unserialize( $raw );
  }
  private static function invalidate( string $key ): void {
   wp_cache_delete( $key, 'options' );
@@ -38,6 +49,17 @@ final class Delicat_Builder_V9_Express_Payment {
   if ( false === $result || $wpdb->last_error ) { throw new RuntimeException( 'Vérification du paiement requise.' ); }
   return 1 === $result;
  }
+ /**
+  * The customer's connection, not PHP's.
+  *
+  * TLS terminates at the edge on this storefront, so is_ssl() is false on a
+  * site that is https end to end for every customer - and this gate then
+  * refuses every express payment. See the bootstrap helper for why the
+  * forwarded headers are safe to read here and only here.
+  */
+ private static function secure(): bool {
+  return function_exists( 'delicat_builder_v9_request_is_secure' ) ? delicat_builder_v9_request_is_secure() : is_ssl();
+ }
  private static function input( string $name ): string {
   return isset( $_POST[ $name ] ) && is_scalar( $_POST[ $name ] ) ? sanitize_text_field( wp_unslash( (string) $_POST[ $name ] ) ) : '';
  }
@@ -61,7 +83,7 @@ final class Delicat_Builder_V9_Express_Payment {
  }
  private static function credentials(): array {
   $id = self::input( 'delicat_intent' ); $hash = self::input( 'delicat_cart_hash' ); $issued = self::input( 'delicat_issued' );
-  if ( ! is_ssl() || ! is_user_logged_in() || 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) || ! preg_match( '/^[a-f0-9-]{36}$/D', $id ) || ! is_numeric( $issued ) || ! wp_verify_nonce( self::input( 'delicat_intent_nonce' ), 'delicat_pay_' . $id . '_' . $hash . '_' . $issued ) ) {
+  if ( ! self::secure() || ! is_user_logged_in() || 'POST' !== ( $_SERVER['REQUEST_METHOD'] ?? '' ) || ! preg_match( '/^[a-f0-9-]{36}$/D', $id ) || ! is_numeric( $issued ) || ! wp_verify_nonce( self::input( 'delicat_intent_nonce' ), 'delicat_pay_' . $id . '_' . $hash . '_' . $issued ) ) {
    throw new RuntimeException( 'Session expirée. Actualisez la commande avant de continuer.' );
   }
   return array( $id, $hash, $issued );
@@ -71,7 +93,25 @@ final class Delicat_Builder_V9_Express_Payment {
   list( $id, $hash, $issued ) = self::credentials();
   $uid = get_current_user_id(); $keys = self::keys( $uid, $id );
   if ( self::read( $keys['key'] ) ) { throw new RuntimeException( 'Cette demande a déjà été envoyée. Vérifiez vos commandes.' ); }
-  if ( ! self::insert( $keys['active'], $id ) ) { throw new RuntimeException( 'Un paiement est déjà en cours ou à vérifier dans vos commandes.' ); }
+  if ( ! self::insert( $keys['active'], $id ) ) {
+   /*
+    * Someone already holds this customer's guard. Usually that is a payment in
+    * flight and refusing is exactly right. But shutdown() is what releases it,
+    * and shutdown() does not run when PHP is killed outright - a memory limit,
+    * a request timeout, a worker restart. The guard then outlives the request
+    * that took it and the customer cannot check out AT ALL, express or not,
+    * until an administrator notices and releases it by hand.
+    *
+    * So a guard is reclaimed - but only when its own record proves nothing was
+    * charged under it: no order created, creation never begun, and old enough
+    * that no request could still be working on it. Anything that reached order
+    * creation keeps the guard and the reconciliation screen, because a possible
+    * double charge is worse than a customer who has to wait.
+    */
+   if ( ! self::reclaim_abandoned( $keys['active'], $uid ) || ! self::insert( $keys['active'], $id ) ) {
+    throw new RuntimeException( 'Un paiement est déjà en cours ou à vérifier dans vos commandes.' );
+   }
+  }
   try {
    // Everything that decides whether to charge is rechecked AFTER owning the mutex.
    $last = (float) self::read( 'delicat_payment_completed_' . $uid );
@@ -85,6 +125,39 @@ final class Delicat_Builder_V9_Express_Payment {
   } catch ( Throwable $e ) { self::release( $keys['active'], $id ); throw $e; }
   WC()->session->__unset( 'delicat_payment_intent' );
  }
+ /** Seconds before an unfinished, uncharged guard may be reclaimed. */
+ private const ABANDONED_AFTER = 300;
+
+ /**
+  * Release a guard whose request died before anything could be charged.
+  *
+  * Returns true only when the record shows creation never started and no order
+  * exists, and the record is older than ABANDONED_AFTER. Every other state -
+  * including a record that cannot be read - keeps the guard.
+  *
+  * A guard with no record at all is deliberately NOT reclaimed here: nothing
+  * dates it, so it cannot be told apart from one taken a millisecond ago. Those
+  * the reconciliation screen releases, where a human is doing the dating.
+  */
+ private static function reclaim_abandoned( string $active, int $uid ): bool {
+  try {
+   $held = self::read( $active );
+   if ( ! is_string( $held ) || '' === $held ) { return false; }
+
+   $record = self::read( 'delicat_payment_' . $uid . '_' . $held );
+   if ( ! is_array( $record ) ) { return false; }
+
+   if ( ! empty( $record['creating'] ) || ! empty( $record['order_id'] ) ) { return false; }
+   if ( ( time() - (int) ( $record['created'] ?? time() ) ) < self::ABANDONED_AFTER ) { return false; }
+
+   /* Compare-and-swap on the owner, so a guard taken between the read above
+      and here is left alone. */
+   return self::release( $active, $held );
+  } catch ( Throwable $e ) {
+   return false;
+  }
+ }
+
  private static function save( array $record ): void {
   $c = self::$context;
   if ( ! $c || ! self::change( $c['key'], $c['record'], $record ) ) { throw new RuntimeException( 'État du paiement incertain. Consultez vos commandes.' ); }
@@ -219,10 +292,20 @@ add_action( 'admin_post_delicat_reconcile_payment', static function () {
  $id = Delicat_Builder_V9_Express_Payment::read( $active );
  if ( ! is_string( $id ) || ! hash_equals( $id, $submitted ) ) { wp_die( 'Cette protection a changé. Actualisez la page.' ); }
  $record = Delicat_Builder_V9_Express_Payment::read( 'delicat_payment_' . $uid . '_' . $id );
- if ( time() - (int) ( $record['created'] ?? time() ) < 300 ) { wp_die( 'Le traitement est récent. Attendez cinq minutes puis vérifiez son résultat.' ); }
- if ( ! empty( $record['order_id'] ) ) {
-  $order = wc_get_order( $record['order_id'] );
-  if ( $order ) { $order->add_order_note( 'Protection paiement direct libérée après vérification par administrateur #' . get_current_user_id() ); }
+ /*
+  * Only a guard that recorded something can be too recent to judge. Without a
+  * record the request died before it wrote one, so there is no order, no charge
+  * and nothing to wait for - and the age test used to compute time() - time(),
+  * which is zero, which is under five minutes forever: this screen could never
+  * release such a guard, and that customer stayed locked out of checkout for
+  * good.
+  */
+ if ( is_array( $record ) ) {
+  if ( time() - (int) ( $record['created'] ?? time() ) < 300 ) { wp_die( 'Le traitement est récent. Attendez cinq minutes puis vérifiez son résultat.' ); }
+  if ( ! empty( $record['order_id'] ) ) {
+   $order = wc_get_order( $record['order_id'] );
+   if ( $order ) { $order->add_order_note( 'Protection paiement direct libérée après vérification par administrateur #' . get_current_user_id() ); }
+  }
  }
  if ( ! Delicat_Builder_V9_Express_Payment::release( $active, $submitted ) ) { wp_die( 'Cette protection a changé. Actualisez la page.' ); }
  } catch ( Throwable $e ) { wp_die( 'Vérification indisponible. La protection reste en place.' ); }

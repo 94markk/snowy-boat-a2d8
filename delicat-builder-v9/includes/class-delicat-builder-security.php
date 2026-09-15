@@ -93,7 +93,10 @@ final class Delicat_Builder_V9_Security {
 		if ( ! isset( $headers['Permissions-Policy'] ) ) {
 			$headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(), interest-cohort=()';
 		}
-		if ( is_ssl() && ! isset( $headers['Strict-Transport-Security'] ) ) {
+		/* self::request_is_secure(), not is_ssl(): behind Cloudflare/LiteSpeed the
+		 * latter is false on an https site, and HSTS - the one header that keeps a
+		 * browser off plain http - would silently never be sent. */
+		if ( self::request_is_secure() && ! isset( $headers['Strict-Transport-Security'] ) ) {
 			$headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains';
 		}
 		// SAMEORIGIN blocks clickjacking without restricting payment/CDN resources
@@ -106,6 +109,18 @@ final class Delicat_Builder_V9_Security {
 		}
 
 		return $headers;
+	}
+
+	/**
+	 * Is the customer's connection encrypted, whatever PHP was reached over?
+	 *
+	 * Thin accessor for the bootstrap helper so every caller in this file, and
+	 * the Pro header layer, asks one question one way. Falls back to is_ssl()
+	 * if the helper is ever missing: this file runs on every request and a
+	 * fatal here would take the storefront with it.
+	 */
+	public static function request_is_secure(): bool {
+		return function_exists( 'delicat_builder_v9_request_is_secure' ) ? delicat_builder_v9_request_is_secure() : is_ssl();
 	}
 
 	/** Shared route guard for the Pro fragment endpoint. */
@@ -543,7 +558,7 @@ add_filter( 'wp_headers', static function ( $headers ) {
 	if ( ! isset( $headers['Referrer-Policy'] ) ) {
 		$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
 	}
-	if ( function_exists( 'is_ssl' ) && is_ssl() && ! isset( $headers['Strict-Transport-Security'] ) ) {
+	if ( Delicat_Builder_V9_Security::request_is_secure() && ! isset( $headers['Strict-Transport-Security'] ) ) {
 		$headers['Strict-Transport-Security'] = 'max-age=15552000';
 	}
 	return $headers;

@@ -45,8 +45,21 @@ final class Delicat_Builder_V9_Transport {
 		return true;
 	}
 
+	/**
+	 * The customer's scheme, not PHP's.
+	 *
+	 * This gate decides whether to redirect. Reading is_ssl() on a site whose
+	 * TLS ends at Cloudflare or LiteSpeed means redirecting an https request
+	 * to https - a loop the visitor cannot escape - and answering 403 to every
+	 * POST behind it, login and checkout included. Falls back to is_ssl() so
+	 * the boundary still holds if the bootstrap helper is ever absent.
+	 */
+	private static function secure(): bool {
+		return function_exists( 'delicat_builder_v9_request_is_secure' ) ? delicat_builder_v9_request_is_secure() : is_ssl();
+	}
+
 	public static function enforce_request(): void {
-		if ( ( defined( 'WP_CLI' ) && WP_CLI ) || PHP_SAPI === 'cli' || is_ssl() ) { return; }
+		if ( ( defined( 'WP_CLI' ) && WP_CLI ) || PHP_SAPI === 'cli' || self::secure() ) { return; }
 		nocache_headers();
 		// Never redirect/replay a plaintext login, order, payment or API mutation.
 		if ( ! self::read_only_request() ) {

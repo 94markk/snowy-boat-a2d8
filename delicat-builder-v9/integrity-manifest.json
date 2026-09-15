@@ -1,8 +1,8 @@
 {
   "algorithm": "sha256",
-  "built": "2026-09-15T02:19:39.354789+00:00",
-  "version": "9.2.0-pro.28",
-  "bytes": 5896071,
+  "built": "2026-09-15T02:41:27.438720+00:00",
+  "version": "9.2.0-pro.29",
+  "bytes": 5904537,
   "count": 353,
   "files": {
     "PRO-README.md": {
@@ -894,8 +894,8 @@
       "sha256": "894a2032adc23434fd6c44bc6c2f752d09fe87f9142529ef7cca00e4920672fd"
     },
     "delicat-builder-v9.php": {
-      "bytes": 85041,
-      "sha256": "522016fb277e4a462668819468a487589477d1c07737e6092b52981510533e8b"
+      "bytes": 87771,
+      "sha256": "28ef94a998434826e80ba25d2422bc78b30e75aa73d59a7a84e2b301dbc352cb"
     },
     "includes/class-delicat-builder-admin.php": {
       "bytes": 23021,
@@ -974,8 +974,8 @@
       "sha256": "74738387397ffff4e1d019c349f5881204ea5e5be2a134a6a911b81ec50762e0"
     },
     "includes/class-delicat-builder-express-payment.php": {
-      "bytes": 16296,
-      "sha256": "75e446d2075e1d1b5ec0c4794b1d962c217016c67c78998adf09ad274c5d2c86"
+      "bytes": 20134,
+      "sha256": "4e3519123b6d0fc6055f1810151da3d37de1311b51a15bd9fa5b23c6e11c8aac"
     },
     "includes/class-delicat-builder-footer.php": {
       "bytes": 19759,
@@ -1138,8 +1138,8 @@
       "sha256": "025f2819b2e9e60ce0fbf30ae2b4746837f42c09dcc3962e6b223eac8d37bbf5"
     },
     "includes/class-delicat-builder-security.php": {
-      "bytes": 26990,
-      "sha256": "eb9a2124424b29cfd04cdc555c338ef18583f27e41d625e8e769e8c2f05779ca"
+      "bytes": 27776,
+      "sha256": "5bd4bf47d2fe32331dccb28b06c29c8edfee644f424b34d1ea9b3a12869ca4bb"
     },
     "includes/class-delicat-builder-self-test.php": {
       "bytes": 18743,
@@ -1186,8 +1186,8 @@
       "sha256": "a02310592a1833fbe456f11af17341176897ac5d3bae29c40222dd0bd682814b"
     },
     "includes/class-delicat-builder-transport.php": {
-      "bytes": 4090,
-      "sha256": "fa55d74c9e9b137f7f54ebe6e7d3f49691b1660c082c19cf9df86cc3d71344d7"
+      "bytes": 4686,
+      "sha256": "573d3aaa7cda00f2760721dbc7dab562b06b3fa110122d7ab8c29e2cc519523d"
     },
     "includes/class-delicat-builder-turbo-diagnostics.php": {
       "bytes": 5072,
@@ -1314,8 +1314,8 @@
       "sha256": "bae44b25ee07d0fe1ba78e9a25d07f67aa4ca2a9fa2a3d6ad6cb82d26e1ffd0a"
     },
     "pro/class-dbp-security.php": {
-      "bytes": 4559,
-      "sha256": "95dd6ccf538a74bb6ec9cd3d7bdf22d08e986bfee1f18ece0011daf8a9b3396b"
+      "bytes": 5075,
+      "sha256": "7399fc65af0db6a6f6e58a1cf10e1439773d113373844e8bbdce7a1c9b6ab1d0"
     },
     "pro/class-dbp-state.php": {
       "bytes": 8077,

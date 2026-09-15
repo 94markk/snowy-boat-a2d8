@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.28
+ * Version: 9.2.0-pro.29
 
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -151,7 +151,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.28' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.29' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -698,9 +698,14 @@ function delicat_builder_v9_maybe_upgrade_native_only(): bool {
 			if ( $held ) {
 				$archive = array();
 				foreach ( $held as $row ) {
+					/* Archived for a human to read, never trusted. Nothing this
+					 * plugin writes to these rows is an object, so a serialized
+					 * object here could only be an injection attempt - and
+					 * maybe_unserialize() is where one would be paid out. */
+					$value = (string) $row->option_value;
 					$archive[] = array(
 						'name'  => (string) $row->option_name,
-						'value' => maybe_unserialize( $row->option_value ),
+						'value' => preg_match( '/(^|;|{)O:\d+:"/', $value ) ? '(valeur illisible)' : maybe_unserialize( $value ),
 					);
 				}
 				update_option(
@@ -1482,6 +1487,64 @@ add_action( 'admin_init', static function () {
     update_option( 'delicat_builder_pro21_popup_enabled', 1, false );
 } );
 
+/**
+ * Is the CUSTOMER's connection encrypted?
+ *
+ * is_ssl() answers a narrower question: whether PHP was reached over TLS. On
+ * this storefront TLS terminates at Cloudflare and LiteSpeed, and the leg from
+ * there to PHP can be plain HTTP - so is_ssl() can be false on a site that is
+ * https from end to end as far as any customer is concerned.
+ *
+ * Every SSL gate in the plugin was therefore answering the wrong question, and
+ * each one fails in its own direction: the express payment gates refuse and the
+ * purchase never runs, while Strict-Transport-Security and the CSP's
+ * upgrade-insecure-requests are simply never sent - so the browser is never told
+ * to stay on https. The checks were right; the detection was wrong.
+ *
+ * The forwarded headers are only consulted when the SITE ITSELF is https. A
+ * plain-http install cannot be talked into believing otherwise by a header, and
+ * on an https install a spoofed header buys an attacker nothing they could not
+ * have by simply using https. Overridable, because only the operator knows what
+ * sits in front of PHP.
+ */
+function delicat_builder_v9_request_is_secure(): bool {
+	if ( is_ssl() ) {
+		return true;
+	}
+
+	$home = function_exists( 'home_url' ) ? (string) home_url() : '';
+	if ( 'https' !== strtolower( (string) wp_parse_url( $home, PHP_URL_SCHEME ) ) ) {
+		/** @param bool $secure */
+		return (bool) apply_filters( 'delicat_builder_v9_request_is_secure', false );
+	}
+
+	$secure = false;
+
+	foreach ( array( 'HTTP_X_FORWARDED_PROTO', 'HTTP_X_FORWARDED_SCHEME' ) as $header ) {
+		if ( ! isset( $_SERVER[ $header ] ) ) {
+			continue;
+		}
+		/* A chain of proxies appends; the first entry is the client-facing one. */
+		$first = strtolower( trim( explode( ',', (string) $_SERVER[ $header ] )[0] ) );
+		if ( 'https' === $first ) {
+			$secure = true;
+			break;
+		}
+	}
+
+	if ( ! $secure && isset( $_SERVER['HTTP_X_FORWARDED_SSL'] ) && 'on' === strtolower( (string) $_SERVER['HTTP_X_FORWARDED_SSL'] ) ) {
+		$secure = true;
+	}
+
+	/* Cloudflare states the customer's scheme here. */
+	if ( ! $secure && isset( $_SERVER['HTTP_CF_VISITOR'] ) && false !== strpos( (string) $_SERVER['HTTP_CF_VISITOR'], '"scheme":"https"' ) ) {
+		$secure = true;
+	}
+
+	/** @param bool $secure */
+	return (bool) apply_filters( 'delicat_builder_v9_request_is_secure', $secure );
+}
+
 /*
  * Express checkout (RC24 transport). The product form is posted by fetch()
  * through WooCommerce's own classic add-to-cart handler (same validation,
@@ -1499,6 +1562,7 @@ add_action( 'admin_init', static function () {
  */
 /* Express requires a same-origin POST and a logged-in WordPress nonce.
  * Invalid flagged requests stop before WooCommerce mutates the cart. */
+
 function delicat_builder_v9_express_request(): bool {
 	if ( empty( $_REQUEST['dpn_express'] ) || 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		return false;
@@ -1527,7 +1591,7 @@ add_filter(
 add_action( 'wp_loaded', static function (): void {
 	if ( ! isset( $_REQUEST['dpn_express'] ) ) { return; }
 	$nonce = isset( $_POST['_delicat_express_nonce'] ) && is_string( $_POST['_delicat_express_nonce'] ) ? wp_unslash( $_POST['_delicat_express_nonce'] ) : '';
-	if ( ! delicat_builder_v9_express_request() || ! is_ssl() || ! is_user_logged_in() || ! wp_verify_nonce( $nonce, 'delicat_express_add' ) ) {
+	if ( ! delicat_builder_v9_express_request() || ! delicat_builder_v9_request_is_secure() || ! is_user_logged_in() || ! wp_verify_nonce( $nonce, 'delicat_express_add' ) ) {
 		nocache_headers();
 		wp_send_json( array( 'success' => false, 'messages' => array( 'Session expirée. Rechargez la page sécurisée.' ) ), 403 );
 	}
@@ -1579,7 +1643,7 @@ add_action(
 			status_header( 403 );
 			exit;
 		}
-		if ( ! is_ssl() || ! is_user_logged_in() ) {
+		if ( ! delicat_builder_v9_request_is_secure() || ! is_user_logged_in() ) {
 			status_header( 403 );
 			exit;
 		}

@@ -64,6 +64,11 @@ final class DBP_Security {
 		return $headers;
 	}
 
+	/** The customer's scheme; see the bootstrap helper of the same name. */
+	private static function secure() {
+		return function_exists( 'delicat_builder_v9_request_is_secure' ) ? delicat_builder_v9_request_is_secure() : is_ssl();
+	}
+
 	/**
 	 * Headers that need the request context.
 	 *
@@ -76,13 +81,17 @@ final class DBP_Security {
 
 		// Append a separate enforcing policy: never collapse/replace host policies.
 		$policy = "frame-ancestors 'self'; base-uri 'self'; object-src 'none'";
-		if ( is_ssl() ) { $policy .= '; upgrade-insecure-requests'; }
+		/* Both of these depend on the CUSTOMER's scheme. is_ssl() reports the leg
+		 * between the edge and PHP, which is plain http on a proxy-terminated
+		 * site - so upgrade-insecure-requests and HSTS were being withheld from
+		 * exactly the browsers that need them. */
+		if ( self::secure() ) { $policy .= '; upgrade-insecure-requests'; }
 		header( 'Content-Security-Policy: ' . $policy, false );
 
 		header( 'Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(self), interest-cohort=()' );
 		header( 'Cross-Origin-Resource-Policy: same-site' );
 
-		if ( is_ssl() ) {
+		if ( self::secure() ) {
 			header( 'Strict-Transport-Security: max-age=31536000; includeSubDomains' );
 		}
 	}
