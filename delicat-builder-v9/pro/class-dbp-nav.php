@@ -511,7 +511,27 @@ final class DBP_Nav {
 				'assets/css/native-product.css', 'assets/css/native-product-pro15.css',
 				'assets/js/native-product.js', 'assets/css/express-checkout.css', 'assets/js/express-checkout.js',
 			) ),
-			'publicProductWarm' => ! is_user_logged_in() && empty( $_COOKIE['woocommerce_items_in_cart'] ) && empty( $_COOKIE['wp_woocommerce_session_' . COOKIEHASH] ),
+			/*
+			 * pro.30: whether a product document may be warmed with
+			 * <link rel="prefetch"> before the shopper opens it.
+			 *
+			 * This used to stand down for any guest carrying a WooCommerce cart
+			 * or session cookie, because warming then fetched a personalised,
+			 * uncacheable document -- bandwidth spent on a copy the shopper
+			 * would not be served. That is no longer what those cookies mean:
+			 * Security::public_cache_allowed() now lets a guest with a cart be
+			 * served from the shared cache, and cart state is kept out of the
+			 * document so the copy is correct for everyone. Warming is both
+			 * cheap and useful for exactly the shopper this used to exclude --
+			 * the one already browsing products.
+			 *
+			 * Deferring to the cache gate also keeps the two in step: a request
+			 * the gate will not cache is still never warmed.
+			 */
+			'publicProductWarm' => class_exists( 'Delicat_Builder_V9_Security', false )
+				&& is_callable( array( 'Delicat_Builder_V9_Security', 'public_cache_allowed' ) )
+				? Delicat_Builder_V9_Security::public_cache_allowed()
+				: ( ! is_user_logged_in() && empty( $_COOKIE['woocommerce_items_in_cart'] ) && empty( $_COOKIE['wp_woocommerce_session_' . COOKIEHASH] ) ),
 			'productPaths' => array_values( array_unique( $product_paths ) ),
 			'generation'  => DBP_Kernel::generation(),
 			'home'        => home_url( '/' ),
