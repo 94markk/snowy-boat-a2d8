@@ -10,14 +10,19 @@ final class Delicat_Builder_V9_Audit_Fixes {
   add_filter( 'wp_get_attachment_image_attributes', array( __CLASS__, 'image_attributes' ), PHP_INT_MAX );
   add_action( 'wp_enqueue_scripts', array( __CLASS__, 'empty_cart_assets' ), PHP_INT_MAX );
   add_action( 'template_redirect', array( __CLASS__, 'buffer' ), -50 );
-  // Also run after LiteSpeed's optimizer when it owns the outer buffer. Idempotent.
+  // Runs after LiteSpeed's optimizer when it owns the outer buffer. Idempotent.
   add_filter( 'litespeed_buffer_after', array( __CLASS__, 'document' ), PHP_INT_MAX );
   add_filter( 'woocommerce_locate_template', array( __CLASS__, 'result_count_template' ), PHP_INT_MAX, 3 );
  }
+ /** Original path => content-addressed path, loaded once per request. */
+ private static function map(): array {
+  static $map = null;
+  if ( null === $map ) { $file = DELICAT_BUILDER_V9_DIR . 'asset-versions.php'; $map = is_file( $file ) ? require $file : array(); $map = is_array( $map ) ? $map : array(); }
+  return $map;
+ }
  public static function asset_url( $url ) {
   if ( ! is_string( $url ) || strpos( $url, DELICAT_BUILDER_V9_URL ) !== 0 ) { return $url; }
-  static $map = null;
-  if ( null === $map ) { $file = DELICAT_BUILDER_V9_DIR . 'asset-versions.php'; $map = is_file( $file ) ? require $file : array(); }
+  $map = self::map();
   $parts = explode( '?', substr( $url, strlen( DELICAT_BUILDER_V9_URL ) ), 2 );
   return isset( $map[ $parts[0] ] ) ? DELICAT_BUILDER_V9_URL . $map[ $parts[0] ] : $url;
  }
@@ -51,35 +56,75 @@ final class Delicat_Builder_V9_Audit_Fixes {
   if ( 'loop/result-count.php' === $name ) { return DELICAT_BUILDER_V9_DIR . 'templates/purchase/result-count.php'; }
   return $template;
  }
+ /**
+  * LiteSpeed Cache opens its own output buffer at after_setup_theme, so it
+  * wraps this one and applies litespeed_buffer_after to the final document.
+  * Opening a second buffer here would run the same pass twice on every
+  * uncached response; the inner buffer is only needed without LiteSpeed.
+  */
+ private static function litespeed_owns_buffer(): bool {
+  return defined( 'LSCWP_V' ) && ! ( defined( 'LITESPEED_DISABLE_ALL' ) && LITESPEED_DISABLE_ALL );
+ }
  public static function buffer(): void {
   if ( is_admin() || wp_doing_ajax() || is_feed() || is_embed() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || isset( $_GET['wc-ajax'] ) || isset( $_GET['dbp_fragment'] ) ) { return; }
+  if ( self::litespeed_owns_buffer() ) { return; }
   ob_start( array( __CLASS__, 'document' ) );
  }
  /** Only known storefront tags are touched; scripts, JSON and user content remain intact. */
  public static function document( $html ) {
   if ( ! is_string( $html ) || false === stripos( $html, '<body' ) || false === stripos( $html, '</html>' ) ) { return $html; }
-  $wallet = function_exists( 'is_page' ) && is_page( array( 'my-wallet', 'wallet' ) );
-  $wallet = $wallet || ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'woo-wallet' ) );
-  if ( ! $wallet ) {
-   // The audited tour prints directly instead of using a dequeuable script handle.
-   $html = preg_replace( '~<(script|style)\b(?=[^>]*\bid=["\']delicat-wallet-tour-(?:js|css)["\'])[^>]*>.*?</\1\s*>~is', '', $html );
+  if ( false !== strpos( $html, 'delicat-wallet-tour' ) ) {
+   $wallet = function_exists( 'is_page' ) && is_page( array( 'my-wallet', 'wallet' ) );
+   $wallet = $wallet || ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'woo-wallet' ) );
+   if ( ! $wallet ) {
+    // The audited tour prints directly instead of using a dequeuable script handle.
+    $html = (string) preg_replace( '~<(script|style)\b(?=[^>]*\bid=["\']delicat-wallet-tour-(?:js|css)["\'])[^>]*>.*?</\1\s*>~is', '', $html );
+   }
   }
   // Remove only the redundant plain page title directly inside our cart document.
   if ( function_exists( 'is_cart' ) && is_cart() && false !== strpos( $html, 'class="dpn-head ' ) ) {
-   $html = preg_replace( '~(<main\b[^>]*\bid=["\']delicat-native-page-main["\'][^>]*>)\s*<h1\b[^>]*>[^<]*</h1>~i', '$1', $html, 1 );
+   $html = (string) preg_replace( '~(<main\b[^>]*\bid=["\']delicat-native-page-main["\'][^>]*>)\s*<h1\b[^>]*>[^<]*</h1>~i', '$1', $html, 1 );
   }
-  if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) { return $html; }
+  $html = self::map_asset_urls( $html );
+  if ( self::needs_tag_pass( $html ) ) {
+   $html = self::repair_tags( $html );
+  }
+  return $html;
+ }
+ /**
+  * Rewrite every Builder asset URL that still uses its original file name to
+  * the content-addressed copy. A plain string replacement on the URL itself
+  * is exact (the URL is an opaque token inside a quoted attribute) and costs
+  * a fraction of a full tag walk on a 300 KB catalogue page.
+  */
+ private static function map_asset_urls( string $html ): string {
+  $base = DELICAT_BUILDER_V9_URL;
+  if ( false === strpos( $html, $base ) ) { return $html; }
+  $map = self::map();
+  if ( empty( $map ) ) { return $html; }
+  $pattern = '~' . preg_quote( $base, '~' ) . '((?:assets|pro/assets|modules/[a-z0-9_-]+/assets)/[^"\'?#\s<>\\\\]+\.(?:css|js))(\?[^"\'\s<>\\\\]*)?~';
+  return (string) preg_replace_callback(
+   $pattern,
+   static function ( array $m ) use ( $base, $map ) { return isset( $map[ $m[1] ] ) ? $base . $map[ $m[1] ] : $m[0]; },
+   $html
+  );
+ }
+ /** True only when LiteSpeed rewrote a boot script or an eager image and a repair is due. */
+ private static function needs_tag_pass( string $html ): bool {
+  if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) { return false; }
+  if ( false !== strpos( $html, 'litespeed/javascript' ) ) { return true; }
+  if ( false === stripos( $html, 'data-lazyloaded' ) && false === stripos( $html, 'data-src' ) ) { return false; }
+  if ( false === stripos( $html, 'fetchpriority="high"' ) && false === stripos( $html, "fetchpriority='high'" ) && false === stripos( $html, 'loading="eager"' ) && false === stripos( $html, "loading='eager'" ) ) { return false; }
+  return (bool) preg_match( '~<img\b(?=[^>]*\b(?:fetchpriority=["\']high["\']|loading=["\']eager["\']))[^>]*\bdata-(?:src|srcset|sizes|lazyloaded)\b~i', $html );
+ }
+ private static function repair_tags( string $html ): string {
   $p = new WP_HTML_Tag_Processor( $html );
   $boots = array( 'delicat-builder-v9-session-js-before', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'delicat-builder-v9-express-js-before', 'dip-identity-modal-v4-js-extra', 'dbp-nav-js-before', 'dbp-state-js-before' );
   while ( $p->next_tag() ) {
    $tag = $p->get_tag();
-   if ( 'SCRIPT' === $tag || 'LINK' === $tag ) {
-    if ( 'SCRIPT' === $tag && in_array( $p->get_attribute( 'id' ), $boots, true ) ) {
-     if ( 'litespeed/javascript' === $p->get_attribute( 'type' ) ) { $p->remove_attribute( 'type' ); }
-     $p->set_attribute( 'data-no-optimize', '1' ); $p->set_attribute( 'data-no-delay', '1' );
-    }
-    $attr = 'SCRIPT' === $tag ? 'src' : 'href'; $src = $p->get_attribute( $attr );
-    if ( is_string( $src ) ) { $p->set_attribute( $attr, self::asset_url( $src ) ); }
+   if ( 'SCRIPT' === $tag && in_array( $p->get_attribute( 'id' ), $boots, true ) ) {
+    if ( 'litespeed/javascript' === $p->get_attribute( 'type' ) ) { $p->remove_attribute( 'type' ); }
+    $p->set_attribute( 'data-no-optimize', '1' ); $p->set_attribute( 'data-no-delay', '1' );
    }
    if ( 'IMG' === $tag && ( 'high' === $p->get_attribute( 'fetchpriority' ) || 'eager' === $p->get_attribute( 'loading' ) ) ) {
     foreach ( array( 'src', 'srcset', 'sizes' ) as $attr ) {
