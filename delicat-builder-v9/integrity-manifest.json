@@ -1,9 +1,9 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-15T12:41:23.000000+00:00",
+    "built": "2026-09-15T12:45:41.000000+00:00",
     "version": "9.2.0-pro.30",
-    "bytes": 5984842,
-    "count": 361,
+    "bytes": 5989442,
+    "count": 362,
     "files": {
         "OPTIMIZATION.md": {
             "bytes": 10516,
@@ -1440,6 +1440,10 @@
         "tools/rebuild-assets.php": {
             "bytes": 8013,
             "sha256": "9b6e09a35d90813d310d080889d9d454a2c73111ab1a2f66be885720767da992"
+        },
+        "tools/verify-console.js": {
+            "bytes": 4600,
+            "sha256": "e8e2bbf69c9d39498c617621aa2fc9874aaeb0aea2b11afe6cd9de637f7e0b05"
         },
         "tools/verify-live.sh": {
             "bytes": 8023,
