@@ -6,8 +6,8 @@ Run after editing any CSS/JS in the plugin:
     python3 scripts/refresh-delicat-assets.py [delicat-builder-v9]
 
 It (1) writes one `<name>.<12-hex-sha256>.<ext>` copy per source stylesheet/script
-under assets/, pro/assets/ and modules/**/assets/ (superseded copies are KEPT so
-already-cached HTML still resolves; pass --prune to remove them),
+under assets/, pro/assets/ and modules/**/assets/ (superseded copies are kept for
+the last few builds so already-cached HTML still resolves; --prune drops them all),
 (2) regenerates asset-versions.php, and (3) regenerates integrity-manifest.json
 with the plugin version read from the main plugin header.
 """
@@ -129,24 +129,66 @@ for r in sorted(sources):
 # with no styling at all. That is what "the site broke after updating" was: one
 # release dropped the copy the previous release's cached pages still asked for.
 #
-# So a superseded copy is kept by default and only removed with --prune, which
-# is a deliberate act for a release allowed to break in-flight HTML. Keeping
-# them costs a few KB per changed file. Removing them costs the storefront.
+# So superseded copies are kept - but not forever, or every release would carry
+# every version it ever had. asset-history.json remembers what the last few
+# builds shipped, and a copy is dropped once no remembered build still refers to
+# it. GENERATIONS is how many releases of cached HTML keep working: with 3, a
+# visitor whose page was cached two releases ago still loads.
+#
+# --prune clears everything superseded at once, for a release deliberately
+# allowed to break in-flight HTML.
+GENERATIONS = 3
+HISTORY = os.path.join(ROOT, "asset-history.json")
+
 PRUNE = "--prune" in sys.argv[1:]
+
+previous = []
+if os.path.exists(HISTORY):
+    try:
+        with open(HISTORY, encoding="utf-8") as fh:
+            previous = json.load(fh).get("builds", [])
+    except (ValueError, OSError):
+        previous = []
+
+current = sorted(wanted.values())
+
+# No history yet does NOT mean nothing is worth keeping.
+#
+# The first run of this policy found no file to read and concluded that every
+# superseded copy on disk was unreferenced - including the ones deliberately
+# carried forward to repair already-cached pages. It deleted them, which is the
+# exact failure the whole policy exists to prevent. What is on disk IS the
+# record, until there is a written one: seed the history from it.
+if not previous:
+    inherited = sorted(r for r in hashed if r not in wanted.values())
+    previous = [inherited] if inherited else []
+
+# The newest build first; a rebuild that changed nothing does not consume a slot.
+builds = [current] + [b for b in previous if b != current]
+builds = builds[:GENERATIONS] if not PRUNE else [current]
+
+still_wanted = set()
+for b in builds:
+    still_wanted.update(b)
+
 keep, dropped = 0, 0
 for r in hashed:
-    if r in wanted.values():
+    if r in still_wanted:
+        if r not in wanted.values():
+            keep += 1
         continue
-    if PRUNE:
-        os.remove(os.path.join(ROOT, r))
-        dropped += 1
-        print("removed  %s (stale, --prune)" % r)
-    else:
-        keep += 1
+    os.remove(os.path.join(ROOT, r))
+    dropped += 1
+    print("removed  %s (no longer referenced by the last %d builds)" % (r, len(builds)))
+
+with open(HISTORY, "w", encoding="utf-8") as fh:
+    json.dump({"generations": GENERATIONS, "builds": builds}, fh, indent=1)
+    fh.write("\n")
+
 if keep:
     print("kept     %d superseded copy(ies) so already-cached pages still resolve" % keep)
 if dropped:
-    print("PRUNED   %d copy(ies): any HTML cached before this build will 404 on them" % dropped)
+    print("PRUNED   %d copy(ies): HTML cached that long ago will 404 on them" % dropped)
 
 # 2. asset-versions.php --------------------------------------------------------
 lines = ["<?php", "// Generated content-addressed assets. Original paths retained for compatibility.", "return array("]

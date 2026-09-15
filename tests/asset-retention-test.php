@@ -106,7 +106,72 @@ ok(
     'new HTML must reference the current build'
 );
 
+group( 'A first run does not mistake "no record" for "nothing to keep"' );
+
+/*
+ * The first build under this policy finds no history file. It must read what is
+ * already on disk as the previous generation rather than as rubbish - the first
+ * version of this did the latter and deleted the copies that had been carried
+ * forward on purpose to repair already-cached pages, which is precisely the
+ * failure the policy exists to prevent.
+ */
+build_tree( $tmp, '/* one */' );
+refresh( $script, $tmp );
+$before = hashed( $tmp )[0] ?? '';
+
+/* A superseded copy that predates any history, exactly like a carried-forward one. */
+unlink( $tmp . '/asset-history.json' );
+file_put_contents( $tmp . '/assets/css/drawer.css', '/* two */' );
+refresh( $script, $tmp );
+
+ok(
+    'a copy already on disk survives the first run',
+    in_array( $before, hashed( $tmp ), true ),
+    'it has no history entry, and it is still the file cached pages ask for'
+);
+
+group( 'But not kept forever' );
+
+build_tree( $tmp, '/* gen1 */' );
+refresh( $script, $tmp );
+$gen1 = hashed( $tmp )[0] ?? '';
+
+$seen = array( $gen1 );
+foreach ( array( 'gen2', 'gen3', 'gen4' ) as $i => $label ) {
+    file_put_contents( $tmp . '/assets/css/drawer.css', '/* ' . $label . ' */' );
+    refresh( $script, $tmp );
+    $now    = hashed( $tmp );
+    $seen[] = $now[ count( $now ) - 1 ];
+}
+
+$final = hashed( $tmp );
+ok(
+    'three builds of cached HTML keep working',
+    count( $final ) === 3,
+    count( $final ) . ' copies: ' . implode( ',', $final )
+);
+ok(
+    'and the generation older than that is dropped',
+    ! in_array( $gen1, $final, true ),
+    'otherwise every release carries every version it ever had'
+);
+
+$history = $tmp . '/asset-history.json';
+ok( 'the builds it remembers are written down', is_file( $history ) );
+$remembered = json_decode( (string) file_get_contents( $history ), true );
+ok(
+    'and that is what decides, not the filesystem',
+    is_array( $remembered ) && 3 === count( $remembered['builds'] ?? array() ),
+    (string) file_get_contents( $history )
+);
+
 group( 'Removing them is a deliberate act' );
+
+build_tree( $tmp, '.a{color:red}' );
+refresh( $script, $tmp );
+$original = hashed( $tmp )[0] ?? '';
+file_put_contents( $tmp . '/assets/css/drawer.css', '.a{color:blue}' );
+refresh( $script, $tmp );
 
 $out   = refresh( $script, $tmp, true );
 $third = hashed( $tmp );
