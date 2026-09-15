@@ -743,10 +743,6 @@ final class Delicat_Builder_V9_Carousel {
 			: '';
 	}
 
-	private static function heart_icon(): string {
-		return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 20.5S4.5 15.9 2.7 11C1.6 7.6 3.6 4.5 6.9 4.5c1.9 0 3.4 1 4.3 2.4.9-1.4 2.4-2.4 4.3-2.4 3.3 0 5.3 3.1 4.2 6.5-1.8 4.9-9.3 9.5-9.3 9.5Z"/></svg>';
-	}
-
 	private static function deferred_card_payload(
 		int $product_id,
 		int $index,
@@ -958,12 +954,12 @@ final class Delicat_Builder_V9_Carousel {
 				<?php if ( $heart_enabled ) : ?>
 					<button
 						type="button"
-						class="delicat-product-card__bubble delicat-product-card__heart<?php echo $is_favorite ? ' is-favorite' : ''; ?>"
+						class="delicat-product-card__bubble delicat-product-card__like<?php echo $is_favorite ? ' is-liked' : ''; ?>"
 						data-delicat-heart
 						data-product-id="<?php echo esc_attr( (string) $product_id ); ?>"
 						aria-pressed="<?php echo $is_favorite ? 'true' : 'false'; ?>"
-						aria-label="<?php echo esc_attr( $is_favorite ? __( 'Remove from favorites', 'delicat-builder-v9' ) : __( 'Add to favorites', 'delicat-builder-v9' ) ); ?>"
-					><?php echo self::heart_icon(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></button>
+						aria-label="<?php echo esc_attr( $is_favorite ? __( 'Retirer des favoris', 'delicat-builder-v9' ) : __( 'Ajouter aux favoris', 'delicat-builder-v9' ) ); ?>"
+					><?php echo Delicat_Builder_V9_Badges::favorite_mark( $heart_icon ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- drawn SVG from the badge engine's fixed table. ?></button>
 				<?php elseif ( ! empty( $design['bubble'] ) && 'off' !== $heart_mode ) : ?>
 					<span class="delicat-product-card__bubble" aria-hidden="true"><?php echo $heart_symbol; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- drawn SVG from the badge engine's fixed table. ?></span>
 				<?php endif; ?>

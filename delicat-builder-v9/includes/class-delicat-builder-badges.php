@@ -139,6 +139,28 @@ final class Delicat_Builder_V9_Badges {
 		return str_replace( 'delicat-badge__icon', 'delicat-heart__icon', $svg );
 	}
 
+	/**
+	 * The interactive favourite mark: the same shape, drawn twice.
+	 *
+	 * The outline is what an unfavourited product shows; the fill sits on top
+	 * of it at scale(0) and springs out when the shopper taps. Two paths and
+	 * no second request, so the "liked" state is a transform on a shape that
+	 * is already on the card rather than a new icon that has to arrive.
+	 *
+	 * @param string $icon One of heart, heart_outline, star, bolt.
+	 */
+	public static function favorite_mark( string $icon = 'heart' ): string {
+		$name = in_array( $icon, array( 'heart', 'heart_outline', 'star', 'bolt' ), true ) ? $icon : 'heart';
+		$name = 'heart_outline' === $name ? 'heart' : $name;
+		$path = self::ICONS[ $name ] ?? self::ICONS['heart'];
+
+		return '<span class="delicat-like" aria-hidden="true">'
+			. '<svg class="delicat-like__mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+			. str_replace( '<path ', '<path class="delicat-like__outline" ', $path )
+			. str_replace( '<path ', '<path class="delicat-like__fill" ', $path )
+			. '</svg></span>';
+	}
+
 	/* =====================================================================
 	 * The topics
 	 * ===================================================================== */
