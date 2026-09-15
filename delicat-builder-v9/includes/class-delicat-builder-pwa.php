@@ -171,8 +171,8 @@ final class Delicat_Builder_V9_PWA {
 		$chrome = 'assets/css/storefront-chrome.min.css';
 		$chrome_css = is_file( DELICAT_BUILDER_V9_DIR . $chrome )
 			? array( $chrome )
-			: array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/drawer.css', 'assets/css/bottom-nav.css' );
-		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/drawer.js', 'assets/js/session.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
+			: array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/menu.css', 'assets/css/bottom-nav.css' );
+		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/menu.js', 'assets/js/session.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
 		/*
 		 * pro.17: every one of these files has a content-addressed twin, and the
 		 * page requests the twin — style_loader_src/script_loader_src are rewritten

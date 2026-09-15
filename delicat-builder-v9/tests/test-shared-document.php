@@ -29,8 +29,7 @@ $chrome = array(
 	'includes/class-delicat-builder-header-runtime.php',
 	'includes/class-delicat-builder-bottom-nav.php',
 	'includes/class-delicat-builder-shell.php',
-	'includes/class-delicat-builder-drawer.php',
-	'includes/class-delicat-builder-menu-runtime.php',
+	'includes/class-delicat-builder-menu-engine.php',
 	'includes/class-delicat-builder-footer.php',
 );
 

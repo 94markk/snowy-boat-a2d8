@@ -399,9 +399,9 @@ final class Delicat_Builder_V9_Assets {
 		 * lightweight visual theme + delegated toggle runtime. */
 		$chrome_path = DELICAT_BUILDER_V9_DIR . 'assets/css/storefront-chrome.min.css';
 		if ( is_file( $chrome_path ) ) {
-			// Header, drawer and bottom-nav enqueue earlier (priorities 8/9).
+			// Header, menu and bottom-nav enqueue earlier (priorities 8/9).
 			// Their cascade order is preserved inside the release-built bundle.
-			foreach ( array( 'delicat-builder-v9-theme-system', 'delicat-builder-v9-header-studio-8', 'delicat-builder-v9-drawer', 'delicat-builder-v9-bottom-nav' ) as $handle ) {
+			foreach ( array( 'delicat-builder-v9-theme-system', 'delicat-builder-v9-header-studio-8', 'delicat-builder-v9-menu', 'delicat-builder-v9-bottom-nav' ) as $handle ) {
 				wp_dequeue_style( $handle );
 			}
 			wp_enqueue_style(

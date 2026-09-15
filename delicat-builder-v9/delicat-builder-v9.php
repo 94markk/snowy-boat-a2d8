@@ -988,7 +988,7 @@ if ( $delicat_builder_v9_product_editor_request ) {
 $delicat_builder_v9_admin_modules = array(
     'includes/class-delicat-builder-cache.php','includes/class-delicat-builder-query-cache.php','includes/class-delicat-builder-turbo-diagnostics.php','includes/class-delicat-builder-security.php','includes/class-delicat-builder-server-engine.php','includes/class-delicat-builder-compiler.php',
     'includes/class-delicat-builder-media.php','includes/class-delicat-builder-hero-search.php','includes/class-delicat-builder-shell.php','includes/class-delicat-builder-footer.php',
-    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-express-checkout.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
+    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-express-checkout.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-engine.php','includes/class-delicat-builder-menu-builder.php',
     'includes/class-delicat-builder-header-studio-8.php','includes/class-delicat-builder-woo-ui.php','includes/class-delicat-builder-purchase-ui.php',
     'includes/class-delicat-builder-performance.php','includes/class-delicat-builder-identity-bridge.php','includes/class-delicat-builder-production.php',
     'includes/class-delicat-builder-release.php','includes/class-delicat-builder-design.php','includes/class-delicat-builder-assets.php',
@@ -1062,10 +1062,10 @@ if ( $delicat_builder_v9_activating ) {
     if ( in_array( $delicat_builder_v9_ajax_action, array('delicat_builder_v9_product_search','delicat_builder_v9_cart_snapshot'), true ) ) {
         $ajax_modules[] = 'includes/class-delicat-builder-shell.php';
     } elseif ( 'delicat_builder_v9_header_remove_cart_item' === $delicat_builder_v9_ajax_action ) {
-        $ajax_modules[] = 'includes/class-delicat-builder-menu-runtime.php';
+        $ajax_modules[] = 'includes/class-delicat-builder-menu-engine.php';
         $ajax_modules[] = 'includes/class-delicat-builder-header-runtime.php';
     } elseif ( 'delicat_builder_v9_wallet_balance' === $delicat_builder_v9_ajax_action ) {
-        $ajax_modules[] = 'includes/class-delicat-builder-menu-runtime.php';
+        $ajax_modules[] = 'includes/class-delicat-builder-menu-engine.php';
     } elseif ( 'delicat_builder_v9_favorite' === $delicat_builder_v9_ajax_action ) {
         $ajax_modules[] = 'includes/class-delicat-builder-heart-engine.php';
     } elseif ( 0 === strpos( $delicat_builder_v9_ajax_action, 'delicat_builder_v9_notifications_' ) ) {
@@ -1107,7 +1107,7 @@ if ( $delicat_builder_v9_activating ) {
 		: array(
 			'includes/class-delicat-builder-cache.php','includes/class-delicat-builder-query-cache.php','includes/class-delicat-builder-security.php','includes/class-delicat-builder-performance.php','includes/class-delicat-builder-server-engine.php',
 			'includes/class-delicat-builder-unified-runtime.php',
-			'includes/class-delicat-builder-menu-runtime.php','includes/class-delicat-builder-header-runtime.php','includes/class-delicat-builder-drawer.php','includes/class-delicat-builder-bottom-nav.php','includes/class-delicat-builder-session.php','includes/class-delicat-builder-shell-nav.php',
+			'includes/class-delicat-builder-menu-engine.php','includes/class-delicat-builder-header-runtime.php','includes/class-delicat-builder-bottom-nav.php','includes/class-delicat-builder-session.php','includes/class-delicat-builder-shell-nav.php',
 			'includes/class-delicat-builder-footer.php',
 			'includes/class-delicat-builder-runtime-router.php','includes/class-delicat-builder-reviews-kernel.php','includes/class-delicat-builder-front-slim.php','includes/class-delicat-builder-storefront-fix.php',
 			'includes/class-delicat-builder-core.php',

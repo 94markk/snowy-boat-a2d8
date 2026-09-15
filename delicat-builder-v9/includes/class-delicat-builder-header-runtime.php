@@ -449,13 +449,17 @@ final class Delicat_Builder_V9_Header_Studio_8 {
         </header>
         <?php echo $this->cart_fragment_markup(); ?>
         <?php
-        if (!self::$embedded_menu_rendered) {
+        /* Menu Engine 3.0 prints the menu itself, at the end of the document.
+         * The header used to embed it here, which put the whole panel between
+         * the header and the page's first content — markup the shopper waits
+         * on for a menu most visits never open. All the header ships now is
+         * the three-bar button, which the engine binds by attribute.
+         *
+         * A legacy standalone Builder still on the site keeps its old
+         * behaviour: it has no footer renderer of its own. */
+        if (!self::$embedded_menu_rendered && function_exists('dsb_render_modern_menu')) {
             self::$embedded_menu_rendered = true;
-            if (class_exists('Delicat_Builder_V9_Menu_Builder', false)) {
-                echo Delicat_Builder_V9_Menu_Builder::render('drawer');
-            } elseif (function_exists('dsb_render_modern_menu')) {
-                echo dsb_render_modern_menu('drawer');
-            }
+            echo dsb_render_modern_menu('drawer');
         }
 return ob_get_clean();
     }
