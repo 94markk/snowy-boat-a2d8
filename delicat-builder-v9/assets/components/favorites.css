@@ -1,0 +1,27 @@
+/* RC58 "Retrouve ce que tu aimes ✨" — server-rendered link cards. Every colour, size and column count comes from the section fields via custom properties. */
+.delicat-fav{width:100%;color:var(--dbv9-fav-title,#111827)}
+.delicat-fav__head{margin:0 0 20px}
+.delicat-fav--center .delicat-fav__head{text-align:center}
+.delicat-fav__eyebrow{display:block;margin:0 0 8px;color:var(--dbv9-fav-eyebrow,#6a5cff);font-size:12px;font-weight:800;letter-spacing:.2em;line-height:1.2;text-transform:uppercase}
+.delicat-fav__title{margin:0;color:var(--dbv9-fav-title,#111827);font-size:var(--dbv9-fav-title-d,34px);font-weight:800;letter-spacing:-.02em;line-height:1.1}
+.delicat-fav__subtitle{margin:8px 0 0;color:var(--dbv9-fav-subtitle,#6b7280);font-size:16px;line-height:1.45}
+.delicat-fav__grid{display:grid;grid-template-columns:repeat(var(--dbv9-fav-cols-d,4),minmax(0,1fr));gap:var(--dbv9-fav-gap,14px)}
+.delicat-fav__card{position:relative;display:flex;flex-direction:column;gap:14px;min-width:0;padding:18px 18px 20px;border:1px solid var(--dbv9-fav-border,#e8e6f7);border-radius:var(--dbv9-fav-radius,20px);background:var(--dbv9-fav-bg,#fff);color:var(--dbv9-fav-card-title,#111827);text-decoration:none;box-shadow:0 8px 24px rgba(30,25,90,.05);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+a.delicat-fav__card:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--dbv9-fav-tone,#6a5cff) 45%,var(--dbv9-fav-border,#e8e6f7));box-shadow:0 14px 30px rgba(30,25,90,.09)}
+.delicat-fav__icon{display:grid;place-items:center;width:var(--dbv9-fav-icon-size,56px);height:var(--dbv9-fav-icon-size,56px);border-radius:16px;background:color-mix(in srgb,var(--dbv9-fav-tone,#6a5cff) 14%,#fff);color:var(--dbv9-fav-tone,#6a5cff);font-size:calc(var(--dbv9-fav-icon-size,56px) * .46);line-height:1}
+.delicat-fav__icon .delicat-inline-icon{width:calc(var(--dbv9-fav-icon-size,56px) * .46);height:calc(var(--dbv9-fav-icon-size,56px) * .46)}
+.delicat-fav__body{display:flex;flex-direction:column;gap:6px;min-width:0}
+.delicat-fav__body strong{color:var(--dbv9-fav-card-title,#111827);font-size:17px;font-weight:800;letter-spacing:-.01em;line-height:1.2}
+.delicat-fav__body span{color:var(--dbv9-fav-card-text,#6b7280);font-size:14px;line-height:1.5}
+.delicat-fav__arrow{position:absolute;top:20px;right:20px;color:var(--dbv9-fav-tone,#6a5cff);font-size:20px;font-weight:700;line-height:1;opacity:.85}
+.delicat-fav__footer{margin-top:var(--dbv9-fav-gap,14px)}
+.delicat-fav--center .delicat-fav__footer{text-align:center}
+.delicat-fav__button{display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:54px;padding:14px 26px;border-radius:14px;background:linear-gradient(90deg,var(--dbv9-fav-btn-a,#5b5bd6),var(--dbv9-fav-btn-b,#e0407f));color:#fff!important;font-size:17px;font-weight:800;text-decoration:none;box-shadow:0 10px 24px rgba(91,91,214,.22);transition:transform .16s ease}
+.delicat-fav__button:hover{transform:translateY(-1px)}
+@media(min-width:641px) and (max-width:960px){.delicat-fav__title{font-size:var(--dbv9-fav-title-t,36px)}.delicat-fav__grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.delicat-fav__head{margin-bottom:18px}.delicat-fav__eyebrow{font-size:11px}.delicat-fav__title{font-size:var(--dbv9-fav-title-m,26px);line-height:1.12}.delicat-fav__subtitle{margin-top:8px;font-size:15px;line-height:1.45}.delicat-fav__grid{grid-template-columns:repeat(var(--dbv9-fav-cols-m,2),minmax(0,1fr));gap:min(var(--dbv9-fav-gap,10px),10px)}.delicat-fav__card{gap:12px;padding:13px 14px 15px;border-radius:min(var(--dbv9-fav-radius,14px),14px)}.delicat-fav__icon{width:min(var(--dbv9-fav-icon-size,40px),40px);height:min(var(--dbv9-fav-icon-size,40px),40px);border-radius:11px}.delicat-fav__icon .delicat-inline-icon{width:19px;height:19px}.delicat-fav__body strong{font-size:14px}.delicat-fav__body span{font-size:12.5px}.delicat-fav__arrow{top:13px;right:13px;font-size:16px}.delicat-fav__button{width:100%;min-height:44px;border-radius:10px;font-size:16px}}
+@media(prefers-reduced-motion:reduce){.delicat-fav__card,.delicat-fav__button{transition:none!important;transform:none!important}}
+html[data-delicat-theme="dark"] .delicat-fav__card,html.dlc-theme-dark .delicat-fav__card{background:#12142a;border-color:#26294a;color:#f3f4ff;box-shadow:none}
+html[data-delicat-theme="dark"] .delicat-fav__body strong,html.dlc-theme-dark .delicat-fav__body strong,html[data-delicat-theme="dark"] .delicat-fav__title,html.dlc-theme-dark .delicat-fav__title{color:#f3f4ff}
+html[data-delicat-theme="dark"] .delicat-fav__body span,html.dlc-theme-dark .delicat-fav__body span,html[data-delicat-theme="dark"] .delicat-fav__subtitle,html.dlc-theme-dark .delicat-fav__subtitle{color:#a9adc4}
+html[data-delicat-theme="dark"] .delicat-fav__icon,html.dlc-theme-dark .delicat-fav__icon{background:color-mix(in srgb,var(--dbv9-fav-tone,#6a5cff) 18%,#12142a)}

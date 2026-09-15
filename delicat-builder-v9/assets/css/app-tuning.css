@@ -1,0 +1,624 @@
+/* Delicat Builder V9 — App Tuning (RC79)
+   ---------------------------------------------------------------------------
+   Two layers.
+
+   A. SIZING. Maps the --dbv9-app-* variables printed by App Tuning onto the
+      real V9 class names, so one settings screen moves the type scale, tap
+      targets, section rhythm, corner radius and card widths across the whole
+      storefront. Every declaration is a plain value: no calc(), no clamp().
+      LiteSpeed's combiner strips the whitespace those functions need around
+      + and -, and a browser then discards the entire declaration without a
+      warning — that is what silently flattened the type scale before.
+
+   B. SLOW NETWORK. What html.delicat-slow-net turns off. The rule for what
+      belongs here: it must cost bandwidth, main-thread time or GPU memory,
+      and removing it must not remove information. Shadows, gradients, blurs
+      and marquees go; text, prices, buttons and images stay.
+   --------------------------------------------------------------------------- */
+
+/* ---------- A. Sizing ---------- */
+
+.delicat-builder-hero__title,
+.delicat-builder-hero--style-neo_glass_pro .delicat-builder-hero__title,
+.delicat-builder-homepage-managed #delicat-section-home-premium-hero .delicat-builder-hero__title {
+  font-size: var(--dbv9-app-h1, 34px);
+  line-height: 1.02;
+}
+
+.delicat-builder-homepage-managed .delicat-carousel__title,
+.delicat-carousel--variant-ranking .delicat-carousel__title,
+.delicat-category-chips__title,
+.delicat-process__title,
+.delicat-why__title,
+.delicat-testimonials__title,
+.delicat-faq__title,
+.delicat-fav__title,
+.delicat-newsletter h2 {
+  font-size: var(--dbv9-app-h2, 26px);
+  line-height: 1.1;
+}
+
+.delicat-product-card__name,
+.delicat-carousel--delicat_abonnement .delicat-product-card__name,
+.delicat-category-tile__copy strong,
+.delicat-process__card h3,
+.delicat-why__card h3,
+.delicat-fav__body strong {
+  font-size: var(--dbv9-app-h3, 17px);
+  line-height: 1.24;
+}
+
+.delicat-carousel__subtitle,
+.delicat-category-chips__subtitle,
+.delicat-process__subtitle,
+.delicat-testimonials__subtitle,
+.delicat-faq__subtitle,
+.delicat-fav__subtitle,
+.delicat-process__card p,
+.delicat-why__card p,
+.delicat-fav__body span,
+.delicat-faq__answer p {
+  font-size: var(--dbv9-app-body, 15px);
+}
+
+.delicat-product-card__price,
+.delicat-product-card__poster-price,
+.delicat-category-tile__copy small,
+.delicat-trust__item > span:last-child,
+.delicat-testimonials__mquote {
+  font-size: var(--dbv9-app-small, 13px);
+}
+
+/* Controls: one tap floor everywhere, one CTA height. */
+.delicat-product-card__cta,
+.delicat-builder-homepage-managed .delicat-product-card__cta,
+.delicat-builder-hero--style-neo_glass_pro .delicat-builder-hero__cta,
+.delicat-fav__button,
+.delicat-why__cta-button,
+.delicat-newsletter__form button,
+.delicat-newsletter__button {
+  min-height: var(--dbv9-app-cta, 46px);
+}
+
+.delicat-carousel__view-all,
+.delicat-carousel__button,
+.delicat-shell__icon-button,
+.dsb8-header__action,
+.delicat-product-card__bubble,
+.delicat-category-chip,
+.delicat-shell__search-chip {
+  min-height: var(--dbv9-app-tap, 44px);
+}
+
+.delicat-shell__icon-button,
+.dsb8-header__action,
+.delicat-product-card__bubble {
+  min-width: var(--dbv9-app-tap, 44px);
+}
+
+/* Rhythm and edges. */
+.delicat-builder-homepage-managed .delicat-carousel,
+.delicat-builder-homepage-managed .delicat-section {
+  margin-bottom: var(--dbv9-app-gap, 26px);
+}
+
+.delicat-builder-homepage-managed .delicat-section {
+  padding-left: var(--dbv9-app-edge, 14px);
+  padding-right: var(--dbv9-app-edge, 14px);
+}
+
+.delicat-product-card,
+.delicat-category-tile,
+.delicat-process__card,
+.delicat-why__card,
+.delicat-fav__card,
+.delicat-faq__item {
+  border-radius: var(--dbv9-app-radius, 16px);
+}
+
+/* Card width on phones, so the rail shows the same amount of the next card
+   whatever the screen. Kept behind the phone breakpoint on purpose. */
+@media (max-width: 640px) {
+  .delicat-builder-homepage-managed .delicat-carousel__track {
+    grid-auto-columns: min(var(--dbv9-app-card, 44vw), 300px);
+  }
+  .delicat-shell--header .delicat-shell__inner,
+  .dsb8-header__inner {
+    min-height: var(--dbv9-app-header, 60px);
+  }
+  .delicat-shell__bottom-nav.delicat-mobile-dock {
+    min-height: var(--dbv9-app-dock, 66px);
+    height: var(--dbv9-app-dock, 66px);
+  }
+}
+
+/* ---------- B. Slow network ---------- */
+
+/* No web font arrived, so set the system stack explicitly rather than letting
+   each component fall through to a different default.
+
+   pro.17: this was a list of seven selectors, and a list of selectors misses
+   things. Measured in a browser with the class applied: body, the carousel
+   title and the card name switched to the system stack, while h1, the section
+   titles and every button kept `Inter, -apple-system, ...`. A slow connection
+   was therefore rendering the page in two different stacks with two different
+   sets of metrics.
+
+   The storefront already routes almost every font-family through one variable
+   - theme-system.css and storefront-polish.css both resolve to
+   var(--delicat-font) - so redefining the variable reaches every one of those
+   selectors at once, including the ones nobody thought to list. Only the two
+   places that name a family literally still need naming. */
+html.delicat-slow-net {
+  --delicat-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* The literal stacks, which read no variable and so cannot be reached above. */
+html.delicat-slow-net body,
+html.delicat-slow-net .delicat-carousel__title,
+html.delicat-slow-net .delicat-testimonials .delicat-testimonial__quote,
+html.delicat-slow-net .delicat-product-card__name,
+html.delicat-slow-net .delicat-builder-hero__title,
+html.delicat-slow-net .delicat-process__card h3,
+html.delicat-slow-net .delicat-why__card h3,
+html.delicat-slow-net .delicat-newsletter h2 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+}
+
+/* Paint cost. Every one of these is decoration a 3G phone renders slowly and
+   nobody is reading. */
+html.delicat-slow-net .delicat-product-card,
+html.delicat-slow-net .delicat-category-tile,
+html.delicat-slow-net .delicat-process__card,
+html.delicat-slow-net .delicat-why__card,
+html.delicat-slow-net .delicat-fav__card,
+html.delicat-slow-net .delicat-testimonials__card,
+html.delicat-slow-net .delicat-testimonials__mcard,
+html.delicat-slow-net .delicat-newsletter,
+html.delicat-slow-net .delicat-trust__panel,
+html.delicat-slow-net .delicat-carousel__view-all,
+html.delicat-slow-net .delicat-shell--header,
+html.delicat-slow-net .delicat-shell__bottom-nav.delicat-mobile-dock {
+  box-shadow: none !important;
+}
+
+html.delicat-slow-net *,
+html.delicat-slow-net *::before,
+html.delicat-slow-net *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* The hero mesh, its glow layers and the floating tiles are three stacked
+   composited layers behind the copy. On a cheap phone they are the most
+   expensive thing above the fold and they carry no information. */
+html.delicat-slow-net .delicat-builder-hero__float,
+html.delicat-slow-net .delicat-builder-hero--style-neo_glass_pro::before,
+html.delicat-slow-net .delicat-builder-hero--style-neo_glass_pro::after,
+html.delicat-slow-net .delicat-bk::before,
+html.delicat-slow-net .delicat-bk.has-pattern::after {
+  display: none !important;
+}
+
+html.delicat-slow-net .delicat-builder-hero--style-neo_glass_pro,
+html.delicat-slow-net .delicat-builder-hero--style-neo_glass_pro.is-mesh {
+  background: var(--dbv9-hero-bg-start, #f2f3ff) !important;
+  box-shadow: none !important;
+}
+
+/* Animation. The review marquee runs a transform on a max-content track for
+   as long as the page is open; that is a permanent main-thread and battery
+   cost on a phone that has neither to spare. */
+html.delicat-slow-net .delicat-testimonials__mtrack,
+html.delicat-slow-net .delicat-builder-hero__float-item,
+html.delicat-slow-net .delicat-bk__card,
+html.delicat-slow-net .delicat-bk__badge {
+  animation: none !important;
+  transform: none !important;
+  will-change: auto !important;
+}
+
+html.delicat-slow-net .delicat-testimonials__marquee {
+  overflow-x: auto;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+html.delicat-slow-net .dbv9-reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+
+/* Below-the-fold work the browser can skip until it is scrolled to. Applied
+   on phones too here — the desktop-only guard existed because older mobile
+   engines mis-sized the placeholder, and contain-intrinsic-size fixes that. */
+@supports (content-visibility: auto) {
+  html.delicat-slow-net .delicat-builder-homepage-managed .delicat-section--testimonials,
+  html.delicat-slow-net .delicat-builder-homepage-managed .delicat-section--faq,
+  html.delicat-slow-net .delicat-builder-homepage-managed .delicat-section--newsletter,
+  html.delicat-slow-net .delicat-builder-homepage-managed .delicat-section--trust_strip,
+  html.delicat-slow-net .delicat-builder-homepage-managed .delicat-section--bon_kliyan {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 520px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.delicat-slow-net * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- C. RC81 — mobile density ---------- */
+
+/* The rules above lose to rc.71.4's mobile block, which sets
+   `font-size: clamp(25px,7vw,29px) !important` on carousel titles and a fixed
+   min-height on the CTAs. Specificity cannot beat !important, so the phone
+   scale has to carry it too — otherwise App Tuning silently does nothing on
+   the one breakpoint it matters most on. That was a real defect in rc.79.
+
+   The heading LEVEL is untouched: these are still h2 in the markup, they just
+   render at an h4 size. One cached HTML document cannot serve a different tag
+   per viewport, so "h4 on mobile" can only ever mean the size. Changing the
+   tag would change it on desktop too and reintroduce the broken outline
+   rc.80 just fixed. */
+@media (max-width: 640px) {
+
+  .delicat-builder-homepage-managed .delicat-carousel__title,
+  .delicat-carousel--variant-ranking .delicat-carousel__title,
+  .delicat-category-chips__title,
+  .delicat-process__title,
+  .delicat-why__title,
+  .delicat-testimonials__title,
+  .delicat-faq__title,
+  .delicat-fav__title,
+  .delicat-newsletter h2 {
+    font-size: var(--dbv9-app-h2, 19px) !important;
+    line-height: 1.18 !important;
+    letter-spacing: -.01em;
+  }
+
+  /* The eyebrow above each title (CATÉGORIES, CLASSEMENT) and the one-line
+     subtitle under it are each a full line of vertical space. */
+  .delicat-carousel__eyebrow,
+  .delicat-category-chips__eyebrow,
+  .delicat-why__eyebrow,
+  .delicat-process__eyebrow,
+  .delicat-fav__eyebrow {
+    margin-bottom: 4px;
+    font-size: 10px;
+    letter-spacing: .16em;
+  }
+
+  .delicat-carousel__subtitle,
+  .delicat-category-chips__subtitle,
+  .delicat-process__subtitle,
+  .delicat-testimonials__subtitle,
+  .delicat-faq__subtitle,
+  .delicat-fav__subtitle {
+    margin-top: 4px !important;
+    font-size: var(--dbv9-app-body, 14px) !important;
+    line-height: 1.4 !important;
+  }
+
+  .delicat-carousel__head,
+  .delicat-category-chips__heading,
+  .delicat-process__head,
+  .delicat-why__head,
+  .delicat-testimonials__head,
+  .delicat-faq__head {
+    margin-bottom: 9px !important;
+  }
+
+  /* Section rhythm. The gap between a rail and the next section was the
+     carousel's own bottom margin (30px, 44px in the lovable variant) stacked
+     on top of the next section's top padding (16px) — so 46-60px of nothing
+     between every band. One variable owns it now. */
+  .delicat-builder-homepage-managed .delicat-carousel,
+  .delicat-builder-homepage-managed.delicat-design-lovable_reference .delicat-carousel {
+    margin-bottom: var(--dbv9-app-gap, 14px) !important;
+  }
+
+  .delicat-builder-homepage-managed .delicat-section {
+    padding-top: var(--dbv9-app-gap, 14px) !important;
+    padding-bottom: 0 !important;
+  }
+
+  .delicat-process__grid,
+  .delicat-why__list,
+  .delicat-faq__list,
+  .delicat-fav__grid,
+  .delicat-category-chips__grid {
+    gap: 8px !important;
+  }
+
+  .delicat-why__payments {
+    margin-top: 18px !important;
+  }
+
+  .delicat-testimonials__review-cta {
+    margin-top: 16px !important;
+  }
+}
+
+/* Clearance for the floating dock.
+   ---------------------------------------------------------------------------
+   The dock is a pill about 66px tall sitting 10px off the bottom, so it needs
+   roughly 90px of clearance. Four different stylesheets were each reserving
+   their own guess — 122px, 128px, 180px, 190px — and the largest won, which is
+   the empty band above the footer. It is derived from the dock height now.
+
+   Two declarations on purpose: the plain px value is what survives if a CSS
+   combiner mangles the calc (which is exactly what strips the spaces calc
+   needs around +). A browser that understands the second uses it; one that
+   gets a broken copy still has 96px rather than nothing. */
+@media (max-width: 820px) {
+  body.delicat-shell-mobile-nav-active,
+  body.delicat-builder-homepage-managed .delicat-page-layout,
+  body.delicat-builder-homepage-managed.delicat-design-lovable_reference .delicat-page-layout {
+    padding-bottom: 96px !important;
+    padding-bottom: calc(var(--dbv9-app-dock, 66px) + 30px + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* ---------- D. RC81 — the heart acknowledges the tap ---------- */
+
+.delicat-product-card__heart.is-tapped {
+  animation: dbv9-heart-tap .26s ease-out;
+}
+
+@keyframes dbv9-heart-tap {
+  0%   { transform: scale(1); }
+  38%  { transform: scale(.86); }
+  100% { transform: scale(1); }
+}
+
+/* A tap target that reads as pressable has to be one. */
+.delicat-product-card__heart {
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.delicat-product-card__heart:focus-visible {
+  outline: 2px solid var(--dbv9-heart-color, #ff4d91);
+  outline-offset: 2px;
+}
+
+html.delicat-slow-net .delicat-product-card__heart.is-tapped,
+html.delicat-low-power .delicat-product-card__heart.is-tapped {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delicat-product-card__heart.is-tapped { animation: none; }
+}
+
+/* ---------- E. RC81.3 — legal pages ---------- */
+
+/* These pages get read on a phone, at length, often by someone who is annoyed.
+   The layout is built for that: one column, generous measure, a sticky-free
+   contents block at the top, and section anchors so support can link to a
+   paragraph instead of to a page. No decoration that costs a repaint. */
+
+.delicat-legal {
+  --lg-ink: #15172a;
+  --lg-mute: #6b7285;
+  --lg-line: #e3e7f1;
+  --lg-accent: var(--dbv9-design-accent, #ff5a1f);
+  --lg-brand: var(--dbv9-design-primary, #0d1b4d);
+  max-width: 44rem;
+  margin: 0 auto;
+  color: var(--lg-ink);
+  font-size: var(--dbv9-app-body, 15px);
+  line-height: 1.72;
+}
+
+.delicat-legal__hero {
+  padding: 6px 0 22px;
+  border-bottom: 1px solid var(--lg-line);
+  margin-bottom: 22px;
+}
+
+.delicat-legal__eyebrow {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .18em;
+  color: var(--lg-accent);
+}
+
+.delicat-legal__title {
+  margin: 0;
+  font-size: var(--dbv9-app-h1, 27px);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  color: var(--lg-brand);
+}
+
+.delicat-legal__intro {
+  margin: 10px 0 0;
+  font-size: var(--dbv9-app-body, 15px);
+  line-height: 1.5;
+  color: var(--lg-mute);
+}
+
+.delicat-legal__stamp {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 0;
+  font-size: 12.5px;
+  color: var(--lg-mute);
+}
+
+.delicat-legal__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #21a05a;
+  flex: 0 0 auto;
+}
+
+/* Contents. Numbered, because the documents number their own articles and a
+   support message that says "article 8" should be findable. */
+.delicat-legal__toc {
+  background: #f4f6fc;
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-bottom: 26px;
+}
+
+.delicat-legal__toc-title {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  color: var(--lg-mute);
+}
+
+.delicat-legal__toc ol {
+  margin: 0;
+  padding-left: 18px;
+  columns: 1;
+}
+
+.delicat-legal__toc li {
+  margin-bottom: 5px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.delicat-legal__toc a {
+  color: var(--lg-brand);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.delicat-legal__toc a:hover,
+.delicat-legal__toc a:focus-visible {
+  border-bottom-color: var(--lg-accent);
+}
+
+@media (min-width: 720px) {
+  .delicat-legal__toc ol { columns: 2; column-gap: 26px; }
+}
+
+/* Body */
+.delicat-legal__body p.lead,
+.delicat-legal p.lead {
+  font-size: 16.5px;
+  line-height: 1.58;
+  color: var(--lg-brand);
+  padding-left: 14px;
+  border-left: 3px solid var(--lg-accent);
+  margin: 0 0 24px;
+}
+
+.delicat-legal__h2 {
+  position: relative;
+  margin: 34px 0 10px;
+  padding-top: 22px;
+  border-top: 1px solid var(--lg-line);
+  font-size: var(--dbv9-app-h2, 19px);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -.015em;
+  color: var(--lg-brand);
+  scroll-margin-top: 84px;
+}
+
+.delicat-legal__body h3 {
+  margin: 22px 0 7px;
+  font-size: var(--dbv9-app-h3, 15px);
+  font-weight: 700;
+  color: var(--lg-ink);
+}
+
+.delicat-legal__anchor {
+  margin-left: 8px;
+  color: var(--lg-line);
+  text-decoration: none;
+  font-weight: 400;
+  opacity: 0;
+}
+
+.delicat-legal__h2:hover .delicat-legal__anchor,
+.delicat-legal__anchor:focus-visible { opacity: 1; color: var(--lg-accent); }
+
+.delicat-legal__body p { margin: 0 0 13px; }
+.delicat-legal__body ul,
+.delicat-legal__body ol { margin: 0 0 15px; padding-left: 20px; }
+.delicat-legal__body li { margin-bottom: 7px; }
+.delicat-legal__body strong { font-weight: 700; color: var(--lg-brand); }
+
+.delicat-legal__body a {
+  color: var(--dbv9-design-secondary, #284696);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* Tables carry the real content in the refund and shipping pages, so they get
+   proper treatment rather than being left to the theme. */
+.delicat-legal__body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 4px 0 20px;
+  font-size: 14px;
+}
+
+.delicat-legal__body th,
+.delicat-legal__body td {
+  text-align: left;
+  padding: 11px 12px;
+  border-bottom: 1px solid var(--lg-line);
+  vertical-align: top;
+}
+
+.delicat-legal__body th {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--lg-mute);
+  background: #f4f6fc;
+}
+
+.delicat-legal__body tr:last-child td { border-bottom: 0; }
+
+/* On a phone a two-column table stacks into labelled rows rather than
+   scrolling sideways — a refund rule you have to swipe to read is a refund
+   rule nobody reads. */
+@media (max-width: 620px) {
+  .delicat-legal__body table,
+  .delicat-legal__body thead,
+  .delicat-legal__body tbody,
+  .delicat-legal__body tr,
+  .delicat-legal__body th,
+  .delicat-legal__body td { display: block; width: 100%; }
+
+  .delicat-legal__body thead { display: none; }
+
+  .delicat-legal__body tr {
+    border: 1px solid var(--lg-line);
+    border-radius: 12px;
+    padding: 4px 12px;
+    margin-bottom: 10px;
+  }
+
+  .delicat-legal__body td { border-bottom: 1px solid var(--lg-line); padding: 10px 0; }
+  .delicat-legal__body tr td:last-child { border-bottom: 0; }
+  .delicat-legal__body tr td:first-child { font-weight: 700; color: var(--lg-brand); }
+}
+
+.delicat-legal-todo {
+  background: #fff0ea;
+  color: #c1400f;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+}
+
+html.delicat-slow-net .delicat-legal__toc { background: #f4f6fc; }

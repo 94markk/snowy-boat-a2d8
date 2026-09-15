@@ -1,0 +1,415 @@
+/* Delicat Announcement Studio — centered, cache-safe announcement popup.
+   Performance rule: no backdrop-filter; all models use lightweight gradients. */
+
+.dbv9-annc[hidden]{display:none!important}
+
+.dbv9-annc{
+  --dbv9-annc-accent:#ff5a1f;
+  --dbv9-annc-navy:#0d1b4d;
+  --dbv9-annc-royal:#284696;
+  position:fixed;
+  inset:0;
+  z-index:2147483646;
+  box-sizing:border-box;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+  min-height:100vh;
+  min-height:100dvh;
+  padding:max(18px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left));
+  isolation:isolate;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+}
+.dbv9-annc,.dbv9-annc *,.dbv9-annc *::before,.dbv9-annc *::after{box-sizing:border-box}
+
+.dbv9-annc__overlay{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  background:rgba(5,9,29,.62);
+  opacity:0;
+  transition:opacity .24s ease;
+  cursor:pointer;
+}
+.dbv9-annc.is-open .dbv9-annc__overlay{opacity:1}
+.dbv9-annc.is-closing .dbv9-annc__overlay{opacity:0}
+
+.dbv9-annc__dialog{
+  position:relative;
+  z-index:1;
+  width:min(430px,100%);
+  max-height:calc(100vh - 36px);
+  max-height:calc(100dvh - 36px);
+  overflow-x:hidden;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  padding:28px 22px 22px;
+  border:1px solid rgba(40,70,150,.14);
+  border-radius:26px;
+  background:#fff;
+  color:#12142e;
+  box-shadow:0 24px 64px rgba(4,8,34,.34);
+  transform:translate3d(0,18px,0) scale(.975);
+  transform-origin:center;
+  opacity:0;
+  transition:transform .30s cubic-bezier(.22,.9,.3,1),opacity .22s ease;
+}
+.dbv9-annc.is-open .dbv9-annc__dialog{transform:translate3d(0,0,0) scale(1);opacity:1}
+.dbv9-annc.is-closing .dbv9-annc__dialog{transform:translate3d(0,12px,0) scale(.985);opacity:0}
+
+
+.dbv9-annc__decor{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  overflow:hidden;
+}
+.dbv9-annc__float{
+  position:absolute;
+  display:grid;
+  place-items:center;
+  width:46px;
+  height:46px;
+  border-radius:16px;
+  font-size:23px;
+  line-height:1;
+  opacity:.24;
+  color:var(--dbv9-annc-royal);
+  background:rgba(255,255,255,.22);
+  border:1px solid rgba(40,70,150,.05);
+  box-shadow:none;
+  transform:translate3d(0,0,0);
+  animation:dbv9AnncBob 6.2s ease-in-out infinite;
+}
+.dbv9-annc__float--game{top:20px;left:20px;animation-duration:6.8s}
+.dbv9-annc__float--gift{top:62px;right:24px;animation-duration:7.6s;animation-delay:-1.5s}
+.dbv9-annc__float--bolt{left:18px;bottom:88px;animation-duration:5.9s;animation-delay:-.8s}
+.dbv9-annc__float--diamond{right:30px;bottom:122px;animation-duration:7.1s;animation-delay:-2s}
+.dbv9-annc__float--shield{right:18px;top:190px;animation-duration:6.4s;animation-delay:-2.4s}
+
+.dbv9-annc__media,
+.dbv9-annc__emoji,
+.dbv9-annc__title,
+.dbv9-annc__text,
+.dbv9-annc__actions{position:relative;z-index:1}
+
+@keyframes dbv9AnncBob{
+  0%,100%{transform:translate3d(0,0,0) rotate(0deg)}
+  25%{transform:translate3d(0,-7px,0) rotate(-2deg)}
+  50%{transform:translate3d(0,4px,0) rotate(2deg)}
+  75%{transform:translate3d(0,-3px,0) rotate(-1deg)}
+}
+
+.dbv9-annc__close{
+  position:absolute;
+  z-index:4;
+  top:12px;
+  right:12px;
+  width:40px;
+  height:40px;
+  display:grid;
+  place-items:center;
+  margin:0;
+  padding:0;
+  border:1px solid rgba(13,27,77,.12);
+  border-radius:999px;
+  background:#fff;
+  color:#37406b;
+  box-shadow:0 5px 14px rgba(15,23,42,.08);
+  appearance:none;
+  -webkit-appearance:none;
+  font:500 25px/1 Arial,sans-serif;
+  cursor:pointer;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .16s ease,color .16s ease,transform .14s ease,border-color .16s ease;
+}
+.dbv9-annc__close:hover{background:#f8f9fd;color:#0d1b4d}
+.dbv9-annc__close:active{transform:scale(.92)}
+.dbv9-annc__close:focus-visible{outline:3px solid color-mix(in srgb,var(--dbv9-annc-accent) 32%,transparent);outline-offset:2px}
+
+.dbv9-annc__media{
+  margin:2px 0 16px;
+  border-radius:18px;
+  overflow:hidden;
+  background:#eef1ff;
+}
+.dbv9-annc__media img{
+  display:block;
+  width:100%;
+  max-height:220px;
+  height:auto;
+  object-fit:cover;
+}
+
+.dbv9-annc__emoji{
+  width:64px;
+  height:64px;
+  display:grid;
+  place-items:center;
+  margin:0 auto 15px;
+  border-radius:20px;
+  background:linear-gradient(135deg,#eef1ff,#fff0e9);
+  font-size:31px;
+  line-height:1;
+}
+
+.dbv9-annc__title{
+  margin:0 0 9px;
+  padding:0 18px;
+  font:850 clamp(22px,5.4vw,28px)/1.13 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  letter-spacing:-.035em;
+  text-align:center;
+  color:var(--dbv9-annc-navy);
+  text-wrap:balance;
+}
+
+.dbv9-annc__text{
+  margin:0 0 21px;
+  font-size:.96rem;
+  line-height:1.55;
+  text-align:center;
+  color:#5a5f7d;
+  text-wrap:pretty;
+}
+
+.dbv9-annc__actions{display:grid;gap:9px}
+
+.dbv9-annc__btn{
+  appearance:none;
+  -webkit-appearance:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  width:100%;
+  min-height:50px;
+  padding:12px 18px;
+  border:0;
+  border-radius:16px;
+  font:800 .95rem/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  letter-spacing:.01em;
+  text-align:center;
+  text-decoration:none;
+  cursor:pointer;
+  touch-action:manipulation;
+  transition:transform .14s ease,filter .16s ease,background .16s ease,border-color .16s ease;
+}
+.dbv9-annc__btn:active{transform:scale(.985)}
+.dbv9-annc__btn:focus-visible{outline:3px solid color-mix(in srgb,var(--dbv9-annc-accent) 32%,transparent);outline-offset:2px}
+
+.dbv9-annc__btn--primary{
+  background:linear-gradient(105deg,var(--dbv9-annc-royal) 0%,#5b63d9 54%,var(--dbv9-annc-accent) 135%);
+  color:#fff!important;
+  -webkit-text-fill-color:#fff;
+  text-shadow:0 1px 1px rgba(0,0,0,.12);
+  box-shadow:0 8px 20px rgba(40,70,150,.16);
+}
+.dbv9-annc__btn--primary:hover{filter:brightness(1.055);color:#fff!important;-webkit-text-fill-color:#fff}
+.dbv9-annc__btn--ghost{background:#f3f4f8;color:#37406b}
+.dbv9-annc__btn--ghost:hover{background:#e9ebf2;color:#20284f}
+
+/* ---------------------------------------------------------------- Models */
+
+/* Aurora — default: bright, soft and mobile-friendly. */
+.dbv9-annc--aurora .dbv9-annc__dialog{
+  background:
+    radial-gradient(circle at 10% 0,rgba(91,99,217,.10),transparent 34%),
+    radial-gradient(circle at 100% 100%,color-mix(in srgb,var(--dbv9-annc-accent) 9%,transparent),transparent 35%),
+    #fff;
+}
+.dbv9-annc--aurora .dbv9-annc__close{border:2px solid var(--dbv9-annc-accent);background:#fff}
+
+/* Flash — dark app-like card with an accent outline and fast pop. */
+.dbv9-annc--flash .dbv9-annc__overlay{background:rgba(3,5,19,.72)}
+.dbv9-annc--flash .dbv9-annc__dialog{
+  border:1px solid color-mix(in srgb,var(--dbv9-annc-accent) 72%,#656df0);
+  border-radius:24px;
+  background:linear-gradient(155deg,#0a0c21 0%,#121637 55%,#171b45 100%);
+  color:#fff;
+  box-shadow:0 0 0 1px rgba(255,255,255,.04),0 24px 72px rgba(0,0,0,.52);
+  transform:scale(.92);
+}
+.dbv9-annc--flash.is-open .dbv9-annc__dialog{transform:scale(1)}
+.dbv9-annc--flash.is-closing .dbv9-annc__dialog{transform:scale(.95)}
+.dbv9-annc--flash .dbv9-annc__title{color:#fff}
+.dbv9-annc--flash .dbv9-annc__text{color:#b7bdd9}
+.dbv9-annc--flash .dbv9-annc__emoji{background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.dbv9-annc--flash .dbv9-annc__close{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.13);color:#fff;box-shadow:none}
+.dbv9-annc--flash .dbv9-annc__btn--primary{background:var(--dbv9-annc-accent);box-shadow:0 9px 24px color-mix(in srgb,var(--dbv9-annc-accent) 22%,transparent)}
+.dbv9-annc--flash .dbv9-annc__btn--ghost{background:rgba(255,255,255,.09);color:#e7e9f5}
+
+/* Midnight — premium Delicat navy. */
+.dbv9-annc--midnight .dbv9-annc__overlay{background:rgba(2,4,19,.76)}
+.dbv9-annc--midnight .dbv9-annc__dialog{
+  border-color:rgba(139,147,255,.22);
+  background:
+    radial-gradient(circle at 50% -10%,rgba(96,75,255,.23),transparent 38%),
+    linear-gradient(180deg,#0b0b2d 0%,#0c1230 100%);
+  color:#fff;
+  box-shadow:0 28px 74px rgba(0,0,0,.55);
+}
+.dbv9-annc--midnight .dbv9-annc__title{color:#fff}
+.dbv9-annc--midnight .dbv9-annc__text{color:#b7bfdc}
+.dbv9-annc--midnight .dbv9-annc__emoji{background:linear-gradient(145deg,rgba(99,79,255,.28),rgba(255,255,255,.06));box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+.dbv9-annc--midnight .dbv9-annc__close{background:rgba(255,255,255,.075);border-color:rgba(255,255,255,.12);color:#fff;box-shadow:none}
+.dbv9-annc--midnight .dbv9-annc__btn--primary{background:linear-gradient(105deg,#5948ff,var(--dbv9-annc-accent));box-shadow:0 10px 28px rgba(89,72,255,.20)}
+.dbv9-annc--midnight .dbv9-annc__btn--ghost{background:rgba(255,255,255,.08);color:#e7eaf9}
+
+/* Minimal — editorial, light, no decorative gradient. */
+.dbv9-annc--minimal .dbv9-annc__overlay{background:rgba(22,24,32,.46)}
+.dbv9-annc--minimal .dbv9-annc__dialog{
+  max-width:410px;
+  padding:30px 26px 24px;
+  border:1px solid #dfe2e9;
+  border-radius:18px;
+  background:#fff;
+  box-shadow:0 18px 48px rgba(15,23,42,.18);
+}
+.dbv9-annc--minimal .dbv9-annc__emoji{width:auto;height:auto;margin-bottom:12px;background:transparent;border-radius:0;font-size:28px}
+.dbv9-annc--minimal .dbv9-annc__title{padding:0;color:#111827;font-size:clamp(22px,5vw,26px);letter-spacing:-.025em}
+.dbv9-annc--minimal .dbv9-annc__text{color:#606775}
+.dbv9-annc--minimal .dbv9-annc__close{width:36px;height:36px;border:0;background:transparent;box-shadow:none}
+.dbv9-annc--minimal .dbv9-annc__btn{border-radius:12px;box-shadow:none}
+.dbv9-annc--minimal .dbv9-annc__btn--primary{background:#111827}
+.dbv9-annc--minimal .dbv9-annc__btn--ghost{background:#f4f4f5;color:#52525b}
+
+/* Boutique — warm commerce card with a top accent ribbon. */
+.dbv9-annc--boutique .dbv9-annc__dialog{
+  padding-top:34px;
+  border-color:#ece6e2;
+  background:linear-gradient(180deg,#fffaf7 0%,#fff 42%);
+  box-shadow:0 24px 64px rgba(69,39,25,.24);
+}
+.dbv9-annc--boutique .dbv9-annc__dialog::before{
+  content:"";
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:7px;
+  background:linear-gradient(90deg,var(--dbv9-annc-accent),#5b63d9);
+}
+.dbv9-annc--boutique .dbv9-annc__emoji{background:#fff1e9;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--dbv9-annc-accent) 14%,transparent)}
+.dbv9-annc--boutique .dbv9-annc__title{color:#241a17}
+.dbv9-annc--boutique .dbv9-annc__text{color:#6d5c55}
+.dbv9-annc--boutique .dbv9-annc__close{border-color:#eee3dd;color:#574742}
+.dbv9-annc--boutique .dbv9-annc__btn--primary{background:var(--dbv9-annc-accent);box-shadow:0 9px 22px color-mix(in srgb,var(--dbv9-annc-accent) 18%,transparent)}
+.dbv9-annc--boutique .dbv9-annc__btn--ghost{background:#f7efeb;color:#5d4a43}
+
+/* Spotlight — centered halo, subdued premium scene. */
+.dbv9-annc--spotlight .dbv9-annc__overlay{background:rgba(1,3,14,.82)}
+.dbv9-annc--spotlight .dbv9-annc__dialog{
+  border-color:rgba(255,255,255,.10);
+  background:
+    radial-gradient(circle at 50% 12%,color-mix(in srgb,var(--dbv9-annc-accent) 25%,#6f62ff),transparent 26%),
+    radial-gradient(circle at 50% 0,rgba(255,255,255,.09),transparent 44%),
+    #090c1d;
+  color:#fff;
+  box-shadow:0 32px 90px rgba(0,0,0,.66);
+}
+.dbv9-annc--spotlight .dbv9-annc__title{color:#fff}
+.dbv9-annc--spotlight .dbv9-annc__text{color:#b5bbce}
+.dbv9-annc--spotlight .dbv9-annc__emoji{background:rgba(255,255,255,.07);box-shadow:0 0 28px color-mix(in srgb,var(--dbv9-annc-accent) 18%,transparent)}
+.dbv9-annc--spotlight .dbv9-annc__close{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.11);color:#fff;box-shadow:none}
+.dbv9-annc--spotlight .dbv9-annc__btn--primary{background:#fff;color:#0d1024;box-shadow:none}
+.dbv9-annc--spotlight .dbv9-annc__btn--primary:hover{color:#0d1024}
+.dbv9-annc--spotlight .dbv9-annc__btn--ghost{background:rgba(255,255,255,.08);color:#e6e9f3}
+
+
+.dbv9-annc--aurora .dbv9-annc__float{
+  background:rgba(255,255,255,.72);
+  color:#5b63d9;
+}
+.dbv9-annc--flash .dbv9-annc__float,
+.dbv9-annc--midnight .dbv9-annc__float,
+.dbv9-annc--spotlight .dbv9-annc__float{
+  background:rgba(255,255,255,.045);
+  border-color:rgba(255,255,255,.05);
+  color:#ffffff;
+  box-shadow:none;
+  opacity:.22;
+}
+
+.dbv9-annc--minimal .dbv9-annc__float{
+  width:40px;
+  height:40px;
+  border-radius:14px;
+  background:rgba(17,24,39,.025);
+  border-color:rgba(17,24,39,.04);
+  color:#4b5563;
+  box-shadow:none;
+  opacity:.18;
+}
+
+.dbv9-annc--boutique .dbv9-annc__float{
+  background:rgba(255,247,241,.24);
+  border-color:rgba(255,90,31,.05);
+  color:#9a4f37;
+  box-shadow:none;
+  opacity:.22;
+}
+
+/* Keep floating chat/assistant controls from sitting on top of an open modal. */
+html.dbv9-annc-lock [data-delicat-assistant],
+html.dbv9-annc-lock [class*="delicat-assistant"],
+html.dbv9-annc-lock [id*="delicat-assistant"],
+html.dbv9-annc-lock [class*="deli-assistant"],
+html.dbv9-annc-lock [id*="deli-assistant"],
+html.dbv9-annc-lock [class*="assistant-widget"],
+html.dbv9-annc-lock [id*="assistant-widget"],
+html.dbv9-annc-lock [class*="assistant-fab"],
+html.dbv9-annc-lock [id*="assistant-fab"],
+html.dbv9-annc-lock [class*="chatbot"],
+html.dbv9-annc-lock [id*="chatbot"],
+html.dbv9-annc-lock [class*="chat-widget"],
+html.dbv9-annc-lock [id*="chat-widget"],
+html.dbv9-annc-lock [class*="chat_launcher"],
+html.dbv9-annc-lock [class*="chat-launcher"],
+html.dbv9-annc-lock [class*="support-widget"],
+html.dbv9-annc-lock [id*="support-widget"],
+html.dbv9-annc-lock iframe[title*="chat" i],
+html.dbv9-annc-lock iframe[title*="assistant" i]{
+  visibility:hidden!important;
+  pointer-events:none!important;
+}
+
+html.dbv9-annc-lock,
+html.dbv9-annc-lock body{
+  overflow:hidden!important;
+  overscroll-behavior:none;
+}
+
+@media(max-width:640px){
+  .dbv9-annc{padding:max(14px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+  .dbv9-annc__float{width:40px;height:40px;font-size:20px}
+  .dbv9-annc__float--game{top:18px;left:16px}
+  .dbv9-annc__float--gift{top:58px;right:16px}
+  .dbv9-annc__float--bolt{left:12px;bottom:92px}
+  .dbv9-annc__float--diamond{right:10px;bottom:112px}
+  .dbv9-annc__float--shield{display:none}
+  .dbv9-annc__dialog{width:min(430px,100%);max-height:calc(100vh - 28px);max-height:calc(100dvh - 28px);padding:27px 20px 20px;border-radius:24px}
+  .dbv9-annc__title{font-size:clamp(22px,7vw,27px)}
+  .dbv9-annc__text{font-size:.94rem}
+  .dbv9-annc__media img{max-height:190px}
+  .dbv9-annc--minimal .dbv9-annc__dialog{padding:28px 22px 21px;border-radius:17px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .dbv9-annc__overlay,
+  .dbv9-annc__dialog,
+  .dbv9-annc__btn,
+  .dbv9-annc__close,.dbv9-annc__float{transition:none!important;animation:none!important}
+  .dbv9-annc__dialog{transform:none!important}
+}
+
+/* Older browsers that do not support color-mix still keep usable focus rings. */
+@supports not (color:color-mix(in srgb,#000 50%,#fff)){
+  .dbv9-annc__close:focus-visible,.dbv9-annc__btn:focus-visible{outline-color:var(--dbv9-annc-accent)}
+  .dbv9-annc--flash .dbv9-annc__dialog{border-color:var(--dbv9-annc-accent)}
+  .dbv9-annc--flash .dbv9-annc__btn--primary,.dbv9-annc--boutique .dbv9-annc__btn--primary{box-shadow:none}
+  .dbv9-annc--spotlight .dbv9-annc__dialog{background:radial-gradient(circle at 50% 12%,rgba(111,98,255,.25),transparent 26%),#090c1d}
+}
