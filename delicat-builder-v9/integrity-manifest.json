@@ -1,10 +1,14 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-15T05:15:54.000000+00:00",
+    "built": "2026-09-15T05:17:06.000000+00:00",
     "version": "9.2.0-pro.29",
-    "bytes": 5943387,
-    "count": 356,
+    "bytes": 5949697,
+    "count": 357,
     "files": {
+        "OPTIMIZATION.md": {
+            "bytes": 6310,
+            "sha256": "cbf51fedecf64e30f7881e62535cc6a595a7bf98fa5c6d045d6d9d7590965903"
+        },
         "PRO-README.md": {
             "bytes": 1735,
             "sha256": "1c4df19dc1fa2c987d2e739910047c481aefc26b58e505d9783453a92f57835e"
