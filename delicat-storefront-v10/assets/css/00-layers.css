@@ -1,0 +1,25 @@
+/* =============================================================================
+   00 — Layer order
+   -----------------------------------------------------------------------------
+   The single most important file in V10's CSS, and the shortest.
+
+   This statement fixes the outcome of every conflict in the storefront, once,
+   in reading order rather than by counting selectors. A rule in `state` beats a
+   rule in `components` beats a rule in `layout` — whatever their specificity,
+   whatever order the files load in, whether or not an optimiser reorders or
+   combines them.
+
+   Three consequences worth stating plainly:
+
+   1. `!important` is never needed, and V10 contains none outside of [hidden].
+   2. A stylesheet can be loaded late without becoming more powerful, so the
+      loading order of the bundle stops being load-bearing. V9's chrome bundle
+      silently discarded every edit made to its four source files; even when it
+      was rebuilt, order still decided behaviour. Here it does not.
+   3. The theme's own CSS, and WooCommerce's, land in the anonymous layer, which
+      the spec places *after* every named layer. So V10 deliberately puts the
+      surfaces it must win — `state` — last, and leaves everything a theme might
+      legitimately want to restyle in earlier layers.
+   ============================================================================= */
+
+@layer reset, base, layout, components, state;

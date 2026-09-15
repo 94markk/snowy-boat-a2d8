@@ -1,0 +1,115 @@
+/* =============================================================================
+   01 — Reset
+   -----------------------------------------------------------------------------
+   Everything in V10 lives inside a cascade layer, and the layers are ordered
+   once, in 00-layers.css. Layer order beats specificity, which is why this
+   stylesheet — and every other one in V10 — contains no `!important` at all.
+
+   V9 could not do this. Its rules competed on specificity, so making a fix
+   stick meant adding class names to the selector or reaching for !important,
+   and the result was a storefront where `.dpn-checkout-dock{display:none
+   !important}` lost to `body.dpn-checkout-dock-ready .dpn-checkout-dock
+   {display:block!important}` — because among !important declarations the more
+   specific selector still wins. Layers remove the whole category of argument.
+   ============================================================================= */
+
+@layer reset {
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    /* The browser's own smooth scrolling, which respects reduced-motion by
+       itself and survives a page swap. No script involved. */
+    scroll-behavior: smooth;
+    /* Chrome is fixed, so an in-page anchor must clear the header. */
+    scroll-padding-top: calc(var(--dlx-header-h) + var(--dlx-safe-t) + var(--dlx-space-md));
+    scroll-padding-bottom: var(--dlx-band);
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+
+  body {
+    margin: 0;
+    background: var(--dlx-ground);
+    color: var(--dlx-ink);
+    font-size: var(--dlx-text-md);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    /* Native feel, item 1: a pull past the end of the page must not bounce the
+       whole document or trigger a pull-to-refresh mid-scroll. */
+    overscroll-behavior-y: none;
+
+    /* Native feel, item 2: text selection is a desktop gesture. On a phone a
+       long press on the chrome should do nothing, not select a label. Content
+       re-enables it below. */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd { margin: 0; }
+  ul[class], ol[class] { margin: 0; padding: 0; list-style: none; }
+
+  img, picture, video, canvas, svg { display: block; max-width: 100%; }
+  img, video { height: auto; }
+
+  input, button, textarea, select {
+    font: inherit;
+    color: inherit;
+    margin: 0;
+  }
+
+  button {
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    /* Native feel, item 3: no 300ms wait for a possible double-tap. Every tap
+       target in V10 opts in, so nothing in the app feels laggy on a phone. */
+    touch-action: manipulation;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    touch-action: manipulation;
+  }
+
+  /* Long words in a product title must wrap rather than widen the page. */
+  h1, h2, h3, h4, p, li, td, th, figcaption { overflow-wrap: break-word; }
+
+  /* Headings and short strings read better balanced; body text does not. */
+  h1, h2, h3, h4 { text-wrap: balance; }
+
+  :where(:focus-visible) {
+    outline: 2px solid var(--dlx-brand);
+    outline-offset: 2px;
+    border-radius: var(--dlx-radius-sm);
+  }
+  /* A visible ring for keyboards, nothing for taps. */
+  :where(:focus:not(:focus-visible)) { outline: none; }
+
+  [hidden] { display: none !important; }
+
+  /* Tables, code and diagrams are the only things allowed to be wider than the
+     page, and only inside their own scroller. */
+  .dlx-scroll-x {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dlx-sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+}

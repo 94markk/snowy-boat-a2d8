@@ -1,0 +1,629 @@
+/* =============================================================================
+   04 — Components
+   -----------------------------------------------------------------------------
+   Each component reads tokens and nothing else. None of them contains a colour,
+   a breakpoint, a z-index or a duration of its own, and none of them contains a
+   dark-mode rule — the token layer restates the palette for dark, so a
+   component that was correct in light is correct in dark by construction.
+   ============================================================================= */
+
+@layer components {
+
+  /* ---------------------------------------------------------------------
+     Surfaces
+     ------------------------------------------------------------------ */
+
+  .dlx-card {
+    display: flex;
+    flex-direction: column;
+    background: var(--dlx-surface);
+    border: 1px solid var(--dlx-line-soft);
+    border-radius: var(--dlx-radius-lg);
+    overflow: hidden;
+  }
+
+  .dlx-section {
+    padding-block: var(--dlx-space-lg);
+  }
+
+  .dlx-section__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--dlx-space-md);
+    margin-bottom: var(--dlx-space-md);
+  }
+
+  .dlx-section__title { font-size: var(--dlx-text-xl); }
+
+  .dlx-section__more {
+    flex: 0 0 auto;
+    color: var(--dlx-brand);
+    font-size: var(--dlx-text-sm);
+    font-weight: 650;
+  }
+
+  /* ---------------------------------------------------------------------
+     Buttons
+     ------------------------------------------------------------------ */
+
+  .dlx-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--dlx-space-xs);
+
+    /* 48px is the smallest target a thumb hits reliably. Every interactive
+       element in V10 meets it, including the ones that look smaller — the
+       padding does the work, not the glyph. */
+    min-height: 48px;
+    padding-inline: var(--dlx-space-lg);
+
+    border-radius: var(--dlx-radius-md);
+    font-size: var(--dlx-text-md);
+    font-weight: 650;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+
+    transition: scale var(--dlx-t-instant) var(--dlx-ease-out),
+                background-color var(--dlx-t-quick) var(--dlx-ease-out),
+                opacity var(--dlx-t-quick) var(--dlx-ease-out);
+  }
+
+  /* The single detail that does most of the work in making a web page feel
+     like an app: the control acknowledges the finger before anything else
+     happens. No network, no script, no wait. */
+  .dlx-btn:active { scale: 0.97; }
+
+  .dlx-btn--primary {
+    background: var(--dlx-brand);
+    color: var(--dlx-brand-ink);
+  }
+
+  .dlx-btn--secondary {
+    background: var(--dlx-sunken);
+    color: var(--dlx-ink);
+  }
+
+  .dlx-btn--ghost {
+    background: transparent;
+    color: var(--dlx-ink-soft);
+    border: 1px solid var(--dlx-line);
+  }
+
+  .dlx-btn--block { width: 100%; }
+
+  .dlx-btn[disabled],
+  .dlx-btn[aria-disabled="true"] {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  /* An icon-only control: square, centred, same 48px reach. */
+  .dlx-icon-btn {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--dlx-radius-full);
+    color: var(--dlx-ink-soft);
+    transition: background-color var(--dlx-t-quick) var(--dlx-ease-out),
+                scale var(--dlx-t-instant) var(--dlx-ease-out);
+  }
+
+  .dlx-icon-btn svg { width: 22px; height: 22px; }
+  .dlx-icon-btn:hover { background: var(--dlx-sunken); }
+  .dlx-icon-btn:active { scale: 0.9; }
+
+  /* ---------------------------------------------------------------------
+     Product card
+     ------------------------------------------------------------------ */
+
+  .dlx-product {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: var(--dlx-surface);
+    border: 1px solid var(--dlx-line-soft);
+    border-radius: var(--dlx-radius-lg);
+    overflow: hidden;
+    transition: scale var(--dlx-t-quick) var(--dlx-ease-out);
+  }
+
+  .dlx-product:active { scale: 0.985; }
+
+  .dlx-product__media {
+    position: relative;
+    /* Reserved before the image arrives, so nothing below it ever moves. The
+       single largest source of layout shift on a storefront, removed by
+       stating the ratio rather than waiting to measure it. */
+    aspect-ratio: 1 / 1;
+    background: var(--dlx-sunken);
+  }
+
+  .dlx-product__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .dlx-product__body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--dlx-space-2xs);
+    padding: var(--dlx-space-sm);
+  }
+
+  .dlx-product__name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    /* Clamping without a stated line-height inherits the page's, and a theme
+       with a tight one slices the tops off the letters. V9 shipped exactly
+       that bug in its drawer. Every clamped string in V10 states its own. */
+    line-height: 1.3;
+    font-size: var(--dlx-text-sm);
+    font-weight: 600;
+    color: var(--dlx-ink);
+  }
+
+  .dlx-product__price {
+    margin-top: auto;
+    font-size: var(--dlx-text-md);
+    font-weight: 700;
+    color: var(--dlx-ink);
+  }
+
+  .dlx-product__price del {
+    margin-inline-end: var(--dlx-space-2xs);
+    color: var(--dlx-ink-muted);
+    font-weight: 500;
+    text-decoration: line-through;
+  }
+
+  .dlx-product__badge {
+    position: absolute;
+    inset-block-start: var(--dlx-space-xs);
+    inset-inline-start: var(--dlx-space-xs);
+    padding: 4px 8px;
+    border-radius: var(--dlx-radius-full);
+    background: var(--dlx-accent);
+    color: var(--dlx-ink-inverse);
+    font-size: var(--dlx-text-xs);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+
+  /* ---------------------------------------------------------------------
+     Grids and rails
+     ------------------------------------------------------------------ */
+
+  .dlx-grid {
+    display: grid;
+    gap: var(--dlx-space-sm);
+    /* Cards choose their own count from the space available rather than from a
+       breakpoint, so every width between the breakpoints is designed too. */
+    grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+  }
+
+  @media (min-width: 720px) {
+    .dlx-grid { gap: var(--dlx-space-md); grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); }
+  }
+
+  /* A horizontal rail that snaps like a native carousel, with no script. */
+  .dlx-rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(150px, 44%);
+    gap: var(--dlx-space-sm);
+
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    /* A flick at the end of the rail must not scroll the page behind it. */
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+
+    /* The rail bleeds to the screen edge while its items stay on the gutter,
+       which is what a native carousel does and what a padded container cannot. */
+    margin-inline: calc(var(--dlx-gutter) * -1);
+    padding-inline: var(--dlx-gutter);
+    scroll-padding-inline: var(--dlx-gutter);
+    padding-block: 2px;
+
+    scrollbar-width: none;
+  }
+
+  .dlx-rail::-webkit-scrollbar { display: none; }
+  .dlx-rail > * { scroll-snap-align: start; }
+
+  @media (min-width: 720px) { .dlx-rail { grid-auto-columns: minmax(190px, 28%); } }
+  @media (min-width: 1024px) { .dlx-rail { grid-auto-columns: minmax(200px, 22%); } }
+
+  /* ---------------------------------------------------------------------
+     Sheet — the native idiom for a secondary surface
+     ------------------------------------------------------------------ */
+
+  .dlx-sheet {
+    position: fixed;
+    inset: auto 0 0 0;
+    z-index: var(--dlx-z-sheet);
+
+    display: flex;
+    flex-direction: column;
+    max-height: min(88svh, 720px);
+
+    padding-bottom: var(--dlx-safe-b);
+    border-radius: var(--dlx-radius-xl) var(--dlx-radius-xl) 0 0;
+    background: var(--dlx-surface);
+    box-shadow: var(--dlx-shadow-lg);
+
+    translate: 0 100%;
+    transition: translate var(--dlx-t-base) var(--dlx-ease-out),
+                overlay var(--dlx-t-base) allow-discrete,
+                display  var(--dlx-t-base) allow-discrete;
+  }
+
+  .dlx-sheet[open] { translate: 0 0; }
+
+  /* The entry animation needs a start value that exists before the element is
+     shown; without this the sheet appears in place and only animates out. */
+  @starting-style {
+    .dlx-sheet[open] { translate: 0 100%; }
+  }
+
+  .dlx-sheet::backdrop {
+    background: var(--dlx-scrim);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    transition: opacity var(--dlx-t-base) var(--dlx-ease-out),
+                overlay var(--dlx-t-base) allow-discrete,
+                display var(--dlx-t-base) allow-discrete;
+  }
+
+  .dlx-sheet[open]::backdrop { opacity: 1; }
+
+  @starting-style {
+    .dlx-sheet[open]::backdrop { opacity: 0; }
+  }
+
+  /* The grabber. Decorative, but it is the affordance that tells a customer
+     this panel is dismissible, and its absence is why web sheets feel wrong. */
+  .dlx-sheet__grip {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 4px;
+    margin: var(--dlx-space-sm) auto;
+    border-radius: var(--dlx-radius-full);
+    background: var(--dlx-line);
+  }
+
+  .dlx-sheet__head {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+    padding: 0 var(--dlx-gutter) var(--dlx-space-sm);
+  }
+
+  .dlx-sheet__title { flex: 1 1 auto; font-size: var(--dlx-text-lg); }
+
+  .dlx-sheet__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 var(--dlx-gutter) var(--dlx-space-lg);
+  }
+
+  @media (min-width: 720px) {
+    .dlx-sheet {
+      inset: 50% auto auto 50%;
+      width: min(520px, calc(100vw - (var(--dlx-gutter) * 2)));
+      translate: -50% -44%;
+      border-radius: var(--dlx-radius-xl);
+    }
+    .dlx-sheet[open] { translate: -50% -50%; }
+    @starting-style { .dlx-sheet[open] { translate: -50% -44%; } }
+  }
+
+  /* ---------------------------------------------------------------------
+     Drawer
+     ------------------------------------------------------------------ */
+
+  .dlx-drawer {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: var(--dlx-z-drawer);
+
+    display: flex;
+    flex-direction: column;
+
+    width: min(340px, 86vw);
+    max-width: none;
+    max-height: none;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+
+    border: 0;
+    background: var(--dlx-surface);
+    color: var(--dlx-ink);
+
+    translate: -100% 0;
+    transition: translate var(--dlx-t-base) var(--dlx-ease-out),
+                overlay var(--dlx-t-base) allow-discrete,
+                display var(--dlx-t-base) allow-discrete;
+  }
+
+  .dlx-drawer[open] { translate: 0 0; }
+
+  @starting-style {
+    .dlx-drawer[open] { translate: -100% 0; }
+  }
+
+  .dlx-drawer::backdrop {
+    background: var(--dlx-scrim);
+    opacity: 0;
+    transition: opacity var(--dlx-t-base) var(--dlx-ease-out),
+                overlay var(--dlx-t-base) allow-discrete,
+                display var(--dlx-t-base) allow-discrete;
+  }
+
+  .dlx-drawer[open]::backdrop { opacity: 1; }
+  @starting-style { .dlx-drawer[open]::backdrop { opacity: 0; } }
+
+  .dlx-drawer__head {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+    padding: calc(var(--dlx-safe-t) + var(--dlx-space-md)) var(--dlx-space-md) var(--dlx-space-md);
+    border-bottom: 1px solid var(--dlx-line-soft);
+  }
+
+  .dlx-drawer__avatar {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--dlx-radius-full);
+    background: var(--dlx-brand);
+    color: var(--dlx-brand-ink);
+    font-size: var(--dlx-text-lg);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* The identity block is only rendered when there is something to put in it.
+     V9 printed the element unconditionally and fell back to the WordPress site
+     title, which was blank on this install — so the drawer opened with a tall
+     empty space where the shop name should be. */
+  .dlx-drawer__identity {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .dlx-drawer__identity strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--dlx-text-md);
+    line-height: 1.35;
+  }
+
+  .dlx-drawer__identity small {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    /* Stated, not inherited. A theme with a tight line height slices the tops
+       off clamped text, which is what happened to "Mon Portefeuille" in V9. */
+    line-height: 1.35;
+  }
+
+  .dlx-drawer__body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    padding: var(--dlx-space-sm) var(--dlx-space-sm) var(--dlx-space-lg);
+  }
+
+  .dlx-drawer__item {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+    min-height: 48px;
+    padding: var(--dlx-space-xs) var(--dlx-space-sm);
+    border-radius: var(--dlx-radius-md);
+    color: var(--dlx-ink);
+    transition: background-color var(--dlx-t-instant) var(--dlx-ease-out);
+  }
+
+  .dlx-drawer__item:active { background: var(--dlx-sunken); }
+  .dlx-drawer__item[aria-current="page"] { background: var(--dlx-sunken); color: var(--dlx-brand); }
+
+  .dlx-drawer__item svg { flex: 0 0 22px; width: 22px; height: 22px; }
+
+  .dlx-drawer__item span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    /* Stated, for the same reason as the product name above. */
+    line-height: 1.4;
+    font-size: var(--dlx-text-md);
+    font-weight: 550;
+  }
+
+  /* ---------------------------------------------------------------------
+     Search field
+     ------------------------------------------------------------------ */
+
+  /* The icon is a flex item, not an absolutely positioned overlay. V9 placed
+     it over the input and relied on the input keeping a 50px text indent; a
+     theme that reset the indent put the magnifier on top of the placeholder.
+     Structured this way the overlap is not merely fixed, it is unexpressible. */
+  .dlx-search {
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-xs);
+    width: 100%;
+    min-height: 48px;
+    padding-inline: var(--dlx-space-sm);
+    border: 1px solid var(--dlx-line);
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-surface);
+    transition: border-color var(--dlx-t-quick) var(--dlx-ease-out),
+                box-shadow var(--dlx-t-quick) var(--dlx-ease-out);
+  }
+
+  .dlx-search:focus-within {
+    border-color: var(--dlx-brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--dlx-brand) 18%, transparent);
+  }
+
+  .dlx-search__icon {
+    display: flex;
+    flex: 0 0 auto;
+    color: var(--dlx-ink-muted);
+    pointer-events: none;
+  }
+
+  .dlx-search__icon svg { width: 20px; height: 20px; }
+
+  .dlx-search input {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .dlx-search input:focus { box-shadow: none; }
+
+  /* ---------------------------------------------------------------------
+     Purchase dock
+     ------------------------------------------------------------------ */
+
+  .dlx-dock {
+    position: fixed;
+    inset-inline: 0;
+    /* Sits ON the tab bar, never over it: the offset is the whole space the bar
+       occupies, read as one token rather than reassembled from its parts. */
+    bottom: var(--dlx-tabbar-block);
+    z-index: var(--dlx-z-dock);
+
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+
+    min-height: var(--dlx-dock-h);
+    padding: var(--dlx-space-sm) var(--dlx-gutter);
+
+    background: color-mix(in srgb, var(--dlx-surface) 90%, transparent);
+    border-top: 1px solid var(--dlx-line-soft);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+
+    view-transition-name: dlx-dock;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .dlx-dock { background: var(--dlx-surface); }
+  }
+
+  .dlx-dock__price {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+  }
+
+  .dlx-dock__price small { font-size: var(--dlx-text-xs); }
+  .dlx-dock__price strong { font-size: var(--dlx-text-lg); }
+  .dlx-dock .dlx-btn { flex: 1 1 auto; }
+
+  /* On a tablet the dock takes the tab bar's shape and sits flush on top of it,
+     so the two read as one stacked control rather than a pill on a slab.
+
+     Flush, with no gap and no margin of its own, on purpose. A margin here
+     would be a second piece of vertical geometry that --dlx-tabbar-block does
+     not account for, and the band would once again be short by exactly that
+     amount - which is the same mistake as the tablet float, one element up.
+     The only vertical offset the dock has is the block it sits on. */
+  @media (min-width: 560px) {
+    .dlx-dock {
+      inset-inline: 50% auto;
+      translate: -50% 0;
+      width: min(calc(100% - (var(--dlx-gutter) * 2)), 460px);
+      border: 1px solid var(--dlx-line-soft);
+      border-bottom: 0;
+      border-radius: var(--dlx-radius-xl) var(--dlx-radius-xl) 0 0;
+      box-shadow: var(--dlx-shadow-md);
+    }
+  }
+
+  /* A desktop product page has its own add-to-cart button; a phone action bar
+     across the bottom of a laptop is duplicate furniture. V9 shipped one, and
+     reserved 190px of page for it. */
+  @media (min-width: 1024px) {
+    .dlx-dock { display: none; }
+  }
+
+  /* ---------------------------------------------------------------------
+     Skeletons — shown while something is genuinely pending, never as decoration
+     ------------------------------------------------------------------ */
+
+  .dlx-skeleton {
+    background: linear-gradient(90deg,
+      var(--dlx-sunken) 0%,
+      color-mix(in srgb, var(--dlx-sunken) 60%, var(--dlx-surface)) 50%,
+      var(--dlx-sunken) 100%);
+    background-size: 200% 100%;
+    animation: dlx-shimmer 1.4s linear infinite;
+    border-radius: var(--dlx-radius-md);
+  }
+
+  @keyframes dlx-shimmer {
+    from { background-position: 200% 0; }
+    to   { background-position: -200% 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .dlx-skeleton { animation: none; }
+  }
+
+  /* ---------------------------------------------------------------------
+     Toast
+     ------------------------------------------------------------------ */
+
+  .dlx-toast {
+    position: fixed;
+    inset-inline: var(--dlx-gutter);
+    /* Above whatever bottom chrome exists, using the same derived band. */
+    bottom: calc(var(--dlx-band) + var(--dlx-space-md));
+    z-index: var(--dlx-z-toast);
+
+    display: flex;
+    align-items: center;
+    gap: var(--dlx-space-sm);
+    margin-inline: auto;
+    max-width: 420px;
+    padding: var(--dlx-space-sm) var(--dlx-space-md);
+
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-ink);
+    color: var(--dlx-ink-inverse);
+    box-shadow: var(--dlx-shadow-lg);
+    font-size: var(--dlx-text-sm);
+  }
+}

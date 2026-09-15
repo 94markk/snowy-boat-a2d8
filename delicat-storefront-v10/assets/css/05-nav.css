@@ -1,0 +1,128 @@
+/* =============================================================================
+   05 — Navigation
+   -----------------------------------------------------------------------------
+   The part that makes V10 feel like an app rather than a website, and the part
+   where it differs most from V9.
+
+   V9 moved between pages with a JavaScript router: fetch the next page, parse
+   it, swap the body's innerHTML, then try to re-run whatever the new markup
+   needed. Twelve of its own modules never learned that a page had changed, so
+   they stopped working after the first navigation; dark mode reverted on every
+   swap; the scroll position was lost on Back; and with JavaScript unavailable
+   the store fell back to plain loads that looked nothing like the app.
+
+   V10 does not have a router. It navigates by loading pages — real navigations,
+   real history entries, real Back — and asks the browser to do three things:
+
+     @view-transition   animate between the two documents itself
+     view-transition-name  recognise the header and the tab bar as the same
+                           object on both pages, and hold them still
+     speculationrules   render the next page before the tap lands
+
+   The result is that a page change is a crossfade over chrome that never moved,
+   with the destination usually already rendered. No module can miss it, because
+   every page is a real page load. Back works because it is the browser's Back.
+   Scroll restoration works because nothing is fighting it. With JavaScript off
+   the transitions simply do not play and the store still works.
+   ============================================================================= */
+
+@layer layout {
+
+  /* Opt in to cross-document transitions. Both the page being left and the page
+     being entered must carry this, which is why it is in the always-loaded
+     bundle rather than on any one template. */
+  @view-transition {
+    navigation: auto;
+  }
+
+  /* The content area is the thing that changes. Naming it separates it from the
+     root snapshot so the chrome above and below can sit out the animation. */
+  .dlx-main {
+    view-transition-name: dlx-content;
+  }
+
+  /* A named element must be unique per document. If a template ever renders two
+     mains the browser skips the whole transition rather than guessing — so
+     the shell renders exactly one, and the build asserts it. */
+}
+
+/* -----------------------------------------------------------------------------
+   Transition pseudo-elements
+   These live outside any layer: they are not page content and never conflict
+   with it, and keeping them out of the layer stack makes that explicit.
+   -------------------------------------------------------------------------- */
+
+::view-transition-group(root) {
+  animation-duration: var(--dlx-t-base);
+  animation-timing-function: var(--dlx-ease-out);
+}
+
+/* Chrome does not animate. Both snapshots exist; the outgoing one is simply
+   not drawn and the incoming one is drawn at once. Since the two are identical
+   the effect is that the header and the tab bar never moved — which is the
+   whole illusion, achieved without keeping a single DOM node alive. */
+::view-transition-old(dlx-header),
+::view-transition-old(dlx-tabbar),
+::view-transition-old(dlx-dock) {
+  animation: none;
+  opacity: 0;
+}
+
+::view-transition-new(dlx-header),
+::view-transition-new(dlx-tabbar),
+::view-transition-new(dlx-dock) {
+  animation: none;
+  opacity: 1;
+}
+
+/* Content: a short, shallow slide in the direction of travel plus a crossfade.
+   The distance is deliberately small — 24px, not a full screen — because a
+   full-screen push reads as slow however fast it is. */
+::view-transition-old(dlx-content) {
+  animation: dlx-leave var(--dlx-t-base) var(--dlx-ease-out) both;
+}
+
+::view-transition-new(dlx-content) {
+  animation: dlx-enter var(--dlx-t-base) var(--dlx-ease-out) both;
+}
+
+@keyframes dlx-enter {
+  from { opacity: 0; transform: translate3d(var(--dlx-nav-from, 24px), 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes dlx-leave {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translate3d(var(--dlx-nav-to, -16px), 0, 0); }
+}
+
+/* Direction. `dlx-nav.js` writes this attribute from the navigation type before
+   the transition starts; without JavaScript the default forward values above
+   apply and the animation is still correct, just not directional. */
+:root[data-dlx-nav="back"] {
+  --dlx-nav-from: -24px;
+  --dlx-nav-to: 16px;
+}
+
+/* A page reached by tapping its own tab should not slide at all — it is the
+   same surface, refreshed. */
+:root[data-dlx-nav="same"] {
+  --dlx-nav-from: 0px;
+  --dlx-nav-to: 0px;
+}
+
+/* Someone who has asked for less motion gets the crossfade and none of the
+   movement. The durations are already collapsed by the token layer; this
+   removes the translation as well, which is the part that causes trouble. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dlx-nav-from: 0px;
+    --dlx-nav-to: 0px;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 1ms;
+  }
+}

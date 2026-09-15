@@ -1,0 +1,79 @@
+/* =============================================================================
+   02 — Base
+   Element-level defaults. No class selectors, no components.
+   ============================================================================= */
+
+@layer base {
+
+  body {
+    font-family: var(--dlx-font-body, ui-sans-serif, system-ui, -apple-system,
+      "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--dlx-font-display, inherit);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    color: var(--dlx-ink);
+  }
+
+  h1 { font-size: var(--dlx-text-3xl); }
+  h2 { font-size: var(--dlx-text-2xl); }
+  h3 { font-size: var(--dlx-text-xl); }
+  h4 { font-size: var(--dlx-text-lg); }
+
+  p  { color: var(--dlx-ink-soft); }
+  small { font-size: var(--dlx-text-sm); color: var(--dlx-ink-muted); }
+
+  strong, b { font-weight: 650; color: var(--dlx-ink); }
+
+  hr {
+    height: 1px;
+    margin: var(--dlx-space-lg) 0;
+    border: 0;
+    background: var(--dlx-line);
+  }
+
+  /* Form controls are the surface a customer touches most on a checkout, and
+     the one themes most often leave at the browser default. Stated here so
+     every input in the store matches without a component having to intervene. */
+  input:where([type="text"], [type="email"], [type="tel"], [type="number"],
+              [type="password"], [type="search"], [type="url"], [type="date"]),
+  textarea,
+  select {
+    width: 100%;
+    min-height: 48px;
+    padding: 0 var(--dlx-space-sm);
+    border: 1px solid var(--dlx-line);
+    border-radius: var(--dlx-radius-md);
+    background: var(--dlx-surface);
+    color: var(--dlx-ink);
+    font-size: var(--dlx-text-md);
+
+    /* 16px or larger, or iOS Safari zooms the page on focus and the customer
+       is left scrolled sideways in the middle of paying. The token's phone end
+       is 15px, so this one control states its own floor. */
+    font-size: max(16px, var(--dlx-text-md));
+    transition: border-color var(--dlx-t-quick) var(--dlx-ease-out),
+                box-shadow  var(--dlx-t-quick) var(--dlx-ease-out);
+  }
+
+  textarea {
+    min-height: 120px;
+    padding: var(--dlx-space-sm);
+    line-height: 1.5;
+    resize: vertical;
+  }
+
+  input:focus, textarea:focus, select:focus {
+    border-color: var(--dlx-brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--dlx-brand) 18%, transparent);
+    outline: none;
+  }
+
+  ::placeholder { color: var(--dlx-ink-muted); opacity: 1; }
+
+  /* The customer's own content is selectable; the app's chrome is not. */
+  p, li, td, th, dd, dt, blockquote, figcaption, pre, code { -webkit-user-select: text; user-select: text; }
+}
