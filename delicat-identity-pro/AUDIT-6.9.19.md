@@ -1,4 +1,4 @@
-# Delicat Identity Pro — audit 6.9.18
+# Delicat Identity Pro — audit 6.9.18 & 6.9.19
 
 Scope: 67 PHP files, 13 JS, 13 CSS (~800 KB) read for the authentication,
 session, cookie, OAuth, two-factor, passkey and endpoint-authorisation paths,
@@ -171,42 +171,82 @@ Worth saying, because it is most of the plugin:
 
 ---
 
-## 6. Recommendations (not done — your call)
+## 6. Recommendations
 
-1. **Set `$_SERVER['HTTPS']` in `wp-config.php`.** The fix above makes the plugin
-   correct behind the proxy, but WordPress core, WooCommerce and every other
-   plugin still call `is_ssl()`. Adding, above `require_once ABSPATH . 'wp-settings.php'`:
+### Done in 6.9.19
+
+1. **`is_ssl()` is now repaired for the whole site, not just this plugin.**
+   Fixing every gate inside Identity Pro fixes nothing outside it — and outside
+   it is where the damage is. WordPress core decides the `Secure` flag on its own
+   auth cookies with `is_ssl()`; so does WooCommerce when it decides whether
+   checkout needs a redirect; so does the theme. `DIP_Request::share_with_wordpress()`
+   sets `$_SERVER['HTTPS']` on `plugins_loaded` at `-PHP_INT_MAX`, but **only**
+   when the site's own `home_url()` is https *and* a proxy header says the
+   customer arrived over https. Neither condition alone is enough: setting it on
+   a site genuinely served over http would mark every cookie `Secure`, the
+   browser would drop them, and nobody could sign in.
+
+   Off switches, in order of precedence: `define('DIP_TRUST_PROXY_HTTPS', false)`
+   in wp-config.php, the `trust_proxy_https` setting, the `dip_trust_proxy_https`
+   filter.
+
+   **This is still a plugin repairing something that is not the plugin's.** It
+   can only act from `plugins_loaded` onward, and it stops the day Identity Pro
+   is deactivated. The permanent fix is two lines in `wp-config.php`, above
+   *"That's all, stop editing"*:
    ```php
-   if ( ! empty( $_SERVER['HTTP_CF_VISITOR'] ) && str_contains( $_SERVER['HTTP_CF_VISITOR'], '"scheme":"https"' ) ) { $_SERVER['HTTPS'] = 'on'; }
+   if ( ! empty( $_SERVER['HTTP_CF_VISITOR'] ) && false !== strpos( $_SERVER['HTTP_CF_VISITOR'], '"scheme":"https"' ) ) { $_SERVER['HTTPS'] = 'on'; }
    elseif ( ! empty( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === strtolower( explode( ',', $_SERVER['HTTP_X_FORWARDED_PROTO'] )[0] ) ) { $_SERVER['HTTPS'] = 'on'; }
    ```
-   fixes it for the whole site at once. Only do this if the origin is reachable
-   *only* through Cloudflare.
-2. **Do not add per-IP rate limiting to `dip_native_fresh_nonces_v2`.** It is the
-   one public endpoint without one, and it looks like an omission — but Haitian
-   mobile carriers NAT thousands of customers behind a handful of addresses, so
-   a per-IP cap here would lock out real people. The endpoint only issues nonces.
-3. **`bypass_cache_redirect`** appends a random `dip_nocache` value to the Google
-   button URL on every render, which makes the HTML non-deterministic and defeats
-   `ETag`/`If-None-Match` revalidation on every page carrying the button. Worth
-   turning off unless a specific cache problem needed it.
-4. **Eight nonces are issued per `fresh_nonces` call**; the popup uses three.
-   Harmless, but the other five (OTP, magic link, customer registration) are
-   handed to every visitor who touches the sign-in button.
-5. **Consider removing the legacy Code Snippets compatibility layer** once you
-   confirm the old snippet is gone. `legacy_snippet_active()`, the duplicate
-   `delicat_*` AJAX actions and the suppression pass all exist only for it.
-6. **`wp-login.php` is still reachable and still renders.** Nothing here hides it.
-   If you want it gone for customers entirely, that is a server-level rule, not a
-   plugin one.
+   Only do this if the origin is reachable **only** through Cloudflare. A
+   dismissible admin notice says the same thing, and the dashboard's HTTPS card
+   now reads *"Actif (via proxy)"* instead of *"Obligatoire"* on a correctly
+   configured site.
+
+2. **`bypass_cache_redirect` is deterministic.** It appended
+   `wp_generate_password(8)` to the Google button URL on **every render**, which
+   made the HTML different on every single request and defeated `ETag` /
+   `If-None-Match` revalidation on every page carrying the button — on a
+   signed-out storefront, every page, because the popup carries it. The value is
+   now an HMAC of the page URL and the hour: still unique enough that no shared
+   cache can hold a stale redirect, identical across two renders of the same
+   page.
+
+### Deliberately not done
+
+3. **No per-IP rate limit on `dip_native_fresh_nonces_v2`.** It is the one public
+   endpoint without one and it looks like an omission. It is not one worth
+   closing here: Haitian mobile carriers NAT thousands of customers behind a
+   handful of addresses, so a per-IP cap on the endpoint that issues sign-in
+   nonces would lock out real people in blocks. The endpoint only issues nonces
+   and writes no state beyond a cookie.
+
+4. **The eight nonces per `fresh_nonces` call stay.** An earlier draft of this
+   audit suggested trimming to the three the popup uses. That was wrong — the
+   other five (`otp_request`, `otp_verify`, `magic_request`, `customer_register`)
+   are consumed by the shortcode-rendered passwordless and registration forms,
+   which refresh from the same endpoint. Trimming them would break flows that
+   cannot be exercised in this sandbox.
+
+### Still yours to decide
+
+5. **The legacy Code Snippets compatibility layer** — `legacy_snippet_active()`,
+   the duplicate `delicat_*` AJAX actions, and the DOM suppression pass — exists
+   only for an old snippet. If you have confirmed that snippet is gone, all of it
+   can be deleted, which also removes the one remaining `MutationObserver` from
+   the sign-in popup.
+
+6. **`wp-login.php` is still reachable and still renders.** Nothing here hides
+   it; 6.9.18 only stops *customers* being sent there. If you want it gone for
+   the public entirely, that is a server-level rule, not a plugin one.
 
 ---
 
 ## 7. Verification
 
-- `tests/identity-auth-test.php` — 94 assertions. The classes are loaded and
-  called against stubbed WordPress functions; **33 deliberate regressions were
-  introduced one at a time and all 33 were caught.**
+- `tests/identity-auth-test.php` — 102 assertions. The classes are loaded and
+  called against stubbed WordPress functions; **39 deliberate regressions were
+  introduced one at a time and all 39 were caught.**
 - `tests/browser/identity-modal-test.cjs` — 25 assertions in a real Chromium at
   390×844 with touch, over an `admin-ajax` deliberately delayed by 1.2 s (an
   ordinary round trip on a cheap phone on 3G). **Running the same suite against
@@ -217,4 +257,6 @@ Worth saying, because it is most of the plugin:
 
 **Not verifiable here:** there is no live WordPress, WooCommerce, Google OAuth or
 TeraWallet in this sandbox. Sign in, sign out, and sign in with a wrong password
-on the real site before trusting any of this with customers.
+on the real site before trusting any of this with customers. If the HTTPS repair
+misbehaves on your host, `define('DIP_TRUST_PROXY_HTTPS', false);` in
+wp-config.php turns it off before any plugin code runs.

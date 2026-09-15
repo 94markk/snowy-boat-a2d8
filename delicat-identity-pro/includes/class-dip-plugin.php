@@ -54,6 +54,7 @@ final class DIP_Plugin {
             'social_login_maintenance_changed_by' => 0,
             'health_email' => 'no',
             'performance_maintenance_enabled' => 'yes', 'conditional_assets' => 'yes',
+            'trust_proxy_https' => 'yes',
             'performance_health_cache' => 'yes',
             'automatic_migration_batch_size' => 25,
             'native_account_url' => '',
@@ -255,7 +256,7 @@ final class DIP_Plugin {
     public function sanitize_settings($input) {
         $old = $this->settings();
         $out = wp_parse_args($old, self::defaults());
-        foreach (['enabled','allow_registration','link_existing_email','remember_login','auto_wp_login','auto_my_account','auto_checkout','use_google_avatar','security_log_enabled','lockout_enabled','show_divider','mobile_full_width','trusted_devices_enabled','new_device_email','mobile_api_enabled','mobile_push_enabled','mobile_biometric_enabled','provider_framework_enabled','microsoft_enabled','microsoft_link_existing_email','adaptive_risk_blocking','country_header_required','require_new_user_approval','block_privileged_social_login','social_login_maintenance','health_email','performance_maintenance_enabled','conditional_assets','performance_health_cache','show_native_login_link','auto_comments','auto_lost_password','bypass_cache_redirect','google_prompt_select_account','sync_profile_name','hide_social_for_logged_in','native_modal_enabled','strict_rest_firewall','two_factor_available','passkeys_available','admin_google_secure_mode'] as $key) {
+        foreach (['enabled','allow_registration','link_existing_email','remember_login','auto_wp_login','auto_my_account','auto_checkout','use_google_avatar','security_log_enabled','lockout_enabled','show_divider','mobile_full_width','trusted_devices_enabled','new_device_email','mobile_api_enabled','mobile_push_enabled','mobile_biometric_enabled','provider_framework_enabled','microsoft_enabled','microsoft_link_existing_email','adaptive_risk_blocking','country_header_required','require_new_user_approval','block_privileged_social_login','social_login_maintenance','health_email','performance_maintenance_enabled','conditional_assets','performance_health_cache','show_native_login_link','auto_comments','auto_lost_password','bypass_cache_redirect','google_prompt_select_account','sync_profile_name','hide_social_for_logged_in','native_modal_enabled','strict_rest_firewall','two_factor_available','passkeys_available','admin_google_secure_mode','trust_proxy_https'] as $key) {
             $out[$key] = !empty($input[$key]) ? 'yes' : 'no';
         }
         // From 6.9.16 onward maintenance is an explicit administrator decision,
@@ -422,7 +423,10 @@ final class DIP_Plugin {
             <?php $google_state = $this->google_availability($s); ?>
             <article class="dip-quick-card"><span class="dip-status-dot <?php echo $google_state === 'ok' ? 'is-good' : ($google_state === 'secret_unreadable' ? 'is-bad' : 'is-warn'); ?>"></span><div><small>Google OAuth</small><strong><?php echo $google_state === 'ok' ? 'Configuré' : 'À corriger'; ?></strong><p><?php echo esc_html(self::google_availability_label($google_state)); ?></p><p>URI exacte : <code><?php echo esc_html($callback); ?></code></p></div></article>
             <article class="dip-quick-card"><span class="dip-status-dot <?php echo DIP_Migration::plugin_status() === 'active' ? 'is-info' : 'is-good'; ?>"></span><div><small>Migration Nextend</small><strong><?php echo DIP_Migration::plugin_status() === 'active' ? 'Mode coexistence' : 'Prêt'; ?></strong><p>Conservez Nextend pendant les tests clients.</p></div></article>
-            <article class="dip-quick-card"><span class="dip-status-dot <?php echo DIP_Request::is_secure() ? 'is-good' : 'is-bad'; ?>"></span><div><small>HTTPS</small><strong><?php echo DIP_Request::is_secure() ? 'Actif' : 'Obligatoire'; ?></strong><p>OAuth et l’API mobile exigent une connexion chiffrée.</p></div></article>
+            <?php $proxied = DIP_Request::tls_terminated_upstream(); ?>
+            <article class="dip-quick-card"><span class="dip-status-dot <?php echo DIP_Request::is_secure() ? 'is-good' : 'is-bad'; ?>"></span><div><small>HTTPS</small><strong><?php echo DIP_Request::is_secure() ? ($proxied ? 'Actif (via proxy)' : 'Actif') : 'Obligatoire'; ?></strong><p><?php echo $proxied
+              ? 'TLS se termine sur Cloudflare/LiteSpeed : PHP reçoit du http. Delicat le détecte et corrige is_ssl() pour tout le site. Le correctif définitif est une ligne dans wp-config.php — voir la notice.'
+              : 'OAuth et l’API mobile exigent une connexion chiffrée.'; ?></p></div></article>
           </section>
           <section class="dip-oauth-panel">
             <div><span class="dip-eyebrow">CONFIGURATION GOOGLE</span><h2>URI de redirection</h2><p>Ajoutez cette adresse dans Google Cloud Console → APIs & Services → Credentials → OAuth Client ID → Authorized redirect URIs.</p><div class="dip-copy-row"><code id="dip-callback-uri"><?php echo esc_html($callback); ?></code><button type="button" class="button" data-dip-copy="#dip-callback-uri">Copier</button></div></div>
@@ -1175,7 +1179,22 @@ final class DIP_Plugin {
         $wrap = ['dip-login-wrap','dip-align-' . $align];
         if ($s['mobile_full_width'] === 'yes') $wrap[] = 'dip-mobile-full';
         $divider = ($s['show_divider'] === 'yes' && empty($args['suppress_divider'])) ? '<div class="dip-divider"><span>' . esc_html__('ou', 'delicat-google-login') . '</span></div>' : '';
-        if (($s['bypass_cache_redirect'] ?? 'yes') === 'yes') $url = add_query_arg('dip_nocache', wp_generate_password(8, false, false), $url);
+        /*
+         * A cache-busting value that is stable for one page in one hour.
+         *
+         * This used to be wp_generate_password() - a fresh random string on
+         * every render. It does bypass a cached redirect, but it also makes the
+         * page's HTML different on every single request, which defeats ETag and
+         * If-None-Match revalidation for every page carrying the button. On a
+         * signed-out storefront that is every page, because the sign-in popup
+         * carries it. Keyed to the page and the hour instead: still unique
+         * enough that no shared cache can hold a stale redirect, and identical
+         * across two renders of the same page, so revalidation works again.
+         */
+        if (($s['bypass_cache_redirect'] ?? 'yes') === 'yes') {
+            $bucket = substr(hash_hmac('sha256', DIP_Request::current_url() . '|' . gmdate('YmdH'), wp_salt('nonce')), 0, 8);
+            $url = add_query_arg('dip_nocache', $bucket, $url);
+        }
         return '<div class="' . esc_attr(implode(' ', $wrap)) . '">' . $divider . '<a class="' . esc_attr(implode(' ', $classes)) . '" href="' . esc_url($url) . '" data-dip-location="' . esc_attr($location) . '" data-dip-provider="' . esc_attr($provider_id) . '" data-delicat-no-app="1" aria-label="' . esc_attr($text) . '" rel="nofollow noopener"><span class="dip-g" aria-hidden="true">' . $this->provider_icon($provider_id) . '</span><span>' . esc_html($text) . '</span></a></div>';
     }
 

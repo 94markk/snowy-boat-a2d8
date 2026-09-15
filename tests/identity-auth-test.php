@@ -74,6 +74,18 @@ function add_filter() {}
 function nocache_headers() {}
 function did_action($hook) { return 0; }
 function wc_get_page_permalink($page) { return $GLOBALS['stub_home'] . '/mon-compte/'; }
+$GLOBALS['stub_options'] = [];
+function get_option($k, $d = false) { return $GLOBALS['stub_options'][$k] ?? $d; }
+function current_user_can($cap) { return false; }
+function get_user_meta() { return ''; }
+function get_current_screen() { return null; }
+function wp_json_encode($v) { return json_encode($v); }
+function wp_create_nonce($a = '') { return 'n'; }
+function check_ajax_referer() { return true; }
+function update_user_meta() {}
+function wp_send_json_error() {}
+function wp_send_json_success() {}
+function esc_html__($t, $d = null) { return $t; }
 function absint($n) { return abs((int) $n); }
 function apply_filters($tag, $value) {
     return isset($GLOBALS['stub_filters'][$tag]) ? call_user_func($GLOBALS['stub_filters'][$tag], $value) : $value;
@@ -182,6 +194,62 @@ $GLOBALS['stub_filters']['dip_request_is_secure'] = static function () { return 
 ok('a filter can vouch for an unusual front end', secure_with([]));
 $GLOBALS['stub_filters']['dip_request_is_secure'] = static function () { return false; };
 ok('and can withdraw the proxy headers', !secure_with(['HTTP_X_FORWARDED_PROTO' => 'https']));
+$GLOBALS['stub_filters'] = [];
+
+group('WordPress itself is told what this class knows');
+
+/*
+ * Fixing every gate inside the plugin fixes nothing outside it, and outside it
+ * is where the damage is: WordPress core decides the Secure flag on its own
+ * auth cookies with is_ssl(), and so does WooCommerce, and so does the theme.
+ */
+function repair(array $server, bool $php_tls, string $home, array $options = [], $constant = null): array {
+    unset($_SERVER['HTTPS']);
+    $GLOBALS['stub_options'] = $options;
+    secure_with($server, $php_tls, $home);            // primes the same request state
+    $applied = DIP_Request::share_with_wordpress();
+    return [$applied, $_SERVER['HTTPS'] ?? null];
+}
+
+$proxy = ['HTTP_X_FORWARDED_PROTO' => 'https'];
+
+list($applied, $flag) = repair($proxy, false, 'https://delicastoreha.com');
+ok('an https site behind a proxy gets is_ssl() repaired', $applied === true && $flag === 'on',
+   'without this, core issues the session cookie without the Secure flag');
+
+list($applied, $flag) = repair([], true, 'https://delicastoreha.com');
+ok('a site PHP already sees as TLS is left alone', $applied === false && $flag === null,
+   'there is nothing to repair');
+
+list($applied, $flag) = repair($proxy, false, 'http://delicastoreha.com');
+ok('a plain-http install is NEVER touched', $applied === false && $flag === null,
+   'marking every cookie Secure there would lock out every customer');
+
+list($applied, $flag) = repair([], false, 'https://delicastoreha.com');
+ok('nor is a customer who genuinely arrived over http', $applied === false && $flag === null);
+
+list($applied) = repair(['HTTP_CF_VISITOR' => '{"scheme":"http"}'], false, 'https://delicastoreha.com');
+ok('Cloudflare saying the customer used http is believed', $applied === false);
+
+list($applied) = repair($proxy, false, 'https://delicastoreha.com', ['dglp_settings' => ['trust_proxy_https' => 'no']]);
+ok('and an administrator can switch it off', $applied === false);
+
+$GLOBALS['stub_filters']['dip_trust_proxy_https'] = static function () { return false; };
+list($applied) = repair($proxy, false, 'https://delicastoreha.com');
+ok('so can a filter', $applied === false);
+$GLOBALS['stub_filters'] = [];
+
+/*
+ * An operator with an unusual front end can filter is_secure() to true. That
+ * is their call for the plugin's own gates. It must NOT become permission to
+ * mark every cookie on the site Secure while WordPress is still publishing
+ * http:// URLs, because the browser would then drop them and nobody could sign
+ * in at all. The home URL is the thing that decides this one.
+ */
+$GLOBALS['stub_filters']['dip_request_is_secure'] = static function () { return true; };
+list($applied, $flag) = repair([], false, 'http://delicastoreha.com');
+ok('and a filter cannot force it onto an http:// site', $applied === false && $flag === null,
+   'home_url() is what decides whether Secure cookies can work at all');
 $GLOBALS['stub_filters'] = [];
 
 group('The OAuth return address uses the scheme the SITE is published under');
@@ -358,12 +426,18 @@ $offenders = [];
 foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator("$root/includes")) as $file) {
     if ($file->getExtension() !== 'php') continue;
     if ($file->getFilename() === 'class-dip-request.php') continue;   // where the evidence is read
-    /* Code only. A docblock is free to name the function it warns against. */
+    /* Code only. A docblock is free to name the function it warns against, and
+       so is a sentence shown to an administrator explaining what was repaired. */
     $src = '';
+    $strings = '';
     foreach (token_get_all((string) file_get_contents($file->getPathname())) as $token) {
-        if (is_array($token) && in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_INLINE_HTML], true)) continue;
-        $src .= is_array($token) ? $token[1] : $token;
+        if (!is_array($token)) { $src .= $token; continue; }
+        if (in_array($token[0], [T_COMMENT, T_DOC_COMMENT, T_INLINE_HTML], true)) continue;
+        if (in_array($token[0], [T_CONSTANT_ENCAPSED_STRING, T_ENCAPSED_AND_WHITESPACE], true)) { $strings .= $token[1]; continue; }
+        $src .= $token[1];
     }
+    /* ...but a string is still not allowed to BE the call. */
+    if (preg_match('/[\'\"]is_ssl[\'\"]/', $strings)) $offenders[] = $file->getFilename() . ' (callable string)';
     /* Every call is a gate here: a condition, a ternary, a cookie's Secure
        flag, or a value handed to something that decides one. */
     if (preg_match('/(?<![a-z_])is_ssl\s*\(\s*\)/', $src)) $offenders[] = $file->getFilename();

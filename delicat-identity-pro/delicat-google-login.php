@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Identity Pro
  * Description: Unified secure identity, authentication, account lifecycle, and synchronized WordPress/WooCommerce transactional email studio.
- * Version:     6.9.18
+ * Version:     6.9.19
  * Author: Delicat Store
  * Text Domain: delicat-google-login
  * Requires at least: 6.2
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('DIP_VERSION', '6.9.18');
+define('DIP_VERSION', '6.9.19');
 define('DIP_FILE', __FILE__);
 define('DIP_DIR', plugin_dir_path(__FILE__));
 define('DIP_URL', plugin_dir_url(__FILE__));
@@ -50,6 +50,19 @@ add_action('before_woocommerce_init', static function () {
 
 register_deactivation_hook(__FILE__, ['DIP_Plugin', 'deactivate']);
 register_deactivation_hook(__FILE__, ['DIP_Headless_Google', 'deactivate']);
+/*
+ * Before anything else reads is_ssl().
+ *
+ * Behind Cloudflare and LiteSpeed, TLS ends before PHP and is_ssl() answers
+ * "no" on a site that is https for every customer. Identity Pro asks
+ * DIP_Request::is_secure() everywhere and is correct on its own - but WordPress
+ * core still decides the Secure flag on its auth cookies with is_ssl(), and so
+ * does WooCommerce, and so does the theme. Repair it once, as early as a plugin
+ * is allowed to, and everything downstream is right. Only when the site's own
+ * home URL is https AND a proxy header says the customer arrived that way; see
+ * DIP_Request::share_with_wordpress().
+ */
+add_action('plugins_loaded', ['DIP_Request', 'share_with_wordpress'], -PHP_INT_MAX);
 add_action('plugins_loaded', ['DIP_Plugin', 'instance']);
 add_action('profile_update', ['DIP_Account_Sync', 'profile_email_changed'], 5, 2);
 add_action('after_password_reset', ['DIP_Account_Sync', 'password_reset'], 5, 2);
