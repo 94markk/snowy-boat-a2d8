@@ -1,9 +1,9 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-15T11:08:55.000000+00:00",
+    "built": "2026-09-15T12:41:23.000000+00:00",
     "version": "9.2.0-pro.30",
-    "bytes": 5976819,
-    "count": 360,
+    "bytes": 5984842,
+    "count": 361,
     "files": {
         "OPTIMIZATION.md": {
             "bytes": 10516,
@@ -1440,6 +1440,10 @@
         "tools/rebuild-assets.php": {
             "bytes": 8013,
             "sha256": "9b6e09a35d90813d310d080889d9d454a2c73111ab1a2f66be885720767da992"
+        },
+        "tools/verify-live.sh": {
+            "bytes": 8023,
+            "sha256": "624302d152a8272876bb26c2c28fd0390be04a3b1f25b5f02d6ce11b7f0727aa"
         },
         "uninstall.php": {
             "bytes": 1524,
