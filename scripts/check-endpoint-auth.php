@@ -114,7 +114,58 @@ $checked = 0; $issues = 0; $stale = array_fill_keys( array_keys( $ALLOWED ), tru
 $re = "/add_action\(\s*'((?:wp_ajax_(?:nopriv_)?|admin_post_(?:nopriv_)?)[a-z0-9_]+)'\s*,\s*"
     . "(?:array\(\s*(?:__CLASS__|self::class|'[A-Za-z_0-9]+')\s*,\s*'([a-zA-Z_0-9]+)'\s*\)|'([a-zA-Z_0-9]+)')/";
 
+/*
+ * An endpoint registered with a closure instead of a named callback.
+ *
+ * The pattern above cannot see one, and that blindness is the whole problem: a
+ * handler written inline is exactly as reachable as a named one, and the tool
+ * reported "0 unprotected" across a file that registers an admin-post endpoint
+ * this way. Found while reintroducing that file, not by the tool.
+ */
+$re_closure = "/add_action\(\s*'((?:wp_ajax_(?:nopriv_)?|admin_post_(?:nopriv_)?)[a-z0-9_]+)'\s*,\s*(?:static\s+)?function\s*\(/";
+
+/** The body of the closure that starts at the given offset. */
+function closure_body( string $src, int $from ): string {
+    $open = strpos( $src, '{', $from );
+    if ( false === $open ) { return ''; }
+    $depth = 0;
+    for ( $i = $open, $n = strlen( $src ); $i < $n; $i++ ) {
+        if ( '{' === $src[ $i ] ) { $depth++; }
+        elseif ( '}' === $src[ $i ] ) { $depth--; if ( 0 === $depth ) { return substr( $src, $open, $i - $open ); } }
+    }
+    return '';
+}
+
 foreach ( $files as $path => $src ) {
+    /* ---- closures ---- */
+    if ( preg_match_all( $re_closure, $src, $inline, PREG_SET_ORDER | PREG_OFFSET_CAPTURE ) ) {
+        foreach ( $inline as $m ) {
+            $action = $m[1][0];
+            $blob   = closure_body( $src, (int) $m[0][1] );
+            $checked++;
+
+            $has_nonce = mentions( $blob, $NONCE );
+            $has_auth  = mentions( $blob, $AUTH );
+            $key       = $action . '::closure';
+
+            if ( isset( $ALLOWED[ $key ] ) ) {
+                unset( $stale[ $key ] );
+                continue;
+            }
+
+            if ( ! $has_nonce || ! $has_auth ) {
+                $missing = array();
+                if ( ! $has_nonce ) { $missing[] = 'no nonce check (CSRF)'; }
+                if ( ! $has_auth )  { $missing[] = 'no authorisation check'; }
+                printf(
+                    "%s\n  '%s' -> closure: %s\n  Add the check, or add \"%s\" to ALLOWED in this script with the reason it is safe.\n",
+                    $path, $action, implode( ', ', $missing ), $key
+                );
+                $issues++;
+            }
+        }
+    }
+
     if ( ! preg_match_all( $re, $src, $all, PREG_SET_ORDER ) ) { continue; }
 
     foreach ( $all as $m ) {

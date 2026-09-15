@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.27
+ * Version: 9.2.0-pro.28
 
  * Requires at least: 6.4
  * Requires PHP: 7.4
@@ -151,7 +151,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.27' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.28' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -453,13 +453,9 @@ if ( $delicat_builder_v9_maintenance_on || $delicat_builder_v9_maintenance_previ
 $delicat_builder_v9_wc_ajax = isset( $_REQUEST['wc-ajax'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
 	? sanitize_key( delicat_builder_v9_request_scalar( $_REQUEST['wc-ajax'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
 	: '';
-if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review' ), true ) ) {
+if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review', 'delicat_express_pay' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
 	if ( 'update_order_review' === $delicat_builder_v9_wc_ajax ) {
-		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-express-sheet.php' );
-		if ( class_exists( 'Delicat_Builder_V9_Express_Sheet', false ) ) {
-			add_filter( 'woocommerce_update_order_review_fragments', array( 'Delicat_Builder_V9_Express_Sheet', 'summary_fragments' ) );
-		}
 	}
 	if (
 		class_exists( 'Delicat_Builder_V9_Purchase_Native', false )
@@ -987,7 +983,7 @@ if ( $delicat_builder_v9_product_editor_request ) {
 $delicat_builder_v9_admin_modules = array(
     'includes/class-delicat-builder-cache.php','includes/class-delicat-builder-query-cache.php','includes/class-delicat-builder-turbo-diagnostics.php','includes/class-delicat-builder-security.php','includes/class-delicat-builder-server-engine.php','includes/class-delicat-builder-compiler.php',
     'includes/class-delicat-builder-media.php','includes/class-delicat-builder-hero-search.php','includes/class-delicat-builder-shell.php','includes/class-delicat-builder-footer.php',
-    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-express-sheet.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
+    'includes/class-delicat-builder-archive-builder.php','includes/class-delicat-builder-native-product.php','includes/class-delicat-builder-express-checkout.php','includes/class-delicat-builder-product-switcher.php','includes/class-delicat-builder-menu-builder.php',
     'includes/class-delicat-builder-header-studio-8.php','includes/class-delicat-builder-woo-ui.php','includes/class-delicat-builder-purchase-ui.php',
     'includes/class-delicat-builder-performance.php','includes/class-delicat-builder-identity-bridge.php','includes/class-delicat-builder-production.php',
     'includes/class-delicat-builder-release.php','includes/class-delicat-builder-design.php','includes/class-delicat-builder-assets.php',
@@ -1485,3 +1481,294 @@ add_action( 'admin_init', static function () {
     update_option( 'delicat_builder_v9_native_product', $settings );
     update_option( 'delicat_builder_pro21_popup_enabled', 1, false );
 } );
+
+/*
+ * Express checkout (RC24 transport). The product form is posted by fetch()
+ * through WooCommerce's own classic add-to-cart handler (same validation,
+ * product fields, variations and notices as a real submit) with dpn_express=1.
+ *
+ *  - Accepted: WooCommerce asks where to redirect; the answer is a JSON body
+ *    written right there (no 302, no second request, nothing a proxy or WAF
+ *    can rewrite on the way).
+ *  - Refused: WooCommerce's own error notices are returned as JSON so the
+ *    product page can show them next to the button.
+ *  - The sheet then loads WooCommerce's real checkout form (fields, gateway,
+ *    terms, process-checkout nonce) from `wc-ajax=delicat_express_form`, and
+ *    Continue opens the normal WooCommerce checkout. Only its native form
+ *    and configured gateway can submit payment.
+ */
+/* Express requires a same-origin POST and a logged-in WordPress nonce.
+ * Invalid flagged requests stop before WooCommerce mutates the cart. */
+function delicat_builder_v9_express_request(): bool {
+	if ( empty( $_REQUEST['dpn_express'] ) || 'POST' !== strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? '' ) ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		return false;
+	}
+	$site = isset( $_SERVER['HTTP_SEC_FETCH_SITE'] ) ? strtolower( sanitize_key( (string) $_SERVER['HTTP_SEC_FETCH_SITE'] ) ) : '';
+	return '' === $site || in_array( $site, array( 'same-origin', 'none' ), true );
+}
+add_filter(
+	'woocommerce_add_to_cart_redirect',
+	static function ( $url ) {
+		if ( ! delicat_builder_v9_express_request() ) {
+			return $url;
+		}
+		nocache_headers();
+		if ( ! headers_sent() ) {
+			header( 'X-Content-Type-Options: nosniff' );
+		}
+		$count = ( function_exists( 'WC' ) && is_object( WC() ) && is_object( WC()->cart ) ) ? (int) WC()->cart->get_cart_contents_count() : 0;
+		wp_send_json( array( 'success' => true, 'count' => $count ) );
+		return $url; // unreachable; wp_send_json() ends the request.
+	},
+	PHP_INT_MAX
+);
+/* Validate the custom express transport before WooCommerce's handler at 20.
+ * Never remove/replace cart lines before WooCommerce validates the new item. */
+add_action( 'wp_loaded', static function (): void {
+	if ( ! isset( $_REQUEST['dpn_express'] ) ) { return; }
+	$nonce = isset( $_POST['_delicat_express_nonce'] ) && is_string( $_POST['_delicat_express_nonce'] ) ? wp_unslash( $_POST['_delicat_express_nonce'] ) : '';
+	if ( ! delicat_builder_v9_express_request() || ! is_ssl() || ! is_user_logged_in() || ! wp_verify_nonce( $nonce, 'delicat_express_add' ) ) {
+		nocache_headers();
+		wp_send_json( array( 'success' => false, 'messages' => array( 'Session expirée. Rechargez la page sécurisée.' ) ), 403 );
+	}
+}, 18 );
+add_action(
+	'wp_loaded',
+	static function (): void {
+		/* WooCommerce's handler runs at wp_loaded:20; reaching this point means it did not accept the item. */
+		if ( ! delicat_builder_v9_express_request() || ! isset( $_REQUEST['add-to-cart'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			return;
+		}
+		$messages = array();
+		if ( function_exists( 'wc_get_notices' ) ) {
+			foreach ( (array) wc_get_notices( 'error' ) as $notice ) {
+				$text = is_array( $notice ) ? (string) ( $notice['notice'] ?? '' ) : (string) $notice;
+				$text = trim( wp_strip_all_tags( $text ) );
+				if ( '' !== $text ) {
+					$messages[] = $text;
+				}
+			}
+			if ( function_exists( 'wc_clear_notices' ) ) {
+				wc_clear_notices();
+			}
+		}
+		nocache_headers();
+		if ( ! headers_sent() ) {
+			header( 'X-Content-Type-Options: nosniff' );
+		}
+		wp_send_json( array( 'success' => false, 'messages' => $messages ) );
+	},
+	25
+);
+add_action(
+	'wc_ajax_delicat_express_form',
+	static function (): void {
+		nocache_headers();
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		}
+		do_action( 'litespeed_control_set_nocache', 'Delicat Builder express form' );
+		if ( ! headers_sent() ) {
+			header( 'X-Content-Type-Options: nosniff' );
+			header( 'X-Robots-Tag: noindex, nofollow', true );
+		}
+		/* The form carries the signed-in client's details and checkout nonce:
+		 * same-site requests only, signed-in only, and throttled. */
+		$fetch_site = isset( $_SERVER['HTTP_SEC_FETCH_SITE'] ) ? strtolower( sanitize_key( (string) $_SERVER['HTTP_SEC_FETCH_SITE'] ) ) : '';
+		if ( '' !== $fetch_site && ! in_array( $fetch_site, array( 'same-origin', 'none' ), true ) ) {
+			status_header( 403 );
+			exit;
+		}
+		if ( ! is_ssl() || ! is_user_logged_in() ) {
+			status_header( 403 );
+			exit;
+		}
+		if (
+			class_exists( 'Delicat_Builder_V9_Security', false )
+			&& is_callable( array( 'Delicat_Builder_V9_Security', 'rate_limit_allowed' ) )
+			&& ! Delicat_Builder_V9_Security::rate_limit_allowed( 'express_form_' . get_current_user_id(), 40, 60 )
+		) {
+			status_header( 429 );
+			exit;
+		}
+		if ( ! class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) ) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
+		}
+		$html = '';
+		if (
+			class_exists( 'Delicat_Builder_V9_Purchase_Native', false )
+			&& is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'express_supported' ) )
+			&& is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'render_express_form' ) )
+		) {
+			try {
+				if ( Delicat_Builder_V9_Purchase_Native::express_supported() ) {
+					Delicat_Builder_V9_Purchase_Native::boot();
+					Delicat_Builder_V9_Purchase_Native::mark_express();
+					$html = (string) Delicat_Builder_V9_Purchase_Native::render_express_form();
+				}
+			} catch ( Throwable $error ) {
+				unset( $error );
+				$html = '';
+			}
+		}
+		if ( ! headers_sent() ) {
+			header( 'Content-Type: text/html; charset=' . get_option( 'blog_charset' ) );
+		}
+		echo $html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- WooCommerce's own checkout template output.
+		exit;
+	}
+);
+
+/*
+ * RC28: Builder's stylesheets and scripts are excluded from LiteSpeed Cache's
+ * guest-only optimizers (CSS/JS combine, unique CSS, deferred/delayed JS).
+ * Those rewrites are keyed on crawls that predate a release, and a signed-out
+ * visitor then receives new markup with old or stripped CSS. Builder ships its
+ * own critical CSS and load order; leaving its files untouched is the safe
+ * default. The filters are no-ops without LiteSpeed.
+ */
+foreach ( array( 'litespeed_optimize_css_excludes', 'litespeed_optimize_js_excludes', 'litespeed_optm_js_defer_exc', 'litespeed_optm_gm_js_exc', 'litespeed_optm_css_async_exc' ) as $delicat_builder_v9_ls_filter ) {
+	add_filter(
+		$delicat_builder_v9_ls_filter,
+		static function ( $list ) {
+			$list   = is_array( $list ) ? $list : array();
+			$list[] = 'delicat-builder-v9/assets/';
+			$list[] = 'delicat-builder-v9/pro/assets/';
+			// Inline config must execute with its external runtime, before first interaction.
+			foreach ( array( 'DBPNavConfig', 'DBPStateConfig', 'DelicatShellNavConfig', 'DelicaBuilderV9Config' ) as $config_name ) {
+				$list[] = $config_name;
+			}
+			return array_values( array_unique( $list ) );
+		}
+	);
+}
+unset( $delicat_builder_v9_ls_filter );
+add_filter(
+	'litespeed_ucss_whitelist',
+	static function ( $list ) {
+		$list = is_array( $list ) ? $list : array();
+		foreach ( array( '.dpn-', '.dnp-', '.dbv9-', '.delicat-', '.dsb-', '.dsb8-', '.dlc-', '.dap-', '.ddsw-', '.dmc-', '.dcn-' ) as $prefix ) {
+			$list[] = $prefix;
+		}
+		return array_values( array_unique( $list ) );
+	}
+);
+
+add_action(
+	'before_woocommerce_init',
+	static function () {
+		if ( class_exists( '\Automattic\WooCommerce\Utilities\FeaturesUtil' ) ) {
+			try {
+				\Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
+					'cart_checkout_blocks',
+					DELICAT_BUILDER_V9_FILE,
+					true
+				);
+			} catch ( Throwable $error ) {
+				update_option( 'delicat_builder_v9_safe_mode', 1, false );
+				update_option( 'delicat_builder_v9_safe_mode_meta', array( 'version' => DELICAT_BUILDER_V9_VERSION, 'tripped' => gmdate( 'c' ), 'context' => 'woocommerce_compatibility' ), false );
+				unset( $error );
+			}
+		}
+	}
+);
+
+register_activation_hook(
+	__FILE__,
+	static function () {
+		if ( version_compare( PHP_VERSION, '7.4', '<' ) ) {
+			deactivate_plugins( plugin_basename( __FILE__ ) );
+			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 7.4 or newer.', 'delicat-builder-v9' ) );
+		}
+
+		/* RC17: activation is deliberately boring. Seed only primitive options;
+		 * no feature class or optional installer is parsed in the activation sandbox. */
+		$core_defaults = array(
+			'enabled' => 1, 'app_navigation' => 0, 'navigation_scope' => 'marked',
+			'content_selector' => 'main', 'prefetch' => 1, 'cache_ttl' => 600,
+			'safe_headers' => 1, 'low_power_mode' => 1, 'compiled_assets' => 1,
+			'hero_preload' => 1, 'carousel_progressive' => 1, 'carousel_initial' => 8,
+		);
+		$core_current = get_option( 'delicat_builder_v9_settings', array() );
+		update_option( 'delicat_builder_v9_settings', wp_parse_args( is_array( $core_current ) ? $core_current : array(), $core_defaults ), false );
+		if ( false === get_option( 'delicat_builder_v9_cache_version', false ) ) {
+			add_option( 'delicat_builder_v9_cache_version', 1, '', false );
+		}
+		$safe_meta = get_option( 'delicat_builder_v9_safe_mode_meta', array() );
+		$safe_stamp = is_array( $safe_meta ) ? (string) ( $safe_meta['version'] ?? '' ) : '';
+		if ( (bool) get_option( 'delicat_builder_v9_safe_mode', false ) && DELICAT_BUILDER_V9_VERSION !== $safe_stamp ) {
+			update_option( 'delicat_builder_v9_safe_mode', 0, false );
+			update_option(
+				'delicat_builder_v9_safe_mode_meta',
+				array(
+					'version'  => DELICAT_BUILDER_V9_VERSION,
+					'cleared'  => gmdate( 'c' ),
+					'context'  => 'activation_upgrade_recovery',
+					'previous' => sanitize_text_field( $safe_stamp ),
+				),
+				false
+			);
+		}
+		update_option( 'delicat_builder_v9_activation_version', DELICAT_BUILDER_V9_VERSION, false );
+	}
+);
+
+add_action(
+	'plugins_loaded',
+	static function () {
+        if ( defined( 'DELICAT_BUILDER_V9_FOREIGN_AJAX' ) && DELICAT_BUILDER_V9_FOREIGN_AJAX ) {
+            return;
+        }
+		if ( defined( 'DELICAT_BUILDER_V9_DORMANT' ) && DELICAT_BUILDER_V9_DORMANT ) {
+			// RC39.13 dependency gate: a critical module was quarantined. Booting
+			// would fatal on an unguarded cross-reference, so stay dormant and let
+			// the storefront fall back to plain WordPress/WooCommerce.
+			return;
+		}
+		$delicat_builder_v9_did_upgrade = false;
+		try {
+			$delicat_builder_v9_did_upgrade = delicat_builder_v9_maybe_upgrade_native_only();
+		} catch ( Throwable $error ) {
+			update_option( 'delicat_builder_v9_safe_mode', 1, false );
+			update_option( 'delicat_builder_v9_safe_mode_meta', array( 'version' => DELICAT_BUILDER_V9_VERSION, 'tripped' => gmdate( 'c' ), 'context' => 'schema_upgrade' ), false );
+			unset( $error );
+		}
+		if ( ! class_exists( 'Delicat_Builder_V9_Core', false ) || ! is_callable( array( 'Delicat_Builder_V9_Core', 'instance' ) ) ) {
+			// The guarded loader has already recorded the failure and enabled Safe Mode.
+			// Leaving the plugin dormant is safer than taking down WordPress.
+			return;
+		}
+		// Identity Pro declares its SDK/classes before this callback. Sites without
+		// that plugin avoid parsing an integration bridge they cannot use.
+		if (
+			! is_admin()
+			&& ! wp_doing_ajax()
+			&& ( defined( 'DIP_VERSION' ) || class_exists( 'DIP_Plugin', false ) || class_exists( 'DIP_SDK', false ) )
+		) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-identity-bridge.php' );
+		}
+		try {
+			$core = Delicat_Builder_V9_Core::instance();
+		} catch ( Throwable $error ) {
+			update_option( 'delicat_builder_v9_safe_mode', 1, false );
+			update_option( 'delicat_builder_v9_safe_mode_meta', array( 'version' => DELICAT_BUILDER_V9_VERSION, 'tripped' => gmdate( 'c' ), 'context' => 'core_instance' ), false );
+			unset( $error );
+			return;
+		}
+		if ( is_object( $core ) && is_callable( array( $core, 'boot' ) ) ) {
+			try {
+				$core->boot();
+			} catch ( Throwable $error ) {
+				update_option( 'delicat_builder_v9_safe_mode', 1, false );
+				update_option( 'delicat_builder_v9_safe_mode_meta', array( 'version' => DELICAT_BUILDER_V9_VERSION, 'tripped' => gmdate( 'c' ), 'context' => 'core_boot' ), false );
+				unset( $error );
+			}
+		}
+		if ( $delicat_builder_v9_did_upgrade ) {
+			/* Cloudflare's LiteSpeed bridge is attached by Core::boot(), so purge again at the edge. */
+			do_action( 'litespeed_purge_all' );
+		}
+	}
+);
+
+require_once __DIR__ . '/includes/class-delicat-builder-express-payment.php';
