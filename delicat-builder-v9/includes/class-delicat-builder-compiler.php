@@ -420,6 +420,27 @@ final class Delicat_Builder_V9_Compiler {
 		return self::component_css_path( $asset );
 	}
 
+	/**
+	 * Refresh every Builder page's compiled bundle once per plugin version.
+	 *
+	 * A compiled bundle is only used when its manifest matches both the plugin
+	 * version and the component source signature, and public requests never
+	 * compile. So until this has run, every Builder page -- the homepage
+	 * included -- falls back to assets/components/all-components.min.css: one
+	 * 177 KB render-blocking stylesheet in place of the handful of component
+	 * sheets the page actually uses.
+	 *
+	 * Two things used to make that fallback permanent rather than temporary.
+	 * The version stamp was written before the work, and a single Throwable
+	 * from any one page aborted the whole loop -- so every page after the
+	 * failing one stayed uncompiled, with the stamp already claiming the
+	 * version was done and nothing to retry it.
+	 *
+	 * Now each page is compiled in isolation, the stamp is only written when
+	 * the whole set has been attempted, and a failed pass is retried on a later
+	 * admin visit. A short-lived lock keeps the retry from running on every
+	 * request while one pass is already in flight.
+	 */
 	public static function maybe_recompile_for_version(): void {
 		if ( wp_doing_ajax() || ! current_user_can( 'manage_options' ) ) {
 			return;
@@ -427,7 +448,14 @@ final class Delicat_Builder_V9_Compiler {
 		if ( DELICAT_BUILDER_V9_VERSION === (string) get_option( 'delicat_builder_v9_compiled_stamp', '' ) ) {
 			return;
 		}
-		update_option( 'delicat_builder_v9_compiled_stamp', DELICAT_BUILDER_V9_VERSION, true );
+		/* One pass at a time. Without this a slow or fatal pass would be
+		 * restarted by every concurrent admin request. */
+		if ( get_transient( 'delicat_builder_v9_compiling' ) ) {
+			return;
+		}
+		set_transient( 'delicat_builder_v9_compiling', 1, 5 * MINUTE_IN_SECONDS );
+
+		$failed = 0;
 		try {
 			$ids = get_posts(
 				array(
@@ -441,17 +469,50 @@ final class Delicat_Builder_V9_Compiler {
 				)
 			);
 			foreach ( (array) $ids as $page_id ) {
-				$layout = Delicat_Builder_V9_Pages::get_layout( (int) $page_id );
-				if ( ! empty( $layout ) ) {
-					self::compile_page( (int) $page_id, $layout );
+				/* Per page, so one unparseable layout cannot cost every other
+				 * page its bundle. */
+				try {
+					$layout = Delicat_Builder_V9_Pages::get_layout( (int) $page_id );
+					if ( ! empty( $layout ) ) {
+						self::compile_page( (int) $page_id, $layout );
+					}
+				} catch ( Throwable $page_error ) {
+					++$failed;
+					unset( $page_error );
 				}
 			}
 			if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'bump_version' ) ) ) {
 				Delicat_Builder_V9_Cache::bump_version();
 			}
 			do_action( 'litespeed_purge_all' );
+
+			/* Only now is the version genuinely built. If some pages failed, say
+			 * so in an option the Performance screen can surface, but still
+			 * stamp: the pages that did compile are current, and a page that
+			 * throws every time must not make every admin visit recompile the
+			 * other 249. */
+			update_option( 'delicat_builder_v9_compiled_stamp', DELICAT_BUILDER_V9_VERSION, true );
+			if ( $failed > 0 ) {
+				update_option(
+					'delicat_builder_v9_compiled_failures',
+					array(
+						'version' => DELICAT_BUILDER_V9_VERSION,
+						'time'    => gmdate( 'c' ),
+						'pages'   => (int) $failed,
+					),
+					false
+				);
+			} else {
+				delete_option( 'delicat_builder_v9_compiled_failures' );
+			}
 		} catch ( Throwable $recompile_error ) {
+			/* The pass itself failed -- the page query, the cache bump. The
+			 * stamp is deliberately not written, so the next admin visit after
+			 * the lock expires tries again instead of leaving every Builder page
+			 * on the 177 KB fallback for good. */
 			unset( $recompile_error );
+		} finally {
+			delete_transient( 'delicat_builder_v9_compiling' );
 		}
 	}
 

@@ -21,7 +21,14 @@ final class Delicat_Builder_V9_Drawer {
 			return;
 		}
 		self::$booted = true;
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'assets' ), 8 );
+		/* Priority 9, not 8. assets() skips drawer.css when the storefront-chrome
+		 * bundle (which contains it) is already enqueued, and chrome is enqueued by
+		 * Header Studio at priority 8. Sharing that priority made the check depend
+		 * on registration order -- header-runtime self-boots on include, Drawer boots
+		 * later via Core -- so it happened to work, and any reordering of the
+		 * bootstrap would have silently shipped 18 KB of duplicate CSS. Bottom Nav
+		 * already sits at 9 for the same reason. */
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'assets' ), 9 );
 	}
 
 	/** The rebuilt drawer owns the menu whenever the Menu Builder is enabled on the storefront. */
