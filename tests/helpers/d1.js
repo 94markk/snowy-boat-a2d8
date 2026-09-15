@@ -7,7 +7,8 @@
  */
 
 import { DatabaseSync } from "node:sqlite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 class Statement {
   #db;
@@ -80,9 +81,12 @@ class FakeD1 {
   }
 }
 
-export function createTestDb(migrationPath = "db/migrations/0001_init.sql") {
+/** Applies every migration in order, so tests always run the real schema. */
+export function createTestDb(migrationsDir = "db/migrations") {
   const db = new DatabaseSync(":memory:");
-  db.exec(readFileSync(migrationPath, "utf8"));
+  for (const file of readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort()) {
+    db.exec(readFileSync(join(migrationsDir, file), "utf8"));
+  }
   return new FakeD1(db);
 }
 

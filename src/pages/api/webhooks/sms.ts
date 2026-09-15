@@ -22,6 +22,7 @@
 import type { APIRoute } from "astro";
 import { safeEqual } from "../../../lib/db";
 import { json, methodNotAllowed } from "../../../lib/http";
+import { fulfilOrder } from "../../../lib/orders";
 import { ingestSms } from "../../../lib/payments/match";
 
 export const prerender = false;
@@ -92,6 +93,16 @@ export const POST: APIRoute = async ({ request, locals }) => {
     body: messageBody,
     receivedAt: Number.isSafeInteger(payload?.receivedAt) ? payload.receivedAt : undefined,
   });
+
+  // A payment that settled an order releases the goods. This runs after the
+  // response so the forwarding device is not held open by a supplier API.
+  if (outcome.status === "matched" && outcome.orderId && outcome.orderPaid) {
+    locals.runtime?.ctx?.waitUntil?.(
+      fulfilOrder(db, env, outcome.orderId).catch((error) => {
+        console.error("fulfilment failed", outcome.orderId, error);
+      }),
+    );
+  }
 
   // Always 200 for anything the endpoint understood, so the forwarder stops
   // retrying. The outcome tells the operator what happened.

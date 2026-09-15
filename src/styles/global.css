@@ -1348,6 +1348,21 @@ main {
   align-items: baseline;
 }
 
+/* Side by side, the label and a long value each wrap to two lines on a phone.
+   Stacking keeps both readable. */
+@media (max-width: 480px) {
+  .pay-instructions dl > div {
+    display: grid;
+    gap: 0.1rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .pay-instructions dd {
+    text-align: left;
+  }
+}
+
 .pay-instructions dt {
   color: var(--text-muted);
   font-size: 0.875rem;

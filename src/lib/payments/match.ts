@@ -8,6 +8,7 @@
  */
 
 import { newId, now, writeAudit } from "../db";
+import { settleOrderPayment } from "../orders";
 import { credit } from "../wallet";
 import { isActionable, parseSms, type ParsedSms } from "./parse";
 
@@ -24,7 +25,17 @@ export type MatchOutcome =
   | { status: "duplicate"; smsId: string }
   | { status: "ignored"; smsId: string; reason: string }
   | { status: "unmatched"; smsId: string; parsed: ParsedSms }
-  | { status: "matched"; smsId: string; topupId: string; userId: string; amountCentimes: number };
+  | {
+      status: "matched";
+      smsId: string;
+      topupId: string;
+      userId: string;
+      amountCentimes: number;
+      /** Set when this payment settled an order rather than topping up. */
+      orderId?: string;
+      /** True when that order is now paid and ready to fulfil. */
+      orderPaid?: boolean;
+    };
 
 /**
  * Store, parse and (when possible) apply an incoming SMS.
@@ -100,7 +111,7 @@ export async function ingestSms(db: D1Database, sms: IncomingSms): Promise<Match
   // top-ups gets them settled in the order they were made.
   const candidate = await db
     .prepare(
-      `SELECT id, user_id
+      `SELECT id, user_id, order_id
          FROM topup_requests
         WHERE provider = ?
           AND payer_msisdn = ?
@@ -111,7 +122,7 @@ export async function ingestSms(db: D1Database, sms: IncomingSms): Promise<Match
         LIMIT 1`,
     )
     .bind(parsed.provider, parsed.msisdn, parsed.amountCentimes, receivedAt)
-    .first<{ id: string; user_id: string }>();
+    .first<{ id: string; user_id: string; order_id: string | null }>();
 
   if (!candidate) {
     await db
@@ -180,8 +191,18 @@ export async function ingestSms(db: D1Database, sms: IncomingSms): Promise<Match
     actorUserId: candidate.user_id,
     action: "topup.credited",
     target: candidate.id,
-    detail: { smsId, amountCentimes: parsed.amountCentimes, provider: parsed.provider },
+    detail: {
+      smsId,
+      amountCentimes: parsed.amountCentimes,
+      provider: parsed.provider,
+      orderId: candidate.order_id,
+    },
   });
+
+  // A payment made for a specific order is spent on it straight away. If that
+  // fails the amount simply stays in the wallet — the customer is never out of
+  // pocket, and staff can see why in the audit log.
+  const orderPaid = candidate.order_id ? await settleOrderPayment(db, candidate.order_id) : false;
 
   return {
     status: "matched",
@@ -189,14 +210,45 @@ export async function ingestSms(db: D1Database, sms: IncomingSms): Promise<Match
     topupId: candidate.id,
     userId: candidate.user_id,
     amountCentimes: parsed.amountCentimes!,
+    orderId: candidate.order_id ?? undefined,
+    orderPaid,
   };
 }
 
-/** Marks pending top-ups past their window as expired. Called on a schedule. */
-export async function expireStaleTopups(db: D1Database): Promise<number> {
-  const result = await db
-    .prepare(`UPDATE topup_requests SET status = 'expired' WHERE status = 'pending' AND expires_at <= ?`)
-    .bind(now())
-    .run();
-  return result.meta?.changes ?? 0;
+/**
+ * Marks payments past their window as expired, and fails the orders that were
+ * waiting on them, so an unpaid order does not sit as a claim on goods forever.
+ *
+ * Safe to call repeatedly. Cloudflare cron triggers cannot reach an Astro route,
+ * so instead of a scheduled job this runs lazily, scoped to one customer, when
+ * they open their account page — which is exactly when a stale order would
+ * otherwise be visible and confusing. Called without a `userId` it sweeps
+ * everything, for a future scheduled worker or a manual run.
+ */
+export async function expireStalePayments(db: D1Database, userId?: string): Promise<number> {
+  const timestamp = now();
+  const scope = userId ? `AND user_id = ?` : "";
+  const bindings = userId ? [timestamp, userId] : [timestamp];
+
+  const [expired] = await db.batch([
+    db
+      .prepare(
+        `UPDATE topup_requests SET status = 'expired'
+          WHERE status = 'pending' AND expires_at <= ? ${scope}`,
+      )
+      .bind(...bindings),
+    db
+      .prepare(
+        `UPDATE orders
+            SET status = 'failed', failure_reason = 'payment_not_received', updated_at = ?
+          WHERE status = 'pending'
+            AND id IN (
+              SELECT order_id FROM topup_requests
+               WHERE order_id IS NOT NULL AND status = 'expired'
+            )`,
+      )
+      .bind(timestamp),
+  ]);
+
+  return expired?.meta?.changes ?? 0;
 }

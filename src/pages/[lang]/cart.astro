@@ -1,4 +1,5 @@
 ---
+import { PAYMENT_ACCOUNTS } from "../../config";
 import type { Locale } from "../../i18n/ui";
 import { formatMoney, localePath, useTranslations } from "../../i18n/utils";
 import Base from "../../layouts/Base.astro";
@@ -22,6 +23,8 @@ const user = Astro.locals.user;
     data-account-url={localePath(locale, "account")}
     data-signed-in={user ? "true" : "false"}
     data-balance={user ? String(user.balanceCentimes) : "0"}
+    data-account-orders-url={localePath(locale, "account")}
+    data-providers={JSON.stringify(PAYMENT_ACCOUNTS)}
   >
     <h1>{t("cart.title")}</h1>
 
@@ -41,7 +44,8 @@ const user = Astro.locals.user;
 
 <script>
   import { getVariant } from "../../data/catalog";
-  import type { Locale } from "../../i18n/ui";
+  import { PAYMENT_ACCOUNTS } from "../../config";
+import type { Locale } from "../../i18n/ui";
   import { formatMoney, isLocale, useTranslations } from "../../i18n/utils";
   import { onCartChange, readCart, removeAt, setQty } from "../../lib/cart";
 
@@ -152,10 +156,46 @@ const user = Astro.locals.user;
         );
       });
 
+      /* ---- Payment method ------------------------------------------- */
+
+      const providers = JSON.parse(region!.dataset.providers ?? "{}") as Record<
+        string,
+        { label: string; number: string }
+      >;
+
+      const methodSelect = el("select", { name: "method" });
+      // The wallet is only offered when it can actually cover the order.
+      if (balance >= total) {
+        methodSelect.append(el("option", { value: "wallet", text: t("cart.methodWallet") }));
+      }
+      for (const [id, account] of Object.entries(providers)) {
+        methodSelect.append(el("option", { value: id, text: account.label }));
+      }
+
+      const phoneInput = el("input", {
+        type: "tel",
+        name: "payerMsisdn",
+        inputmode: "tel",
+        placeholder: "3412 3456",
+        maxlength: "20",
+      });
+
+      const phoneField = el("label", { class: "field" }, [
+        el("span", { text: t("wallet.payerPhone") }),
+        phoneInput,
+        el("span", { class: "field-help", text: t("wallet.payerPhoneHelp") }),
+      ]);
+
+      /** The phone number is only relevant when paying by mobile money. */
+      function syncMethod() {
+        phoneField.hidden = methodSelect.value === "wallet";
+      }
+      methodSelect.addEventListener("change", syncMethod);
+
       const payButton = el("button", {
         class: "btn btn-primary btn-block",
         type: "button",
-        text: t("cart.pay"),
+        text: t("cart.payNow"),
       });
 
       const alertBox = el("p", { class: "form-alert", "data-tone": "error", hidden: "hidden" });
@@ -172,25 +212,26 @@ const user = Astro.locals.user;
           el("p", { class: "form-alert", "data-tone": "error", text: t("cart.signInFirst") }),
           el("a", { class: "btn btn-primary btn-block", href: accountUrl, text: t("account.signIn") }),
         );
-      } else if (balance < total) {
-        summaryChildren.push(
-          el("div", { class: "summary-row" }, [
-            el("span", { text: t("cart.balance") }),
-            el("span", { text: formatMoney(balance, locale) }),
-          ]),
-          el("p", { class: "form-alert", "data-tone": "error", text: t("cart.insufficient") }),
-          el("a", { class: "btn btn-primary btn-block", href: walletUrl, text: t("cart.topUpCta") }),
-        );
       } else {
+        if (balance > 0) {
+          summaryChildren.push(
+            el("div", { class: "summary-row" }, [
+              el("span", { text: t("cart.balance") }),
+              el("span", { text: formatMoney(balance, locale) }),
+            ]),
+          );
+        }
+
         summaryChildren.push(
-          el("div", { class: "summary-row" }, [
-            el("span", { text: t("cart.balance") }),
-            el("span", { text: formatMoney(balance, locale) }),
-          ]),
+          el("label", { class: "field" }, [el("span", { text: t("cart.method") }), methodSelect]),
+          phoneField,
           payButton,
           alertBox,
         );
-        payButton.addEventListener("click", () => pay(payButton, alertBox));
+
+        payButton.addEventListener("click", () =>
+          pay(methodSelect.value, phoneInput.value, total, payButton, alertBox),
+        );
       }
 
       summaryChildren.push(
@@ -202,10 +243,37 @@ const user = Astro.locals.user;
       body!.replaceChildren(
         el("div", { class: "cart-layout" }, [list, el("aside", { class: "summary" }, summaryChildren)]),
       );
+      syncMethod();
       region!.dataset.loading = "false";
     }
 
-    async function pay(button: HTMLButtonElement, alertBox: HTMLElement) {
+    /** Maps an API error code to something the customer can act on. */
+    function messageFor(code: string | undefined): string {
+      switch (code) {
+        case "insufficient_funds":
+          return t("cart.insufficient");
+        case "too_many_pending":
+          return t("cart.duplicatePending");
+        case "invalid_phone":
+          return t("cart.invalidPhone");
+        default:
+          return t("cart.error");
+      }
+    }
+
+    async function pay(
+      method: string,
+      payerMsisdn: string,
+      total: number,
+      button: HTMLButtonElement,
+      alertBox: HTMLElement,
+    ) {
+      if (method !== "wallet" && !payerMsisdn.trim()) {
+        alertBox.textContent = t("cart.invalidPhone");
+        alertBox.hidden = false;
+        return;
+      }
+
       button.disabled = true;
       button.textContent = t("cart.processing");
       alertBox.hidden = true;
@@ -216,6 +284,8 @@ const user = Astro.locals.user;
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             locale,
+            method,
+            payerMsisdn,
             items: readCart().map((line) => ({
               variantId: line.variantId,
               qty: line.qty,
@@ -224,24 +294,55 @@ const user = Astro.locals.user;
           }),
         });
 
-        const payload = (await response.json()) as { ok?: boolean; reference?: string; error?: string };
+        const payload = (await response.json()) as any;
+        if (!response.ok || !payload.ok) throw new Error(payload.error ?? "failed");
 
-        if (!response.ok || !payload.ok) {
-          throw new Error(payload.error ?? "failed");
+        // The basket has become an order either way, so it is cleared here.
+        localStorage.removeItem("delica.cart.v2");
+
+        if (payload.status === "awaiting_payment") {
+          showPaymentInstructions(payload, total);
+          return;
         }
 
-        // The order is placed; clear the basket and show it in the account.
-        localStorage.removeItem("delica.cart.v2");
         window.location.assign(`${accountUrl}?order=${encodeURIComponent(payload.reference ?? "")}`);
       } catch (error) {
-        alertBox.textContent =
-          error instanceof Error && error.message === "insufficient_funds"
-            ? t("cart.insufficient")
-            : t("cart.error");
+        alertBox.textContent = messageFor(error instanceof Error ? error.message : undefined);
         alertBox.hidden = false;
         button.disabled = false;
-        button.textContent = t("cart.pay");
+        button.textContent = t("cart.payNow");
       }
+    }
+
+    /**
+     * Replaces the cart with what the customer has to do next. Nothing has been
+     * charged at this point — the order settles when their payment SMS arrives.
+     */
+    function showPaymentInstructions(payload: any, total: number) {
+      const minutes = Math.max(1, Math.round((payload.expiresAt - Date.now() / 1000) / 60));
+
+      const row = (label: string, value: string) =>
+        el("div", {}, [el("dt", { text: label }), el("dd", { text: value })]);
+
+      body!.replaceChildren(
+        el("div", { class: "pay-instructions" }, [
+          el("h2", { text: t("cart.awaitingTitle") }),
+          el("p", { text: t("cart.awaitingBody") }),
+          el("dl", {}, [
+            row(t("wallet.sendTo"), `${payload.payTo.label} — ${payload.payTo.number}`),
+            row(t("wallet.exactAmount"), formatMoney(payload.totalCentimes ?? total, locale)),
+            row(t("cart.orderRef"), String(payload.reference ?? "")),
+            row(t("wallet.expiresIn"), `${minutes} ${t("wallet.minutes")}`),
+          ]),
+          el("p", { class: "waiting", text: t("wallet.waiting") }),
+          el("a", {
+            class: "btn btn-ghost",
+            href: region!.dataset.accountOrdersUrl ?? accountUrl,
+            text: t("cart.viewOrders"),
+          }),
+        ]),
+      );
+      region!.dataset.loading = "false";
     }
 
     render();

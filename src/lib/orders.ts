@@ -1,21 +1,28 @@
 /**
  * Order creation and fulfilment.
  *
- * The flow is deliberately ordered so money and goods cannot get out of step:
+ * There are two ways to pay, and both settle through the same ledger:
+ *
+ *   - From the wallet balance, immediately.
+ *   - Directly with MonCash or NatCash, in which case the order is created
+ *     `pending` and waits for its confirmation SMS. When that arrives the
+ *     amount is credited to the wallet and spent on the order in one step, so
+ *     every gourde still has a ledger row behind it — and a customer whose
+ *     order cannot be charged keeps the money rather than losing it.
+ *
+ * Either way the order is only ever fulfilled after it is paid:
  *
  *   1. Re-price the basket from the catalog. Client-supplied prices are ignored.
  *   2. Validate every required field (player id, email) against its pattern.
- *   3. Debit the wallet. If the balance is short, nothing else happens.
- *   4. Create the order as paid, then fulfil each line.
+ *   3. Take payment. If it cannot be taken, nothing else happens.
+ *   4. Mark the order paid, then fulfil each line.
  *   5. Any line that fails permanently is refunded to the wallet.
- *
- * Debiting before fulfilling means a customer can never receive a code they did
- * not pay for. The refund in step 5 covers the opposite case.
  */
 
-import { MAX_ORDER_LINES, MAX_QTY_PER_ITEM } from "../config";
+import { MAX_ORDER_LINES, MAX_QTY_PER_ITEM, WALLET } from "../config";
 import type { Locale } from "../i18n/ui";
 import { getVariant, type Product, type RequiredField } from "../data/catalog";
+import { normalizeMsisdn } from "./auth";
 import { newId, newReference, now, writeAudit } from "./db";
 import { getSupplier } from "./suppliers";
 import { credit, debit } from "./wallet";
@@ -112,43 +119,62 @@ export function priceBasket(input: unknown, locale: Locale): PriceOutcome {
 }
 
 export type PlaceOrderResult =
-  | { ok: true; orderId: string; reference: string; totalCentimes: number; balanceCentimes: number }
-  | { ok: false; error: "insufficient_funds" | "empty" | "unknown_variant" | "unavailable" | "invalid_field"; detail?: string };
+  | {
+      ok: true;
+      orderId: string;
+      reference: string;
+      totalCentimes: number;
+      /** Present when paid from the wallet. */
+      balanceCentimes?: number;
+      /** Present when the customer must now send mobile money. */
+      payment?: { topupId: string; provider: MobileMoneyProvider; expiresAt: number };
+    }
+  | {
+      ok: false;
+      error:
+        | "insufficient_funds"
+        | "empty"
+        | "unknown_variant"
+        | "unavailable"
+        | "invalid_field"
+        | "invalid_phone"
+        | "too_many_pending";
+      detail?: string;
+    };
 
-/** Prices the basket, takes payment from the wallet, and records the order. */
-export async function placeOrder(
+export type MobileMoneyProvider = "moncash" | "natcash";
+
+/** Creates the order and its lines. Does not take payment. */
+async function writeOrder(
   db: D1Database,
   userId: string,
-  basket: unknown,
+  priced: Extract<PriceOutcome, { ok: true }>,
   locale: Locale,
-): Promise<PlaceOrderResult> {
-  const priced = priceBasket(basket, locale);
-  if (!priced.ok) return { ok: false, error: priced.error, detail: priced.detail };
-
+  status: "pending" | "paid",
+  paymentMethod: "wallet" | MobileMoneyProvider,
+): Promise<{ orderId: string; reference: string }> {
   const orderId = newId("ord");
   const reference = newReference();
   const timestamp = now();
 
-  // Charge first. An order only exists once it is paid for.
-  const payment = await debit(db, {
-    userId,
-    amountCentimes: priced.totalCentimes,
-    kind: "purchase",
-    reference: orderId,
-    idempotencyKey: `order:${orderId}`,
-  });
-
-  if (!payment.ok) {
-    return { ok: false, error: "insufficient_funds" };
-  }
-
-  const statements = [
+  await db.batch([
     db
       .prepare(
-        `INSERT INTO orders (id, reference, user_id, status, total_centimes, locale, created_at, updated_at)
-         VALUES (?, ?, ?, 'paid', ?, ?, ?, ?)`,
+        `INSERT INTO orders
+           (id, reference, user_id, status, total_centimes, locale, payment_method, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(orderId, reference, userId, priced.totalCentimes, locale, timestamp, timestamp),
+      .bind(
+        orderId,
+        reference,
+        userId,
+        status,
+        priced.totalCentimes,
+        locale,
+        paymentMethod,
+        timestamp,
+        timestamp,
+      ),
     ...priced.lines.map((line) =>
       db
         .prepare(
@@ -168,15 +194,47 @@ export async function placeOrder(
           line.product.supplier ?? null,
         ),
     ),
-  ];
+  ]);
 
-  await db.batch(statements);
+  return { orderId, reference };
+}
+
+/** Prices the basket, takes payment from the wallet, and records the order. */
+export async function placeOrder(
+  db: D1Database,
+  userId: string,
+  basket: unknown,
+  locale: Locale,
+): Promise<PlaceOrderResult> {
+  const priced = priceBasket(basket, locale);
+  if (!priced.ok) return { ok: false, error: priced.error, detail: priced.detail };
+
+  const { orderId, reference } = await writeOrder(db, userId, priced, locale, "pending", "wallet");
+
+  const payment = await debit(db, {
+    userId,
+    amountCentimes: priced.totalCentimes,
+    kind: "purchase",
+    reference: orderId,
+    idempotencyKey: `order:${orderId}`,
+  });
+
+  if (!payment.ok) {
+    // Nothing was charged, so the order must not survive as a claim on goods.
+    await db.prepare(`DELETE FROM orders WHERE id = ?`).bind(orderId).run();
+    return { ok: false, error: "insufficient_funds" };
+  }
+
+  await db
+    .prepare(`UPDATE orders SET status = 'paid', updated_at = ? WHERE id = ?`)
+    .bind(now(), orderId)
+    .run();
 
   await writeAudit(db, {
     actorUserId: userId,
     action: "order.placed",
     target: orderId,
-    detail: { reference, totalCentimes: priced.totalCentimes, lines: priced.lines.length },
+    detail: { reference, totalCentimes: priced.totalCentimes, method: "wallet" },
   });
 
   return {
@@ -186,6 +244,136 @@ export async function placeOrder(
     totalCentimes: priced.totalCentimes,
     balanceCentimes: payment.balanceCentimes,
   };
+}
+
+/**
+ * Creates an order that waits for a MonCash or NatCash payment.
+ *
+ * Nothing is charged and nothing is fulfilled here. The customer is told the
+ * exact amount to send and from which number; `settleOrderPayment` runs when
+ * the matching SMS arrives.
+ */
+export async function placeMobileMoneyOrder(
+  db: D1Database,
+  userId: string,
+  basket: unknown,
+  locale: Locale,
+  provider: MobileMoneyProvider,
+  payerMsisdnInput: string,
+): Promise<PlaceOrderResult> {
+  const priced = priceBasket(basket, locale);
+  if (!priced.ok) return { ok: false, error: priced.error, detail: priced.detail };
+
+  const payerMsisdn = normalizeMsisdn(payerMsisdnInput);
+  if (!payerMsisdn) return { ok: false, error: "invalid_phone" };
+
+  // Two pending payments with the same provider, number and amount would be
+  // indistinguishable to the matcher, so refuse rather than guess later.
+  const clash = await db
+    .prepare(
+      `SELECT id FROM topup_requests
+        WHERE provider = ? AND payer_msisdn = ? AND amount_centimes = ?
+          AND status = 'pending' AND expires_at > ?`,
+    )
+    .bind(provider, payerMsisdn, priced.totalCentimes, now())
+    .first<{ id: string }>();
+
+  if (clash) return { ok: false, error: "too_many_pending" };
+
+  const { orderId, reference } = await writeOrder(db, userId, priced, locale, "pending", provider);
+
+  const topupId = newId("pay");
+  const createdAt = now();
+  const expiresAt = createdAt + WALLET.topUpTtlMinutes * 60;
+
+  await db
+    .prepare(
+      `INSERT INTO topup_requests
+         (id, user_id, provider, amount_centimes, payer_msisdn, status, purpose, order_id, created_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, 'pending', 'order', ?, ?, ?)`,
+    )
+    .bind(topupId, userId, provider, priced.totalCentimes, payerMsisdn, orderId, createdAt, expiresAt)
+    .run();
+
+  await writeAudit(db, {
+    actorUserId: userId,
+    action: "order.awaiting_payment",
+    target: orderId,
+    detail: { reference, totalCentimes: priced.totalCentimes, provider },
+  });
+
+  return {
+    ok: true,
+    orderId,
+    reference,
+    totalCentimes: priced.totalCentimes,
+    payment: { topupId, provider, expiresAt },
+  };
+}
+
+/**
+ * Charges a pending order against the wallet once its payment has landed.
+ *
+ * Called from the SMS matcher, right after the incoming amount was credited.
+ * Returns true when the order moved to paid and is ready to fulfil.
+ */
+export async function settleOrderPayment(db: D1Database, orderId: string): Promise<boolean> {
+  const order = await db
+    .prepare(`SELECT id, user_id, status, total_centimes, reference FROM orders WHERE id = ?`)
+    .bind(orderId)
+    .first<{
+      id: string;
+      user_id: string;
+      status: string;
+      total_centimes: number;
+      reference: string;
+    }>();
+
+  // Already paid, or gone: nothing to do, and safe to call twice.
+  if (!order || order.status !== "pending") return false;
+
+  const payment = await debit(db, {
+    userId: order.user_id,
+    amountCentimes: order.total_centimes,
+    kind: "purchase",
+    reference: orderId,
+    idempotencyKey: `order:${orderId}`,
+  });
+
+  if (!payment.ok) {
+    if (payment.reason === "already_applied") {
+      // A previous run charged it; just move the order forward.
+      await db
+        .prepare(`UPDATE orders SET status = 'paid', updated_at = ? WHERE id = ? AND status = 'pending'`)
+        .bind(now(), orderId)
+        .run();
+      return true;
+    }
+
+    // The credit should have covered this exactly. If it somehow did not, the
+    // money stays in the customer's wallet rather than vanishing.
+    await writeAudit(db, {
+      actorUserId: order.user_id,
+      action: "order.settle_failed",
+      target: orderId,
+      detail: { reason: payment.reason, totalCentimes: order.total_centimes },
+    });
+    return false;
+  }
+
+  await db
+    .prepare(`UPDATE orders SET status = 'paid', updated_at = ? WHERE id = ?`)
+    .bind(now(), orderId)
+    .run();
+
+  await writeAudit(db, {
+    actorUserId: order.user_id,
+    action: "order.placed",
+    target: orderId,
+    detail: { reference: order.reference, totalCentimes: order.total_centimes, method: "mobile_money" },
+  });
+
+  return true;
 }
 
 /**

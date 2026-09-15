@@ -180,12 +180,22 @@ const signature = hmacSha256Hex(secret, `${timestamp}.${payload}`);
 ### How matching works
 
 Before paying, the customer tells the site the provider, the exact amount, and
-the number they will send from. An arriving SMS is matched on those three
-things, inside a one-hour window. That means:
+the number they will send from — either when topping up their wallet, or when
+confirming an order they want to pay for directly. An arriving SMS is matched on
+those three things, inside a one-hour window.
+
+A payment made **for an order** is credited to the customer's wallet and spent
+on that order in the same step, then the order is fulfilled. A payment made as a
+**plain top-up** just raises the balance. Either way the ledger records every
+movement, so an order paid directly shows as a credit and a matching debit
+rather than appearing from nowhere.
+
+That design means:
 
 - Two customers paying the **same amount from different numbers** never collide.
 - A customer paying a **different amount than they declared** is not credited
-  automatically — it lands in the unmatched list for you to resolve.
+  automatically — it lands in the unmatched list for you to resolve. Their order
+  stays `pending` and is marked failed once its hour is up; nothing is charged.
 - A **replayed or duplicated** message is rejected twice over: once by
   `externalId`, once by the operator's own transaction id.
 
@@ -264,7 +274,9 @@ Be aware of these before switching the domain over:
 
 - **No admin panel.** Manual-fulfilment orders and unmatched payments are in the
   database with nothing to view them through. Until one exists, use
-  `npx wrangler d1 execute delicastoreha --remote --command "..."`.
+  `npx wrangler d1 execute delicastoreha --remote --command "..."`. This matters
+  most for payments that arrive with the wrong amount: nobody is told about them
+  except through the query in section 12.
 - **No supplier integration.** Every order currently refunds itself (section 8).
 - **No email.** Nothing is sent on registration or delivery. Cloudflare Workers
   has no built-in mail; this needs a provider such as Resend or MailChannels.
@@ -293,9 +305,13 @@ Useful database queries:
 npx wrangler d1 execute delicastoreha --remote \
   --command "SELECT received_at, body FROM sms_messages WHERE status='unmatched' ORDER BY received_at DESC LIMIT 20"
 
-# Orders waiting on a human
+# Orders that are paid but waiting on a human
 npx wrangler d1 execute delicastoreha --remote \
-  --command "SELECT o.reference, l.label, l.fields_json FROM order_lines l JOIN orders o ON o.id=l.order_id WHERE l.fulfilment_status='pending'"
+  --command "SELECT o.reference, l.label, l.fields_json FROM order_lines l JOIN orders o ON o.id=l.order_id WHERE l.fulfilment_status='pending' AND o.status IN ('paid','fulfilling')"
+
+# Orders still waiting for the customer's MonCash/NatCash payment
+npx wrangler d1 execute delicastoreha --remote \
+  --command "SELECT reference, payment_method, total_centimes, created_at FROM orders WHERE status='pending' ORDER BY created_at DESC"
 
 # Prove a wallet balance matches its ledger
 npx wrangler d1 execute delicastoreha --remote \

@@ -54,6 +54,19 @@ db/migrations/           Database schema
 tests/                   Unit tests and a full browser run
 ```
 
+## Paying
+
+Customers can pay two ways, and both settle through the same ledger:
+
+- **Directly with MonCash or NatCash.** The order is created `pending`, the
+  customer is shown the exact amount and number to send to, and the order is
+  paid the moment the confirmation SMS arrives.
+- **From their wallet balance**, which they top up the same way.
+
+A direct payment is credited to the wallet and spent on the order in one step,
+so every gourde has a ledger row behind it — and if the order somehow cannot be
+charged, the customer keeps the money instead of losing it.
+
 ## The two rules worth knowing
 
 **Prices are never taken from the browser.** The cart holds variant ids and

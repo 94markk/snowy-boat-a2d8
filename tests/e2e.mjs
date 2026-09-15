@@ -18,6 +18,9 @@ const payerMsisdn = String(30_000_000 + (Date.now() % 9_000_000));
 const problems = [];
 const note = (page, message) => problems.push(`[${page}] ${message}`);
 
+/** French number formatting uses narrow no-break spaces; treat them as spaces. */
+const normalizeSpaces = (value) => (value ?? "").replace(/[\u00a0\u202f\s]+/g, " ").trim();
+
 function signedSmsRequest(body) {
   const payload = JSON.stringify(body);
   const timestamp = Math.floor(Date.now() / 1000);
@@ -133,7 +136,7 @@ if (unsigned.status() !== 401) note("sms-webhook", `unsigned delivery returned $
 /* 6. The balance shows the credit. */
 currentLabel = "wallet-after";
 await visit("wallet-after", "/fr/wallet");
-const balanceText = (await page.locator(".balance-card strong").textContent())?.trim();
+const balanceText = normalizeSpaces(await page.locator(".balance-card strong").textContent());
 if (balanceText !== "G500") note("wallet-after", `balance shows "${balanceText}", expected "G500"`);
 
 /* 7. Pay for the cart from the wallet. */
@@ -142,7 +145,7 @@ await visit("cart", "/fr/cart");
 await page.waitForSelector(".cart-line", { timeout: 10_000 });
 const payButton = page.locator(".summary button.btn-primary");
 if (!(await payButton.count())) {
-  note("checkout", "pay button missing — balance may not cover the cart");
+  note("checkout", "pay button missing");
 } else {
   const [orderResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().includes("/api/orders")),
@@ -166,15 +169,87 @@ const orderCards = await page.locator(".order-card").count();
 if (orderCards < 1) {
   note("after-order", "no order card rendered");
 } else {
-  const orderStatus = (await page.locator(".order-card .status-pill").first().textContent())?.trim();
+  const orderStatus = normalizeSpaces(await page.locator(".order-card .status-pill").first().textContent());
   if (orderStatus !== "Remboursée") {
     note("after-order", `order status is "${orderStatus}", expected "Remboursée" with no supplier configured`);
   }
 
-  const newBalance = (await page.locator(".balance-line strong").textContent())?.trim();
+  const newBalance = normalizeSpaces(await page.locator(".balance-line strong").textContent());
   if (newBalance !== "G500") {
     note("after-order", `balance after the refund is "${newBalance}", expected "G500"`);
   }
+}
+
+/* 9. Buy again, paying MonCash directly rather than from the wallet. */
+currentLabel = "direct-checkout";
+await visit("product", "/fr/shop/pubg-mobile");
+// Pick a specific denomination rather than the pre-selected first one, so the
+// amount under test is deterministic and variant choice is exercised.
+// Click the label, as a customer would: the radio itself is visually hidden
+// so the styled tile can stand in for it.
+await page.click('label.variant:has(input[value="pubg-325"])');
+await page.fill('input[name="player_id"]', "987654321");
+await page.click('button[type="submit"]');
+await page.waitForTimeout(400);
+
+await visit("cart-direct", "/fr/cart");
+await page.waitForSelector(".cart-line", { timeout: 10_000 });
+
+const directPayer = String(40_000_000 + (Date.now() % 9_000_000));
+await page.selectOption('select[name="method"]', "moncash");
+await page.fill('input[name="payerMsisdn"]', directPayer);
+
+const [directResponse] = await Promise.all([
+  page.waitForResponse((response) => response.url().includes("/api/orders")),
+  page.locator(".summary button.btn-primary").click(),
+]);
+if (directResponse.status() !== 201) note("direct-checkout", `order API returned ${directResponse.status()}`);
+
+// Nothing is charged yet: the customer is shown what to send.
+await page.waitForSelector(".pay-instructions", { timeout: 10_000 });
+const instructionsText = normalizeSpaces(await page.locator(".pay-instructions").textContent());
+if (!instructionsText.includes("G810")) {
+  note("direct-checkout", "instructions do not show the exact amount to send (G810)");
+}
+
+/* 10. The payment arrives and settles that order. */
+currentLabel = "direct-payment";
+const directSms = {
+  externalId: `e2e-direct-${Date.now()}`,
+  sender: "MonCash",
+  body: `Ou resevwa 810.00 HTG nan men TEST USER (509${directPayer}). Transaction ID: D${Date.now().toString(36).toUpperCase()}`,
+};
+const directResult = await (
+  await context.request.post(`${BASE}/api/webhooks/sms`, {
+    headers: signedSmsRequest(directSms).headers,
+    data: directSms,
+  })
+).json();
+if (directResult.outcome !== "matched") {
+  note("direct-payment", `outcome was "${directResult.outcome}", expected "matched"`);
+}
+
+// The G810 was credited and immediately spent on the order, then refunded when
+// the stub supplier declined — so it ends up sitting in the wallet on top of the
+// G500 from earlier. With a real supplier configured the wallet would stay at
+// G500, because the money would have bought something.
+await visit("wallet-final", "/fr/wallet");
+const finalBalance = normalizeSpaces(await page.locator(".balance-card strong").textContent());
+if (finalBalance !== "G1 310") {
+  note("direct-payment", `wallet is "${finalBalance}" after the refund, expected "G1 310"`);
+}
+
+// The ledger must show all three movements, not a single net figure.
+const ledgerKinds = await page.locator(".ledger-kind").allTextContents();
+for (const expected of ["Recharge", "Achat", "Remboursement"]) {
+  if (!ledgerKinds.includes(expected)) {
+    note("direct-payment", `wallet history is missing a "${expected}" entry`);
+  }
+}
+
+await visit("account-final", "/fr/account");
+if ((await page.locator(".order-card").count()) < 2) {
+  note("direct-payment", "the direct order does not appear in the order list");
 }
 
 await browser.close();

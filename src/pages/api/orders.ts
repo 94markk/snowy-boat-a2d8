@@ -1,17 +1,23 @@
 /**
  * POST /api/orders
  *
- * Places an order paid from the wallet balance. Prices come from the catalog,
- * never from the request body — see src/lib/orders.ts.
+ * Places an order, paid either from the wallet balance or directly with
+ * MonCash / NatCash. Prices come from the catalog, never from the request body
+ * — see src/lib/orders.ts.
  */
 
 import type { APIRoute } from "astro";
+import { PAYMENT_ACCOUNTS } from "../../config";
 import { isSameOrigin, json, methodNotAllowed, readJson } from "../../lib/http";
-import { fulfilOrder, placeOrder } from "../../lib/orders";
+import { fulfilOrder, placeMobileMoneyOrder, placeOrder, type MobileMoneyProvider } from "../../lib/orders";
 import { allowRequest } from "../../lib/ratelimit";
 import { isLocale } from "../../i18n/utils";
 
 export const prerender = false;
+
+function isMobileMoney(value: unknown): value is MobileMoneyProvider {
+  return value === "moncash" || value === "natcash";
+}
 
 export const POST: APIRoute = async ({ request, locals }) => {
   if (!isSameOrigin(request)) return json({ error: "forbidden_origin" }, 403);
@@ -29,6 +35,40 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!body.ok) return body.response;
 
   const locale = isLocale(body.value?.locale) ? body.value.locale : user.locale;
+  const method = body.value?.method;
+
+  /* ---- Paid with MonCash or NatCash ------------------------------------ */
+
+  if (isMobileMoney(method)) {
+    const result = await placeMobileMoneyOrder(
+      db,
+      user.id,
+      body.value?.items,
+      locale,
+      method,
+      String(body.value?.payerMsisdn ?? ""),
+    );
+
+    if (!result.ok) return json({ error: result.error, detail: result.detail }, 400);
+
+    // Nothing is charged or delivered yet: the customer now sends the money,
+    // and the confirmation SMS settles the order.
+    return json(
+      {
+        ok: true,
+        status: "awaiting_payment",
+        reference: result.reference,
+        orderId: result.orderId,
+        totalCentimes: result.totalCentimes,
+        payTo: PAYMENT_ACCOUNTS[method],
+        expiresAt: result.payment?.expiresAt,
+      },
+      201,
+    );
+  }
+
+  /* ---- Paid from the wallet balance ------------------------------------ */
+
   const result = await placeOrder(db, user.id, body.value?.items, locale);
 
   if (!result.ok) {
@@ -47,6 +87,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   return json(
     {
       ok: true,
+      status: "paid",
       reference: result.reference,
       orderId: result.orderId,
       totalCentimes: result.totalCentimes,

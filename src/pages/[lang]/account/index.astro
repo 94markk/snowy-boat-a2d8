@@ -1,6 +1,8 @@
 ---
+import { PAYMENT_ACCOUNTS, type PaymentProvider } from "../../../config";
 import type { Locale } from "../../../i18n/ui";
 import { formatDate, formatMoney, localePath, useTranslations } from "../../../i18n/utils";
+import { expireStalePayments } from "../../../lib/payments/match";
 import Base from "../../../layouts/Base.astro";
 
 export const prerender = false;
@@ -18,15 +20,24 @@ interface OrderRow {
   status: string;
   total_centimes: number;
   created_at: number;
+  payment_method: string | null;
   lines: { label: string; qty: number; fulfilment_status: string; delivered_payload: string | null }[];
 }
+
+/** An order still waiting for its MonCash/NatCash payment. */
+const isAwaitingPayment = (order: OrderRow): order is OrderRow & { payment_method: PaymentProvider } =>
+  order.status === "pending" && order.payment_method !== null && order.payment_method in PAYMENT_ACCOUNTS;
 
 let orders: OrderRow[] = [];
 
 if (user && db) {
+  // Close out any payment whose window has passed, so an order the customer
+  // never paid for shows as failed rather than sitting "pending" forever.
+  await expireStalePayments(db, user.id);
+
   const { results } = await db
     .prepare(
-      `SELECT id, reference, status, total_centimes, created_at
+      `SELECT id, reference, status, total_centimes, created_at, payment_method
          FROM orders WHERE user_id = ? ORDER BY created_at DESC LIMIT 20`,
     )
     .bind(user.id)
@@ -160,6 +171,28 @@ const statusLabel = (status: string) =>
                       <b>{formatMoney(order.total_centimes, locale)}</b>
                     </div>
                   </header>
+
+                  {isAwaitingPayment(order) && (
+                    <div class="awaiting-payment">
+                      <p>
+                        <strong>{t("cart.awaitingTitle")}</strong>
+                      </p>
+                      <p>{t("cart.awaitingBody")}</p>
+                      <dl>
+                        <div>
+                          <dt>{t("wallet.sendTo")}</dt>
+                          <dd>
+                            {PAYMENT_ACCOUNTS[order.payment_method].label} —{" "}
+                            {PAYMENT_ACCOUNTS[order.payment_method].number}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>{t("wallet.exactAmount")}</dt>
+                          <dd>{formatMoney(order.total_centimes, locale)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  )}
 
                   <ul>
                     {order.lines.map((line) => (
@@ -361,6 +394,41 @@ const statusLabel = (status: string) =>
     margin-top: 0.75rem;
     display: grid;
     gap: 0.6rem;
+  }
+
+  .awaiting-payment {
+    margin-top: 0.85rem;
+    padding: 0.9rem 1rem;
+    border-radius: var(--radius-sm);
+    border: 1.5px dashed var(--violet-500);
+    font-size: 0.875rem;
+  }
+
+  .awaiting-payment p + p {
+    margin-top: 0.3rem;
+    color: var(--text-muted);
+  }
+
+  .awaiting-payment dl {
+    margin: 0.75rem 0 0;
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  .awaiting-payment dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .awaiting-payment dt {
+    color: var(--text-muted);
+  }
+
+  .awaiting-payment dd {
+    margin: 0;
+    font-weight: 800;
+    text-align: right;
   }
 
   .order-card li {
