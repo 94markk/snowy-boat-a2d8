@@ -431,14 +431,53 @@
 		});
 	}
 
-	function boot() {
-		bindButtons();
-		if (!cfg.loggedIn) { return; }
+	/* RC-PRO15: the invitation check used to be an admin-ajax round trip on
+	   every single page a signed-in client opened — the full WordPress and
+	   plugin bootstrap, for an answer that is "no" on all but a handful of
+	   visits. It now runs off the critical path, and a "no" is remembered in a
+	   short-lived cookie so the next few pages ask nothing at all. Storage
+	   stays a cookie: nothing about a client is written to this device. */
+	var SEEN_COOKIE = 'dlc_rv_ck';
+
+	function readFlag(name) {
+		var parts = document.cookie ? document.cookie.split(';') : [];
+		for (var i = 0; i < parts.length; i++) {
+			var pair = parts[i].replace(/^\s+/, '');
+			if (pair.indexOf(name + '=') === 0) { return pair.slice(name.length + 1); }
+		}
+		return '';
+	}
+
+	function writeFlag(name, value, maxAge) {
+		var c = name + '=' + value + '; path=/; SameSite=Lax; max-age=' + maxAge;
+		if ('https:' === location.protocol) { c += '; Secure'; }
+		document.cookie = c;
+	}
+
+	function idle(fn) {
+		if (window.requestIdleCallback) { window.requestIdleCallback(fn, { timeout: 4000 }); }
+		else { window.setTimeout(fn, 1200); }
+	}
+
+	function checkPrompt() {
 		fetchPrompt().then(function () {
 			if (state.due) {
 				window.setTimeout(function () { open(state.name, false); }, 2200);
+				return;
 			}
+			/* Nothing to ask for, so stop asking for a while. The order-confirmation
+			   page never consults this flag, so the one moment that matters — the
+			   page right after a purchase — always runs the check. */
+			if (!cfg.thanks) { writeFlag(SEEN_COOKIE, '1', 21600); }
 		}).catch(function () {});
+	}
+
+	function boot() {
+		bindButtons();
+		if (!cfg.loggedIn) { return; }
+		if (!cfg.thanks && '1' === readFlag(SEEN_COOKIE)) { return; }
+		if ('complete' === document.readyState) { idle(checkPrompt); }
+		else { window.addEventListener('load', function () { idle(checkPrompt); }, { once: true }); }
 	}
 
 	if ('loading' === document.readyState) {

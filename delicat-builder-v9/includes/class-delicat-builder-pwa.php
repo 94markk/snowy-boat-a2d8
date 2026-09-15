@@ -172,11 +172,45 @@ final class Delicat_Builder_V9_PWA {
 		$chrome_css = is_file( DELICAT_BUILDER_V9_DIR . $chrome )
 			? array( $chrome )
 			: array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/drawer.css', 'assets/css/bottom-nav.css' );
-		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/drawer.js', 'assets/js/session.js', 'assets/js/shell-nav.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
+		$precache_files = array_merge( $chrome_css, array( 'assets/dsb8-beta2-header.js', 'assets/js/drawer.js', 'assets/js/session.js', 'assets/js/theme.js', 'assets/js/pwa-runtime.js' ) );
+		/*
+		 * PRO15: precache what the storefront actually loads.
+		 *
+		 * The Pro Kernel deregisters shell-nav and answers navigation from
+		 * pro/assets/dbp-nav.js, and it owns the app stylesheet and the type
+		 * sheet. Precaching the V9 handles it replaced filled the install cache
+		 * with files no page ever requests, while the files every page does
+		 * request arrived as a miss.
+		 */
+		$pro = class_exists( 'DBP_Kernel', false ) && is_callable( array( 'DBP_Kernel', 'on' ) );
+		if ( $pro && DBP_Kernel::on( 'navigation' ) ) {
+			$precache_files[] = 'pro/assets/dbp-nav.js';
+		} else {
+			$precache_files[] = 'assets/js/shell-nav.js';
+		}
+		if ( $pro && DBP_Kernel::on( 'assets' ) ) {
+			$precache_files[] = 'pro/assets/dbp-app.css';
+		}
+		if ( $pro && DBP_Kernel::on( 'type_system' ) ) {
+			$precache_files[] = 'pro/assets/dbp-type.css';
+		}
 		foreach ( $precache_files as $rel ) {
-			if ( is_file( DELICAT_BUILDER_V9_DIR . $rel ) ) {
-				$precache[] = add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, DELICAT_BUILDER_V9_URL . $rel );
+			if ( ! is_file( DELICAT_BUILDER_V9_DIR . $rel ) ) {
+				continue;
 			}
+			$url = DELICAT_BUILDER_V9_URL . $rel;
+			/*
+			 * Pages request the content-addressed copy of each asset, with no
+			 * query string. Precaching the `?ver=` form stored an entry under a
+			 * URL the storefront never asks for, so the install download was
+			 * spent and every asset still missed on the first visit.
+			 */
+			$mapped = is_callable( array( 'Delicat_Builder_V9_Audit_Fixes', 'asset_url' ) )
+				? (string) Delicat_Builder_V9_Audit_Fixes::asset_url( $url )
+				: $url;
+			$precache[] = ( '' !== $mapped && $mapped !== $url )
+				? $mapped
+				: add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, $url );
 		}
 		$precache = (array) apply_filters( 'delicat_builder_v9_pwa_precache', array_values( array_unique( array_map( 'esc_url_raw', $precache ) ) ) );
 		?>
@@ -257,8 +291,12 @@ self.addEventListener('fetch',e=>{
      time (stale-while-revalidate) — for `?ver=`-stamped plugin/WordPress/Woo files
      and media-library images that is pure data waste on a metered phone. A
      versioned URL never changes; an upload is revalidated at most once per 6 h.
+     PRO15: a content-addressed name (`core.d2d18e641204.js`) is versioned in the
+     strongest sense — the name changes when the bytes do — but carries no
+     `?ver=`, so every Builder asset was being re-fetched in the background on
+     every page view of a metered phone.
      Everything else keeps the previous stale-while-revalidate behaviour. */
-  const versioned=/[?&]ver=/.test(u.search);
+  const versioned=/[?&]ver=/.test(u.search)||/\.[0-9a-f]{12}\.(?:css|js)$/.test(u.pathname);
   const upload=/\/wp-content\/uploads\//.test(u.pathname);
   e.respondWith(caches.open(DBV9_CACHE).then(async c=>{
     const hit=await c.match(r);

@@ -182,24 +182,44 @@
     else setTimeout(fn, 200);
   }
 
+  /* ------------------------------------------------------------------ gate */
+
+  /**
+   * A state request is a full round trip to the origin plus a WooCommerce
+   * session load on the server. On a 3G phone that is real time and real data,
+   * so it is only spent when this document has something to update: a badge,
+   * a wallet or identity slot, a nonce field, a subscriber, or the WooCommerce
+   * add-to-cart parameters whose cached nonce goes stale at the tick.
+   *
+   * Checked live rather than once, because a navigation or a modal can bring
+   * a consumer into a document that had none.
+   */
+  var CONSUMERS = '[data-dbp-cart-count],[data-dbp-cart-total],[data-dbp-wallet],[data-dbp-alerts],[data-dbp-user-name],[data-dbp-requires-auth],[data-dbp-requires-guest],input[data-dbp-nonce]';
+
+  function wanted() {
+    if (listeners.length) return true;
+    if (window.wc_add_to_cart_params) return true;
+    return !!doc.querySelector(CONSUMERS);
+  }
+
   /* The first paint belongs to the page, not to the session probe. */
   if (cfg.initial) {
-    if (doc.readyState === 'complete') schedule(function () { fetchState('load'); });
-    else window.addEventListener('load', function () { schedule(function () { fetchState('load'); }); }, { once: true });
+    if (doc.readyState === 'complete') schedule(function () { if (wanted()) fetchState('load'); });
+    else window.addEventListener('load', function () { schedule(function () { if (wanted()) fetchState('load'); }); }, { once: true });
   }
 
   /* Refresh on the events that can actually change the session, rather than
      on a timer. A poll costs a Haitian shopper data for nothing. */
-  doc.addEventListener('delicat:pro:navigated', function () { if (state || cfg.initial) fetchState('nav'); });
-  doc.addEventListener('added_to_cart', function () { fetchState('cart'); });
-  doc.addEventListener('removed_from_cart', function () { fetchState('cart'); });
+  doc.addEventListener('delicat:pro:navigated', function () { if ((state || cfg.initial) && wanted()) fetchState('nav'); });
+  doc.addEventListener('added_to_cart', function () { if (wanted()) fetchState('cart'); });
+  doc.addEventListener('removed_from_cart', function () { if (wanted()) fetchState('cart'); });
 
   /* WooCommerce's cart events travel through jQuery and never reach a native
      listener, which is why V9's badges could sit on a stale count. */
   if (window.jQuery) {
     window.jQuery(document.body).on(
       'added_to_cart removed_from_cart updated_cart_totals wc_fragments_refreshed',
-      function () { fetchState('cart'); }
+      function () { if (wanted()) fetchState('cart'); }
     );
   }
   doc.addEventListener('delicat:pro:refresh', function () { fetchState('manual'); });
@@ -207,6 +227,7 @@
   doc.addEventListener('visibilitychange', function () {
     if (doc.visibilityState !== 'visible' || (!cfg.initial && !state)) return;
     if (!state || Date.now() - (state.time * 1000) < 30000) return;
+    if (!wanted()) return;
     fetchState('focus');
   });
 
@@ -217,6 +238,7 @@
       if (typeof fn !== 'function') return function () {};
       listeners.push(fn);
       if (state) { try { fn(state); } catch (e) {} }
+      else if (cfg.initial) { schedule(function () { fetchState('subscribe'); }); }
       return function () {
         var at = listeners.indexOf(fn);
         if (at !== -1) listeners.splice(at, 1);

@@ -412,7 +412,17 @@ final class DBP_Kernel {
 		}
 
 		if ( self::on( 'assets' ) && self::on( 'legacy_slim_off' ) && class_exists( 'Delicat_Builder_V9_Front_Slim', false ) ) {
-			remove_action( 'wp_enqueue_scripts', array( 'Delicat_Builder_V9_Front_Slim', 'slim_scripts' ), 999 );
+			/* PRO15: only the blanket defer pass is removed. It rewrites the
+			 * loading strategy of every delicat/dsb handle at priority 9999,
+			 * which is the pass that fought the Pro enqueue order.
+			 *
+			 * `slim_scripts` does not touch a Pro handle. It deregisters the
+			 * heartbeat poll, drops dashicons for guests, removes the theme's
+			 * Google Font on a managed homepage, trims the classic head links
+			 * and — the expensive one on a phone — defers wc-cart-fragments to
+			 * idle or first interaction. The Pro asset layer replaces none of
+			 * that, so removing it handed every signed-in shopper an immediate
+			 * `get_refreshed_fragments` round trip on every page. */
 			remove_action( 'wp_enqueue_scripts', array( 'Delicat_Builder_V9_Front_Slim', 'defer_plugin_scripts' ), 9999 );
 		}
 	}

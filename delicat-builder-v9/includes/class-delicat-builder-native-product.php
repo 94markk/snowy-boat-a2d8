@@ -75,6 +75,20 @@ final class Delicat_Builder_V9_Native_Product {
 
 	/** Last front-end attempt, so the admin panel can show what actually happened on the storefront. */
 	public static function record_express( int $id, string $state, string $detail = '' ): void {
+		/*
+		 * PRO15: this is a diagnostic for the Express panel, not storefront
+		 * state. Without a persistent object cache a transient is two option
+		 * writes, and the three states the happy path produces were written on
+		 * every single product view — 'guest' on every uncached guest view,
+		 * 'rendered' on every signed-in one. They are now recorded only for a
+		 * user who can open the panel that reads them. A real failure ('off'
+		 * aside, the states that mean express did not run) is always recorded,
+		 * because that is the case the panel exists for.
+		 */
+		$routine = in_array( $state, array( 'off', 'guest', 'rendered' ), true );
+		if ( $routine && ! ( function_exists( 'current_user_can' ) && current_user_can( 'manage_woocommerce' ) ) ) {
+			return;
+		}
 		set_transient(
 			'delicat_builder_v9_express_last',
 			array( 'product' => $id, 'state' => $state, 'detail' => $detail, 'time' => time(), 'version' => DELICAT_BUILDER_V9_VERSION ),

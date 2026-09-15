@@ -108,11 +108,42 @@ final class Delicat_Builder_V9_Footer {
 		);
 	}
 
+	/**
+	 * PRO15: fetch the installed native pages in one query.
+	 *
+	 * Support, terms and privacy each resolved their own post to build one
+	 * footer link, which on a host without a persistent object cache is three
+	 * separate queries on every page of the site.
+	 *
+	 * @return void
+	 */
+	private static function prime_native_pages(): void {
+		static $primed = false;
+		if ( $primed || ! function_exists( '_prime_post_caches' ) ) {
+			return;
+		}
+		$primed = true;
+
+		$native_pages = get_option( 'delicat_builder_v9_native_pages', array() );
+		$ids          = array();
+		foreach ( (array) $native_pages as $id ) {
+			$id = absint( $id );
+			if ( $id > 0 ) {
+				$ids[ $id ] = $id;
+			}
+		}
+		if ( $ids ) {
+			_prime_post_caches( array_values( $ids ), false, false );
+		}
+	}
+
 	private static function page_url( string $type, array $slugs, string $fallback ): string {
 		$key = $type . '|' . implode( '|', $slugs ) . '|' . $fallback;
 		if ( isset( self::$page_url_cache[ $key ] ) ) {
 			return self::$page_url_cache[ $key ];
 		}
+
+		self::prime_native_pages();
 
 		$native_pages = get_option( 'delicat_builder_v9_native_pages', array() );
 		$native_pages = is_array( $native_pages ) ? $native_pages : array();

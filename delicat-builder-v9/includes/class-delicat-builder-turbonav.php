@@ -214,15 +214,53 @@ final class Delicat_Builder_V9_TurboNav {
 		return array_values( array_unique( array_merge( $paths, self::excluded_patterns() ) ) );
 	}
 
+	/**
+	 * Is the Pro navigation engine answering links on this request?
+	 *
+	 * @return bool
+	 */
+	private static function pro_navigation_active() {
+		return class_exists( 'DBP_Kernel', false )
+			&& is_callable( array( 'DBP_Kernel', 'on' ) )
+			&& DBP_Kernel::on( 'navigation' );
+	}
+
+	/**
+	 * PRO15: core's speculation rules are printed live and ungated.
+	 *
+	 * RC79 established that a prerender is a straight loss on the 3G links this
+	 * store runs on: it downloads a second complete document over the
+	 * connection the shopper is already waiting on. That gate lives in the
+	 * footer script below and is decided in the browser, from the effective
+	 * connection type. Upgrading core's own rules to prerender/moderate handed
+	 * every guest the aggressive behaviour with none of the gate — the gate
+	 * only ever covered the copy this class prints.
+	 *
+	 * So core's rules are declined in the two cases where they are not wanted,
+	 * and left exactly as they are otherwise:
+	 *
+	 * - Pro navigation on: dbp-nav.js prefetches the navigation fragment for a
+	 *   link it expects. A prerender of the same link downloads the whole
+	 *   document again, over the same connection, for the same tap.
+	 * - Prerender enabled: replaced by the network-gated copy in the footer.
+	 *
+	 * With prerender off, core's default conservative prefetch is cheap and
+	 * safe on a slow link, and is left untouched.
+	 *
+	 * @param array<string,string>|null $config Core's speculation configuration.
+	 * @return array<string,string>|null
+	 */
 	public static function upgrade_core_speculation( $config ) {
-		if ( ! self::active() || empty( self::settings()['prerender'] ) || self::save_data_requested() ) {
+		if ( ! self::active() ) {
 			return $config;
 		}
-		if ( is_array( $config ) ) {
-			$config['mode']      = 'prerender';
-			$config['eagerness'] = 'moderate';
+		if ( self::pro_navigation_active() ) {
+			return null;
 		}
-		return $config;
+		if ( empty( self::settings()['prerender'] ) || self::save_data_requested() ) {
+			return $config;
+		}
+		return null;
 	}
 
 	public static function print_speculation_rules() {
@@ -235,11 +273,18 @@ final class Delicat_Builder_V9_TurboNav {
 			return;
 		}
 
-		// WordPress core (6.8+) prints its own rules for guests; it stays silent for
-		// signed-in users, so RC32 prints ours for privately-cached customers.
-		if ( function_exists( 'wp_get_speculation_rules' ) && ! is_user_logged_in() ) {
+		/* PRO15: the Pro navigation engine already prefetches the fragment for a
+		 * link it expects, so a second, heavier speculation of the same link is
+		 * pure duplicate transfer. */
+		if ( self::pro_navigation_active() ) {
 			return;
 		}
+
+		/* Core (6.8+) used to print the guest copy of these rules. It now stands
+		 * down for them too (see upgrade_core_speculation), because its script
+		 * is live the moment it is parsed and cannot be held back on a slow
+		 * connection. Guests and privately-cached customers both get the gated
+		 * copy below instead. */
 
 		$not = array(
 			array( 'href_matches' => self::excluded_patterns() ),
@@ -309,9 +354,17 @@ final class Delicat_Builder_V9_TurboNav {
 		 * A script element only registers its rules when it is parsed with the
 		 * speculationrules type, so an inert copy costs nothing until swapped. */
 		$inert = '<script type="delicat/speculationrules" id="dbv9-speculation">' . $json . '</script>';
+		/* The class is set by the App Tuning boot script before first paint. It
+		 * is re-derived here so the gate still holds when that layer is off:
+		 * these rules are the one thing that must never promote itself on a
+		 * link that cannot carry a second document. */
 		$swap  = '<script id="dbv9-speculation-gate">(function(){'
 			. 'var r=document.documentElement;'
 			. 'if(r.className.indexOf("delicat-slow-net")>-1)return;'
+			. 'var nav=navigator||{},c=nav.connection||nav.mozConnection||nav.webkitConnection||null;'
+			. 'if(c){var t=c.effectiveType?String(c.effectiveType).toLowerCase():"",'
+			. 'dl=typeof c.downlink==="number"?c.downlink:0,rt=typeof c.rtt==="number"?c.rtt:0;'
+			. 'if(c.saveData||t==="slow-2g"||t==="2g"||t==="3g"||(dl>0&&dl<1.5)||(rt>300&&dl>0&&dl<3))return;}'
 			. 'var s=document.getElementById("dbv9-speculation");if(!s)return;'
 			. 'var n=document.createElement("script");n.type="speculationrules";'
 			. 'n.textContent=s.textContent;'

@@ -37,7 +37,17 @@ final class Delicat_Builder_V9_Notifications {
 			self::$booted = true;
 
 			add_action( 'init', array( __CLASS__, 'migrate_privacy' ), 5 );
-			add_action( 'init', array( __CLASS__, 'migrate_service_secret' ), 6 );
+			/*
+			 * PRO15: the service-account upgrade decrypts the stored secret and
+			 * parses its JSON to decide whether there is anything to do — on
+			 * every storefront request, for a secret only the admin screens and
+			 * the push sender ever write. A front-end visitor can neither create
+			 * nor consume it, and `service_account_json()` still reads the legacy
+			 * option at send time, so an un-upgraded secret keeps working.
+			 */
+			if ( is_admin() || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+				add_action( 'init', array( __CLASS__, 'migrate_service_secret' ), 6 );
+			}
 			// RC37.6: V9 owns these two notification shortcodes regardless of which
 			// historical Builder callback was registered first/last. The shortcode
 			// pre-filter prevents legacy notification markup from ever reaching HTML.

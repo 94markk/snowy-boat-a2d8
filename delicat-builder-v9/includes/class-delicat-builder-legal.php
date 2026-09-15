@@ -39,6 +39,12 @@ final class Delicat_Builder_V9_Legal {
 	/** Bump when a document's text changes; drives the refresh on upgrade. */
 	const DOC_VERSION = '1.1.0';
 
+	/** Resolved document page IDs for this request (front end only). */
+	private static $page_ids = array();
+
+	/** True once the configured document pages have been fetched in one query. */
+	private static $pages_primed = false;
+
 	/**
 	 * @return array<string,array<string,string>>
 	 */
@@ -178,18 +184,60 @@ final class Delicat_Builder_V9_Legal {
 		return home_url( '/' . $docs[ $key ]['slug'] . '/' );
 	}
 
+	/**
+	 * PRO15: fetch every configured document page in one query.
+	 *
+	 * The footer resolves seven of these on every page render, and each one
+	 * asked for its post on its own. Without a persistent object cache that is
+	 * seven round trips to MySQL before the footer has printed a link.
+	 *
+	 * @return void
+	 */
+	private static function prime_pages(): void {
+		if ( self::$pages_primed || ! function_exists( '_prime_post_caches' ) ) {
+			return;
+		}
+		self::$pages_primed = true;
+
+		$s   = self::settings();
+		$ids = array();
+		foreach ( (array) ( $s['pages'] ?? array() ) as $id ) {
+			$id = absint( $id );
+			if ( $id > 0 ) {
+				$ids[ $id ] = $id;
+			}
+		}
+		if ( $ids ) {
+			_prime_post_caches( array_values( $ids ), false, false );
+		}
+	}
+
 	public static function page_id( string $key ): int {
+		/* The answer cannot change inside a front-end request, and the footer
+		 * asks for the same key at least twice per link. */
+		$memo = ! is_admin();
+		if ( $memo && isset( self::$page_ids[ $key ] ) ) {
+			return self::$page_ids[ $key ];
+		}
+		if ( $memo ) {
+			self::prime_pages();
+		}
+
 		$s  = self::settings();
 		$id = isset( $s['pages'][ $key ] ) ? absint( $s['pages'][ $key ] ) : 0;
 		if ( $id > 0 && 'page' === get_post_type( $id ) && 'trash' !== get_post_status( $id ) ) {
+			if ( $memo ) { self::$page_ids[ $key ] = $id; }
 			return $id;
 		}
 		$docs = self::documents();
 		if ( ! isset( $docs[ $key ] ) ) {
+			if ( $memo ) { self::$page_ids[ $key ] = 0; }
 			return 0;
 		}
-		$found = get_page_by_path( $docs[ $key ]['slug'] );
-		return ( $found instanceof WP_Post ) ? (int) $found->ID : 0;
+		$found  = get_page_by_path( $docs[ $key ]['slug'] );
+		$result = ( $found instanceof WP_Post ) ? (int) $found->ID : 0;
+		if ( $memo ) { self::$page_ids[ $key ] = $result; }
+		return $result;
 	}
 
 	private static function tokens(): array {
