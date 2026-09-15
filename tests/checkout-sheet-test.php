@@ -17,64 +17,14 @@
 
 define( 'ABSPATH', __DIR__ . '/' );
 
-/* ---- Just enough WordPress and WooCommerce ---- */
+require_once __DIR__ . '/support/stubs-wp.php';
 
-function __( $t, $d = null ) { return $t; }
-function esc_html__( $t, $d = null ) { return $t; }
-function esc_attr__( $t, $d = null ) { return $t; }
-function esc_html( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES, 'UTF-8' ); }
-function esc_attr( $t ) { return htmlspecialchars( (string) $t, ENT_QUOTES, 'UTF-8' ); }
-function esc_url( $u ) { return (string) $u; }
-function esc_attr_e( $t, $d = null ) { echo esc_attr( $t ); }
-function wp_kses_post( $t ) { return (string) $t; }
-function wp_strip_all_tags( $t ) { return trim( strip_tags( (string) $t ) ); }
-function is_admin() { return false; }
-function add_action() {}
-function add_filter() {}
-function apply_filters( $tag, $value ) { return $value; }
-function is_user_logged_in() { return (bool) $GLOBALS['stub_logged_in']; }
-function get_current_user_id() { return 0; }
-function absint( $n ) { return abs( (int) $n ); }
-function home_url( $p = '/' ) { return 'https://shop.test' . $p; }
-function get_page_by_path() { return null; }
-function wc_get_page_permalink() { return 'https://shop.test/commander/'; }
-function wp_enqueue_script() {}
-function wp_enqueue_style() {}
-function wp_localize_script() {}
-function wp_create_nonce() { return 'nonce'; }
-function admin_url( $p = '' ) { return 'https://shop.test/wp-admin/' . $p; }
-function wc_get_account_endpoint_url() { return ''; }
-function get_option( $k, $d = false ) { return $d; }
-function is_product() { return $GLOBALS['stub_is_product'] ?? false; }
-function wc_price( $n ) { return 'G' . number_format( (float) $n ); }
-function wc_get_formatted_cart_item_data() { return ''; }
-
-class WC_Product {}
-
-$GLOBALS['stub_cart_total'] = 'G7,400';
-class Stub_Cart {
-    public function is_empty() { return false; }
-    public function get_cart() { return array(); }
-    public function get_total( $c = 'view' ) { return $GLOBALS['stub_cart_total']; }
+/* Enough of the product page for active() to say yes. */
+if ( ! class_exists( 'WooCommerce' ) ) { class WooCommerce {} }
+class Delicat_Builder_V9_Native_Product {
+    public static function express_enabled_for( $id ) { return true; }
 }
-class Stub_WC { public $cart; public $session = null;
-    public function __construct() { $this->cart = new Stub_Cart(); }
-    public function payment_gateways() { return null; } }
-function WC() { return $GLOBALS['stub_wc']; }
-$GLOBALS['stub_wc'] = new Stub_WC();
-
-/* The wallet plugin, present only when the test says so. */
-$GLOBALS['stub_balance']   = null;
-$GLOBALS['stub_logged_in'] = true;
-class Stub_Wallet_Api {
-    public function get_wallet_balance( $uid, $ctx = 'view' ) {
-        if ( null === $GLOBALS['stub_balance'] ) { throw new RuntimeException( 'no wallet' ); }
-        return $GLOBALS['stub_balance'];
-    }
-}
-class Stub_Wallet { public $wallet; public function __construct() { $this->wallet = new Stub_Wallet_Api(); } }
-function woo_wallet() { return $GLOBALS['stub_woo_wallet']; }
-$GLOBALS['stub_woo_wallet'] = new Stub_Wallet();
+function get_queried_object_id() { return 7; }
 
 require_once __DIR__ . '/../delicat-builder-v9/includes/class-delicat-builder-checkout-sheet.php';
 
@@ -222,6 +172,53 @@ $GLOBALS['stub_balance']   = 450.0;
 $GLOBALS['stub_logged_in'] = false;
 ok( 'and a guest is never told about a wallet they do not have', ! summary_marks_short() );
 $GLOBALS['stub_logged_in'] = true;
+
+/* =========================================================================
+   What a product page is made to carry
+   ====================================================================== */
+group( 'The product page does not carry the checkout sheet' );
+
+$GLOBALS['stub_is_product'] = true;
+$GLOBALS['stub_enqueued']   = array();
+$GLOBALS['stub_inline']     = array();
+$GLOBALS['stub_registered'] = array();
+
+Delicat_Builder_V9_Checkout_Sheet::enqueue();
+
+$srcs   = array_map( static function ( $e ) { return $e['src']; }, $GLOBALS['stub_enqueued'] );
+$inline = implode( "\n", $GLOBALS['stub_inline'] );
+$joined = implode( ' ', $srcs );
+
+ok(
+    'active() agreed this is a page the sheet belongs on',
+    ! empty( $GLOBALS['stub_registered'] ) || '' !== $inline,
+    'nothing was enqueued at all, so the rest of this group proves nothing'
+);
+ok(
+    'the sheet stylesheet is not shipped with it',
+    false === strpos( $joined, 'checkout-sheet.css' ),
+    '24 KB on every product view, for a button most visits never press'
+);
+ok(
+    'nor the sheet script',
+    false === strpos( $joined, 'checkout-sheet.js' ),
+    'another 20 KB of the same'
+);
+ok(
+    'a loader goes instead, watching for the buy button',
+    false !== strpos( $inline, 'delicat_native_buy_now' ),
+    'something has to notice the tap and fetch the sheet'
+);
+ok(
+    'and it knows where both assets live',
+    false !== strpos( $inline, 'checkout-sheet.css' ) && false !== strpos( $inline, 'checkout-sheet.js' ),
+    $inline
+);
+ok(
+    'the loader is a fraction of what it replaces',
+    strlen( $inline ) < 4096,
+    strlen( $inline ) . ' bytes'
+);
 
 echo "\n$pass passed, $fail failed\n";
 exit( $fail ? 1 : 0 );

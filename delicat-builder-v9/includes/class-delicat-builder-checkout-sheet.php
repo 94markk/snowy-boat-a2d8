@@ -379,25 +379,85 @@ final class Delicat_Builder_V9_Checkout_Sheet {
 			}
 		}
 
-		$css = DELICAT_BUILDER_V9_DIR . 'assets/css/checkout-sheet.css';
-		if ( is_file( $css ) ) {
-			wp_enqueue_style( self::HANDLE, DELICAT_BUILDER_V9_URL . 'assets/css/checkout-sheet.css', array(), DELICAT_BUILDER_V9_VERSION );
-		}
+		/*
+		 * The sheet's own CSS and JS are NOT loaded here.
+		 *
+		 * Together they are about 44 KB that every visitor to every product page
+		 * was paying for, to support one button that most visits never press. On
+		 * the connections this shop sells over that is a slower product page for
+		 * everybody, bought for the few who buy.
+		 *
+		 * They load on intent instead - see print_loader() below - which is the
+		 * same trade the notifications bell makes. WooCommerce's own checkout
+		 * scripts above stay eagerly enqueued: they carry parameters WordPress
+		 * prints alongside them, and reconstructing those by hand is exactly the
+		 * kind of cleverness that has no place near a payment.
+		 */
+		self::print_loader();
+	}
 
-		$js = DELICAT_BUILDER_V9_DIR . 'assets/js/checkout-sheet.js';
-		if ( ! is_file( $js ) ) {
+	/**
+	 * Load the sheet when the customer reaches for it, not before.
+	 *
+	 * Two moments, because they answer different needs. `pointerdown` on the buy
+	 * button starts the download while the finger is still on the glass, so by
+	 * the time the tap completes the sheet is usually already there. `submit` is
+	 * the guarantee: it catches the keyboard, the slow connection where the
+	 * download has not arrived yet, and the tap that skipped pointerdown - it
+	 * holds the submission, waits, and then re-submits so the loaded script
+	 * handles it exactly as if it had been there all along.
+	 *
+	 * If anything at all goes wrong the submission is released untouched and the
+	 * customer lands on the real checkout page, which is where every other
+	 * failure in this feature ends too.
+	 */
+	private static function print_loader(): void {
+		if ( ! is_file( DELICAT_BUILDER_V9_DIR . 'assets/js/checkout-sheet.js' ) ) {
 			return;
 		}
 
-		wp_enqueue_script(
-			self::HANDLE,
-			DELICAT_BUILDER_V9_URL . 'assets/js/checkout-sheet.js',
-			array( 'jquery' ),
-			DELICAT_BUILDER_V9_VERSION,
-			array( 'in_footer' => true, 'strategy' => 'defer' )
-		);
+		wp_register_script( self::HANDLE, false, array( 'jquery' ), DELICAT_BUILDER_V9_VERSION, true );
+		wp_enqueue_script( self::HANDLE );
+		wp_add_inline_script( self::HANDLE, self::loader_script() );
+	}
 
-		wp_add_inline_script( self::HANDLE, 'window.DelicatCheckoutSheet=' . wp_json_encode( self::config() ) . ';', 'before' );
+	/**
+	 * The loader, as a string, so it can be read and exercised rather than only
+	 * printed. The browser suite runs this exact text.
+	 */
+	public static function loader_script(): string {
+		$css = DELICAT_BUILDER_V9_URL . 'assets/css/checkout-sheet.css';
+		$js  = DELICAT_BUILDER_V9_URL . 'assets/js/checkout-sheet.js';
+
+		return sprintf(
+			'window.DelicatCheckoutSheet=%s;(function(){var c=%s,j=%s,s=0;' .
+			/* 0 idle, 1 loading, 2 ready, 3 gave up */
+			'function flush(){var q=window.__dcsQ||[];window.__dcsQ=[];for(var i=0;i<q.length;i++){try{q[i]();}catch(e){}}}' .
+			'function load(done){if(s===2||s===3){done&&done();return;}if(done){(window.__dcsQ=window.__dcsQ||[]).push(done);}' .
+			'if(s===1)return;s=1;' .
+			'var l=document.createElement("link");l.rel="stylesheet";l.href=c;document.head.appendChild(l);' .
+			'var t=document.createElement("script");t.src=j;' .
+			't.onload=function(){s=2;flush();};' .
+			/*
+			 * The script did not arrive. Whatever is waiting still runs - and
+			 * because the state is now 3, the submit listener below stands aside
+			 * and the form goes where it always went: the real checkout page. A
+			 * customer whose connection dropped the script must never press
+			 * "Acheter maintenant" and have nothing happen at all.
+			 */
+			't.onerror=function(){s=3;flush();};' .
+			'document.head.appendChild(t);}' .
+			'function isBuy(n){return n&&n.name==="delicat_native_buy_now";}' .
+			/* warm it while the finger is still down */
+			'document.addEventListener("pointerdown",function(e){var b=e.target&&e.target.closest?e.target.closest("[name=delicat_native_buy_now]"):null;if(b)load(null);},{passive:true,capture:true});' .
+			'document.addEventListener("submit",function(e){if(s===2||s===3)return;var b=e.submitter;if(!isBuy(b))return;' .
+			'var f=e.target;if(!f||!f.requestSubmit)return;' .
+			'e.preventDefault();e.stopImmediatePropagation();' .
+			'load(function(){try{f.requestSubmit(b);}catch(err){f.submit();}});},true);}());',
+			wp_json_encode( self::config() ),
+			wp_json_encode( $css ),
+			wp_json_encode( $js )
+		);
 	}
 
 	/**
