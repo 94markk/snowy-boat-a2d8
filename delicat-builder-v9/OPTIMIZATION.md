@@ -30,6 +30,29 @@ script in `bottom-nav.php` reads the true cart count from the cookie and fixes
 the badge, and `session.js` syncs whenever a Woo cookie is present. The cache
 path had been designed for; the gate just never allowed it.
 
+## The second finding
+
+`Performance::critical_css()` appends whole stylesheets and skips any that
+would cross the inline byte budget. A budget slightly too small therefore does
+not trim the tail — it drops an entire route stylesheet, silently.
+
+At the 7000-byte floor the archive got exactly that. `shell` minifies to 5309
+bytes and `woo-archive` to 2246, so the pair overflowed by **555 bytes** and
+the archive sheet was dropped on every shop and category page. That sheet
+carries `display:grid` and `grid-template-columns`, so archives painted in
+WooCommerce's float layout and only snapped into a grid once `woo-ui.css` had
+downloaded and parsed. Product pages lost `purchase-single` the same way, 344
+bytes over.
+
+That is the most direct explanation of "archive pages are slow and the layout
+is wrong": the page had no archive layout until a stylesheet arrived over the
+network. The floor is now 8000, and `tests/test-critical-budget.php` fails if
+any route's sheets stop fitting.
+
+Worth knowing: the old floor was reachable from **Performance → critical CSS
+budget** in the admin, so this was reproducible by hand. The input's minimum is
+now aligned with the runtime clamp.
+
 ## What was done
 
 | Phase | Change |
@@ -39,6 +62,7 @@ path had been designed for; the gate just never allowed it.
 | 3 | Archive mobile breakpoint aligned to the grid system (640px, was 680px). `Archive_Builder::current_target()`/`active_config()` memoised — they were recomputed ~11× per archive request, each with a term lookup. |
 | 4 | `Compiler::maybe_recompile_for_version()` no longer leaves Builder pages permanently on the 177 KB component fallback after a partial failure. `Drawer::assets()` moved to priority 9 so its duplicate-CSS guard is order-independent. |
 | 5 | `woocommerce_items_in_cart` declared through `litespeed_vary_cookies`, so the cart-fragments decision is part of the cache key instead of being wrong for half of shoppers. |
+| 6 | Archives were shipping **no critical CSS at all** — the 7000-byte budget dropped the whole `woo-archive` sheet. Floor raised to 8000. The image-ratio setting was being overridden and now works; `sizes` follows the configured grid. |
 
 Full reasoning is in the commit messages; each phase is one commit.
 
