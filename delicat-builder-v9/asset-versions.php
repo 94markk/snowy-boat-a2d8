@@ -42,7 +42,7 @@ return array(
  'assets/css/maintenance.css' => 'assets/css/maintenance.4c465ac7af94.css',
  'assets/css/menu-builder-v2.css' => 'assets/css/menu-builder-v2.b5dd7cdcf797.css',
  'assets/css/mobile-dock.css' => 'assets/css/mobile-dock.4c801a73518d.css',
- 'assets/css/native-archive.css' => 'assets/css/native-archive.e7b99eeedbe2.css',
+ 'assets/css/native-archive.css' => 'assets/css/native-archive.e33d0fde5a99.css',
  'assets/css/native-document.css' => 'assets/css/native-document.039fe602cdca.css',
  'assets/css/native-footer.css' => 'assets/css/native-footer.ea679c21e9b5.css',
  'assets/css/native-pages.css' => 'assets/css/native-pages.8b6fc3150ef9.css',

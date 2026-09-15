@@ -18,6 +18,10 @@ final class Delicat_Builder_V9_Archive_Builder {
 
 	private static ?array $configs_cache = null;
 	private static ?array $drafts_cache = null;
+	/* Resolved archive identity for this request. Only populated once the main
+	 * query is settled -- see current_target(). */
+	private static ?string $target_cache = null;
+	private static ?array $active_cache = null;
 
 	public static function boot(): void {
 		add_action( 'admin_post_delicat_builder_v9_save_archive', array( __CLASS__, 'save' ) );
@@ -280,7 +284,32 @@ final class Delicat_Builder_V9_Archive_Builder {
 		return ! empty( $config['enabled'] );
 	}
 
+	/**
+	 * Which archive this request is, as a config key ('shop', 'cat:12', ...).
+	 *
+	 * Asked about eleven times per archive request -- by the cache policy, the
+	 * template override, the Woo settings merge, the header, the trust strip,
+	 * the page-title filter and the body classes -- and each answer cost up to
+	 * three taxonomy_exists() checks and a get_term_by() slug lookup. Resolved
+	 * once per request now.
+	 *
+	 * The memo is only filled in after the `wp` action. WooCommerce asks for
+	 * loop settings from pre_get_posts, where the conditional tags are not
+	 * final yet; caching that early answer would pin the wrong archive -- or
+	 * an empty one -- for the rest of the request.
+	 */
 	public static function current_target(): string {
+		if ( null !== self::$target_cache ) {
+			return self::$target_cache;
+		}
+		$target = self::resolve_current_target();
+		if ( did_action( 'wp' ) ) {
+			self::$target_cache = $target;
+		}
+		return $target;
+	}
+
+	private static function resolve_current_target(): string {
 		if ( is_admin() && ! wp_doing_ajax() ) {
 			return '';
 		}
@@ -337,7 +366,24 @@ final class Delicat_Builder_V9_Archive_Builder {
 		return '';
 	}
 
+	/**
+	 * The published config governing this archive, or an empty array.
+	 *
+	 * Memoised on the same terms as current_target(): only once the main query
+	 * is settled, because the answer depends on it.
+	 */
 	public static function active_config(): array {
+		if ( null !== self::$active_cache ) {
+			return self::$active_cache;
+		}
+		$config = self::resolve_active_config();
+		if ( did_action( 'wp' ) ) {
+			self::$active_cache = $config;
+		}
+		return $config;
+	}
+
+	private static function resolve_active_config(): array {
 		$target = self::current_target();
 		if ( '' === $target ) {
 			return array();
@@ -671,6 +717,8 @@ final class Delicat_Builder_V9_Archive_Builder {
 		update_option( self::OPTION, $configs, false );
 		update_option( 'delicat_builder_v9_native_archive_preset', DELICAT_BUILDER_V9_VERSION, false );
 		self::$configs_cache = $configs;
+		self::$target_cache = null;
+		self::$active_cache = null;
 		if ( class_exists( 'Delicat_Builder_V9_Cache', false ) ) {
 			Delicat_Builder_V9_Cache::bump_version();
 			Delicat_Builder_V9_Cache::purge_product_archives();
@@ -792,6 +840,8 @@ final class Delicat_Builder_V9_Archive_Builder {
 		$drafts = self::drafts();
 		$drafts[ $target ] = $config;
 		self::$drafts_cache = $drafts;
+		self::$target_cache = null;
+		self::$active_cache = null;
 		update_option( self::DRAFT_OPTION, $drafts, false );
 
 		$status = 'draft_saved';
@@ -804,6 +854,8 @@ final class Delicat_Builder_V9_Archive_Builder {
 			$configs[ $target ] = $live;
 			update_option( self::OPTION, $configs, false );
 			self::$configs_cache = $configs;
+			self::$target_cache = null;
+			self::$active_cache = null;
 			if ( class_exists( 'Delicat_Builder_V9_Woo_UI' ) && is_callable( array( 'Delicat_Builder_V9_Woo_UI', 'settings' ) ) ) {
 				$woo = Delicat_Builder_V9_Woo_UI::settings();
 				$woo['enabled'] = 1;
@@ -820,6 +872,8 @@ final class Delicat_Builder_V9_Archive_Builder {
 			$configs[ $target ] = $live;
 			update_option( self::OPTION, $configs, false );
 			self::$configs_cache = $configs;
+			self::$target_cache = null;
+			self::$active_cache = null;
 			$status = 'unpublished';
 		}
 		if ( 'draft' !== $intent && class_exists( 'Delicat_Builder_V9_Cache' ) ) {
