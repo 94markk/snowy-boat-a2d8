@@ -1,0 +1,378 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+import { SUPPORTED_INTERVALS } from '../lib/api.ts';
+
+const title = 'Trading Signals';
+const description =
+	'A transparent, rule-based market signal engine with a built-in backtester.';
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<BaseHead title={title} description={description} />
+	</head>
+	<body>
+		<Header />
+		<main class="wide">
+			<h1>Trading signals</h1>
+			<p class="lede">
+				Six independent rules read the price history and vote. The verdict below is the
+				weighted result, with every vote shown so you can disagree with it.
+			</p>
+
+			<div class="disclaimer">
+				<strong>This does not predict prices.</strong> It describes what the recent price
+				action looks like under a fixed set of rules. Before acting on any signal, run the
+				backtest and check whether the edge survives out of sample. Educational tool, not
+				financial advice.
+			</div>
+
+			<form id="controls">
+				<label>
+					Symbol
+					<input
+						id="symbol"
+						name="symbol"
+						value="BTCUSDT"
+						autocomplete="off"
+						placeholder="BTCUSDT or AAPL"
+					/>
+				</label>
+				<label>
+					Interval
+					<select id="interval" name="interval">
+						{
+							SUPPORTED_INTERVALS.map((value) => (
+								<option value={value} selected={value === '1h'}>
+									{value}
+								</option>
+							))
+						}
+					</select>
+				</label>
+				<label class="checkbox">
+					<input id="demo" type="checkbox" />
+					Demo data
+				</label>
+				<button type="submit" id="analyse">Analyse</button>
+			</form>
+			<p class="hint">
+				Crypto pairs (BTCUSDT, ETHUSDT) come from Binance; anything else (AAPL, SPY,
+				EURUSD=X) from Yahoo Finance. Tick <em>Demo data</em> to use a deterministic
+				synthetic series with no network call.
+			</p>
+
+			<div id="status" role="status" aria-live="polite"></div>
+			<section id="result" hidden></section>
+
+			<section id="backtest-section" hidden>
+				<h2>Does it actually work?</h2>
+				<p>
+					The only useful answer is a replay of the same rules over history, paying fees
+					and slippage on every fill, with the entry taken on the bar <em>after</em> the
+					signal. That is what this runs.
+				</p>
+				<button type="button" id="run-backtest">Run backtest</button>
+				<div id="backtest-status" role="status" aria-live="polite"></div>
+				<div id="backtest-result"></div>
+			</section>
+		</main>
+		<Footer />
+
+		<style>
+			main.wide {
+				width: 960px;
+			}
+			.lede {
+				font-size: 1.05em;
+				color: rgb(var(--gray-dark));
+			}
+			.disclaimer {
+				border-left: 4px solid var(--accent);
+				background: rgba(var(--gray-light), 40%);
+				padding: 0.8em 1em;
+				margin: 1.5em 0;
+				font-size: 0.85em;
+				line-height: 1.5;
+			}
+			form {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 1em;
+				align-items: flex-end;
+				margin-bottom: 0.5em;
+			}
+			label {
+				display: flex;
+				flex-direction: column;
+				font-size: 0.75em;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				color: rgb(var(--gray));
+				gap: 0.3em;
+			}
+			label.checkbox {
+				flex-direction: row;
+				align-items: center;
+				gap: 0.5em;
+				padding-bottom: 0.7em;
+			}
+			input,
+			select {
+				font-family: inherit;
+				font-size: 0.85rem;
+				padding: 0.55em 0.7em;
+				border: 1px solid rgb(var(--gray-light));
+				border-radius: 6px;
+				background: white;
+				color: rgb(var(--black));
+			}
+			input[type='checkbox'] {
+				padding: 0;
+				width: 1em;
+				height: 1em;
+			}
+			button {
+				font-family: inherit;
+				font-size: 0.85rem;
+				font-weight: 700;
+				padding: 0.6em 1.4em;
+				border: none;
+				border-radius: 6px;
+				background: var(--accent);
+				color: white;
+				cursor: pointer;
+			}
+			button:hover {
+				background: var(--accent-dark);
+			}
+			button[disabled] {
+				opacity: 0.5;
+				cursor: progress;
+			}
+			.hint {
+				font-size: 0.75em;
+				color: rgb(var(--gray));
+				margin-top: 0;
+			}
+			#status,
+			#backtest-status {
+				font-size: 0.85em;
+				color: rgb(var(--gray));
+				min-height: 1.5em;
+			}
+			.error {
+				color: #b00020;
+				font-weight: 700;
+			}
+		</style>
+
+		<style is:global>
+			/* Styles for nodes rendered by the client script. */
+			.verdict {
+				display: flex;
+				flex-wrap: wrap;
+				align-items: center;
+				gap: 1.5em;
+				padding: 1.2em 1.4em;
+				border: 1px solid rgb(var(--gray-light));
+				border-radius: 10px;
+				margin: 1em 0 1.5em;
+			}
+			.action {
+				font-size: 2em;
+				font-weight: 700;
+				letter-spacing: 0.02em;
+				padding: 0.1em 0.5em;
+				border-radius: 8px;
+				color: white;
+			}
+			.action.BUY {
+				background: #12734a;
+			}
+			.action.SELL {
+				background: #a01b2b;
+			}
+			.action.HOLD {
+				background: rgb(var(--gray));
+			}
+			.verdict dl {
+				display: flex;
+				gap: 2em;
+				margin: 0;
+				flex-wrap: wrap;
+			}
+			.verdict dt {
+				font-size: 0.7em;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: rgb(var(--gray));
+				font-weight: 700;
+			}
+			.verdict dd {
+				margin: 0;
+				font-size: 1.2em;
+				font-weight: 700;
+			}
+			table.data {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 0.8rem;
+				margin-bottom: 1.5em;
+			}
+			table.data th,
+			table.data td {
+				text-align: left;
+				padding: 0.5em 0.6em;
+				border-bottom: 1px solid rgb(var(--gray-light));
+				vertical-align: top;
+			}
+			table.data th {
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				color: rgb(var(--gray));
+			}
+			table.data td.num {
+				text-align: right;
+				font-variant-numeric: tabular-nums;
+				white-space: nowrap;
+			}
+			.meter {
+				position: relative;
+				width: 110px;
+				height: 8px;
+				background: rgb(var(--gray-light));
+				border-radius: 4px;
+				overflow: hidden;
+			}
+			.meter span {
+				position: absolute;
+				top: 0;
+				bottom: 0;
+				background: var(--accent);
+			}
+			.meter span.negative {
+				background: #a01b2b;
+			}
+			.meter span.positive {
+				background: #12734a;
+			}
+			ul.warnings {
+				padding-left: 1.2em;
+				font-size: 0.8em;
+				color: #7a4b00;
+			}
+			.sparkline {
+				width: 100%;
+				height: 90px;
+				display: block;
+				margin-bottom: 1em;
+			}
+			.sparkline path {
+				fill: none;
+				stroke: var(--accent);
+				stroke-width: 1.5;
+			}
+			.verdict-note {
+				font-size: 0.8em;
+				color: rgb(var(--gray));
+				flex-basis: 100%;
+				margin: 0;
+			}
+			.oos-warning {
+				border-left: 4px solid #b00020;
+				background: rgba(176, 0, 32, 0.06);
+				padding: 0.8em 1em;
+				font-size: 0.85em;
+			}
+			.oos-ok {
+				border-left: 4px solid #12734a;
+				background: rgba(18, 115, 74, 0.06);
+				padding: 0.8em 1em;
+				font-size: 0.85em;
+			}
+		</style>
+
+		<script>
+			import { renderSignal, renderBacktest } from '../scripts/dashboard.ts';
+
+			const form = document.getElementById('controls') as HTMLFormElement;
+			const symbolInput = document.getElementById('symbol') as HTMLInputElement;
+			const intervalInput = document.getElementById('interval') as HTMLSelectElement;
+			const demoInput = document.getElementById('demo') as HTMLInputElement;
+			const analyseButton = document.getElementById('analyse') as HTMLButtonElement;
+			const statusEl = document.getElementById('status') as HTMLElement;
+			const resultEl = document.getElementById('result') as HTMLElement;
+			const backtestSection = document.getElementById('backtest-section') as HTMLElement;
+			const backtestButton = document.getElementById('run-backtest') as HTMLButtonElement;
+			const backtestStatus = document.getElementById('backtest-status') as HTMLElement;
+			const backtestResult = document.getElementById('backtest-result') as HTMLElement;
+
+			function currentQuery(extra: Record<string, string> = {}): string {
+				const params = new URLSearchParams({
+					symbol: symbolInput.value.trim(),
+					interval: intervalInput.value,
+					...extra,
+				});
+				if (demoInput.checked) params.set('demo', '1');
+				return params.toString();
+			}
+
+			async function request(path: string, query: string): Promise<any> {
+				const response = await fetch(`${path}?${query}`);
+				const body = await response.json();
+				if (!response.ok) throw new Error(body?.error ?? `Request failed (${response.status}).`);
+				return body;
+			}
+
+			async function analyse(event?: Event): Promise<void> {
+				event?.preventDefault();
+				if (!symbolInput.value.trim() && !demoInput.checked) {
+					statusEl.innerHTML = '<span class="error">Enter a symbol first.</span>';
+					return;
+				}
+				analyseButton.disabled = true;
+				statusEl.textContent = 'Fetching candles and scoring...';
+				resultEl.hidden = true;
+				backtestResult.innerHTML = '';
+				backtestStatus.textContent = '';
+				try {
+					const data = await request('/api/signal', currentQuery());
+					renderSignal(resultEl, data);
+					resultEl.hidden = false;
+					backtestSection.hidden = false;
+					statusEl.textContent = `${data.candlesUsed} closed candles from ${data.provider}.`;
+				} catch (error) {
+					statusEl.innerHTML = `<span class="error">${(error as Error).message}</span>`;
+					backtestSection.hidden = true;
+				} finally {
+					analyseButton.disabled = false;
+				}
+			}
+
+			async function runBacktest(): Promise<void> {
+				backtestButton.disabled = true;
+				backtestStatus.textContent = 'Replaying the rules bar by bar...';
+				backtestResult.innerHTML = '';
+				try {
+					const data = await request('/api/backtest', currentQuery({ limit: '1000' }));
+					renderBacktest(backtestResult, data);
+					backtestStatus.textContent = `${data.candlesUsed} candles tested.`;
+				} catch (error) {
+					backtestStatus.innerHTML = `<span class="error">${(error as Error).message}</span>`;
+				} finally {
+					backtestButton.disabled = false;
+				}
+			}
+
+			form.addEventListener('submit', analyse);
+			backtestButton.addEventListener('click', runBacktest);
+			analyse();
+		</script>
+	</body>
+</html>
