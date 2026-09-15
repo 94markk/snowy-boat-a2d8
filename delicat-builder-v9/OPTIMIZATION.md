@@ -1,4 +1,4 @@
-# Storefront latency work — 9.2.0-pro.29
+# Storefront latency work — 9.2.0-pro.30
 
 What changed, why, and how to confirm it on the live site.
 
