@@ -244,12 +244,36 @@ final class Delicat_Builder_V9_Header_Studio_8 {
         return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'.($icons[$name] ?? $icons['grid']).'</svg>';
     }
 
-    private function cart_count() { return function_exists('WC') && WC()->cart ? (int) WC()->cart->get_cart_contents_count() : 0; }
+    /**
+     * Whether this document is headed for the shared page cache, in which case
+     * nothing specific to the current visitor may be rendered into it.
+     */
+    private function shared_document() {
+        return class_exists('Delicat_Builder_V9_Security', false)
+            && is_callable(array('Delicat_Builder_V9_Security', 'shared_document'))
+            && Delicat_Builder_V9_Security::shared_document();
+    }
+    /**
+     * The real count for a private response; zero for a cacheable one.
+     *
+     * A cacheable document is shared verbatim with every other guest, so a real
+     * count here would show one shopper's basket size to everyone who got that
+     * copy. The client restores the true count from `woocommerce_items_in_cart`
+     * before paint, so the neutral value is never what the shopper sees.
+     */
+    private function cart_count() {
+        if ($this->shared_document()) { return 0; }
+        return function_exists('WC') && WC()->cart ? (int) WC()->cart->get_cart_contents_count() : 0;
+    }
     private function cart_fragment_markup() {
         $count = $this->cart_count();
         return '<span class="dsb8-woo-cart-count-fragment" hidden data-count="'.esc_attr($count).'">'.esc_html($count).'</span>';
     }
     private function cart_panel_markup() {
+        /* A cacheable document carries no basket: neither the count, nor the
+         * line items, nor the subtotal. WooCommerce's cart fragments and
+         * session.js fill all three in on the client. */
+        $shared = $this->shared_document();
         $count = $this->cart_count();
         $ajax = admin_url('admin-ajax.php');
         $nonce = wp_create_nonce('delicat_builder_v9_header_cart_remove');
@@ -261,7 +285,7 @@ final class Delicat_Builder_V9_Header_Studio_8 {
           <div class="dsb8-cart-panel" role="dialog" aria-label="Panier">
             <div class="dsb8-cart-panel__head"><strong>Votre panier</strong><button type="button" class="dsb8-cart-panel__close" aria-label="Fermer">×</button></div>
             <div class="dsb8-cart-list">
-            <?php if(function_exists('WC') && WC()->cart && !WC()->cart->is_empty()): foreach(WC()->cart->get_cart() as $key=>$line):
+            <?php if(!$shared && function_exists('WC') && WC()->cart && !WC()->cart->is_empty()): foreach(WC()->cart->get_cart() as $key=>$line):
               $product = isset($line['data']) ? $line['data'] : null; if(!$product || !$product->exists()) continue;
               $name = $product->get_name(); $qty = isset($line['quantity']) ? (int)$line['quantity'] : 1;
               $image = $product->get_image('woocommerce_thumbnail', array('loading'=>'lazy','decoding'=>'async'));

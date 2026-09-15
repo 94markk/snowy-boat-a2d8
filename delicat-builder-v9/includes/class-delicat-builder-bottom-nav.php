@@ -118,7 +118,13 @@ final class Delicat_Builder_V9_Bottom_Nav {
 		self::$rendered = true;
 		$urls   = self::urls();
 		$active = self::active();
-		$count  = ( function_exists( 'WC' ) && is_object( WC() ) && is_object( WC()->cart ) ) ? (int) WC()->cart->get_cart_contents_count() : 0;
+		/* Zero on a cacheable document: the copy is shared with every other
+		 * guest, and the inline corrector below restores the real count from
+		 * WooCommerce's cookie before paint. */
+		$shared = class_exists( 'Delicat_Builder_V9_Security', false )
+			&& is_callable( array( 'Delicat_Builder_V9_Security', 'shared_document' ) )
+			&& Delicat_Builder_V9_Security::shared_document();
+		$count  = ( ! $shared && function_exists( 'WC' ) && is_object( WC() ) && is_object( WC()->cart ) ) ? (int) WC()->cart->get_cart_contents_count() : 0;
 		$items  = array(
 			'home'    => __( 'Accueil', 'delicat-builder-v9' ),
 			'wallet'  => __( 'Wallet', 'delicat-builder-v9' ),

@@ -4,6 +4,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 final class Delicat_Builder_V9_Security {
+	/** Memo for the immutable half of public_cache_allowed(). */
+	private static ?bool $public_cache_static = null;
+
 	/* ------------------------------------------------------------------ */
 	/* RC32 hardening: XML-RPC, author enumeration, login throttling        */
 	/* ------------------------------------------------------------------ */
@@ -167,41 +170,82 @@ final class Delicat_Builder_V9_Security {
 	 * A shared-cache response must never contain cart, account, currency or
 	 * comment-author state. Inspect cookie names only; values are never logged.
 	 */
+	/**
+	 * Cookies that genuinely personalise a rendered document.
+	 *
+	 * WooCommerce cart/session cookies are deliberately NOT treated as private
+	 * here. Until pro.30 they were, and that single line kept the whole
+	 * storefront out of the page cache: WooCommerce sets a cookie the moment a
+	 * shopper touches a product, so from then on every homepage, archive and
+	 * product view was a full dynamic render for the rest of their session.
+	 *
+	 * A guest cart can no longer reach a shared document. Every renderer that
+	 * prints cart state asks shared_document() first and emits the neutral
+	 * empty-cart markup when the response is headed for the public cache, and
+	 * the client restores the real count from `woocommerce_items_in_cart`
+	 * before paint (see session.js and the bottom-nav corrector). What remains
+	 * below is the set of cookies that change the document for a reason the
+	 * client cannot repair: an identity, a password gate, or a currency.
+	 */
 	public static function has_private_cookie(): bool {
 		foreach ( array_keys( $_COOKIE ) as $cookie_name ) {
 			$name = strtolower( sanitize_key( (string) $cookie_name ) );
+
 			if ( 'dmc_currency' === $name ) {
-				$value = strtoupper( sanitize_key( (string) wp_unslash( $_COOKIE[ $cookie_name ] ) ) );
-				$base = strtoupper( sanitize_key( (string) get_option( 'woocommerce_currency', 'HTG' ) ) );
-				$dmc = get_option( 'dmc_settings', array() );
-				$default = is_array( $dmc ) ? strtoupper( sanitize_key( (string) ( $dmc['default_currency'] ?? '' ) ) ) : '';
-				$locked = is_array( $dmc ) && 'yes' === ( $dmc['lock_currency'] ?? 'no' );
-				$currencies = get_option( 'dmc_currencies', array() );
-				if ( '' !== $default && ( ! is_array( $currencies ) || empty( $currencies[ $default ] ) || 'yes' !== ( $currencies[ $default ]['enabled'] ?? 'no' ) ) ) {
-					$default = '';
+				if ( self::currency_cookie_is_default( (string) wp_unslash( $_COOKIE[ $cookie_name ] ) ) ) {
+					continue;
 				}
-				$default = '' !== $default ? $default : $base;
-				// A default-currency cookie carries no personalization. RC34's
-				// currency runtime expires legacy copies during normal rendering.
-				if ( $locked || ( '' !== $value && hash_equals( $default, $value ) ) ) { continue; }
 				return true;
 			}
+
+			/* An authenticated, password-gated or comment-author identity is
+			 * rendered into the document and must never be shared. */
 			if (
-				false !== strpos( $name, 'woocommerce' )
-				|| false !== strpos( $name, 'wp_woocommerce_session' )
-				|| false !== strpos( $name, 'wordpress_logged_in' )
-				|| false !== strpos( $name, 'wordpress_sec' )
-				|| false !== strpos( $name, 'wp_postpass' )
-				|| false !== strpos( $name, 'comment_author' )
-				|| false !== strpos( $name, 'currency' )
-				|| false !== strpos( $name, 'aelia' )
-				|| false !== strpos( $name, 'wallet' )
-				|| false !== strpos( $name, 'tera' )
+				0 === strpos( $name, 'wordpress_logged_in' )
+				|| 0 === strpos( $name, 'wordpress_sec' )
+				|| 0 === strpos( $name, 'wp_postpass' )
+				|| 0 === strpos( $name, 'comment_author' )
+			) {
+				return true;
+			}
+
+			/* Third-party currency switchers render different prices. Matched
+			 * exactly rather than by substring: the old `strpos($name,'currency')`
+			 * also caught unrelated analytics and consent cookies. */
+			if (
+				'aelia_cs_selected_currency' === $name
+				|| 'aelia_cs_selected_country' === $name
+				|| 'wcml_currency' === $name
+				|| 'wmc_current_currency' === $name
 			) {
 				return true;
 			}
 		}
-		return false;
+
+		return (bool) apply_filters( 'delicat_builder_v9_has_private_cookie', false );
+	}
+
+	/**
+	 * True when a `dmc_currency` cookie carries no personalisation, i.e. it
+	 * holds the store's effective default currency or the currency is locked.
+	 * Extracted from has_private_cookie() unchanged.
+	 */
+	private static function currency_cookie_is_default( string $raw ): bool {
+		$value      = strtoupper( sanitize_key( $raw ) );
+		$base       = strtoupper( sanitize_key( (string) get_option( 'woocommerce_currency', 'HTG' ) ) );
+		$dmc        = get_option( 'dmc_settings', array() );
+		$default    = is_array( $dmc ) ? strtoupper( sanitize_key( (string) ( $dmc['default_currency'] ?? '' ) ) ) : '';
+		$locked     = is_array( $dmc ) && 'yes' === ( $dmc['lock_currency'] ?? 'no' );
+		$currencies = get_option( 'dmc_currencies', array() );
+
+		if ( '' !== $default && ( ! is_array( $currencies ) || empty( $currencies[ $default ] ) || 'yes' !== ( $currencies[ $default ]['enabled'] ?? 'no' ) ) ) {
+			$default = '';
+		}
+		$default = '' !== $default ? $default : $base;
+
+		// A default-currency cookie carries no personalization. RC34's
+		// currency runtime expires legacy copies during normal rendering.
+		return $locked || ( '' !== $value && hash_equals( $default, $value ) );
 	}
 
 	/** Conservative cache gate shared by native catalog renderers. */
@@ -254,18 +298,42 @@ final class Delicat_Builder_V9_Security {
 		}
 	}
 
+	/**
+	 * Whether this response may be served from the shared (public) page cache.
+	 *
+	 * Asked by the homepage, product, archive, native-page and asset layers, so
+	 * it is the single switch that decides whether this storefront answers from
+	 * LiteSpeed or rebuilds every document in PHP.
+	 */
 	public static function public_cache_allowed(): bool {
+		/* Volatile conditions are re-read on every call. DONOTCACHEPAGE may be
+		 * defined at any point in a request (maintenance mode, the identity
+		 * bridge, a product fragment), and a memoised "yes" from before that
+		 * point would put a private document into a shared cache. */
 		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || is_user_logged_in() ) {
 			return false;
 		}
 		if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 			return false;
 		}
+
+		/* The remainder cannot change within one request and costs a full
+		 * $_COOKIE scan plus three get_option() reads. Five modules ask this
+		 * question on every storefront request, so resolve it once. */
+		if ( null === self::$public_cache_static ) {
+			self::$public_cache_static = self::resolve_public_cache_static();
+		}
+
+		return self::$public_cache_static;
+	}
+
+	/** The per-request, immutable half of public_cache_allowed(). */
+	private static function resolve_public_cache_static(): bool {
 		$method = strtoupper( isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) : 'GET' );
 		if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) ) {
 			return false;
 		}
-		if ( ! empty( $_GET ) || self::request_has_sensitive_action() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache bypass only.
+		if ( self::request_has_sensitive_action() || ! self::query_is_cache_safe() ) {
 			return false;
 		}
 		if ( self::has_private_cookie() ) {
@@ -281,6 +349,77 @@ final class Delicat_Builder_V9_Security {
 			}
 		}
 		return true;
+	}
+
+	/**
+	 * A query string does not by itself make a document private. The cache key
+	 * already includes it, so `?orderby=price` is simply a different cacheable
+	 * page.
+	 *
+	 * Until pro.30 this gate was `! empty( $_GET )` — any parameter at all
+	 * bypassed the cache. That meant every ad-tagged landing (`utm_*`,
+	 * `fbclid`, `gclid`, `msclkid`) and every archive page-2 or sort change was
+	 * rebuilt in PHP, which on an ad-driven store is most of the traffic and
+	 * exactly the navigation that felt slow.
+	 *
+	 * Only recognised campaign and catalog-navigation keys are allowed through.
+	 * An unrecognised parameter still bypasses the cache rather than minting
+	 * cache entries for arbitrary keys.
+	 */
+	private static function query_is_cache_safe(): bool {
+		if ( empty( $_GET ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache gate only.
+			return true;
+		}
+
+		$safe = array(
+			/* Campaign and click identifiers. Content-neutral: they change the
+			 * URL, never the document. */
+			'gclid', 'gbraid', 'wbraid', 'gad_source', 'gclsrc', 'srsltid',
+			'fbclid', 'msclkid', 'ttclid', 'twclid', 'li_fat_id', 'igshid',
+			'mc_cid', 'mc_eid', 'ref', 'referrer', '_gl', 'yclid', 'epik',
+			/* Catalog navigation. Each is a different, still-shareable page. */
+			'paged', 'page', 'orderby', 'order', 'product_orderby', 'product_count',
+			'columns', 'per_page', 'min_price', 'max_price', 'rating_filter',
+			'stock_status', 'on_sale', 'product_cat', 'product_tag', 'product_brand',
+			'brand', 'post_type',
+		);
+
+		/* A site with its own content-neutral parameters can add them; the
+		 * filter cannot be used to widen the gate to a private key because
+		 * request_has_sensitive_action() is checked independently. */
+		$safe = array_map( 'strtolower', (array) apply_filters( 'delicat_builder_v9_cache_safe_query_keys', $safe ) );
+
+		foreach ( array_keys( (array) $_GET ) as $key ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache gate only.
+			$name = strtolower( (string) $key );
+			if ( in_array( $name, $safe, true ) ) {
+				continue;
+			}
+			/* Prefix families: Analytics campaign keys and WooCommerce's
+			 * layered-nav filters (`filter_size`, `query_type_size`, ...). */
+			if (
+				0 === strpos( $name, 'utm_' )
+				|| 0 === strpos( $name, 'filter_' )
+				|| 0 === strpos( $name, 'query_type_' )
+			) {
+				continue;
+			}
+			return false;
+		}
+
+		return true;
+	}
+
+	/**
+	 * True when this response is a candidate for the shared page cache, and so
+	 * must not contain anything specific to the current visitor.
+	 *
+	 * Renderers that would print the visitor's cart into the document ask this
+	 * first and emit neutral empty-cart markup instead. `session.js` and the
+	 * bottom-nav cookie corrector restore the real count on the client, so one
+	 * cached copy stays correct for every shopper.
+	 */
+	public static function shared_document(): bool {
+		return self::public_cache_allowed();
 	}
 
 	/**
