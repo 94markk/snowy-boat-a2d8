@@ -1,9 +1,9 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-15T05:17:06.000000+00:00",
+    "built": "2026-09-15T08:25:33.000000+00:00",
     "version": "9.2.0-pro.29",
-    "bytes": 5949697,
-    "count": 357,
+    "bytes": 5955147,
+    "count": 358,
     "files": {
         "OPTIMIZATION.md": {
             "bytes": 6310,
@@ -1418,12 +1418,16 @@
             "sha256": "b26efba01ce86124ed4167cb9255fceb341797e9bd88b19913d35f41aaad8a6a"
         },
         "tests/README.md": {
-            "bytes": 1183,
-            "sha256": "d7d9fc3babe5b4f4c261491f8ad56fc3b0b1e487ed53e81e93ad5efc43f145fd"
+            "bytes": 2286,
+            "sha256": "1569719b6523c2fc956103486c101570c25af5842ad2572381d5038b54cf4740"
         },
         "tests/test-cache-gate.php": {
             "bytes": 6923,
             "sha256": "5a5ca812e0ada5283b1e80f5e4f2b1bb61dea72ff6a5b8989a779d3e53845c4f"
+        },
+        "tests/test-shared-document.php": {
+            "bytes": 4347,
+            "sha256": "4aa14683267d47e1980384d8b1dacb7024c1a9712f5afbdeb915a9f73fda796b"
         },
         "tools/rebuild-assets.php": {
             "bytes": 8013,
