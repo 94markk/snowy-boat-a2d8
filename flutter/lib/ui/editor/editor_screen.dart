@@ -62,7 +62,14 @@ class _EditorScreenState extends State<EditorScreen> {
     // Playback position is polled rather than driven by a listener: the
     // controller reports position changes far more often than the timeline
     // needs, and rebuilding the filmstrip at that rate wastes most of a frame.
-    _ticker = Timer.periodic(const Duration(milliseconds: 60), (_) => _tick());
+    _ticker = Timer.periodic(const Duration(milliseconds: 60), (_) {
+      try {
+        _tick();
+      } catch (_) {
+        // The ticker runs sixty times a second for the life of the screen; one
+        // bad frame must not end it.
+      }
+    });
   }
 
   @override
@@ -85,8 +92,12 @@ class _EditorScreenState extends State<EditorScreen> {
   void _scheduleAutosave() {
     _autosave?.cancel();
     if (_state.project.isEmpty) return;
-    _autosave = Timer(const Duration(milliseconds: 1200), () {
-      ProjectStore.save(_state.project);
+    _autosave = Timer(const Duration(milliseconds: 1200), () async {
+      // A failed save is worth knowing about but never worth crashing over,
+      // and an uncaught error from a timer callback has no one to catch it.
+      try {
+        await ProjectStore.save(_state.project);
+      } catch (_) {}
     });
   }
 
@@ -136,12 +147,46 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  /// Guards the player swap.
+  ///
+  /// Two seeks running at once — the playback ticker handing over at a cut
+  /// while a scrub lands, say — would both take the same controller and both
+  /// dispose it. The second dispose throws from inside a native plugin, which
+  /// surfaces as the process dying rather than as a Dart error anyone can read.
+  bool _seeking = false;
+  int? _queuedSeekUs;
+  bool _queuedPlay = false;
+
   /// Loads the player for whichever clip covers [timeUs], and seeks into it.
   ///
   /// One controller for the whole timeline rather than one per clip: a
   /// controller holds a decoder, and twenty of those open at once is more than
   /// a phone will give you.
   Future<void> _seekTo(int timeUs, {bool play = false}) async {
+    if (_seeking) {
+      // Keep only the newest request; the ones behind it are already stale.
+      _queuedSeekUs = timeUs;
+      _queuedPlay = play;
+      return;
+    }
+    _seeking = true;
+    try {
+      await _seekToInner(timeUs, play: play);
+    } catch (_) {
+      // A clip that will not open must not take the editor with it.
+    } finally {
+      _seeking = false;
+      final queued = _queuedSeekUs;
+      if (queued != null) {
+        _queuedSeekUs = null;
+        final queuedPlay = _queuedPlay;
+        _queuedPlay = false;
+        unawaited(_seekTo(queued, play: queuedPlay));
+      }
+    }
+  }
+
+  Future<void> _seekToInner(int timeUs, {bool play = false}) async {
     final project = _state.project;
     if (project.clips.isEmpty) return;
 

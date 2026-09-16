@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -60,6 +61,14 @@ class _GradedImageState extends State<GradedImage> {
   Adjustments? _lutFor;
   GradingProgram? _program;
 
+  /// Baking evaluates every entry in the cube, so it is not something to start
+  /// twice over. A slider drag asks for a new table faster than one can be
+  /// built; without coalescing, each frame of the drag queues another bake and
+  /// the queue outlives the gesture, which is how a responsive control turns
+  /// into a frozen screen and then into a process the system kills.
+  bool _baking = false;
+  Adjustments? _pending;
+
   @override
   void initState() {
     super.initState();
@@ -73,25 +82,48 @@ class _GradedImageState extends State<GradedImage> {
   }
 
   Future<void> _prepare() async {
-    final program = await GradingProgram.load();
-    if (!mounted) return;
-    setState(() => _program = program);
-    await _bakeLut();
+    try {
+      final program = await GradingProgram.load();
+      if (!mounted) return;
+      setState(() => _program = program);
+      await _bakeLut();
+    } catch (_) {
+      // Without the shader the ungraded frame is still shown, which is a
+      // better outcome than an editor that will not open.
+    }
   }
 
   Future<void> _bakeLut() async {
     final wanted = widget.adjustments;
     if (_lutFor == wanted) return;
-    final lut = await LutBaker.bakeImage(wanted, size: LutBaker.previewSize);
-    if (!mounted) {
-      lut.dispose();
+
+    if (_baking) {
+      // Keep only the newest request. Everything queued behind it is already
+      // out of date by the time it would run.
+      _pending = wanted;
       return;
     }
-    setState(() {
-      _lut?.dispose();
-      _lut = lut;
-      _lutFor = wanted;
-    });
+
+    _baking = true;
+    try {
+      final lut = await LutBaker.bakeImage(wanted, size: LutBaker.previewSize);
+      if (!mounted) {
+        lut.dispose();
+        return;
+      }
+      setState(() {
+        _lut?.dispose();
+        _lut = lut;
+        _lutFor = wanted;
+      });
+    } catch (_) {
+      // Keep the previous table rather than dropping to no grading at all.
+    } finally {
+      _baking = false;
+      final next = _pending;
+      _pending = null;
+      if (next != null && mounted) unawaited(_bakeLut());
+    }
   }
 
   @override

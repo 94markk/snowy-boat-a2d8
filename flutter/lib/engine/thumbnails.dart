@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ffmpeg_kit_flutter_new_min_gpl/ffmpeg_kit.dart';
@@ -21,6 +22,13 @@ class Thumbnailer {
 
   static Directory? _cacheDir;
 
+  /// How many extractions have been requested, for tests.
+  ///
+  /// The failure that made this worth counting was a widget re-running
+  /// extraction on every rebuild, which is invisible to a test that only
+  /// checks the widget renders.
+  static int invocations = 0;
+
   static Future<Directory> _dir() async {
     final existing = _cacheDir;
     if (existing != null) return existing;
@@ -43,13 +51,17 @@ class Thumbnailer {
     int height = 120,
   }) async {
     if (count <= 0) return const [];
+    invocations++;
     final dir = await _dir();
     final key = _keyFor(clip, count, height);
     final outDir = Directory('${dir.path}/$key');
 
     if (await outDir.exists()) {
       final cached = await _listFrames(outDir);
-      if (cached.length >= count) return cached;
+      // Any frames at all count as a hit. Demanding the exact number asked
+      // for never succeeds, because the fps filter yields what it yields, so
+      // the cache would be thrown away and rebuilt on every single call.
+      if (cached.isNotEmpty) return cached;
       await outDir.delete(recursive: true);
     }
     await outDir.create(recursive: true);
@@ -122,14 +134,27 @@ class Thumbnailer {
     return files;
   }
 
-  static Future<bool> _run(List<String> args) async {
-    try {
-      final session = await FFmpegKit.executeWithArguments(args);
-      final code = await session.getReturnCode();
-      return ReturnCode.isSuccess(code);
-    } catch (_) {
-      return false;
-    }
+  /// Serialises FFmpeg invocations.
+  ///
+  /// Each one loads the native libraries and allocates decode buffers, so a
+  /// timeline that fires a dozen at once can exhaust native memory and take
+  /// the process down — a crash with no Dart stack, which is the hardest kind
+  /// to trace back. Queueing costs nothing here: the frames are wanted
+  /// promptly, not simultaneously.
+  static Future<void> _queue = Future.value();
+
+  static Future<bool> _run(List<String> args) {
+    final completer = Completer<bool>();
+    _queue = _queue.then((_) async {
+      try {
+        final session = await FFmpegKit.executeWithArguments(args);
+        final code = await session.getReturnCode();
+        completer.complete(ReturnCode.isSuccess(code));
+      } catch (_) {
+        completer.complete(false);
+      }
+    });
+    return completer.future;
   }
 
   /// Cache key covering everything that changes the pixels in the strip.

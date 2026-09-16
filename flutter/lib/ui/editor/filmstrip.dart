@@ -406,8 +406,26 @@ class _ClipThumbnails extends StatefulWidget {
 class _ClipThumbnailsState extends State<_ClipThumbnails> {
   List<String> _frames = const [];
 
+  /// What the current frames were loaded for, and what a load is in flight
+  /// for. Reloading is decided by comparing these, never by inspecting the
+  /// frames themselves.
+  ///
+  /// An earlier version re-ran when the frame count did not match the number
+  /// of cells. That is true before the first load finishes, and stays true
+  /// forever whenever FFmpeg returns a different number of frames than asked
+  /// for — which it often does, since the fps filter lands where it lands. So
+  /// every rebuild spawned another FFmpeg process, and the timeline rebuilds
+  /// sixteen times a second during playback. The app did not survive it.
+  String? _loadedKey;
+  String? _inFlightKey;
+
   int get _count =>
       (widget.width / (_clipRowHeight * 16 / 9)).ceil().clamp(1, 24);
+
+  String get _key {
+    final clip = widget.clip;
+    return '${clip.uri}|${clip.trimStartUs}|${clip.trimEndUs}|$_count';
+  }
 
   @override
   void initState() {
@@ -418,18 +436,35 @@ class _ClipThumbnailsState extends State<_ClipThumbnails> {
   @override
   void didUpdateWidget(_ClipThumbnails old) {
     super.didUpdateWidget(old);
-    final clip = widget.clip;
-    if (old.clip.uri != clip.uri ||
-        old.clip.trimStartUs != clip.trimStartUs ||
-        old.clip.trimEndUs != clip.trimEndUs ||
-        _frames.length != _count) {
-      _load();
-    }
+    _load();
   }
 
   Future<void> _load() async {
-    final frames = await Thumbnailer.strip(widget.clip, count: _count);
-    if (mounted) setState(() => _frames = frames);
+    final key = _key;
+    if (key == _loadedKey || key == _inFlightKey) return;
+
+    _inFlightKey = key;
+    try {
+      final frames = await Thumbnailer.strip(widget.clip, count: _count);
+      if (!mounted) return;
+      // The widget may have moved on while FFmpeg ran; a stale result is
+      // dropped rather than painted over the current clip.
+      if (_key != key) return;
+      setState(() {
+        _frames = frames;
+        // Recorded even when nothing came back. An extraction that failed —
+        // an unreadable file, a codec the device lacks — will fail again, and
+        // treating "no frames" as "not tried yet" turns one bad clip into a
+        // permanent retry loop on every rebuild.
+        _loadedKey = key;
+      });
+    } catch (_) {
+      // Leave the strip blank rather than taking the timeline down with it,
+      // and remember the attempt so it is not made again every frame.
+      _loadedKey = key;
+    } finally {
+      if (_inFlightKey == key) _inFlightKey = null;
+    }
   }
 
   @override
