@@ -8,6 +8,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -35,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -121,23 +123,44 @@ fun Filmstrip(
         fun timeForOffset(offsetPx: Int): Long =
             if (pxPerSecond <= 0f) 0L else (offsetPx / pxPerSecond * 1_000_000f).roundToLong()
 
+        // True only while the user's own drag (and the fling after it) owns the
+        // strip. isScrollInProgress cannot be used for this: scrolling the
+        // strip programmatically to follow playback sets it too, so the
+        // playhead would drive a scroll that was then read back as a scrub,
+        // seeking the player against itself several times a second.
+        // A drag interaction is only ever emitted by a real touch.
+        var userDriven by remember { mutableStateOf(false) }
+
+        LaunchedEffect(scroll) {
+            scroll.interactionSource.interactions.collect { interaction ->
+                if (interaction is DragInteraction.Start) userDriven = true
+            }
+        }
+
         LaunchedEffect(scroll, pxPerSecond, project.durationUs) {
-            snapshotFlow { scroll.isScrollInProgress to scroll.value }
-                .collect { (dragging, value) ->
-                    if (dragging) {
+            snapshotFlow { scroll.value }
+                .collect { value ->
+                    if (userDriven) {
                         onScrub(timeForOffset(value).coerceIn(0L, project.durationUs))
                     }
                 }
         }
 
+        // The fling keeps running after the finger lifts, so the settle is
+        // taken from the scroll stopping rather than from the touch ending.
         LaunchedEffect(scroll) {
             snapshotFlow { scroll.isScrollInProgress }
-                .collect { dragging -> if (!dragging) onScrubFinished() }
+                .collect { inProgress ->
+                    if (!inProgress && userDriven) {
+                        userDriven = false
+                        onScrubFinished()
+                    }
+                }
         }
 
         // Playback and zoom both re-anchor the strip under the playhead.
         LaunchedEffect(positionUs, pxPerSecond) {
-            if (scroll.isScrollInProgress) return@LaunchedEffect
+            if (userDriven) return@LaunchedEffect
             val target = offsetForTime(positionUs).coerceIn(0, scroll.maxValue)
             if (abs(scroll.value - target) > 1) scroll.scrollTo(target)
         }

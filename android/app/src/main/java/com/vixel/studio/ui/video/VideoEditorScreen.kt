@@ -130,32 +130,6 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
         onDispose { player.release() }
     }
 
-    // Rebuild the playlist whenever the cut changes.
-    LaunchedEffect(state.project.clips) {
-        val items = state.project.clips.map { clip -> clip.toMediaItem() }
-        val wasPlaying = player.isPlaying
-        player.setMediaItems(items)
-        player.prepare()
-        if (wasPlaying) player.play()
-    }
-
-    // Per-clip speed: ExoPlayer's rate is global, so follow item transitions.
-    LaunchedEffect(player, state.project.clips) {
-        while (true) {
-            val index = player.currentMediaItemIndex
-            val clip = state.project.clips.getOrNull(index)
-            if (clip != null) {
-                val target = clip.speed.coerceIn(0.1f, 8f)
-                if (player.playbackParameters.speed != target) player.setPlaybackSpeed(target)
-            }
-            if (player.isPlaying) {
-                state.positionUs = state.project.startOf(index) + player.currentPosition * 1000L
-            }
-            state.isPlaying = player.isPlaying
-            delay(60)
-        }
-    }
-
     /**
      * Moves the player to a timeline time.
      *
@@ -174,6 +148,54 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
             if (exact) SeekParameters.EXACT else SeekParameters.CLOSEST_SYNC,
         )
         player.seekTo(index, offsetMs)
+    }
+
+    /**
+     * Rebuild the playlist only when the playlist would actually differ.
+     *
+     * Keying this on the clip list rebuilt it on every edit of any kind,
+     * because a clip is a value type and recolouring one produces a new list.
+     * Dragging a brightness slider therefore tore down and re-prepared the
+     * player about sixty times a second, and since setMediaItems restarts from
+     * the beginning, the video snapped back to its first frame for the whole
+     * drag. Grading is exactly when you least want that.
+     *
+     * Only uri, kind and the trim bounds reach a MediaItem, so only those
+     * belong in the key. Colour, transform, volume and transitions are applied
+     * downstream and must not disturb playback.
+     */
+    val playlistKey = state.project.clips.map { clip ->
+        val imageDuration =
+            if (clip.kind == MediaKind.IMAGE) clip.timelineDurationUs else 0L
+        "${clip.uri}|${clip.kind}|${clip.trimStartUs}|${clip.trimEndUs}|$imageDuration"
+    }
+
+    LaunchedEffect(playlistKey) {
+        val resumeAt = state.positionUs
+        val wasPlaying = player.isPlaying
+        player.setMediaItems(state.project.clips.map { clip -> clip.toMediaItem() })
+        player.prepare()
+        // A fresh playlist starts at zero, so put the playhead back where the
+        // user left it; splitting a clip should not jump to the top.
+        if (resumeAt > 0L) seekPlayer(resumeAt, exact = true)
+        if (wasPlaying) player.play()
+    }
+
+    // Per-clip speed: ExoPlayer's rate is global, so follow item transitions.
+    LaunchedEffect(player) {
+        while (true) {
+            val index = player.currentMediaItemIndex
+            val clip = state.project.clips.getOrNull(index)
+            if (clip != null) {
+                val target = clip.speed.coerceIn(0.1f, 8f)
+                if (player.playbackParameters.speed != target) player.setPlaybackSpeed(target)
+            }
+            if (player.isPlaying) {
+                state.positionUs = state.project.startOf(index) + player.currentPosition * 1000L
+            }
+            state.isPlaying = player.isPlaying
+            delay(60)
+        }
     }
 
     val picker = rememberLauncherForActivityResult(
