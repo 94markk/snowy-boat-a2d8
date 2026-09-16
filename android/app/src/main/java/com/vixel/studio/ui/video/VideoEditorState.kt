@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.vixel.studio.core.model.AspectRatio
 import com.vixel.studio.core.model.AudioClip
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.Overlay
@@ -146,10 +147,29 @@ class VideoEditorState : OverlayHost {
         project = next
     }
 
+    /**
+     * Appends [clips], and on the first import shapes the canvas to fit them.
+     *
+     * The canvas stays put on every later import, because by then it is a
+     * choice the user has made — possibly deliberately, and possibly by
+     * cropping everything to suit it. Only the empty-project case is a guess
+     * worth making.
+     */
     fun addClips(clips: List<Clip>) {
         if (clips.isEmpty()) return
-        commit { it.copy(clips = it.clips + clips) }
-        if (selectedClipId == null) selectedClipId = clips.first().id
+        val first = clips.first()
+        val wasEmpty = project.clips.isEmpty()
+
+        commit { current ->
+            val next = current.copy(clips = current.clips + clips)
+            if (wasEmpty) {
+                next.copy(aspect = AspectRatio.closestTo(first.displayWidth, first.displayHeight))
+            } else {
+                next
+            }
+        }
+
+        if (selectedClipId == null) selectedClipId = first.id
     }
 
     fun addAudio(audio: AudioClip) = commit { it.copy(audio = it.audio + audio) }

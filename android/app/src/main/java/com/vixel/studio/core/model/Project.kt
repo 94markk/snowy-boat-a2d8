@@ -1,6 +1,7 @@
 package com.vixel.studio.core.model
 
 import java.util.UUID
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
@@ -47,6 +48,21 @@ enum class AspectRatio(
     companion object {
         val DEFAULT = PORTRAIT_9_16
         fun fromId(id: String): AspectRatio = entries.firstOrNull { it.id == id } ?: DEFAULT
+
+        /**
+         * The listed ratio nearest to [width] x [height].
+         *
+         * Used to size the canvas from the first clip imported. A fixed
+         * default is wrong half the time whichever way it points: landscape
+         * footage dropped into a 9:16 canvas comes up as a thin band between
+         * two black slabs, which reads as a broken import rather than as a
+         * canvas waiting to be changed.
+         */
+        fun closestTo(width: Int, height: Int): AspectRatio {
+            if (width <= 0 || height <= 0) return DEFAULT
+            val target = width.toFloat() / height
+            return entries.minByOrNull { abs(it.ratio - target) } ?: DEFAULT
+        }
     }
 }
 
