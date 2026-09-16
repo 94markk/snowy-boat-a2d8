@@ -86,10 +86,13 @@ fun PreviewPane(
             factory = { context ->
                 GLSurfaceView(context).apply {
                     setEGLContextClientVersion(2)
-                    // Eight bits a channel and no alpha. The default chooser
-                    // settles for 565, which puts visible steps through every
-                    // sky and gradient the user is here to grade.
-                    setEGLConfigChooser(8, 8, 8, 0, 0, 0)
+                    // No config chooser on purpose. This asked for eight bits a
+                    // channel with no depth buffer, on the belief that the
+                    // default settles for 565 — it does not, it asks for the
+                    // same eight bits and a depth buffer nobody here uses. The
+                    // only thing that change could do was narrow the set of
+                    // configurations a device might offer, and a device that
+                    // offers none gets no context and no preview at all.
                     setRenderer(renderer)
                     // Drawing on demand rather than sixty times a second. A
                     // paused editor showing a still frame should cost nothing,

@@ -78,7 +78,12 @@ class EditorEngine(
             _state.update { it.copy(playbackError = reason) }
             notify("This clip would not play ($reason)")
         }
-        playback.onReady = { refreshScene() }
+        playback.onReady = {
+            // Whatever it refused to do before, it is doing now, so the
+            // explanation covering the picture is stale.
+            _state.update { it.copy(playbackError = null) }
+            refreshScene()
+        }
     }
 
     // ---- surface ----------------------------------------------------------
