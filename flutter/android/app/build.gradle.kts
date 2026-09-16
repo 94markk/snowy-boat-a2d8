@@ -34,6 +34,15 @@ android {
             // not much use, and a real key belongs in CI secrets rather than
             // in the repository.
             signingConfig = signingConfigs.getByName("debug")
+
+            // Shrinking is off deliberately. Dart is compiled ahead of time
+            // rather than to JVM bytecode, so R8 has very little of this app
+            // to work on, while ffmpeg-kit reaches its classes over JNI where
+            // R8 cannot see the references — stripping one of those fails at
+            // runtime, on the device, with a linkage error rather than a build
+            // error. A few megabytes is not worth that trade.
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 

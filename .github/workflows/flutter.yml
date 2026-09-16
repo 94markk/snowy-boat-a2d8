@@ -62,52 +62,69 @@ jobs:
       - name: Test
         run: flutter test
 
-      - name: Build debug APK
-        timeout-minutes: 25
-        run: flutter build apk --debug
+      # Release and split per ABI, both for size. A debug build carries the
+      # Dart kernel and the Vulkan validation layers, and a fat APK repeats
+      # the engine and the FFmpeg libraries once per architecture: together
+      # that came to 237 MB, which is not something anyone is going to install
+      # over mobile data. arm64-v8a alone, compiled ahead of time, is a third
+      # of the size and covers every phone made in roughly the last decade.
+      - name: Build release APKs
+        timeout-minutes: 30
+        run: flutter build apk --release --split-per-abi
 
-      - name: Upload debug APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: delicat-studio-apk-debug
-          path: flutter/build/app/outputs/flutter-apk/app-debug.apk
+          name: delicat-studio-apk
+          path: flutter/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 30
 
       # Same reasoning as the native workflow: artifacts sit behind a CDN some
       # networks block and expire after thirty days, while a release asset is a
       # plain URL that opens from a phone browser with no login.
-      - name: Publish debug APK as a release
+      - name: Publish APKs as a release
         if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          apk=build/app/outputs/flutter-apk/app-debug.apk
-          [ -f "$apk" ] || { echo "no debug APK at $apk" >&2; exit 1; }
-          cp "$apk" delicat-studio-debug.apk
+          apk=build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          [ -f "$apk" ] || { echo "no arm64 APK at $apk" >&2; exit 1; }
+          cp "$apk" delicat-studio.apk
 
-          tag=flutter-debug-latest
+          # The 32-bit build rides along for older hardware, but arm64 is what
+          # the notes point at.
+          arm32=build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          [ -f "$arm32" ] && cp "$arm32" delicat-studio-arm32.apk || true
+
+          tag=flutter-latest
           notes=$(cat <<EOF
-          Delicat Studio, the Flutter build. Replaced on every build.
+          Delicat Studio. Replaced on every build.
 
           - commit: \`$GITHUB_SHA\`
           - branch: \`$GITHUB_REF_NAME\`
           - built: $(date -u '+%Y-%m-%d %H:%M UTC')
 
-          Download \`delicat-studio-debug.apk\` onto the phone and open it.
-          Android will ask you to allow installs from whichever browser or file
-          manager you used. It is signed with the standard debug key, so it
-          installs alongside a Play-signed copy rather than over one.
+          Download \`delicat-studio.apk\` onto the phone and open it. Android
+          will ask you to allow installs from whichever browser or file manager
+          you used.
+
+          That one is for 64-bit ARM, which is every phone made in roughly the
+          last decade. \`delicat-studio-arm32.apk\` is there for older
+          hardware; if the first one refuses to install, try that instead.
+
+          Signed with the standard debug key, so it installs alongside a
+          Play-signed copy rather than over one.
           EOF
           )
 
           if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" delicat-studio-debug.apk --clobber
+            gh release upload "$tag" delicat-studio*.apk --clobber
             gh release edit "$tag" --notes "$notes"
           else
-            gh release create "$tag" delicat-studio-debug.apk \
-              --title "Delicat Studio (Flutter, debug)" --notes "$notes" --prerelease
+            gh release create "$tag" delicat-studio*.apk \
+              --title "Delicat Studio" --notes "$notes" --prerelease
           fi
 
       - name: Report APK size
