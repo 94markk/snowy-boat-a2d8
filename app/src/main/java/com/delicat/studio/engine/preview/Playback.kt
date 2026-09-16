@@ -97,6 +97,10 @@ class Playback(context: Context) {
         attachedSurface = null
     }
 
+    /** True when [prepare] would have to start a decoder for this clip. */
+    fun needsDecoderFor(clip: Clip): Boolean =
+        clip.kind == MediaKind.VIDEO && keyOf(clip) != loadedKey
+
     /** Identity of what is loaded. Anything not in it can change without a reload. */
     private fun keyOf(clip: Clip): String =
         "${clip.uri}|${clip.trimStartUs}|${clip.trimEndUs}"

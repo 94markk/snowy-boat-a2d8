@@ -86,6 +86,23 @@ class FrameCache(
         }
     }
 
+    /**
+     * Closes the pooled retrievers, keeping the decoded frames.
+     *
+     * Each retriever holds a hardware decoder open for as long as it lives,
+     * and some devices allow very few at once. Holding several while a player
+     * is also trying to start one is a way to lose that race, and losing it
+     * looks like a clip that will not play. The frames already decoded stay
+     * cached, so the filmstrip does not flicker; the next thumbnail simply
+     * pays to reopen the file.
+     */
+    fun releaseDecoders() {
+        synchronized(open) {
+            open.values.forEach { runCatching { it.release() } }
+            open.clear()
+        }
+    }
+
     fun clear() {
         bitmaps.evictAll()
         refused.clear()
@@ -183,7 +200,11 @@ class FrameCache(
                 48L * 1024 * 1024,
             ).toInt()
 
-        private const val MAX_OPEN = 3
+        /**
+         * One. A pool is only worth what it saves on reopening a file, and
+         * that is never worth competing with playback for a decoder.
+         */
+        private const val MAX_OPEN = 1
     }
 }
 

@@ -259,6 +259,11 @@ class EditorEngine(
             return
         }
 
+        // Thumbnails hold decoders too, and the player should have first
+        // refusal on one: a device with few to give out will otherwise refuse
+        // to start playback while the filmstrip is still filling in.
+        if (playback.needsDecoderFor(clip)) frames.releaseDecoders()
+
         val reloaded = playback.prepare(clip, current.isPlaying)
         val wanted = (project.sourceTimeFor(index, current.positionUs) - clip.trimStartUs)
             .coerceAtLeast(0L)
