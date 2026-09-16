@@ -60,13 +60,24 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Split and time-boxed on purpose. A step that hangs past its box is
+      # killed, which is the only way the job ends and its logs become
+      # readable; and splitting says whether a stall is in Kotlin compilation
+      # or later, in dexing and packaging.
+      - name: Compile Kotlin
+        working-directory: android
+        timeout-minutes: 15
+        run: ./gradlew --no-daemon --console=plain compileDebugKotlin
+
       - name: Assemble debug APK
         working-directory: android
-        run: ./gradlew --no-daemon assembleDebug
+        timeout-minutes: 15
+        run: ./gradlew --no-daemon --console=plain assembleDebug
 
       - name: Assemble release APK
         working-directory: android
-        run: ./gradlew --no-daemon assembleRelease
+        timeout-minutes: 15
+        run: ./gradlew --no-daemon --console=plain assembleRelease
 
       - name: Report APK sizes
         working-directory: android
