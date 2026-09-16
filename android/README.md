@@ -151,6 +151,18 @@ to open.
 at the playhead. Per-track volume, position, trim and fades, mixed into the
 export alongside clip audio.
 
+**Keyframes** — animate scale, position, rotation and opacity over time on
+clips, text and stickers, with five easings. Keys are placed at the playhead
+and timed from the owner's own start, so trimming or moving a clip carries its
+animation along. Ken Burns presets (zoom in/out, pan) set a whole move in one
+tap.
+
+**Masks** — rectangle, ellipse, linear and radial, with position, size,
+rotation, feather and invert. A masked clip reveals the canvas behind it.
+
+**Blend modes** — normal, multiply, screen, add, darken and lighten on text
+and stickers.
+
 **Photo** — text and stickers with the same controls as video, 18 live
 parameters (exposure, brightness, contrast, highlights,
 shadows, whites, blacks, saturation, vibrance, temperature, tint, hue, sharpen,
@@ -199,8 +211,15 @@ Worth being straight about:
   project loads instead of rendering as black frames. Copying every import
   would make projects self-contained at the cost of duplicating every video the
   user edits.
-- **Not built yet:** keyframes, masks, blend modes, motion tracking and auto
-  captions.
+- **Blend modes stop at six.** Only the modes expressible with fixed-function
+  GL blending are offered. Overlay and soft light need to read the destination
+  pixel, which costs a full-canvas pass per layer.
+- **Keyframes are edited at the playhead**, not on a curve editor. Scrub, set
+  the value, tap the property. A graph editor would give finer control over
+  timing than the five easings do.
+- **Not built yet:** motion tracking and auto captions. Auto captions in
+  particular need speech recognition over a file, which the platform's
+  recogniser does not offer - it listens to a live microphone.
 
 ## Why CI builds the APK
 
