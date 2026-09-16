@@ -1,6 +1,8 @@
 package com.delicat.studio.ui.editor
 
 import android.opengl.GLSurfaceView
+import android.os.Handler
+import android.os.Looper
 import android.view.Surface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -10,7 +12,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,7 +22,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.delicat.studio.engine.preview.PreviewRenderer
 import com.delicat.studio.engine.preview.Scene
 import com.delicat.studio.ui.theme.Ink
-import kotlinx.coroutines.launch
 
 /**
  * The graded frame, drawn by the same shader the exporter uses.
@@ -38,18 +38,23 @@ fun PreviewPane(
     modifier: Modifier = Modifier,
 ) {
     val holder = remember { mutableStateOf<GLSurfaceView?>(null) }
-    val scope = rememberCoroutineScope()
     val surfaceCallback by rememberUpdatedState(onSurface)
     val errorCallback by rememberUpdatedState(onError)
 
+    // Both callbacks arrive on the GL thread, and the player refuses to be
+    // touched from anywhere but the main one. Launching a coroutine on the
+    // composition's scope looks like it moves the work and does not reliably:
+    // whether it hops threads is up to whatever interceptor is in force, and
+    // under one of them it ran inline on the GL thread and took the editor
+    // down on launch. Posting says what is meant and leaves nothing to a
+    // dispatcher's discretion.
+    val toMainThread = remember { Handler(Looper.getMainLooper()) }
+
     val renderer = remember {
         PreviewRenderer(
-            // Both callbacks arrive on the GL thread. The player is a
-            // main-thread object and will refuse a call from anywhere else,
-            // so they are handed across rather than invoked where they land.
-            onSurface = { surface -> scope.launch { surfaceCallback(surface) } },
+            onSurface = { surface -> toMainThread.post { surfaceCallback(surface) } },
             requestRender = { holder.value?.requestRender() },
-            onError = { reason -> scope.launch { errorCallback(reason) } },
+            onError = { reason -> toMainThread.post { errorCallback(reason) } },
         )
     }
 

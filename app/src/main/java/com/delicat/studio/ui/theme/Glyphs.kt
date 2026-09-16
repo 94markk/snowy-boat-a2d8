@@ -11,19 +11,19 @@ import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Redo
+import androidx.compose.material.icons.automirrored.rounded.Redo
 import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.RotateRight
+import androidx.compose.material.icons.automirrored.rounded.RotateRight
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.Undo
-import androidx.compose.material.icons.rounded.VolumeOff
-import androidx.compose.material.icons.rounded.VolumeUp
+import androidx.compose.material.icons.automirrored.rounded.Undo
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -43,19 +43,19 @@ object Glyphs {
     val Split: ImageVector = Icons.Rounded.ContentCut
     val Duplicate: ImageVector = Icons.Rounded.ContentCopy
     val Delete: ImageVector = Icons.Rounded.Delete
-    val Undo: ImageVector = Icons.Rounded.Undo
-    val Redo: ImageVector = Icons.Rounded.Redo
+    val Undo: ImageVector = Icons.AutoMirrored.Rounded.Undo
+    val Redo: ImageVector = Icons.AutoMirrored.Rounded.Redo
     val Reset: ImageVector = Icons.Rounded.Refresh
     val Adjust: ImageVector = Icons.Rounded.Tune
     val Looks: ImageVector = Icons.Rounded.AutoAwesome
     val Speed: ImageVector = Icons.Rounded.Speed
-    val VolumeOn: ImageVector = Icons.Rounded.VolumeUp
-    val VolumeOff: ImageVector = Icons.Rounded.VolumeOff
+    val VolumeOn: ImageVector = Icons.AutoMirrored.Rounded.VolumeUp
+    val VolumeOff: ImageVector = Icons.AutoMirrored.Rounded.VolumeOff
     val Canvas: ImageVector = Icons.Rounded.AspectRatio
-    val Rotate: ImageVector = Icons.Rounded.RotateRight
+    val Rotate: ImageVector = Icons.AutoMirrored.Rounded.RotateRight
     val Transition: ImageVector = Icons.Rounded.Movie
     val Export: ImageVector = Icons.Rounded.Download
     val Photo: ImageVector = Icons.Rounded.Image
-    val Earlier: ImageVector = Icons.Rounded.KeyboardArrowLeft
-    val Later: ImageVector = Icons.Rounded.KeyboardArrowRight
+    val Earlier: ImageVector = Icons.AutoMirrored.Rounded.KeyboardArrowLeft
+    val Later: ImageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight
 }

@@ -163,11 +163,23 @@ class GradingPipelineTest {
         }
     }
 
-    /** Every parameter, checked where it counts: on the screen. */
+    /**
+     * Every parameter, checked where it counts: on the screen.
+     *
+     * Three probes rather than one, because several of these act on a band of
+     * the tonal range and do almost nothing outside it. Shadows at a midtone
+     * moves the result by less than a single code value, which says nothing
+     * about shadows and everything about the colour it was asked with — a
+     * one-probe version of this test failed for exactly that reason.
+     */
     @Test
     fun everyColourParameterMovesADrawnPixel() {
-        val base = Color.rgb(120, 140, 90)
-        val plain = render(base, Adjustments())
+        val probes = listOf(
+            Color.rgb(45, 55, 40),
+            Color.rgb(120, 140, 90),
+            Color.rgb(215, 200, 170),
+        )
+        val plain = probes.map { render(it, Adjustments()) }
 
         val spatial = setOf(
             Adjustments.SHARPEN, Adjustments.BLUR, Adjustments.GRAIN,
@@ -175,9 +187,12 @@ class GradingPipelineTest {
         )
         for (spec in com.delicat.studio.model.AdjustSpec.ALL) {
             if (spec.id in spatial) continue
-            val moved = render(base, Adjustments().set(spec.id, spec.max * 0.7f))
-            val changed = (0..2).any { abs(moved[it] - plain[it]) > 2 }
-            assertTrue("${spec.id} drew the same pixel as neutral", changed)
+            val nudged = Adjustments().set(spec.id, spec.max * 0.7f)
+            val moved = probes.indices.any { i ->
+                val drawn = render(probes[i], nudged)
+                (0..2).any { abs(drawn[it] - plain[i][it]) > 2 }
+            }
+            assertTrue("${spec.id} drew the same pixel as neutral, on every probe", moved)
         }
     }
 

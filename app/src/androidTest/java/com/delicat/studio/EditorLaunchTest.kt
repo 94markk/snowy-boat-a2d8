@@ -30,10 +30,18 @@ class EditorLaunchTest {
         compose.onNodeWithText("Add photos or video").assertIsDisplayed()
     }
 
+    /**
+     * The rail scrolls, so the tools past the edge of the screen are present
+     * without being visible. Existence is the assertion that matters: a tool
+     * that is missing from the tree is a tool the user can never reach.
+     */
     @Test
-    fun theToolsAreThere() {
-        for (tool in listOf("Add", "Edit", "Adjust", "Looks", "Speed", "Volume", "Canvas")) {
-            compose.onNodeWithContentDescription(tool).assertIsDisplayed()
+    fun everyToolIsOnTheRail() {
+        compose.onNodeWithContentDescription("Add").assertIsDisplayed()
+        for (tool in listOf(
+            "Add", "Edit", "Adjust", "Looks", "Speed", "Volume", "Transition", "Canvas",
+        )) {
+            compose.onNodeWithContentDescription(tool).assertExists()
         }
     }
 
