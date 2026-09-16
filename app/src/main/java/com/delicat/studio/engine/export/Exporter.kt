@@ -366,10 +366,16 @@ class Exporter(private val context: Context) {
     ): Boolean {
         var muxing = alreadyMuxing
         var track = currentTrack
+        // The final drain waits for an end-of-stream flag the encoder is
+        // supposed to produce. Bounded anyway: a codec that never sends it
+        // would otherwise leave the export spinning with no way out and no
+        // way to say so.
+        val deadline = System.currentTimeMillis() + DRAIN_LIMIT_MS
         while (true) {
             val index = encoder.dequeueOutputBuffer(info, if (endOfStream) 10_000L else 0L)
             if (index == MediaCodec.INFO_TRY_AGAIN_LATER) {
                 if (!endOfStream) break
+                if (System.currentTimeMillis() > deadline) break
                 continue
             }
             if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
@@ -433,10 +439,13 @@ class Exporter(private val context: Context) {
             val info = MediaCodec.BufferInfo()
 
             fun drain(endOfStream: Boolean) {
+                val deadline = System.currentTimeMillis() + DRAIN_LIMIT_MS
                 while (true) {
                     val index = codec.dequeueOutputBuffer(info, if (endOfStream) 10_000L else 0L)
                     if (index == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                        if (!endOfStream) return else continue
+                        if (!endOfStream) return
+                        if (System.currentTimeMillis() > deadline) return
+                        continue
                     }
                     if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         outputFormat = codec.outputFormat
@@ -464,7 +473,9 @@ class Exporter(private val context: Context) {
 
             timeline.render(project, { cancelled }) { pcm, count ->
                 var offset = 0
+                val deadline = System.currentTimeMillis() + DRAIN_LIMIT_MS
                 while (offset < count) {
+                    if (cancelled || System.currentTimeMillis() > deadline) break
                     val index = codec.dequeueInputBuffer(10_000L)
                     if (index < 0) {
                         drain(false)
@@ -596,5 +607,8 @@ class Exporter(private val context: Context) {
         const val AUDIO_MIME = "audio/mp4a-latm"
         const val AUDIO_BITRATE = 160_000
         const val STILL_LIMIT = 2048
+
+        /** How long any one codec is given to finish before it is given up on. */
+        const val DRAIN_LIMIT_MS = 20_000L
     }
 }

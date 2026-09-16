@@ -170,8 +170,12 @@ class AudioTimeline(private val context: Context) {
             var carryLeft = 0f
             var carryRight = 0f
             var started = false
+            // A decoder that stops producing without reporting the end of its
+            // stream would otherwise hold the export open indefinitely.
+            val deadline = System.currentTimeMillis() + CLIP_LIMIT_MS
 
             while (!outputDone && outIndex < frames) {
+                if (System.currentTimeMillis() > deadline) break
                 if (!inputDone) {
                     val index = codec.dequeueInputBuffer(TIMEOUT_US)
                     if (index >= 0) {
@@ -273,5 +277,8 @@ class AudioTimeline(private val context: Context) {
 
         /** A decoded chunk may start just before the trim; this tolerates that. */
         private const val CHUNK_SLACK_US = 40_000L
+
+        /** Longest any single clip's sound is given to decode. */
+        private const val CLIP_LIMIT_MS = 90_000L
     }
 }
