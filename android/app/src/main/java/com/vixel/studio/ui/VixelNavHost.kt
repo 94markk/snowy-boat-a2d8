@@ -6,6 +6,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.vixel.studio.ui.home.HomeScreen
 import com.vixel.studio.ui.photo.PhotoEditorScreen
+import com.vixel.studio.ui.convert.ConvertScreen
+import com.vixel.studio.ui.cutout.CutoutScreen
 import com.vixel.studio.ui.settings.SettingsScreen
 import com.vixel.studio.ui.video.VideoEditorScreen
 
@@ -32,8 +34,8 @@ fun VixelNavHost(
         composable(Routes.VIDEO_EDITOR) { VideoEditorScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.PHOTO_EDITOR) { PhotoEditorScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.COLLAGE) { ToolPlaceholder("Collage") { nav.popBackStack() } }
-        composable(Routes.CUTOUT) { ToolPlaceholder("Background remover") { nav.popBackStack() } }
+        composable(Routes.CUTOUT) { CutoutScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.AUDIO) { ToolPlaceholder("Audio studio") { nav.popBackStack() } }
-        composable(Routes.CONVERT) { ToolPlaceholder("Converter") { nav.popBackStack() } }
+        composable(Routes.CONVERT) { ConvertScreen(onBack = { nav.popBackStack() }) }
     }
 }
