@@ -163,6 +163,12 @@ rotation, feather and invert. A masked clip reveals the canvas behind it.
 **Blend modes** — normal, multiply, screen, add, darken and lighten on text
 and stickers.
 
+**Motion tracking** — place a sticker or caption on your subject, tap track,
+and it follows. Matching is normalised cross-correlation on sampled luma, which
+is invariant to brightness, so a subject moving through shade stays locked
+where a plain difference metric would lose it. The result is written as
+ordinary position keyframes, so it can be nudged afterwards like anything else.
+
 **Photo** — text and stickers with the same controls as video, 18 live
 parameters (exposure, brightness, contrast, highlights,
 shadows, whites, blacks, saturation, vibrance, temperature, tint, hue, sharpen,
@@ -217,9 +223,16 @@ Worth being straight about:
 - **Keyframes are edited at the playhead**, not on a curve editor. Scrub, set
   the value, tap the property. A graph editor would give finer control over
   timing than the five easings do.
-- **Not built yet:** motion tracking and auto captions. Auto captions in
-  particular need speech recognition over a file, which the platform's
-  recogniser does not offer - it listens to a live microphone.
+- **Tracking follows one point, not a region's scale or rotation.** It samples
+  at 10fps through MediaMetadataRetriever rather than running a second decoder,
+  which keeps it off the export path but caps how fast a subject can move
+  before the search window loses it. A low-contrast or heavily occluded subject
+  will drift; the match score holds the last good position rather than snapping
+  somewhere wrong.
+- **Not built yet: auto captions.** The platform's speech recogniser listens to
+  a live microphone and will not transcribe a file, so this needs either a
+  bundled recognition model or a cloud service — a different kind of dependency
+  from anything else here, and not a small addition.
 
 ## Why CI builds the APK
 

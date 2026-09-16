@@ -238,6 +238,9 @@ fun TextPanel(state: OverlayHost) {
 
         item { PlacementControls(selected, state) }
         item { OverlayMotionControls(selected, state) }
+        (state as? VideoEditorState)?.let { videoState ->
+            item { TrackingControls(selected, videoState) }
+        }
         item { TimingControls(selected, state) }
     }
 }
