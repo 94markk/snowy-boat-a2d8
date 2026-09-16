@@ -17,18 +17,22 @@ precision highp float;
 // than what colour it is: blur, sharpen, vignette, grain and glow. Those stay
 // here as uniforms, and export maps each onto its FFmpeg equivalent.
 
-layout(location = 0) uniform vec2 uSize;
-layout(location = 1) uniform float uSharpen;
-layout(location = 2) uniform float uBlur;
-layout(location = 3) uniform float uVignette;
-layout(location = 4) uniform float uGrain;
-layout(location = 5) uniform float uGlow;
-layout(location = 6) uniform float uSeed;
-layout(location = 7) uniform float uOpacity;
+uniform vec2 uSize;
+uniform float uSharpen;
+uniform float uBlur;
+uniform float uVignette;
+uniform float uGrain;
+uniform float uGlow;
+uniform float uSeed;
+uniform float uOpacity;
 
-layout(location = 8) uniform sampler2D uTexture;
-layout(location = 9) uniform sampler2D uLut;
+uniform sampler2D uTexture;
+uniform sampler2D uLut;
 
+// No layout(location) qualifiers. Flutter assigns float uniforms to slots in
+// declaration order and samplers in their own order, so the qualifiers buy
+// nothing, and SPIR-V rejects a location decoration on a sampler outright:
+// "Location decoration must not be applied to this storage class".
 out vec4 fragColor;
 
 float luma(vec3 c) {
