@@ -1,0 +1,121 @@
+name: Delicat Studio
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Provisioned explicitly rather than through setup-android, which still
+      # reaches for the retired "tools" package and fails on it.
+      - name: Ensure Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMGR="$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -1)"
+          [ -n "$SDKMGR" ] || { echo "sdkmanager not found under $SDK" >&2; exit 1; }
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Without this the cache is read-only on any branch that is not the
+          # default one, so every run re-dexes the whole of Compose from cold.
+          cache-read-only: false
+
+      # Split so a stall is attributable, and so unit tests run before the
+      # slow packaging step rather than after it.
+      - name: Compile
+        timeout-minutes: 15
+        run: ./gradlew --no-daemon --console=plain compileDebugKotlin
+
+      - name: Test
+        timeout-minutes: 15
+        run: ./gradlew --no-daemon --console=plain testDebugUnitTest
+
+      - name: Assemble debug APK
+        timeout-minutes: 20
+        run: ./gradlew --no-daemon --console=plain assembleDebug
+
+      # Uploaded the moment it exists. Nothing optional downstream should be
+      # able to hold the installable artifact hostage.
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: delicat-studio-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # Artifacts need a GitHub login and expire; a release asset is a plain
+      # link that opens from a phone browser and is served with the Android
+      # package content type, so it saves as .apk rather than .bin.
+      - name: Publish as a release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/debug -name '*.apk' | head -1)
+          [ -n "$apk" ] || { echo "no APK found" >&2; exit 1; }
+          cp "$apk" delicat-studio.apk
+
+          tag=latest
+          notes=$(cat <<EOF
+          Delicat Studio, rebuilt on every push.
+
+          - commit: \`$GITHUB_SHA\`
+          - built: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          Open this link in Chrome on the phone and tap \`delicat-studio.apk\`
+          from Downloads. Android will ask once to allow installs from your
+          browser. Signed with the standard debug key, so it installs alongside
+          a Play-signed copy rather than over one.
+          EOF
+          )
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" delicat-studio.apk --clobber
+            gh release edit "$tag" --notes "$notes"
+          else
+            gh release create "$tag" delicat-studio.apk \
+              --title "Delicat Studio" --notes "$notes" --prerelease
+          fi
+
+      - name: Report size
+        if: always()
+        run: |
+          echo "### APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          find app/build/outputs -name '*.apk' -print0 2>/dev/null |
+            while IFS= read -r -d '' f; do
+              echo "- \`$(basename "$f")\` — $(du -h "$f" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+            done
