@@ -423,14 +423,22 @@ class EditorEngine(
 
     fun setFit(fit: com.delicat.studio.model.FitMode) = editActive { clip -> clip.copy(fit = fit) }
 
-    fun setTrim(startUs: Long, endUs: Long) = editActive { clip -> clip.withTrim(startUs, endUs) }
-
-    fun setImageDuration(durationUs: Long) = editActive { clip ->
-        if (!clip.isImage) clip else clip.copy(
-            sourceDurationUs = durationUs,
-            trimStartUs = 0L,
-            trimEndUs = durationUs.coerceAtLeast(Clip.MIN_US),
-        )
+    /**
+     * Dragging a clip's ends.
+     *
+     * A photo has no length of its own, so there is nothing to trim away:
+     * dragging its edge makes it last longer or shorter instead of running
+     * out of source. Treating a photo like footage is what would otherwise
+     * cap every still at the three seconds it was imported with, with a
+     * handle that stops moving and no reason given.
+     */
+    fun setTrim(startUs: Long, endUs: Long) = editActive { clip ->
+        if (clip.isImage) {
+            val length = (endUs - startUs).coerceIn(Clip.MIN_US, MAX_IMAGE_US)
+            clip.copy(sourceDurationUs = length, trimStartUs = 0L, trimEndUs = length)
+        } else {
+            clip.withTrim(startUs, endUs)
+        }
     }
 
     fun setTransition(type: TransitionType, durationUs: Long) {
@@ -602,5 +610,8 @@ class EditorEngine(
 
         /** Preview stills. Wide enough for a phone screen, small enough to decode fast. */
         const val STILL_EDGE = 1280
+
+        /** Two minutes on one photo is already well past anything deliberate. */
+        const val MAX_IMAGE_US = 120_000_000L
     }
 }

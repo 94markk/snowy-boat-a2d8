@@ -45,7 +45,6 @@ class PreviewRenderer(
 
     private var viewWidth = 1
     private var viewHeight = 1
-    private var reported = false
 
     private class StillSlot {
         var texture = 0
@@ -59,6 +58,11 @@ class PreviewRenderer(
         // is enough on some devices. Everything here is therefore created
         // fresh rather than reused, including the surface the player writes
         // into, which is why the player is told about it again each time.
+        //
+        // The outgoing surface is held back and released last, so the player
+        // is never left pointing at one that has already gone.
+        val previous = surface
+        surface = null
         releaseGl()
         renderer.setup()
         if (!renderer.isReady) {
@@ -77,7 +81,7 @@ class PreviewRenderer(
 
         frontStill = StillSlot()
         backStill = StillSlot()
-        reported = false
+        previous?.release()
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
