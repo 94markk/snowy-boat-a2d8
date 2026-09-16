@@ -194,18 +194,34 @@ void main() {
 }
 """
 
+    /**
+     * High precision where the device has it, and medium where it does not.
+     *
+     * GLSL ES 1.00 does not promise highp in a fragment shader; a device
+     * without it rejects the declaration outright rather than quietly
+     * downgrading. Asking for it unconditionally is therefore a shader that
+     * will not compile, on exactly the hardware least able to spare the
+     * precision — and a shader that will not compile is a preview that never
+     * draws anything at all.
+     */
+    private const val PRECISION = """
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+"""
+
     /** Reads an ExoPlayer frame, which only this sampler type can touch. */
     val FRAGMENT_EXTERNAL: String = """
 #extension GL_OES_EGL_image_external : require
-precision highp float;
-precision mediump samplerExternalOES;
+""" + PRECISION + """
 #define SAMPLE texture2D
 uniform samplerExternalOES uSource;
 """ + FRAGMENT_BODY
 
     /** Reads a still: a photo, or a cached frame standing in for a clip. */
-    val FRAGMENT_FLAT: String = """
-precision highp float;
+    val FRAGMENT_FLAT: String = PRECISION + """
 #define SAMPLE texture2D
 uniform sampler2D uSource;
 """ + FRAGMENT_BODY

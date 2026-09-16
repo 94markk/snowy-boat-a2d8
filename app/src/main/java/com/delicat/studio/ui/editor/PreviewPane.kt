@@ -20,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.delicat.studio.engine.preview.PreviewRenderer
+import com.delicat.studio.engine.preview.PreviewReport
 import com.delicat.studio.engine.preview.Scene
 import com.delicat.studio.ui.theme.Ink
 
@@ -35,11 +36,13 @@ fun PreviewPane(
     scene: Scene,
     onSurface: (Surface) -> Unit,
     onError: (String) -> Unit,
+    onReport: (PreviewReport) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember { mutableStateOf<GLSurfaceView?>(null) }
     val surfaceCallback by rememberUpdatedState(onSurface)
     val errorCallback by rememberUpdatedState(onError)
+    val reportCallback by rememberUpdatedState(onReport)
 
     // Both callbacks arrive on the GL thread, and the player refuses to be
     // touched from anywhere but the main one. Launching a coroutine on the
@@ -55,6 +58,7 @@ fun PreviewPane(
             onSurface = { surface -> toMainThread.post { surfaceCallback(surface) } },
             requestRender = { holder.value?.requestRender() },
             onError = { reason -> toMainThread.post { errorCallback(reason) } },
+            onReport = { report -> toMainThread.post { reportCallback(report) } },
         )
     }
 

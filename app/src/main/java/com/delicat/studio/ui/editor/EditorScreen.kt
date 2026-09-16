@@ -44,6 +44,7 @@ import com.delicat.studio.ui.common.ActionButton
 import com.delicat.studio.ui.common.Sheet
 import com.delicat.studio.ui.common.formatTime
 import com.delicat.studio.ui.theme.Accent
+import com.delicat.studio.ui.theme.Danger
 import com.delicat.studio.ui.theme.Glyphs
 import com.delicat.studio.ui.theme.Ink
 import com.delicat.studio.ui.theme.Palette
@@ -94,10 +95,13 @@ fun EditorScreen(onClose: () -> Unit) {
                     scene = scene,
                     onSurface = editor::attachSurface,
                     onError = editor::report,
+                    onReport = editor::reportPreview,
                     modifier = Modifier.fillMaxSize(),
                 )
                 if (state.isEmpty) {
                     EmptyState(onAdd = openPicker, importing = state.isImporting)
+                } else {
+                    PreviewTrouble(state)
                 }
             }
 
@@ -368,6 +372,65 @@ private fun ToolSheet(tool: Tool, state: EditorState, editor: EditorEngine) {
                 onMatchClip = editor::matchCanvasToClip,
             )
         }
+    }
+}
+
+/**
+ * Explains a preview that is not showing anything.
+ *
+ * A black rectangle looks the same whatever caused it, and working out which
+ * cause it was has cost this app several rounds of guesswork across two
+ * rewrites. Where the picture would have been is the one place nobody can
+ * miss, so that is where the reason goes.
+ */
+@Composable
+private fun PreviewTrouble(state: EditorState) {
+    val preview = state.preview
+    val broken = preview != null && !preview.isHealthy
+    val stalled = state.playbackError != null
+    if (!broken && !stalled) return
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+    ) {
+        Text(
+            if (broken) "The preview could not start" else "This clip would not play",
+            style = MaterialTheme.typography.titleMedium,
+            color = Palette.Primary,
+        )
+        state.playbackError?.let { reason ->
+            Text(
+                reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = Danger,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Column(
+            modifier = Modifier
+                .padding(top = 14.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Ink.Raised)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+        ) {
+            (preview?.lines() ?: listOf("The preview has not started yet")).forEach { line ->
+                Text(
+                    line,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Palette.Secondary,
+                )
+            }
+        }
+        Text(
+            "Send this screen and it will say exactly what to fix.",
+            style = MaterialTheme.typography.labelSmall,
+            color = Palette.Faint,
+            modifier = Modifier.padding(top = 10.dp),
+        )
     }
 }
 

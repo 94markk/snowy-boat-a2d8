@@ -1,6 +1,7 @@
 package com.delicat.studio.engine
 
 import com.delicat.studio.engine.export.ExportState
+import com.delicat.studio.engine.preview.PreviewReport
 import com.delicat.studio.model.Clip
 import com.delicat.studio.model.Project
 
@@ -26,6 +27,10 @@ data class EditorState(
     val isImporting: Boolean = false,
     val export: ExportState = ExportState.Idle,
     val notice: String? = null,
+    /** What the preview found out about this device, once it has started. */
+    val preview: PreviewReport? = null,
+    /** The last thing the player refused to do, kept until it succeeds. */
+    val playbackError: String? = null,
     val canUndo: Boolean = false,
     val canRedo: Boolean = false,
 ) {

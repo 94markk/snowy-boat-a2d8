@@ -83,6 +83,8 @@ class ClipDecoder(
         }
 
         surfaceTexture = SurfaceTexture(textureId)
+        // Stated rather than left at zero, which a decoder may refuse.
+        surfaceTexture.setDefaultBufferSize(width, height)
         surfaceTexture.setOnFrameAvailableListener(
             {
                 synchronized(frameLock) {

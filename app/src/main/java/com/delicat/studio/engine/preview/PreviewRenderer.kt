@@ -27,6 +27,8 @@ class PreviewRenderer(
     /** Asks the host view for another frame, used when the decoder produces one. */
     private val requestRender: () -> Unit,
     private val onError: (String) -> Unit,
+    /** Called whenever what the preview knows about itself changes. */
+    private val onReport: (PreviewReport) -> Unit = {},
 ) : GLSurfaceView.Renderer {
 
     @Volatile
@@ -46,6 +48,11 @@ class PreviewRenderer(
     private var viewWidth = 1
     private var viewHeight = 1
 
+    @Volatile
+    private var report = PreviewReport()
+    private var drawn = 0L
+    private var received = 0L
+
     private class StillSlot {
         var texture = 0
         var key: String? = null
@@ -64,15 +71,23 @@ class PreviewRenderer(
         val previous = surface
         surface = null
         releaseGl()
-        renderer.setup()
-        if (!renderer.isReady) {
-            onError(renderer.failure ?: "The graphics pipeline could not start")
-            return
-        }
 
+        // The player's surface is built first, and whether grading works has
+        // no bearing on it. Colour can fail on hardware the shader does not
+        // suit, and playback should not fail alongside it — but worse, a
+        // player given no surface at all falls back to a placeholder one, and
+        // on a device that cannot make one the decoder refuses to start. A
+        // graphics fault then arrives as "this clip would not play", which
+        // sends anyone looking in entirely the wrong place.
         videoTexture = GlUtil.createTexture(GlUtil.EXTERNAL_TEXTURE)
         val texture = SurfaceTexture(videoTexture)
+        // A SurfaceTexture begins life with a zero-sized buffer. A decoder is
+        // within its rights to refuse to configure against that, and the size
+        // set here is only a floor: MediaCodec replaces it with the video's
+        // own dimensions the moment it configures.
+        texture.setDefaultBufferSize(DEFAULT_BUFFER_WIDTH, DEFAULT_BUFFER_HEIGHT)
         texture.setOnFrameAvailableListener {
+            received++
             frameReady.set(true)
             requestRender()
         }
@@ -82,6 +97,24 @@ class PreviewRenderer(
         frontStill = StillSlot()
         backStill = StillSlot()
         previous?.release()
+
+        renderer.setup()
+
+        drawn = 0L
+        received = 0L
+        report = PreviewReport(
+            vendor = GLES20.glGetString(GLES20.GL_VENDOR).orEmpty(),
+            renderer = GLES20.glGetString(GLES20.GL_RENDERER).orEmpty(),
+            version = GLES20.glGetString(GLES20.GL_VERSION).orEmpty(),
+            shaderCompiled = renderer.isReady,
+            shaderError = renderer.failure,
+            surfaceReady = surface != null,
+        )
+        onReport(report)
+
+        if (!renderer.isReady) {
+            onError(renderer.failure ?: "The graphics pipeline could not start")
+        }
     }
 
     override fun onSurfaceChanged(unused: GL10?, width: Int, height: Int) {
@@ -109,6 +142,14 @@ class PreviewRenderer(
         try {
             renderer.beginFrame(viewWidth, viewHeight, current.background)
             renderer.tick()
+            drawn++
+            // Reported sparingly: the counters only need to be roughly right,
+            // and a report per frame would cross threads sixty times a second
+            // to say almost nothing.
+            if (drawn % 30L == 1L) {
+                report = report.copy(framesDrawn = drawn, videoFramesReceived = received)
+                onReport(report)
+            }
 
             if (current.isEmpty) return
 
@@ -175,6 +216,12 @@ class PreviewRenderer(
             ),
             paint = style.paint,
         )
+    }
+
+    private companion object {
+        /** Any non-zero size will do; the decoder overrides it on configure. */
+        const val DEFAULT_BUFFER_WIDTH = 1920
+        const val DEFAULT_BUFFER_HEIGHT = 1080
     }
 
     /** Called from the host view once the GL thread is finished with it. */

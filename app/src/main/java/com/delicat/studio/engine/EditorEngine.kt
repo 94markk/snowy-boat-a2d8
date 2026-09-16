@@ -8,6 +8,7 @@ import com.delicat.studio.engine.export.ExportState
 import com.delicat.studio.engine.export.Exporter
 import com.delicat.studio.engine.preview.LayerSource
 import com.delicat.studio.engine.preview.Playback
+import com.delicat.studio.engine.preview.PreviewReport
 import com.delicat.studio.engine.preview.Scene
 import com.delicat.studio.engine.preview.SceneLayer
 import com.delicat.studio.model.Adjustments
@@ -73,14 +74,23 @@ class EditorEngine(
     private var lastTickAt = 0L
 
     init {
-        playback.onError = { reason -> notify("This clip would not play ($reason)") }
+        playback.onError = { reason ->
+            _state.update { it.copy(playbackError = reason) }
+            notify("This clip would not play ($reason)")
+        }
         playback.onReady = { refreshScene() }
     }
 
     // ---- surface ----------------------------------------------------------
 
+    /** What the preview reports about itself, for the panel that shows it. */
+    fun reportPreview(report: PreviewReport) {
+        _state.update { it.copy(preview = report) }
+    }
+
     fun attachSurface(surface: Surface) {
         playback.attach(surface)
+        _state.update { it.copy(playbackError = null) }
         // The context can be rebuilt at any point, and the clip that was
         // loaded is still loaded — it just has nowhere to draw until now.
         reconcilePlayer(force = true)

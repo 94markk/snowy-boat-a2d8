@@ -32,6 +32,7 @@ class Playback(context: Context) {
 
     private var loadedKey: String? = null
     private var attachedSurface: Surface? = null
+    private var recoveries = 0
 
     /** Size the player reports, which is authoritative once a frame arrives. */
     var videoWidth: Int = 0
@@ -55,6 +56,16 @@ class Playback(context: Context) {
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                // A decoder can fail to start for reasons that pass: another
+                // app holding the only instance of a codec, or a surface that
+                // was not ready yet. One more attempt costs a moment and
+                // fixes the transient cases; saying so after every one of
+                // them would bury the permanent ones in noise.
+                if (attachedSurface != null && recoveries < MAX_RECOVERIES) {
+                    recoveries++
+                    player.prepare()
+                    return
+                }
                 onError?.invoke(error.errorCodeName)
             }
 
@@ -64,9 +75,21 @@ class Playback(context: Context) {
         })
     }
 
+    /**
+     * Points the player at somewhere to draw.
+     *
+     * If it already gave up — typically because it was asked to start a
+     * decoder before this arrived — the arrival of a live surface is exactly
+     * the condition that makes another attempt worth making, and preparing
+     * again is the documented way to take it.
+     */
     fun attach(surface: Surface) {
         attachedSurface = surface
         player.setVideoSurface(surface)
+        if (player.playerError != null) {
+            recoveries = 0
+            player.prepare()
+        }
     }
 
     fun detach() {
@@ -112,6 +135,7 @@ class Playback(context: Context) {
             loadedKey = key
             videoWidth = 0
             videoHeight = 0
+            recoveries = 0
         }
 
         applyTrack(clip)
@@ -141,6 +165,11 @@ class Playback(context: Context) {
 
     val isBuffering: Boolean
         get() = player.playbackState == Player.STATE_BUFFERING
+
+    private companion object {
+        /** Enough to ride out a codec that is briefly busy, not enough to loop. */
+        const val MAX_RECOVERIES = 2
+    }
 
     fun release() {
         detach()
