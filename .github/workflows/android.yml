@@ -62,27 +62,11 @@ jobs:
 
       - name: Assemble debug APK
         working-directory: android
-        run: |
-          set -o pipefail
-          if ! ./gradlew --no-daemon assembleDebug 2>&1 | tee /tmp/gradle-debug.log; then
-            echo "::error::Debug assembly failed. Compiler diagnostics follow."
-            echo "---------------- compiler errors ----------------"
-            grep -E '^e: ' /tmp/gradle-debug.log | head -80 || echo "(no 'e:' lines found)"
-            echo "-------------------------------------------------"
-            exit 1
-          fi
+        run: ./gradlew --no-daemon assembleDebug
 
       - name: Assemble release APK
         working-directory: android
-        run: |
-          set -o pipefail
-          if ! ./gradlew --no-daemon assembleRelease 2>&1 | tee /tmp/gradle-release.log; then
-            echo "::error::Release assembly failed. Compiler diagnostics follow."
-            echo "---------------- compiler errors ----------------"
-            grep -E '^e: ' /tmp/gradle-release.log | head -80 || echo "(no 'e:' lines found)"
-            echo "-------------------------------------------------"
-            exit 1
-          fi
+        run: ./gradlew --no-daemon assembleRelease
 
       - name: Report APK sizes
         working-directory: android
