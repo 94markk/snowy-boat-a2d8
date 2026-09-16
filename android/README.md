@@ -8,14 +8,28 @@ MediaCodec. No server, no account, no network calls — everything runs on devic
 The APK is built by GitHub Actions on every push, because the Android SDK is
 not reachable from the development container (see *Why CI builds the APK*).
 
+The easy way, and the one that works from a phone:
+
+**[Download `vixel-studio-debug.apk`](../../releases/download/debug-latest/vixel-studio-debug.apk)**
+
+Open it on the device and tap through; Android asks once to allow installs
+from whichever browser or file manager you used. The link needs no GitHub
+login, never expires, and CI replaces the file on every build.
+
+Otherwise, from CI directly:
+
 1. Open the [Actions tab](../../actions/workflows/android.yml)
 2. Click the most recent green run
-3. Download the **vixel-studio-apk** artifact
-4. Unzip it and install `app-debug.apk` on your phone
+3. Download the **vixel-studio-apk-debug** artifact
+4. Unzip it and install `app-debug.apk`
 
-`app-debug.apk` is signed with the standard Android debug key, so it installs
-without extra steps. `app-release.apk` is the unminified release build, signed
-with the same key unless you supply your own (below).
+That route needs a signed-in GitHub session and the artifact expires after
+thirty days, which is why the release link exists.
+
+The debug APK is signed with the standard Android debug key, so it installs
+alongside a Play-signed copy rather than over one. `app-release.apk` is the
+unminified release build, signed with the same key unless you supply your own
+(below).
 
 ### Building locally
 
@@ -73,6 +87,51 @@ engine/audio/    PCM decode/resample, mixer, AAC encoder, WAV + M4A export
 ui/              Compose screens
 ```
 
+### The editor layout
+
+```
+┌──────────────────────────────┐
+│ ✕            1080P  [Export] │  never scrolls away
+├──────────────────────────────┤
+│                              │
+│           preview            │  takes whatever is left
+│                              │
+├──────────────────────────────┤
+│  ⛶         ▶         ↶  ↷   │
+├──────────────────────────────┤
+│ 00:12.4 / 02:43              │
+│ ═══ filmstrip ═══╎══════ +   │  playhead fixed at ╎
+│      + Add audio             │
+│      + Add text              │
+├──────────────────────────────┤
+│ ✂  ♪  T  ⊂⊃  ☺  ✦  ◐  ⚙ →  │  scrolls; opens a sheet
+└──────────────────────────────┘
+```
+
+Two rules shape this:
+
+**The preview is never covered.** Opening a tool replaces the timeline and the
+rail, not the canvas. Colour, text and transforms are all judged by eye, and a
+panel that hides the frame forces apply-dismiss-look-reopen for every nudge.
+
+**The playhead does not move.** The filmstrip scrolls underneath a playhead
+pinned to the centre. Dragging a playhead along a static strip fails on a
+phone in two ways: the finger covers the frame it is aiming at, and the end of
+the timeline sits under the screen edge where it cannot be grabbed. Pinning it
+puts the current frame in the middle of the screen, directly below the preview
+showing that same frame, and makes "split" land where you are already looking.
+
+Tools are a scrolling rail rather than tabs. Tabs divide the width between
+them, so past about five every one is too narrow to label or hit. `RailItem`
+in `ui/common/` is shared with the photo editor.
+
+Scroll and playback each own the playhead at different times, and telling them
+apart is subtler than it looks: a programmatic scroll sets
+`isScrollInProgress` exactly like a finger does, so the strip would follow
+playback, read its own scroll back as a scrub, and seek the player against
+itself. `Filmstrip` keys on a `DragInteraction` instead, which only a real
+touch emits.
+
 ### Timeline-driven compositing
 
 The exporter asks the timeline what is visible at each output frame, then pulls
@@ -111,11 +170,25 @@ sharp + soft ──[colour stack]──▶ target
 
 ### Why every control does something
 
-`Adjustments` is the single source of truth. The UI builds its sliders from
-`AdjustSpec.ALL`, and `ColorGrader.bindAdjustments` binds uniforms from the
-same ids. There is no second path a value can be read from, so a control that
-moves always moves a pixel. Adding a parameter means adding one `AdjustSpec`
-entry and one uniform — the slider appears on its own.
+Two things have to hold, and for a long time only the first one did.
+
+**The value has one home.** `Adjustments` is the single source of truth. The UI
+builds its sliders from `AdjustSpec.ALL`, and `ColorGrader.bindAdjustments`
+binds uniforms from the same ids. There is no second path a value can be read
+from. Adding a parameter means adding one `AdjustSpec` entry and one uniform —
+the slider appears on its own.
+
+**The edit reaches a clip.** That is the part that was broken. Edits were
+addressed to `selectedClipId` and silently dropped when nothing was selected,
+while the preview separately fell back to the first clip. A slider moved, a
+frame sat there unchanged, and nothing explained why — which reads as an app
+where none of the parameters are wired up.
+
+`VideoEditorState.activeClip` closes it: edits go to the selected clip, or to
+whatever sits under the playhead when there is no selection, and the preview
+grades with the clip it is actually showing. Selecting a clip brings the
+playhead into it, because editing a clip you cannot see is the same bug in a
+different costume.
 
 Order of operations follows what a photographer expects: white balance,
 exposure, tonal ranges, contrast, curves, HSL, vibrance/saturation, look,

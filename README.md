@@ -9,11 +9,16 @@ architecture, and an honest list of what is and isn't built yet.
 
 ## Get the APK
 
-Download the **vixel-studio-apk** artifact from the latest green run in the
-[Actions tab](../../actions/workflows/android.yml), unzip, and install
-`app-debug.apk`.
+**[Download `vixel-studio-debug.apk`](../../releases/download/debug-latest/vixel-studio-debug.apk)**
+— open that on the phone and tap through; Android will ask you to allow
+installs from your browser. The link needs no GitHub login and always points
+at the newest build.
 
-CI builds it because the development container is blocked from reaching
+Every build also uploads a `vixel-studio-apk-debug` artifact to its run in the
+[Actions tab](../../actions/workflows/android.yml). That one requires a login
+and expires after thirty days, so prefer the release link.
+
+CI builds the APK because the development container is blocked from reaching
 `dl.google.com`, which serves the entire Android toolchain.
 
 ## Repository layout
