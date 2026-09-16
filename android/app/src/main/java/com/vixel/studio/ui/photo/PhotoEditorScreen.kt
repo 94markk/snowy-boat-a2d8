@@ -25,6 +25,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Crop
+import androidx.compose.material.icons.rounded.EmojiEmotions
+import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.PhotoFilter
+import androidx.compose.material.icons.rounded.TextFields
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Compare
@@ -48,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -61,6 +68,10 @@ import com.vixel.studio.core.model.FilterPreset
 import com.vixel.studio.core.model.Filters
 import com.vixel.studio.engine.photo.PhotoEngine
 import com.vixel.studio.ui.common.Chip
+import com.vixel.studio.ui.common.ChromeDivider
+import com.vixel.studio.ui.common.RailItem
+import com.vixel.studio.ui.common.ToolRail
+import com.vixel.studio.ui.common.ToolSheet
 import com.vixel.studio.ui.common.ParamSlider
 import com.vixel.studio.ui.common.PhotoPreview
 import com.vixel.studio.ui.video.StickerPanel
@@ -69,13 +80,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class Tab(val label: String) {
-    ADJUST("Adjust"),
-    FILTERS("Filters"),
-    TEXT("Text"),
-    STICKERS("Stickers"),
-    TRANSFORM("Transform"),
-    EXPORT("Export"),
+/** The tools on the photo editor's bottom rail. */
+private enum class Tab(
+    override val label: String,
+    override val icon: ImageVector,
+) : RailItem {
+    ADJUST("Adjust", Icons.Rounded.Tune),
+    FILTERS("Filters", Icons.Rounded.PhotoFilter),
+    TEXT("Text", Icons.Rounded.TextFields),
+    STICKERS("Stickers", Icons.Rounded.EmojiEmotions),
+    TRANSFORM("Transform", Icons.Rounded.Crop),
+    EXPORT("Export", Icons.Rounded.FileDownload),
 }
 
 @Composable
@@ -85,7 +100,7 @@ fun PhotoEditorScreen(onBack: () -> Unit) {
     val state = remember { PhotoEditorState() }
     val snackbar = remember { SnackbarHostState() }
 
-    var tab by remember { mutableStateOf(Tab.ADJUST) }
+    var tab by remember { mutableStateOf<Tab?>(null) }
     var group by remember { mutableStateOf(AdjustSpec.Group.LIGHT) }
 
     val picker = rememberLauncherForActivityResult(
@@ -142,17 +157,21 @@ fun PhotoEditorScreen(onBack: () -> Unit) {
             }
 
             if (state.source != null) {
-                TabRow(current = tab, onSelect = { tab = it })
-
-                Box(modifier = Modifier.heightIn(min = 180.dp, max = 300.dp)) {
-                    when (tab) {
-                        Tab.ADJUST -> AdjustPanel(state, group, onGroupChange = { group = it })
-                        Tab.FILTERS -> FilterPanel(state)
-                        Tab.TEXT -> TextPanel(state)
-                        Tab.STICKERS -> StickerPanel(state)
-                        Tab.TRANSFORM -> TransformPanel(state, scope)
-                        Tab.EXPORT -> ExportPanel(state) { message ->
-                            scope.launch { snackbar.showSnackbar(message) }
+                ChromeDivider()
+                val current = tab
+                if (current == null) {
+                    ToolRail(tools = Tab.entries, onSelect = { tab = it as Tab })
+                } else {
+                    ToolSheet(title = current.label, onBack = { tab = null }) {
+                        when (current) {
+                            Tab.ADJUST -> AdjustPanel(state, group, onGroupChange = { group = it })
+                            Tab.FILTERS -> FilterPanel(state)
+                            Tab.TEXT -> TextPanel(state)
+                            Tab.STICKERS -> StickerPanel(state)
+                            Tab.TRANSFORM -> TransformPanel(state, scope)
+                            Tab.EXPORT -> ExportPanel(state) { message ->
+                                scope.launch { snackbar.showSnackbar(message) }
+                            }
                         }
                     }
                 }
@@ -231,25 +250,6 @@ private fun EmptyState(onPick: () -> Unit) {
             textAlign = TextAlign.Center,
         )
         Button(onClick = onPick) { Text("Open photo") }
-    }
-}
-
-@Composable
-private fun TabRow(current: Tab, onSelect: (Tab) -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Tab.entries.forEach { entry ->
-            Chip(
-                label = entry.label,
-                selected = entry == current,
-                onClick = { onSelect(entry) },
-            )
-        }
     }
 }
 

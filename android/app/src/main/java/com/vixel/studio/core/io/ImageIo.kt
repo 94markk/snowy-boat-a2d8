@@ -4,6 +4,7 @@ import android.content.ContentValues
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
@@ -31,23 +32,77 @@ object ImageIo {
      * large part of why an editor can look like it is "stuck in landscape".
      */
     fun decode(context: Context, uri: Uri, maxEdge: Int = 4096): Bitmap? {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, bounds)
-        } ?: return null
-
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
-
-        val options = BitmapFactory.Options().apply {
-            inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, maxEdge)
-            inPreferredConfig = Bitmap.Config.ARGB_8888
-        }
-        val decoded = context.contentResolver.openInputStream(uri)?.use {
-            BitmapFactory.decodeStream(it, null, options)
-        } ?: return null
+        val decoded = decodeWithBitmapFactory(context, uri, maxEdge)
+            ?: decodeWithImageDecoder(context, uri, maxEdge)
+            ?: return null
 
         val rotation = readOrientation(context, uri)
         return if (rotation == 0f) decoded else rotate(decoded, rotation)
+    }
+
+    /**
+     * Everything here returns null rather than throwing.
+     *
+     * A picked uri can fail in ways that are entirely normal — the grant has
+     * lapsed, the provider is gone, the file was deleted between the pick and
+     * the read — and openInputStream signals all of them by throwing. Decoding
+     * usually runs inside a coroutine on a background dispatcher, so letting
+     * one escape takes the app down over a file that simply is not there.
+     */
+    private fun decodeWithBitmapFactory(
+        context: Context,
+        uri: Uri,
+        maxEdge: Int,
+    ): Bitmap? = try {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use {
+            BitmapFactory.decodeStream(it, null, bounds)
+        }
+
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            null
+        } else {
+            val options = BitmapFactory.Options().apply {
+                inSampleSize = sampleSizeFor(bounds.outWidth, bounds.outHeight, maxEdge)
+                inPreferredConfig = Bitmap.Config.ARGB_8888
+            }
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, options)
+            }
+        }
+    } catch (t: Throwable) {
+        null
+    }
+
+    /**
+     * Second attempt, for formats BitmapFactory will not open.
+     *
+     * Phones increasingly save HEIC by default, and newer ones AVIF; both fail
+     * in BitmapFactory on older releases and read fine through ImageDecoder.
+     * Without this an "unsupported image" is indistinguishable from a broken
+     * import, which is the more likely conclusion a user draws.
+     *
+     * Software allocation is requested because the result is uploaded as a GL
+     * texture and read back on the CPU, neither of which a hardware bitmap
+     * supports.
+     */
+    private fun decodeWithImageDecoder(
+        context: Context,
+        uri: Uri,
+        maxEdge: Int,
+    ): Bitmap? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
+        return try {
+            val source = ImageDecoder.createSource(context.contentResolver, uri)
+            ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.isMutableRequired = true
+                val sample = sampleSizeFor(info.size.width, info.size.height, maxEdge)
+                if (sample > 1) decoder.setTargetSampleSize(sample)
+            }
+        } catch (t: Throwable) {
+            null
+        }
     }
 
     fun sampleSizeFor(width: Int, height: Int, maxEdge: Int): Int {
@@ -61,37 +116,46 @@ object ImageIo {
     }
 
     /**
-     * Uses the framework ExifInterface rather than the AndroidX one: it covers
-     * every format we decode here and keeps this layer free of AndroidX so it
-     * can be typechecked against a plain android.jar.
-     */
-    /**
      * Upright pixel size of [uri], or null if it is not a decodable image.
      *
-     * Reads the header only, so it stays cheap enough to run over a whole
-     * multi-select. The EXIF swap matters: [decode] hands back an upright
-     * bitmap, so anything laying this image out has to be told the upright
-     * size too, or a portrait photo gets a landscape slot on the timeline.
+     * Normally a header read, so it stays cheap over a whole multi-select. It
+     * falls back to a small decode for the formats BitmapFactory cannot open,
+     * which costs more but only for files that would otherwise be turned away
+     * at import despite [decode] being able to read them.
+     *
+     * The EXIF swap matters: [decode] hands back an upright bitmap, so
+     * anything laying this image out has to be told the upright size too, or a
+     * portrait photo gets a landscape slot on the timeline.
      */
     fun boundsOf(context: Context, uri: Uri): Pair<Int, Int>? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         try {
             context.contentResolver.openInputStream(uri)?.use {
                 BitmapFactory.decodeStream(it, null, bounds)
-            } ?: return null
+            }
         } catch (t: Throwable) {
-            return null
+            // Fall through to the decoder fallback below.
         }
-        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var width = bounds.outWidth
+        var height = bounds.outHeight
+
+        if (width <= 0 || height <= 0) {
+            val probe = decodeWithImageDecoder(context, uri, maxEdge = 512) ?: return null
+            width = probe.width
+            height = probe.height
+            probe.recycle()
+        }
 
         val quarterTurn = readOrientation(context, uri).let { it == 90f || it == 270f }
-        return if (quarterTurn) {
-            bounds.outHeight to bounds.outWidth
-        } else {
-            bounds.outWidth to bounds.outHeight
-        }
+        return if (quarterTurn) height to width else width to height
     }
 
+    /**
+     * Uses the framework ExifInterface rather than the AndroidX one: it covers
+     * every format we decode here and keeps this layer free of AndroidX so it
+     * can be typechecked against a plain android.jar.
+     */
     @Suppress("DEPRECATION")
     private fun readOrientation(context: Context, uri: Uri): Float = try {
         context.contentResolver.openInputStream(uri)?.use { stream ->

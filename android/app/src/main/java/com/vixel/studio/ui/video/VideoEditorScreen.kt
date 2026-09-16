@@ -68,6 +68,9 @@ import com.vixel.studio.engine.video.MediaProbe
 import com.vixel.studio.engine.video.VideoExporter
 import com.vixel.studio.engine.video.VideoIo
 import com.vixel.studio.ui.common.Chip
+import com.vixel.studio.ui.common.ChromeDivider
+import com.vixel.studio.ui.common.ToolRail
+import com.vixel.studio.ui.common.ToolSheet
 import com.vixel.studio.ui.common.ParamSlider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -329,7 +332,7 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
                         ChromeDivider()
                         ToolRail(
                             tools = EditorTool.entries,
-                            onSelect = { openTool = it },
+                            onSelect = { openTool = it as EditorTool },
                         )
                     }
                 }
