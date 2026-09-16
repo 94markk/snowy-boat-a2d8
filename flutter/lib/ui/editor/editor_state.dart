@@ -47,7 +47,7 @@ class EditorState extends ChangeNotifier {
   bool get canUndo => _undoStack.isNotEmpty;
   bool get canRedo => _redoStack.isNotEmpty;
 
-  Clip? get selectedClip {
+  TimelineClip? get selectedClip {
     final id = _selectedClipId;
     if (id == null) return null;
     for (final clip in _project.clips) {
@@ -56,7 +56,7 @@ class EditorState extends ChangeNotifier {
     return null;
   }
 
-  Clip? get clipUnderPlayhead {
+  TimelineClip? get clipUnderPlayhead {
     if (_project.clips.isEmpty) return null;
     final index = _project.clipIndexAt(_positionUs);
     if (index < 0) return _project.clips.first;
@@ -70,7 +70,7 @@ class EditorState extends ChangeNotifier {
   /// are dropped whenever nothing is selected, so a slider moves, the frame
   /// stays put, and the app looks like none of its parameters are connected to
   /// anything. That was the original complaint about this editor.
-  Clip? get activeClip => selectedClip ?? clipUnderPlayhead;
+  TimelineClip? get activeClip => selectedClip ?? clipUnderPlayhead;
 
   String? get activeClipId => activeClip?.id;
 
@@ -213,7 +213,7 @@ class EditorState extends ChangeNotifier {
   /// The canvas stays put on every later import, because by then it is a
   /// choice the user has made, possibly one the earlier clips have already
   /// been cropped to suit. Only the empty-project case is a guess worth making.
-  void addClips(List<Clip> clips) {
+  void addClips(List<TimelineClip> clips) {
     if (clips.isEmpty) return;
     final first = clips.first;
     final wasEmpty = _project.clips.isEmpty;
@@ -222,7 +222,7 @@ class EditorState extends ChangeNotifier {
       final next = current.copyWith(clips: [...current.clips, ...clips]);
       if (!wasEmpty) return next;
       return next.copyWith(
-        aspect: AspectRatio.closestTo(first.displayWidth, first.displayHeight),
+        aspect: CanvasRatio.closestTo(first.displayWidth, first.displayHeight),
       );
     });
 
@@ -260,13 +260,13 @@ class EditorState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateActiveClip(Clip Function(Clip) transform) {
+  void updateActiveClip(TimelineClip Function(TimelineClip) transform) {
     final id = activeClipId;
     if (id == null) return;
     edit((p) => p.updateClip(id, transform));
   }
 
-  void commitActiveClip(Clip Function(Clip) transform) {
+  void commitActiveClip(TimelineClip Function(TimelineClip) transform) {
     final id = activeClipId;
     if (id == null) return;
     commit((p) => p.updateClip(id, transform));
@@ -279,7 +279,7 @@ class EditorState extends ChangeNotifier {
   /// undo walks back through every intermediate position instead of returning
   /// to where the drag began.
   void setAdjustment(String specId, double value, {bool live = true}) {
-    Clip apply(Clip c) =>
+    TimelineClip apply(TimelineClip c) =>
         c.copyWith(adjustments: c.adjustments.set(specId, value));
     if (live) {
       updateActiveClip(apply);
@@ -319,5 +319,5 @@ class EditorState extends ChangeNotifier {
 
   void rename(String name) => commit((p) => p.copyWith(name: name));
 
-  void setAspect(AspectRatio aspect) => commit((p) => p.copyWith(aspect: aspect));
+  void setAspect(CanvasRatio aspect) => commit((p) => p.copyWith(aspect: aspect));
 }

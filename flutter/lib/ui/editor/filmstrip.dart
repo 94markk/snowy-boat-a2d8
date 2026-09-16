@@ -334,7 +334,7 @@ class _ClipCell extends StatelessWidget {
     required this.onTap,
   });
 
-  final Clip clip;
+  final TimelineClip clip;
   final bool selected;
   final double width;
   final VoidCallback onTap;
@@ -351,9 +351,9 @@ class _ClipCell extends StatelessWidget {
           borderRadius: BorderRadius.circular(6),
           border: selected ? Border.all(color: aqua, width: 2) : null,
         ),
-        // ClipRRect rather than clipBehavior: our Clip model shadows the
-        // Flutter enum of the same name, so Clip.antiAlias will not resolve
-        // inside this library.
+        // ClipRRect rather than clipBehavior, which reads a little better here
+        // anyway: the rounding is stated once rather than split between the
+        // decoration and a separate behaviour flag.
         child: ClipRRect(
           borderRadius: BorderRadius.circular(6),
           child: Stack(
@@ -396,7 +396,7 @@ class _ClipCell extends StatelessWidget {
 class _ClipThumbnails extends StatefulWidget {
   const _ClipThumbnails({required this.clip, required this.width});
 
-  final Clip clip;
+  final TimelineClip clip;
   final double width;
 
   @override

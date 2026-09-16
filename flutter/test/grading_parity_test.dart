@@ -23,7 +23,7 @@ void main() {
   );
 
   test('the strip and the cube describe the same colour', () {
-    final strip = LutBaker.bakeStrip(graded);
+    final strip = LutBaker.bakeStrip(graded, size: LutBaker.exportSize);
     // Data rows only: the DOMAIN_ header lines also carry decimal points, so
     // matching on those would count them as colour entries.
     final cubeLines = LutBaker.bakeCube(graded)
@@ -31,7 +31,8 @@ void main() {
         .where((l) => RegExp(r'^[0-9]').hasMatch(l))
         .toList();
 
-    const size = LutBaker.size;
+    const size = LutBaker.exportSize;
+    final stripWidth = LutBaker.stripWidthFor(size);
     expect(cubeLines.length, size * size * size);
 
     // Walk the cube in its own order — red fastest, blue slowest — and find
@@ -50,7 +51,7 @@ void main() {
 
           final x = (b % LutBaker.tilesAcross) * size + r;
           final y = (b ~/ LutBaker.tilesAcross) * size + g;
-          final i = (y * LutBaker.stripWidth + x) * 4;
+          final i = (y * stripWidth + x) * 4;
           final fromStrip = [
             strip[i] / 255,
             strip[i + 1] / 255,
@@ -67,6 +68,43 @@ void main() {
     }
 
     expect(mismatches, 0);
+  });
+
+  test('the preview cube tracks the export cube', () {
+    // The preview bakes a smaller cube so it can keep up with a slider. That
+    // is only acceptable while the two still describe the same look: if 32³
+    // drifted from 64³, grading would be done against colour the file will not
+    // reproduce, which is the same class of failure as having no parity at all.
+    final preview = LutBaker.bakeStrip(graded, size: LutBaker.previewSize);
+    final previewWidth = LutBaker.stripWidthFor(LutBaker.previewSize);
+    const n = LutBaker.previewSize;
+
+    var worst = 0.0;
+    for (var b = 0; b < n; b++) {
+      for (var g = 0; g < n; g++) {
+        for (var r = 0; r < n; r++) {
+          final x = (b % LutBaker.tilesAcross) * n + r;
+          final y = (b ~/ LutBaker.tilesAcross) * n + g;
+          final i = (y * previewWidth + x) * 4;
+
+          // Same input colour, evaluated directly rather than sampled.
+          final exact = LutBaker.gradePixel(graded, [
+            r / (n - 1),
+            g / (n - 1),
+            b / (n - 1),
+          ]);
+
+          for (var ch = 0; ch < 3; ch++) {
+            final diff = (exact[ch] - preview[i + ch] / 255).abs();
+            if (diff > worst) worst = diff;
+          }
+        }
+      }
+    }
+
+    // Both tables come from gradePixel, so the only difference should be the
+    // 8-bit quantisation of the strip.
+    expect(worst, lessThan(1 / 255));
   });
 
   test('neutral adjustments leave colour untouched', () {

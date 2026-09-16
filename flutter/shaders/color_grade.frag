@@ -18,6 +18,15 @@ precision highp float;
 // here as uniforms, and export maps each onto its FFmpeg equivalent.
 
 uniform vec2 uSize;
+
+// Cube edge length and how many tiles sit across the strip. Passed in rather
+// than hardcoded because the preview bakes a smaller cube than export does: a
+// 64³ table is a quarter of a million evaluations, which is far too slow to
+// rebuild under a moving slider, while 32³ costs an eighth of that and is
+// indistinguishable at phone size. Export still writes the full 64³.
+uniform float uLutSize;
+uniform float uLutCols;
+
 uniform float uSharpen;
 uniform float uBlur;
 uniform float uVignette;
@@ -39,25 +48,34 @@ float luma(vec3 c) {
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }
 
-/// Samples the 64³ LUT held as a 512x512 strip: 64x64 tiles, eight across.
+/// Samples the LUT, held as a strip of NxN tiles laid out uLutCols across.
+///
+/// Blue selects the tile, red and green index within it, and the two tiles
+/// either side of the blue value are blended so the cube reads as continuous
+/// rather than stepping between slices.
 ///
 /// The half-texel inset matters. Without it linear filtering at a tile edge
 /// reaches into the neighbouring blue slice, which shows up as coloured seams
 /// across smooth gradients — a sky is where you notice it first.
 vec3 sampleLut(vec3 color) {
-    float slices = 63.0;
+    float n = uLutSize;
+    float cols = uLutCols;
+    float rows = ceil(n / cols);
+    vec2 texSize = vec2(n * cols, n * rows);
+    float slices = n - 1.0;
+
     color = clamp(color, 0.0, 1.0);
     float blue = color.b * slices;
     float b0 = floor(blue);
     float b1 = min(b0 + 1.0, slices);
     float f = blue - b0;
 
-    vec2 rg = (color.rg * 63.0 + 0.5) / 512.0;
-    vec2 o0 = vec2(mod(b0, 8.0), floor(b0 / 8.0)) * (64.0 / 512.0);
-    vec2 o1 = vec2(mod(b1, 8.0), floor(b1 / 8.0)) * (64.0 / 512.0);
+    vec2 idx = color.rg * slices;
+    vec2 base0 = vec2(mod(b0, cols), floor(b0 / cols)) * n;
+    vec2 base1 = vec2(mod(b1, cols), floor(b1 / cols)) * n;
 
-    vec3 c0 = texture(uLut, o0 + rg).rgb;
-    vec3 c1 = texture(uLut, o1 + rg).rgb;
+    vec3 c0 = texture(uLut, (base0 + idx + 0.5) / texSize).rgb;
+    vec3 c1 = texture(uLut, (base1 + idx + 0.5) / texSize).rgb;
     return mix(c0, c1, f);
 }
 

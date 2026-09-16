@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../editor/editor_screen.dart';
 import '../theme/theme.dart';
 
 /// Landing screen.
@@ -36,7 +37,13 @@ class HomeScreen extends StatelessWidget {
                     ?.copyWith(color: Mist.m400),
               ),
               const SizedBox(height: 28),
-              _NewProjectCard(onTap: () {}),
+              _NewProjectCard(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const EditorScreen(),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

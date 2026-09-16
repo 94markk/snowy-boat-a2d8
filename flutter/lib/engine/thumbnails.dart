@@ -38,7 +38,7 @@ class Thumbnailer {
   /// case, which is a better outcome than a timeline that refuses to render
   /// because one file is unreadable.
   static Future<List<String>> strip(
-    Clip clip, {
+    TimelineClip clip, {
     int count = 10,
     int height = 120,
   }) async {
@@ -92,7 +92,7 @@ class Thumbnailer {
   }
 
   /// A single frame at [timeUs] into the source, for the graded still.
-  static Future<String?> frameAt(Clip clip, int sourceTimeUs, {int height = 720}) async {
+  static Future<String?> frameAt(TimelineClip clip, int sourceTimeUs, {int height = 720}) async {
     final dir = await _dir();
     final snapped = (sourceTimeUs ~/ 200000) * 200000;
     final file = File(
@@ -137,7 +137,7 @@ class Thumbnailer {
   /// Trim is included because trimming a clip changes which frames the strip
   /// should show; leaving it out would serve the old range from cache and make
   /// trimming look like it had done nothing.
-  static String _keyFor(Clip clip, int count, int height) =>
+  static String _keyFor(TimelineClip clip, int count, int height) =>
       '${_hash(clip.uri)}_${clip.trimStartUs}_${clip.trimEndUs}_${count}_$height';
 
   static String _hash(String value) {

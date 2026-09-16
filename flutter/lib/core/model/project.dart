@@ -6,7 +6,7 @@ import 'transition.dart';
 import 'ids.dart';
 
 /// Canvas shapes offered by the editor. Portrait leads, because phones do.
-enum AspectRatio {
+enum CanvasRatio {
   portrait9x16('9:16', '9:16', 9, 16),
   portrait4x5('4:5', '4:5', 4, 5),
   portrait3x4('3:4', '3:4', 3, 4),
@@ -16,7 +16,7 @@ enum AspectRatio {
   landscape4x3('4:3', '4:3', 4, 3),
   cinema21x9('21:9', '21:9', 21, 9);
 
-  const AspectRatio(this.id, this.label, this.widthRatio, this.heightRatio);
+  const CanvasRatio(this.id, this.label, this.widthRatio, this.heightRatio);
 
   final String id;
   final String label;
@@ -44,10 +44,10 @@ enum AspectRatio {
 
   static int _even(int v) => v.isEven ? v : v + 1;
 
-  static const AspectRatio defaultRatio = AspectRatio.portrait9x16;
+  static const CanvasRatio defaultRatio = CanvasRatio.portrait9x16;
 
-  static AspectRatio fromId(String id) =>
-      AspectRatio.values.firstWhere((a) => a.id == id, orElse: () => defaultRatio);
+  static CanvasRatio fromId(String id) =>
+      CanvasRatio.values.firstWhere((a) => a.id == id, orElse: () => defaultRatio);
 
   /// The listed ratio nearest to [width] x [height].
   ///
@@ -55,10 +55,10 @@ enum AspectRatio {
   /// wrong half the time whichever way it points: landscape footage dropped
   /// into a 9:16 canvas comes up as a thin band between two black slabs, which
   /// reads as a broken import rather than as a canvas waiting to be changed.
-  static AspectRatio closestTo(int width, int height) {
+  static CanvasRatio closestTo(int width, int height) {
     if (width <= 0 || height <= 0) return defaultRatio;
     final target = width / height;
-    return AspectRatio.values.reduce(
+    return CanvasRatio.values.reduce(
       (a, b) => (a.ratio - target).abs() <= (b.ratio - target).abs() ? a : b,
     );
   }
@@ -158,8 +158,8 @@ class Transform {
 /// Times are microseconds throughout, matching what the media layer reports
 /// and what FFmpeg accepts, so no unit conversion sits between the model and
 /// either consumer.
-class Clip {
-  Clip({
+class TimelineClip {
+  TimelineClip({
     String? id,
     required this.uri,
     required this.kind,
@@ -224,7 +224,7 @@ class Clip {
 
   bool get isImage => kind == MediaKind.image;
 
-  Clip withTrim(int startUs, int endUs) {
+  TimelineClip withTrim(int startUs, int endUs) {
     final safeStart =
         startUs.clamp(0, math.max(0, sourceDurationUs - minClipUs)).toInt();
     final safeEnd =
@@ -232,7 +232,7 @@ class Clip {
     return copyWith(trimStartUs: safeStart, trimEndUs: safeEnd);
   }
 
-  Clip copyWith({
+  TimelineClip copyWith({
     String? id,
     String? uri,
     MediaKind? kind,
@@ -251,7 +251,7 @@ class Clip {
     int? sourceHeight,
     int? sourceRotationDegrees,
   }) =>
-      Clip(
+      TimelineClip(
         id: id ?? this.id,
         uri: uri ?? this.uri,
         kind: kind ?? this.kind,
@@ -292,9 +292,9 @@ class Clip {
         'sourceRotationDegrees': sourceRotationDegrees,
       };
 
-  static Clip fromJson(Map<String, dynamic> json) {
+  static TimelineClip fromJson(Map<String, dynamic> json) {
     final duration = (json['sourceDurationUs'] as num?)?.toInt() ?? 0;
-    return Clip(
+    return TimelineClip(
       id: json['id'] as String?,
       uri: json['uri'] as String? ?? '',
       kind: MediaKind.values.firstWhere(
@@ -439,7 +439,7 @@ class Project {
   Project({
     String? id,
     this.name = 'Untitled',
-    this.aspect = AspectRatio.defaultRatio,
+    this.aspect = CanvasRatio.defaultRatio,
     this.clips = const [],
     this.audio = const [],
     this.overlays = const [],
@@ -450,8 +450,8 @@ class Project {
 
   final String id;
   final String name;
-  final AspectRatio aspect;
-  final List<Clip> clips;
+  final CanvasRatio aspect;
+  final List<TimelineClip> clips;
   final List<AudioClip> audio;
   final List<Overlay> overlays;
   final int backgroundColor;
@@ -537,8 +537,8 @@ class Project {
 
   Project copyWith({
     String? name,
-    AspectRatio? aspect,
-    List<Clip>? clips,
+    CanvasRatio? aspect,
+    List<TimelineClip>? clips,
     List<AudioClip>? audio,
     List<Overlay>? overlays,
     int? backgroundColor,
@@ -554,7 +554,7 @@ class Project {
         createdAt: createdAt,
       );
 
-  Project updateClip(String id, Clip Function(Clip) transform) => copyWith(
+  Project updateClip(String id, TimelineClip Function(TimelineClip) transform) => copyWith(
         clips: [
           for (final clip in clips) clip.id == id ? transform(clip) : clip,
         ],
@@ -586,7 +586,7 @@ class Project {
   Project duplicateClip(String id) {
     final index = clips.indexWhere((c) => c.id == id);
     if (index < 0) return this;
-    final next = List<Clip>.from(clips)
+    final next = List<TimelineClip>.from(clips)
       ..insert(index + 1, clips[index].copyWith(id: newId()));
     return copyWith(clips: next);
   }
@@ -594,7 +594,7 @@ class Project {
   Project moveClip(int from, int to) {
     if (from < 0 || from >= clips.length) return this;
     if (to < 0 || to >= clips.length || from == to) return this;
-    final next = List<Clip>.from(clips);
+    final next = List<TimelineClip>.from(clips);
     next.insert(to, next.removeAt(from));
     return copyWith(clips: next);
   }
@@ -610,8 +610,8 @@ class Project {
     final offsetOnTimeline = positionUs - startOf(index);
     final cut = clip.trimStartUs + (offsetOnTimeline * clip.speed).round();
 
-    if (cut - clip.trimStartUs < Clip.minClipUs) return this;
-    if (clip.trimEndUs - cut < Clip.minClipUs) return this;
+    if (cut - clip.trimStartUs < TimelineClip.minClipUs) return this;
+    if (clip.trimEndUs - cut < TimelineClip.minClipUs) return this;
 
     final head = clip.copyWith(trimEndUs: cut, fadeOutUs: 0);
     final tail = clip.copyWith(
@@ -623,7 +623,7 @@ class Project {
       transition: Transition.none,
     );
 
-    final next = List<Clip>.from(clips)
+    final next = List<TimelineClip>.from(clips)
       ..[index] = head
       ..insert(index + 1, tail);
     return copyWith(clips: next);
@@ -643,10 +643,10 @@ class Project {
   static Project fromJson(Map<String, dynamic> json) => Project(
         id: json['id'] as String?,
         name: json['name'] as String? ?? 'Untitled',
-        aspect: AspectRatio.fromId(json['aspect'] as String? ?? ''),
+        aspect: CanvasRatio.fromId(json['aspect'] as String? ?? ''),
         clips: (json['clips'] as List? ?? [])
             .whereType<Map>()
-            .map((c) => Clip.fromJson(Map<String, dynamic>.from(c)))
+            .map((c) => TimelineClip.fromJson(Map<String, dynamic>.from(c)))
             .toList(),
         audio: (json['audio'] as List? ?? [])
             .whereType<Map>()

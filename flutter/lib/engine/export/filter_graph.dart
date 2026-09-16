@@ -151,7 +151,7 @@ class FilterGraph {
 
   /// One clip: fit to canvas, apply the look, apply the spatial effects.
   static String _clipChain({
-    required Clip clip,
+    required TimelineClip clip,
     required int index,
     required int width,
     required int height,
@@ -254,7 +254,7 @@ class FilterGraph {
     return current;
   }
 
-  /// Clip audio plus any added tracks, mixed down to one stream.
+  /// TimelineClip audio plus any added tracks, mixed down to one stream.
   static String? _buildAudio(
     Project project,
     List<String> chains,
