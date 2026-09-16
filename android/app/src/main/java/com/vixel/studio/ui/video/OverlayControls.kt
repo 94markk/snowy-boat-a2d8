@@ -252,7 +252,7 @@ fun TimingControls(overlay: Overlay, state: OverlayHost) {
         label = "Start",
         value = overlay.startUs.toFloat(),
         range = 0f..projectDuration.toFloat(),
-        display = formatTime(overlay.startUs),
+        display = formatTimePrecise(overlay.startUs),
         onChange = { v ->
             state.beginGesture()
             state.updateSelectedOverlay {
@@ -266,7 +266,7 @@ fun TimingControls(overlay: Overlay, state: OverlayHost) {
         label = "End",
         value = overlay.endUs.toFloat(),
         range = MIN_OVERLAY_US.toFloat()..(projectDuration + MIN_OVERLAY_US).toFloat(),
-        display = formatTime(overlay.endUs),
+        display = formatTimePrecise(overlay.endUs),
         onChange = { v ->
             state.beginGesture()
             state.updateSelectedOverlay {

@@ -235,7 +235,7 @@ private fun AudioTrackControls(state: VideoEditorState, track: AudioClip) {
             label = "Starts at",
             value = track.startOnTimelineUs.toFloat(),
             range = 0f..timelineEnd.toFloat(),
-            display = formatTime(track.startOnTimelineUs),
+            display = formatTimePrecise(track.startOnTimelineUs),
             onChange = { v ->
                 state.beginGesture()
                 state.edit { it.updateAudio(track.id) { a -> a.copy(startOnTimelineUs = v.toLong()) } }
@@ -246,7 +246,7 @@ private fun AudioTrackControls(state: VideoEditorState, track: AudioClip) {
             label = "Trim start",
             value = track.trimStartUs.toFloat(),
             range = 0f..track.sourceDurationUs.coerceAtLeast(1L).toFloat(),
-            display = formatTime(track.trimStartUs),
+            display = formatTimePrecise(track.trimStartUs),
             onChange = { v ->
                 state.beginGesture()
                 state.edit {
@@ -263,7 +263,7 @@ private fun AudioTrackControls(state: VideoEditorState, track: AudioClip) {
             value = track.trimEndUs.toFloat(),
             range = MIN_OVERLAY_US.toFloat()..
                 maxOf(track.sourceDurationUs, MIN_OVERLAY_US + 1L).toFloat(),
-            display = formatTime(track.trimEndUs),
+            display = formatTimePrecise(track.trimEndUs),
             onChange = { v ->
                 state.beginGesture()
                 state.edit {
@@ -279,7 +279,7 @@ private fun AudioTrackControls(state: VideoEditorState, track: AudioClip) {
             label = "Fade in",
             value = track.fadeInUs.toFloat(),
             range = 0f..3_000_000f,
-            display = formatTime(track.fadeInUs),
+            display = formatTimePrecise(track.fadeInUs),
             onChange = { v ->
                 state.beginGesture()
                 state.edit { it.updateAudio(track.id) { a -> a.copy(fadeInUs = v.toLong()) } }
@@ -290,7 +290,7 @@ private fun AudioTrackControls(state: VideoEditorState, track: AudioClip) {
             label = "Fade out",
             value = track.fadeOutUs.toFloat(),
             range = 0f..3_000_000f,
-            display = formatTime(track.fadeOutUs),
+            display = formatTimePrecise(track.fadeOutUs),
             onChange = { v ->
                 state.beginGesture()
                 state.edit { it.updateAudio(track.id) { a -> a.copy(fadeOutUs = v.toLong()) } }

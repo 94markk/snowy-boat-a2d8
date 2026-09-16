@@ -5,7 +5,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,22 +12,17 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material.icons.rounded.Pause
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Redo
-import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -49,13 +43,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import com.vixel.studio.core.model.AdjustSpec
+import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.AspectRatio
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.FilterPreset
@@ -77,18 +74,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private enum class VideoTab(val label: String) {
-    CLIP("Clip"),
-    ADJUST("Adjust"),
-    FILTERS("Filters"),
-    MOTION("Motion"),
-    TEXT("Text"),
-    STICKERS("Stickers"),
-    AUDIO("Audio"),
-    CANVAS("Canvas"),
-    EXPORT("Export"),
-}
-
+/**
+ * The timeline editor.
+ *
+ * Laid out the way phone editors are: preview on top, transport under it, the
+ * timeline below that, and a scrolling rail of tools along the bottom. Opening
+ * a tool covers the timeline but never the preview, so the frame being graded
+ * stays on screen while it is being graded.
+ */
 @Composable
 fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -96,7 +89,9 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
     val state = remember { VideoEditorState() }
     val snackbar = remember { SnackbarHostState() }
 
-    var tab by remember { mutableStateOf(VideoTab.CLIP) }
+    var openTool by remember { mutableStateOf<EditorTool?>(null) }
+    var showExport by remember { mutableStateOf(false) }
+    var immersive by remember { mutableStateOf(false) }
     var group by remember { mutableStateOf(AdjustSpec.Group.LIGHT) }
 
     // Open an existing project, and report any clip whose media has gone.
@@ -149,7 +144,6 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
             if (clip != null) {
                 val target = clip.speed.coerceIn(0.1f, 8f)
                 if (player.playbackParameters.speed != target) player.setPlaybackSpeed(target)
-                if (state.selectedClipId == null) state.selectedClipId = clip.id
             }
             if (player.isPlaying) {
                 state.positionUs = state.project.startOf(index) + player.currentPosition * 1000L
@@ -157,6 +151,26 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
             state.isPlaying = player.isPlaying
             delay(60)
         }
+    }
+
+    /**
+     * Moves the player to a timeline time.
+     *
+     * Scrubbing asks for a seek on every frame of the drag, and an exact seek
+     * decodes forward from the previous keyframe each time, which is far too
+     * slow to keep up with a finger. Dragging therefore snaps to keyframes and
+     * the settle at the end is exact, so the preview stays live under the
+     * finger and still lands on the right frame.
+     */
+    fun seekPlayer(timeUs: Long, exact: Boolean) {
+        val clips = state.project.clips
+        if (clips.isEmpty()) return
+        val index = state.project.clipIndexAt(timeUs).coerceIn(0, clips.lastIndex)
+        val offsetMs = ((timeUs - state.project.startOf(index)) / 1000L).coerceAtLeast(0L)
+        player.setSeekParameters(
+            if (exact) SeekParameters.EXACT else SeekParameters.CLOSEST_SYNC,
+        )
+        player.seekTo(index, offsetMs)
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -167,70 +181,64 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
             val clips = withContext(Dispatchers.IO) {
                 uris.mapNotNull { uri -> MediaProbe.clipFor(context, uri) }
             }
-            if (clips.isEmpty()) {
-                snackbar.showSnackbar("Those files could not be read")
-            } else {
-                state.addClips(clips)
+            state.addClips(clips)
+
+            // Say how many failed rather than treating any failure as total
+            // failure. Picking ten files and having one unsupported clip is a
+            // very different thing from none of them loading.
+            val failed = uris.size - clips.size
+            if (failed > 0) {
+                snackbar.showSnackbar(
+                    if (clips.isEmpty()) {
+                        "Could not read those $failed file(s)"
+                    } else {
+                        "Added ${clips.size}, skipped $failed unreadable file(s)"
+                    },
+                )
             }
         }
     }
 
-    Scaffold(snackbarHost = { SnackbarHost(snackbar) }) { inner ->
-        Column(modifier = Modifier.fillMaxSize().padding(inner)) {
+    fun pickMedia() {
+        picker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo),
+        )
+    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                }
-                Text(
-                    "Video",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.weight(1f),
-                )
-                IconButton(onClick = { state.undo() }, enabled = state.canUndo) {
-                    Icon(Icons.Rounded.Undo, contentDescription = "Undo")
-                }
-                IconButton(onClick = { state.redo() }, enabled = state.canRedo) {
-                    Icon(Icons.Rounded.Redo, contentDescription = "Redo")
-                }
-                IconButton(
-                    onClick = {
-                        picker.launch(
-                            PickVisualMediaRequest(
-                                ActivityResultContracts.PickVisualMedia.ImageAndVideo,
-                            ),
-                        )
-                    },
-                ) {
-                    Icon(Icons.Rounded.Add, contentDescription = "Add media")
-                }
-            }
+    // The preview is graded with the clip under the playhead, not the selected
+    // one. Those can differ, and grading by selection meant the screen showed
+    // one clip's frames through another clip's colour.
+    val previewClip = state.clipUnderPlayhead
+
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = Color.Black,
+    ) { inner ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(inner)
+                .background(Color.Black),
+        ) {
+            EditorTopBar(
+                resolutionLabel = "${state.exportShortEdge}P",
+                exportEnabled = state.project.clips.isNotEmpty() && !state.exporting,
+                onClose = onBack,
+                onResolution = { openTool = null; showExport = true },
+                onExport = { openTool = null; showExport = true },
+            )
 
             Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.background),
+                modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentAlignment = Alignment.Center,
             ) {
                 if (state.project.clips.isEmpty()) {
-                    EmptyTimeline(
-                        onPick = {
-                            picker.launch(
-                                PickVisualMediaRequest(
-                                    ActivityResultContracts.PickVisualMedia.ImageAndVideo,
-                                ),
-                            )
-                        },
-                    )
+                    EmptyTimeline(onPick = { pickMedia() })
                 } else {
                     VideoPreview(
                         player = player,
-                        clip = state.selectedClip ?: state.project.clips.firstOrNull(),
-                        adjustments = (state.selectedClip ?: state.project.clips.first()).adjustments,
+                        clip = previewClip,
+                        adjustments = previewClip?.adjustments ?: Adjustments(),
                         canvasAspect = state.project.aspect.ratio,
                         canvasColor = state.project.backgroundColor,
                         overlays = state.project.overlays,
@@ -243,60 +251,86 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
             }
 
             if (state.project.clips.isNotEmpty()) {
-                TransportBar(state, player)
-
-                Timeline(
-                    project = state.project,
-                    selectedClipId = state.selectedClipId,
-                    positionUs = state.positionUs,
-                    onSelect = { id ->
-                        state.selectedClipId = id
-                        val index = state.project.clips.indexOfFirst { it.id == id }
-                        if (index >= 0) player.seekTo(index, 0L)
+                TransportRow(
+                    isPlaying = state.isPlaying,
+                    canUndo = state.canUndo,
+                    canRedo = state.canRedo,
+                    onPlayPause = { if (player.isPlaying) player.pause() else player.play() },
+                    onUndo = {
+                        state.undo()
+                        seekPlayer(state.positionUs, exact = true)
                     },
-                    onSeek = { state.positionUs = it },
-                    onSeekFinished = {
-                        val index = state.project.clipIndexAt(state.positionUs)
-                            .takeIf { it >= 0 } ?: 0
-                        val offsetMs =
-                            (state.positionUs - state.project.startOf(index)) / 1000L
-                        player.seekTo(index, offsetMs)
+                    onRedo = {
+                        state.redo()
+                        seekPlayer(state.positionUs, exact = true)
                     },
+                    onFullscreen = { immersive = !immersive },
                 )
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    VideoTab.entries.forEach { entry ->
-                        Chip(
-                            label = entry.label,
-                            selected = entry == tab,
-                            onClick = { tab = entry },
-                        )
-                    }
-                }
+                when {
+                    // Fullscreen hands the whole screen to the frame. Nothing
+                    // below the transport is drawn until it is turned off.
+                    immersive -> Unit
 
-                Box(modifier = Modifier.heightIn(min = 170.dp, max = 290.dp)) {
-                    when (tab) {
-                        VideoTab.CLIP -> ClipPanel(state)
-                        VideoTab.ADJUST -> AdjustPanel(state, group) { group = it }
-                        VideoTab.FILTERS -> FilterPanel(state)
-                        VideoTab.MOTION -> MotionPanel(state)
-                        VideoTab.TEXT -> TextPanel(state) { message ->
+                    showExport -> ToolSheet(
+                        title = "Export",
+                        onBack = { showExport = false },
+                    ) {
+                        ExportPanel(state) { message ->
                             scope.launch { snackbar.showSnackbar(message) }
                         }
-                        VideoTab.STICKERS -> StickerPanel(state)
-                        VideoTab.AUDIO -> AudioPanel(state) { message ->
-                            scope.launch { snackbar.showSnackbar(message) }
+                    }
+
+                    openTool != null -> {
+                        val tool = openTool
+                        ToolSheet(
+                            title = tool?.label.orEmpty(),
+                            onBack = { openTool = null },
+                        ) {
+                            when (tool) {
+                                EditorTool.EDIT -> ClipPanel(state)
+                                EditorTool.ADJUST -> AdjustPanel(state, group) { group = it }
+                                EditorTool.FILTERS -> FilterPanel(state)
+                                EditorTool.EFFECTS -> MotionPanel(state)
+                                EditorTool.TEXT -> TextPanel(state) { message ->
+                                    scope.launch { snackbar.showSnackbar(message) }
+                                }
+                                EditorTool.CAPTIONS -> CaptionControls(state) { message ->
+                                    scope.launch { snackbar.showSnackbar(message) }
+                                }
+                                EditorTool.STICKERS -> StickerPanel(state)
+                                EditorTool.AUDIO -> AudioPanel(state) { message ->
+                                    scope.launch { snackbar.showSnackbar(message) }
+                                }
+                                EditorTool.CANVAS -> CanvasPanel(state)
+                                null -> Unit
+                            }
                         }
-                        VideoTab.CANVAS -> CanvasPanel(state)
-                        VideoTab.EXPORT -> ExportPanel(state) { message ->
-                            scope.launch { snackbar.showSnackbar(message) }
-                        }
+                    }
+
+                    else -> {
+                        Filmstrip(
+                            project = state.project,
+                            positionUs = state.positionUs,
+                            selectedClipId = state.selectedClipId,
+                            onScrub = { timeUs ->
+                                state.positionUs = timeUs
+                                seekPlayer(timeUs, exact = false)
+                            },
+                            onScrubFinished = { seekPlayer(state.positionUs, exact = true) },
+                            onSelectClip = { id ->
+                                state.selectClip(id)
+                                seekPlayer(state.positionUs, exact = true)
+                            },
+                            onAddMedia = { pickMedia() },
+                            onAddAudio = { openTool = EditorTool.AUDIO },
+                            onAddText = { openTool = EditorTool.TEXT },
+                        )
+                        ChromeDivider()
+                        ToolRail(
+                            tools = EditorTool.entries,
+                            onSelect = { openTool = it },
+                        )
                     }
                 }
             }
@@ -304,10 +338,6 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
     }
 }
 
-/**
- * Stand-in for a transition while scrubbing. The preview has only one decoded
- * clip available, so the incoming one ramps up instead of cross-blending.
- */
 private fun previewOpacity(state: VideoEditorState): Float {
     val composition = state.project.compositionAt(state.positionUs)
     return if (composition.isTransitioning) composition.progress.coerceIn(0.05f, 1f) else 1f
@@ -366,41 +396,8 @@ private fun EmptyTimeline(onPick: () -> Unit) {
 }
 
 @Composable
-private fun TransportBar(state: VideoEditorState, player: ExoPlayer) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(
-            onClick = { if (player.isPlaying) player.pause() else player.play() },
-        ) {
-            Icon(
-                if (state.isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                contentDescription = if (state.isPlaying) "Pause" else "Play",
-            )
-        }
-        IconButton(onClick = { state.splitAtPlayhead() }) {
-            Icon(Icons.Rounded.ContentCut, contentDescription = "Split at playhead")
-        }
-        IconButton(
-            onClick = { state.duplicateSelected() },
-            enabled = state.selectedClipId != null,
-        ) {
-            Icon(Icons.Rounded.ContentCopy, contentDescription = "Duplicate clip")
-        }
-        IconButton(
-            onClick = { state.removeSelected() },
-            enabled = state.selectedClipId != null,
-        ) {
-            Icon(Icons.Rounded.Delete, contentDescription = "Delete clip")
-        }
-    }
-}
-
-@Composable
 private fun ClipPanel(state: VideoEditorState) {
-    val clip = state.selectedClip
+    val clip = state.activeClip
     if (clip == null) {
         PanelHint("Tap a clip on the timeline to edit it")
         return
@@ -413,7 +410,7 @@ private fun ClipPanel(state: VideoEditorState) {
                 label = "Trim start",
                 value = clip.trimStartUs.toFloat(),
                 range = 0f..(clip.sourceDurationUs - Clip.MIN_CLIP_US).coerceAtLeast(1L).toFloat(),
-                display = formatTime(clip.trimStartUs),
+                display = formatTimePrecise(clip.trimStartUs),
                 onChange = { v ->
                     state.beginGesture()
                     state.updateSelected { it.withTrim(v.toLong(), it.trimEndUs) }
@@ -429,7 +426,7 @@ private fun ClipPanel(state: VideoEditorState) {
                 // otherwise hand Slider a start >= end and blow up.
                 range = Clip.MIN_CLIP_US.toFloat()..
                     maxOf(clip.sourceDurationUs, Clip.MIN_CLIP_US + 1L).toFloat(),
-                display = formatTime(clip.trimEndUs),
+                display = formatTimePrecise(clip.trimEndUs),
                 onChange = { v ->
                     state.beginGesture()
                     state.updateSelected { it.withTrim(it.trimStartUs, v.toLong()) }
@@ -468,7 +465,7 @@ private fun ClipPanel(state: VideoEditorState) {
                 label = "Fade in",
                 value = clip.fadeInUs.toFloat(),
                 range = 0f..2_000_000f,
-                display = formatTime(clip.fadeInUs),
+                display = formatTimePrecise(clip.fadeInUs),
                 onChange = { v ->
                     state.beginGesture()
                     state.updateSelected { it.copy(fadeInUs = v.toLong()) }
@@ -481,7 +478,7 @@ private fun ClipPanel(state: VideoEditorState) {
                 label = "Fade out",
                 value = clip.fadeOutUs.toFloat(),
                 range = 0f..2_000_000f,
-                display = formatTime(clip.fadeOutUs),
+                display = formatTimePrecise(clip.fadeOutUs),
                 onChange = { v ->
                     state.beginGesture()
                     state.updateSelected { it.copy(fadeOutUs = v.toLong()) }
@@ -571,7 +568,7 @@ private fun TransitionSection(state: VideoEditorState, clip: Clip) {
                 label = "Transition length",
                 value = clip.transition.durationUs.toFloat(),
                 range = Transition.MIN_US.toFloat()..Transition.MAX_US.toFloat(),
-                display = formatTime(state.project.overlapBefore(index)),
+                display = formatTimePrecise(state.project.overlapBefore(index)),
                 onChange = { v ->
                     state.beginGesture()
                     state.updateSelected {
@@ -596,7 +593,7 @@ private fun AdjustPanel(
     group: AdjustSpec.Group,
     onGroupChange: (AdjustSpec.Group) -> Unit,
 ) {
-    val clip = state.selectedClip
+    val clip = state.activeClip
     if (clip == null) {
         PanelHint("Select a clip to grade it")
         return
@@ -640,7 +637,7 @@ private fun AdjustPanel(
 
 @Composable
 private fun FilterPanel(state: VideoEditorState) {
-    val clip = state.selectedClip
+    val clip = state.activeClip
     if (clip == null) {
         PanelHint("Select a clip to apply a look")
         return
@@ -708,7 +705,7 @@ private fun CanvasPanel(state: VideoEditorState) {
             FitMode.entries.forEach { mode ->
                 Chip(
                     label = mode.label,
-                    selected = state.selectedClip?.transform?.fit == mode,
+                    selected = state.activeClip?.transform?.fit == mode,
                     onClick = {
                         state.commitSelected { it.copy(transform = it.transform.copy(fit = mode)) }
                     },
@@ -722,8 +719,6 @@ private fun CanvasPanel(state: VideoEditorState) {
 private fun ExportPanel(state: VideoEditorState, onMessage: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var shortEdge by remember { mutableStateOf(1080) }
-    var fps by remember { mutableStateOf(30) }
 
     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("Resolution", style = MaterialTheme.typography.labelMedium)
@@ -731,15 +726,19 @@ private fun ExportPanel(state: VideoEditorState, onMessage: (String) -> Unit) {
             listOf(720, 1080, 1440, 2160).forEach { value ->
                 Chip(
                     label = "${value}p",
-                    selected = value == shortEdge,
-                    onClick = { shortEdge = value },
+                    selected = value == state.exportShortEdge,
+                    onClick = { state.exportShortEdge = value },
                 )
             }
         }
         Text("Frame rate", style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(24, 30, 60).forEach { value ->
-                Chip(label = "$value fps", selected = value == fps, onClick = { fps = value })
+                Chip(
+                    label = "$value fps",
+                    selected = value == state.exportFps,
+                    onClick = { state.exportFps = value },
+                )
             }
         }
 
@@ -766,7 +765,10 @@ private fun ExportPanel(state: VideoEditorState, onMessage: (String) -> Unit) {
                         val exporter = VideoExporter(
                             context = context,
                             project = project,
-                            config = ExportConfig(shortEdge = shortEdge, fps = fps),
+                            config = ExportConfig(
+                                shortEdge = state.exportShortEdge,
+                                fps = state.exportFps,
+                            ),
                         )
                         exporter.export(VideoIo.newExportFile(context)) { p ->
                             state.exportProgress = p

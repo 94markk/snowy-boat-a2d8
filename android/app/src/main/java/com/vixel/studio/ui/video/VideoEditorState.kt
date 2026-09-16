@@ -33,6 +33,16 @@ class VideoEditorState : OverlayHost {
 
     var exportProgress: Float by mutableStateOf(0f)
 
+    /**
+     * Export settings live here rather than inside the export panel so the top
+     * bar can show the target the file will actually be written at. Kept in
+     * the panel, they reset every time it closed and the header had nothing to
+     * read.
+     */
+    var exportShortEdge: Int by mutableStateOf(1080)
+
+    var exportFps: Int by mutableStateOf(30)
+
     var canUndo: Boolean by mutableStateOf(false)
         private set
 
@@ -48,6 +58,44 @@ class VideoEditorState : OverlayHost {
 
     val selectedIndex: Int
         get() = project.clips.indexOfFirst { it.id == selectedClipId }
+
+    /**
+     * The clip the tools act on, and the clip the preview grades with.
+     *
+     * Falling back to whatever sits under the playhead is what makes the
+     * controls work at all. Every edit used to be addressed to
+     * [selectedClipId] and dropped when that was null, so a slider moved, the
+     * preview stayed put, and the app looked like none of its parameters were
+     * connected to anything.
+     */
+    val activeClip: Clip?
+        get() = selectedClip ?: clipUnderPlayhead
+
+    val activeClipId: String? get() = activeClip?.id
+
+    val clipUnderPlayhead: Clip?
+        get() = project.clips.getOrNull(project.clipIndexAt(positionUs))
+            ?: project.clips.firstOrNull()
+
+    /**
+     * Selects [id] and brings the playhead into that clip.
+     *
+     * Editing a clip you cannot see is the same bug as editing nothing: the
+     * change lands and still looks ignored. Moving the playhead keeps the
+     * frame on screen and the clip being edited the same one.
+     */
+    fun selectClip(id: String?) {
+        selectedClipId = id
+        if (id == null) return
+        selectedOverlayId = null
+        val index = project.clips.indexOfFirst { it.id == id }
+        if (index < 0) return
+        val start = project.startOf(index)
+        val end = start + project.clips[index].timelineDurationUs
+        if (positionUs < start || positionUs >= end) {
+            positionUs = start
+        }
+    }
 
     override val overlays: List<Overlay> get() = project.overlays
 
@@ -130,32 +178,34 @@ class VideoEditorState : OverlayHost {
     }
 
     fun removeSelected() {
-        val id = selectedClipId ?: return
+        val id = activeClipId ?: return
         commit { it.removeClip(id) }
         selectedClipId = project.clips.firstOrNull()?.id
+        positionUs = positionUs.coerceIn(0L, project.durationUs)
     }
 
     fun duplicateSelected() {
-        val id = selectedClipId ?: return
+        val id = activeClipId ?: return
         commit { it.duplicateClip(id) }
     }
 
     fun splitAtPlayhead() = commit { it.splitAt(positionUs) }
 
     fun moveSelected(offset: Int) {
-        val from = selectedIndex
+        val id = activeClipId ?: return
+        val from = project.clips.indexOfFirst { it.id == id }
         if (from < 0) return
         val to = (from + offset).coerceIn(0, project.clips.lastIndex)
         commit { it.moveClip(from, to) }
     }
 
     fun updateSelected(transform: (Clip) -> Clip) {
-        val id = selectedClipId ?: return
+        val id = activeClipId ?: return
         edit { it.updateClip(id, transform) }
     }
 
     fun commitSelected(transform: (Clip) -> Clip) {
-        val id = selectedClipId ?: return
+        val id = activeClipId ?: return
         commit { it.updateClip(id, transform) }
     }
 

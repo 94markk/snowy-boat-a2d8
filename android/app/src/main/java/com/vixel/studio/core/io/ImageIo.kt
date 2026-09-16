@@ -65,6 +65,33 @@ object ImageIo {
      * every format we decode here and keeps this layer free of AndroidX so it
      * can be typechecked against a plain android.jar.
      */
+    /**
+     * Upright pixel size of [uri], or null if it is not a decodable image.
+     *
+     * Reads the header only, so it stays cheap enough to run over a whole
+     * multi-select. The EXIF swap matters: [decode] hands back an upright
+     * bitmap, so anything laying this image out has to be told the upright
+     * size too, or a portrait photo gets a landscape slot on the timeline.
+     */
+    fun boundsOf(context: Context, uri: Uri): Pair<Int, Int>? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        try {
+            context.contentResolver.openInputStream(uri)?.use {
+                BitmapFactory.decodeStream(it, null, bounds)
+            } ?: return null
+        } catch (t: Throwable) {
+            return null
+        }
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        val quarterTurn = readOrientation(context, uri).let { it == 90f || it == 270f }
+        return if (quarterTurn) {
+            bounds.outHeight to bounds.outWidth
+        } else {
+            bounds.outWidth to bounds.outHeight
+        }
+    }
+
     @Suppress("DEPRECATION")
     private fun readOrientation(context: Context, uri: Uri): Float = try {
         context.contentResolver.openInputStream(uri)?.use { stream ->

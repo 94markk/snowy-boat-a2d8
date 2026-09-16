@@ -91,7 +91,7 @@ private fun KenBurnsRow(state: VideoEditorState, clip: Clip) {
 
 @Composable
 private fun KeyframeRows(state: VideoEditorState, clip: Clip, localUs: Long) {
-    SectionLabel("Keyframes at playhead · ${formatTime(localUs)} into the clip")
+    SectionLabel("Keyframes at playhead · ${formatTimePrecise(localUs)} into the clip")
 
     KeyframeProperty.entries.forEach { property ->
         val track = Keyframes.track(clip.keyframes, property)
