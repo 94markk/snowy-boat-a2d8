@@ -114,6 +114,7 @@ fun EditorScreen(onClose: () -> Unit) {
                     editor.selectClip(id)
                     editor.openTool(Tool.TRANSITION)
                 },
+                onZoom = editor::setZoom,
                 onAdd = openPicker,
             )
 
@@ -308,12 +309,18 @@ private fun ToolSheet(tool: Tool, state: EditorState, editor: EditorEngine) {
         when (tool) {
             Tool.EDIT -> EditPanel(
                 clip = clip,
+                canMoveEarlier = state.activeIndex > 0,
+                canMoveLater = state.activeIndex in 0 until state.project.clips.lastIndex,
                 onSplit = editor::split,
                 onDuplicate = editor::duplicate,
                 onDelete = editor::delete,
                 onRotate = {
                     editor.beginChange()
                     editor.rotate()
+                },
+                onMove = { step ->
+                    val from = state.activeIndex
+                    editor.move(from, from + step)
                 },
                 onFit = { mode ->
                     editor.beginChange()

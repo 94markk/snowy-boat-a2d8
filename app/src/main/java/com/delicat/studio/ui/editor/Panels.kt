@@ -55,10 +55,13 @@ private val PANEL_HEIGHT = 216.dp
 @Composable
 fun EditPanel(
     clip: Clip,
+    canMoveEarlier: Boolean,
+    canMoveLater: Boolean,
     onSplit: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
     onRotate: () -> Unit,
+    onMove: (Int) -> Unit,
     onFit: (FitMode) -> Unit,
 ) {
     Column(
@@ -74,6 +77,12 @@ fun EditPanel(
             ActionButton(Glyphs.Split, "Split", onSplit)
             ActionButton(Glyphs.Duplicate, "Copy", onDuplicate)
             ActionButton(Glyphs.Rotate, "Rotate", onRotate)
+            ActionButton(
+                Glyphs.Earlier, "Earlier", { onMove(-1) }, enabled = canMoveEarlier,
+            )
+            ActionButton(
+                Glyphs.Later, "Later", { onMove(1) }, enabled = canMoveLater,
+            )
             ActionButton(Glyphs.Delete, "Delete", onDelete, tint = Danger)
         }
 

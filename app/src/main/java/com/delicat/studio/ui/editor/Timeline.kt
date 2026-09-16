@@ -88,6 +88,7 @@ fun Timeline(
     onBeginChange: () -> Unit,
     onTrim: (Long, Long) -> Unit,
     onTransitionTap: (String) -> Unit,
+    onZoom: (Float) -> Unit,
     onAdd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -97,6 +98,7 @@ fun Timeline(
 
     val pxPerUs = state.pixelsPerSecond * density.density / 1_000_000f
     val cellPx = with(density) { CELL_WIDTH.toPx() }
+    val zoomNow by rememberUpdatedState(state.pixelsPerSecond)
 
     // Scrolling drives time, and time drives scrolling. Which direction is
     // live is decided by whether a finger is involved: a previous version
@@ -139,12 +141,35 @@ fun Timeline(
                 .fillMaxSize()
                 .horizontalScroll(scroll)
                 .pointerInput(Unit) {
-                    // Watched on the initial pass, so the gesture still
-                    // reaches the scroll modifier untouched.
+                    // Watched on the initial pass so a single finger still
+                    // reaches the scroll modifier untouched, and consumed on
+                    // that same pass once a second one lands — a pinch and a
+                    // drag are the same events until you count the fingers.
                     awaitPointerEventScope {
+                        var pinchSpan = 0f
+                        var pinchZoom = 0f
                         while (true) {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
-                            touching = event.changes.any { it.pressed }
+                            val down = event.changes.filter { it.pressed }
+
+                            // A pinch is deliberately not counted as touching.
+                            // Leaving the binding running from time to scroll
+                            // is what keeps the playhead still while the scale
+                            // changes underneath it.
+                            touching = down.size == 1
+
+                            if (down.size >= 2) {
+                                val span = (down[0].position - down[1].position).getDistance()
+                                if (pinchSpan <= 0f) {
+                                    pinchSpan = span
+                                    pinchZoom = zoomNow
+                                } else if (span > 0f) {
+                                    onZoom(pinchZoom * (span / pinchSpan))
+                                    down.forEach { it.consume() }
+                                }
+                            } else {
+                                pinchSpan = 0f
+                            }
                         }
                     }
                 },

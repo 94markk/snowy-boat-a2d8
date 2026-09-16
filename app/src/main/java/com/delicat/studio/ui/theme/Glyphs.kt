@@ -11,6 +11,8 @@ import androidx.compose.material.icons.rounded.ContentCut
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -54,4 +56,6 @@ object Glyphs {
     val Transition: ImageVector = Icons.Rounded.Movie
     val Export: ImageVector = Icons.Rounded.Download
     val Photo: ImageVector = Icons.Rounded.Image
+    val Earlier: ImageVector = Icons.Rounded.KeyboardArrowLeft
+    val Later: ImageVector = Icons.Rounded.KeyboardArrowRight
 }
