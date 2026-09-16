@@ -1,0 +1,163 @@
+# Vixel Studio
+
+A native Android video + photo editor. Kotlin, Jetpack Compose, OpenGL ES 3.0,
+MediaCodec. No server, no account, no network calls — everything runs on device.
+
+## Getting the APK
+
+The APK is built by GitHub Actions on every push, because the Android SDK is
+not reachable from the development container (see *Why CI builds the APK*).
+
+1. Open the [Actions tab](../../actions/workflows/android.yml)
+2. Click the most recent green run
+3. Download the **vixel-studio-apk** artifact
+4. Unzip it and install `app-debug.apk` on your phone
+
+`app-debug.apk` is signed with the standard Android debug key, so it installs
+without extra steps. `app-release.apk` is the unminified release build, signed
+with the same key unless you supply your own (below).
+
+### Building locally
+
+Any machine with the Android SDK:
+
+```bash
+cd android
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew installDebug         # straight onto a connected device
+```
+
+Requires JDK 17 and SDK platform 35. Android Studio will fetch both.
+
+### Signing a release build
+
+Set these before `./gradlew assembleRelease`; if `VIXEL_KEYSTORE_PATH` is
+unset the build falls back to the debug key so the APK is still installable.
+
+| Variable | Meaning |
+| --- | --- |
+| `VIXEL_KEYSTORE_PATH` | path to your `.jks` / `.keystore` |
+| `VIXEL_KEYSTORE_PASSWORD` | keystore password |
+| `VIXEL_KEY_ALIAS` | key alias |
+| `VIXEL_KEY_PASSWORD` | key password |
+
+## Orientation
+
+The app is **portrait by default and stays that way**. This is enforced in two
+places, because one is not enough:
+
+- `AndroidManifest.xml` pins `android:screenOrientation="portrait"`
+- `MainActivity.applyOrientation()` re-asserts it in `onResume`, since
+  launchers and split-screen transitions can hand an activity back with a
+  sensor-derived orientation
+
+Rotation is opt-in from **Settings → Allow rotation**, off by default. Nothing
+reads the accelerometer to decide the launch orientation.
+
+Photos are also rotated upright on import from their EXIF orientation tag
+(`ImageIo.decode`). A phone camera writes orientation into metadata rather
+than into the pixels, so a photo decoded naively appears on its side — which
+looks exactly like an editor "stuck in landscape".
+
+## Architecture
+
+```
+core/model/      Adjustments, Filters, Project/Clip/AudioClip, AspectRatio
+core/io/         image decode, EXIF, MediaStore output
+engine/gl/       EGL, shaders, ColorGrader render graph, LUT + curve baking
+engine/photo/    still rendering, background removal, collage
+engine/video/    probe, decode surface, preview renderer, exporter, remuxer
+engine/audio/    PCM decode/resample, mixer, AAC encoder, WAV + M4A export
+ui/              Compose screens
+```
+
+### One colour pipeline, two consumers
+
+`ColorGrader` is the only thing that applies a look, and both the live preview
+and the exporter call it with the same `Adjustments`. The preview samples a
+bitmap or an external (video) texture; the exporter draws onto the encoder's
+input surface. The exported file matches the preview by construction, rather
+than by two implementations agreeing.
+
+The render graph is three passes:
+
+```
+source (2D or external OES) ──[copy]──▶ sharp
+sharp ──[blur H]──[blur V]──▶ soft        (only when a parameter reads it)
+sharp + soft ──[colour stack]──▶ target
+```
+
+### Why every control does something
+
+`Adjustments` is the single source of truth. The UI builds its sliders from
+`AdjustSpec.ALL`, and `ColorGrader.bindAdjustments` binds uniforms from the
+same ids. There is no second path a value can be read from, so a control that
+moves always moves a pixel. Adding a parameter means adding one `AdjustSpec`
+entry and one uniform — the slider appears on its own.
+
+Order of operations follows what a photographer expects: white balance,
+exposure, tonal ranges, contrast, curves, HSL, vibrance/saturation, look,
+then texture and atmosphere last.
+
+## What's in it
+
+**Video** — multi-clip timeline, trim, split at playhead, duplicate, delete,
+reorder, speed (0.25×–4×), volume, mute, fade in/out, per-clip colour grade and
+look, canvas aspect presets, fit/fill/stretch, MP4 export at 720p–2160p and
+24/30/60 fps with progress.
+
+**Photo** — 18 live parameters (exposure, brightness, contrast, highlights,
+shadows, whites, blacks, saturation, vibrance, temperature, tint, hue, sharpen,
+blur, grain, fade, vignette, glow), 8-band HSL, per-channel + master tone
+curves, 24 looks with strength, rotate/flip, gesture-grouped undo/redo,
+per-parameter reset, hold-to-compare, JPEG/PNG/WebP export.
+
+**Background remover** — chroma key for green screen, plus an automatic
+subject cutout. Saves a transparent PNG.
+
+**Collage** — 11 layouts for 1–6 photos, aspect presets, spacing, corner
+radius, white/black background. Photos are centre-cropped, never squashed.
+
+**Converter** — video to M4A (stream copy, no re-encode, bit-exact) or WAV
+(decoded, always works); image conversion between JPEG, PNG and WebP.
+
+### Looks are code, not assets
+
+The 24 filters in `Filters.kt` are plain RGB→RGB functions, baked into 64³
+LUTs at runtime by `LutGenerator`. No `.cube` files ship in the APK, so a look
+is readable and editable in a few lines and costs nothing in download size.
+
+## Known limits
+
+Worth being straight about:
+
+- **Automatic background removal is a matting heuristic, not segmentation.**
+  It learns a background colour model from the image border and a subject
+  model from the centre, then scores each pixel by which it is closer to. That
+  is strong on a clear subject against a reasonably plain background and weak
+  on a busy one. Green screen footage should use the chroma key path, which is
+  exact. A proper on-device segmentation model would need ML Kit.
+- **Speed changes pitch.** Audio is resampled, so a sped-up clip rises in
+  pitch like tape. There is no pitch-preserving time stretch yet.
+- **Export re-encodes every clip**, including ones that were not modified.
+- **R8 is off**, so the release APK is larger than it needs to be. The GL and
+  effect classes need a keep-rule pass before shrinking can be trusted.
+- **No project persistence.** Closing the app loses the timeline. The activity
+  handles configuration changes, so this only bites on process death.
+- **Not built yet:** keyframes, transitions between clips, masks, blend modes,
+  motion tracking, text and stickers, auto captions, voiceover recording,
+  and a standalone audio studio. The `Clip` model already carries fields for
+  transitions and transforms; the UI and render paths are the missing part.
+
+## Why CI builds the APK
+
+The development container this was written in cannot reach `dl.google.com` —
+the egress policy returns 403 for it. That host serves the Android SDK
+platform, `aapt2`/`d8`/`apksigner`, the Android Gradle Plugin, and all of
+AndroidX and Compose. `maven.google.com` only redirects there. So no APK can
+be produced locally, and CI does it instead.
+
+Maven Central *is* reachable, which allowed a partial local check: the whole
+`core/` and `engine/` tree (everything that touches only framework APIs) is
+typechecked against a real `android.jar` from `org.robolectric:android-all`
+before each push. The Compose layer can only be compiled by CI.

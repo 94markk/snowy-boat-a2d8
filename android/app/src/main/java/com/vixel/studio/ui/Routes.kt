@@ -6,7 +6,6 @@ object Routes {
     const val PHOTO_EDITOR = "editor/photo"
     const val COLLAGE = "tools/collage"
     const val CUTOUT = "tools/cutout"
-    const val AUDIO = "tools/audio"
     const val CONVERT = "tools/convert"
     const val SETTINGS = "settings"
 }

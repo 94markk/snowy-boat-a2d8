@@ -23,7 +23,6 @@ import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Movie
-import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.Icon
@@ -57,8 +56,7 @@ private val tools = listOf(
     Tool("Photo editor", "Adjust, filter, retouch", Icons.Rounded.Image, Routes.PHOTO_EDITOR, Violet),
     Tool("Collage", "Layouts and grids", Icons.Rounded.GridView, Routes.COLLAGE, Azure),
     Tool("Cutout", "Remove background", Icons.Rounded.AutoFixHigh, Routes.CUTOUT, Aqua),
-    Tool("Audio", "Extract, trim, voiceover", Icons.Rounded.MusicNote, Routes.AUDIO, Violet),
-    Tool("Convert", "Video to audio, formats", Icons.Rounded.SwapHoriz, Routes.CONVERT, Azure),
+    Tool("Convert", "Video to audio, formats", Icons.Rounded.SwapHoriz, Routes.CONVERT, Violet),
 )
 
 @Composable

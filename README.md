@@ -1,60 +1,25 @@
-# Astro Starter Kit: Blog
+# Vixel Studio
 
-![Astro Template Preview](https://github.com/withastro/astro/assets/2244813/ff10799f-a816-4703-b967-c78997e8323d)
+A native Android video and photo editor — timeline editing, a full colour
+grading stack, background removal, collage and media conversion, all on device.
 
-<!-- dash-content-start -->
+**The app lives in [`android/`](android/). Start with
+[`android/README.md`](android/README.md)** for install instructions, the
+architecture, and an honest list of what is and isn't built yet.
 
-Create a blog with Astro and deploy it on Cloudflare Workers as a [static website](https://developers.cloudflare.com/workers/static-assets/).
+## Get the APK
 
-Features:
+Download the **vixel-studio-apk** artifact from the latest green run in the
+[Actions tab](../../actions/workflows/android.yml), unzip, and install
+`app-debug.apk`.
 
-- ✅ Minimal styling (make it your own!)
-- ✅ 100/100 Lighthouse performance
-- ✅ SEO-friendly with canonical URLs and OpenGraph data
-- ✅ Sitemap support
-- ✅ RSS Feed support
-- ✅ Markdown & MDX support
+CI builds it because the development container is blocked from reaching
+`dl.google.com`, which serves the entire Android toolchain.
 
-<!-- dash-content-end -->
+## Repository layout
 
-## Getting Started
-
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/snowy-boat-a2d8
-```
-
-A live public deployment of this template is available at [https://snowy-boat-a2d8.templates.workers.dev](https://snowy-boat-a2d8.templates.workers.dev)
-
-## 🚀 Project Structure
-
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
-
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
-
-The `src/content/` directory contains "collections" of related Markdown and MDX documents. Use `getCollection()` to retrieve posts from `src/content/blog/`, and type-check your frontmatter using an optional schema. See [Astro's Content Collections docs](https://docs.astro.build/en/guides/content-collections/) to learn more.
-
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-| `npm run deploy`          | Deploy your production site to Cloudflare        |
-
-## 👀 Want to learn more?
-
-Check out [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
-
-## Credit
-
-This theme is based off of the lovely [Bear Blog](https://github.com/HermanMartinus/bearblog/).
+| Path | What it is |
+| --- | --- |
+| `android/` | The Android app: Kotlin, Compose, OpenGL ES, MediaCodec |
+| `.github/workflows/android.yml` | Builds and publishes the APK |
+| `src/`, `astro.config.mjs`, `public/` | Leftovers from the Astro starter this repo was created from. Nothing depends on them and they can be deleted. |
