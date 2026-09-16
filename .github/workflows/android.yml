@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: android-${{ github.ref }}
@@ -89,6 +89,42 @@ jobs:
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+
+      # Artifacts are served from a CDN some networks block, and they expire
+      # after 30 days. The same APK also goes out as a release asset, which is
+      # a stable link that opens from a phone browser without a GitHub login.
+      - name: Publish debug APK as a release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk=$(find android/app/build/outputs/apk/debug -name '*.apk' | head -1)
+          [ -n "$apk" ] || { echo "no debug APK found" >&2; exit 1; }
+          cp "$apk" vixel-studio-debug.apk
+
+          tag=debug-latest
+          notes=$(cat <<EOF
+          Debug build of Vixel Studio, replaced on every build.
+
+          - commit: \`$GITHUB_SHA\`
+          - branch: \`$GITHUB_REF_NAME\`
+          - built: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          Download \`vixel-studio-debug.apk\` onto the phone and open it.
+          Android will ask you to allow installs from whichever browser or file
+          manager you used. It is signed with the standard debug key, so it
+          installs alongside a Play-signed copy rather than over one.
+          EOF
+          )
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" vixel-studio-debug.apk --clobber
+            gh release edit "$tag" --notes "$notes"
+          else
+            gh release create "$tag" vixel-studio-debug.apk \
+              --title "Vixel Studio (debug)" --notes "$notes" --prerelease
+          fi
 
       - name: Assemble release APK
         working-directory: android
