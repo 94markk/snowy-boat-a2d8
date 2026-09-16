@@ -1,0 +1,123 @@
+name: Flutter APK
+
+on:
+  push:
+    branches:
+      - main
+      - "claude/**"
+    paths:
+      - "flutter/**"
+      - ".github/workflows/flutter.yml"
+  pull_request:
+    paths:
+      - "flutter/**"
+      - ".github/workflows/flutter.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: flutter-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Delicat Studio
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    defaults:
+      run:
+        working-directory: flutter
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.4"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      # Analysis and tests come before the build on purpose: they take seconds
+      # and catch the whole class of mistakes an APK build would spend minutes
+      # reaching. The grading tests in particular assert that the preview and
+      # the export describe the same colour, which is not something you want to
+      # discover from a finished file.
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build debug APK
+        timeout-minutes: 25
+        run: flutter build apk --debug
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: delicat-studio-apk-debug
+          path: flutter/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # Same reasoning as the native workflow: artifacts sit behind a CDN some
+      # networks block and expire after thirty days, while a release asset is a
+      # plain URL that opens from a phone browser with no login.
+      - name: Publish debug APK as a release
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-debug.apk
+          [ -f "$apk" ] || { echo "no debug APK at $apk" >&2; exit 1; }
+          cp "$apk" delicat-studio-debug.apk
+
+          tag=flutter-debug-latest
+          notes=$(cat <<EOF
+          Delicat Studio, the Flutter build. Replaced on every build.
+
+          - commit: \`$GITHUB_SHA\`
+          - branch: \`$GITHUB_REF_NAME\`
+          - built: $(date -u '+%Y-%m-%d %H:%M UTC')
+
+          Download \`delicat-studio-debug.apk\` onto the phone and open it.
+          Android will ask you to allow installs from whichever browser or file
+          manager you used. It is signed with the standard debug key, so it
+          installs alongside a Play-signed copy rather than over one.
+          EOF
+          )
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" delicat-studio-debug.apk --clobber
+            gh release edit "$tag" --notes "$notes"
+          else
+            gh release create "$tag" delicat-studio-debug.apk \
+              --title "Delicat Studio (Flutter, debug)" --notes "$notes" --prerelease
+          fi
+
+      - name: Report APK size
+        if: always()
+        run: |
+          echo "### Delicat Studio APK" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| APK | Size |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | ---- |" >> "$GITHUB_STEP_SUMMARY"
+          find build/app/outputs -name '*.apk' -print0 2>/dev/null |
+            while IFS= read -r -d '' f; do
+              echo "| \`$(basename "$f")\` | $(du -h "$f" | cut -f1) |" >> "$GITHUB_STEP_SUMMARY"
+            done
