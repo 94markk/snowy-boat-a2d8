@@ -16,12 +16,16 @@ dependencies:
   # Dart and composited with the overlay filter, so none of the font-dependent
   # filters that only the full build carries are needed.
   ffmpeg_kit_flutter_new_min_gpl: ^2.6.2
+  #
+  # Filmstrip frames come from this too, rather than from video_thumbnail:
+  # that package still calls jcenter() in its build.gradle, which Gradle 9
+  # removed, so it cannot configure at all on a current toolchain. Using
+  # FFmpeg instead drops a dependency and is faster for a filmstrip anyway,
+  # since one invocation yields the whole strip where a per-frame API needs
+  # one call per thumbnail.
 
   # Preview playback.
   video_player: ^2.14.0
-
-  # Filmstrip frames, and the still the grading shader is applied to.
-  video_thumbnail: ^0.5.6
 
   # Import and save.
   image_picker: ^1.2.3
