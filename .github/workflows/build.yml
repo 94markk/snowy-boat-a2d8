@@ -83,19 +83,12 @@ jobs:
         timeout-minutes: 20
         run: gradle --no-daemon --console=plain assembleDebug
 
-      # Uploaded the moment it exists. Nothing optional downstream should be
-      # able to hold the installable artifact hostage.
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: delicat-studio-apk
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-          retention-days: 30
-
-      # Artifacts need a GitHub login and expire; a release asset is a plain
-      # link that opens from a phone browser and is served with the Android
-      # package content type, so it saves as .apk rather than .bin.
+      # The release comes first because it is the one people actually use: a
+      # plain link that opens from a phone browser and is served with the
+      # Android package content type, so it saves as .apk rather than .bin.
+      # The artifact below needs a GitHub login and expires, and it used to sit
+      # ahead of this — which meant a slow upload to a CDN nobody was waiting
+      # on could hold up the only copy that matters.
       - name: Publish as a release
         if: github.event_name != 'pull_request'
         env:
@@ -127,6 +120,16 @@ jobs:
             gh release create "$tag" delicat-studio.apk \
               --title "Delicat Studio" --notes "$notes" --prerelease
           fi
+
+      - name: Upload APK
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: delicat-studio-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Report size
         if: always()
