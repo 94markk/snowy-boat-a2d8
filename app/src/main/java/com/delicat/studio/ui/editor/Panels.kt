@@ -386,7 +386,11 @@ fun TransitionPanel(
 }
 
 @Composable
-fun CanvasPanel(current: CanvasRatio, onPick: (CanvasRatio) -> Unit) {
+fun CanvasPanel(
+    current: CanvasRatio,
+    onPick: (CanvasRatio) -> Unit,
+    onMatchClip: () -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth().height(PANEL_HEIGHT),
         verticalArrangement = Arrangement.Center,
@@ -402,11 +406,17 @@ fun CanvasPanel(current: CanvasRatio, onPick: (CanvasRatio) -> Unit) {
                 RatioTile(ratio, ratio == current) { onPick(ratio) }
             }
         }
+        Row(
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Chip("Match this clip", selected = false, onClick = onMatchClip)
+        }
         Text(
             "Clips keep their own shape; the canvas decides what the file is.",
             style = MaterialTheme.typography.labelSmall,
             color = Palette.Faint,
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 14.dp),
+            modifier = Modifier.padding(horizontal = 18.dp),
         )
     }
 }

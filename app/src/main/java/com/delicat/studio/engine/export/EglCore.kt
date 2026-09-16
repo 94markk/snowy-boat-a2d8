@@ -36,6 +36,7 @@ class EglCore {
             EGL14.EGL_BLUE_SIZE, 8,
             EGL14.EGL_ALPHA_SIZE, 8,
             EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+            EGL14.EGL_SURFACE_TYPE, EGL14.EGL_WINDOW_BIT or EGL14.EGL_PBUFFER_BIT,
             // Without this the driver is free to choose a configuration the
             // encoder cannot consume, and the failure arrives later as a
             // surface that will not create rather than as a bad config here.
@@ -62,6 +63,24 @@ class EglCore {
         )
         check(eglSurface != null && eglSurface != EGL14.EGL_NO_SURFACE) {
             "eglCreateWindowSurface failed"
+        }
+        return eglSurface
+    }
+
+    /**
+     * A surface with no window behind it.
+     *
+     * Export draws into an encoder and the preview draws into a view; a test
+     * needs neither, but it does need somewhere real to draw so the pixels can
+     * be read back and checked against what the maths says they should be.
+     */
+    fun createOffscreenSurface(width: Int, height: Int): EGLSurface {
+        val eglSurface = EGL14.eglCreatePbufferSurface(
+            display, config,
+            intArrayOf(EGL14.EGL_WIDTH, width, EGL14.EGL_HEIGHT, height, EGL14.EGL_NONE), 0,
+        )
+        check(eglSurface != null && eglSurface != EGL14.EGL_NO_SURFACE) {
+            "eglCreatePbufferSurface failed"
         }
         return eglSurface
     }

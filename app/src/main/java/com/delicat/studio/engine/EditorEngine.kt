@@ -114,17 +114,12 @@ class EditorEngine(
                         sourceRotationDegrees = info.rotationDegrees,
                     )
                 }
-                // The canvas takes its shape from the first thing imported.
-                // Defaulting to portrait would drop landscape footage into a
-                // thin band between two black slabs, which reads as a broken
-                // import rather than as a canvas waiting to be changed.
-                val aspect = if (current.project.isEmpty) {
-                    CanvasRatio.closestTo(found[0].width, found[0].height)
-                } else {
-                    current.project.aspect
-                }
+                // The canvas stays portrait unless it is asked to change.
+                // Taking its shape from the first import meant one landscape
+                // clip turned the whole project sideways, on a phone held
+                // upright, with no obvious way back.
                 current.copy(
-                    project = current.project.copy(clips = clips, aspect = aspect),
+                    project = current.project.copy(clips = clips),
                     isImporting = false,
                     selectedClipId = clips.lastOrNull()?.id,
                 )
@@ -466,6 +461,16 @@ class EditorEngine(
         mutate { it.copy(aspect = ratio) }
     }
 
+    /** Reshapes the canvas around the clip being edited, on request. */
+    fun matchCanvasToClip() {
+        val clip = _state.value.activeClip ?: return
+        if (clip.displayWidth <= 0 || clip.displayHeight <= 0) {
+            notify("This clip did not report a size")
+            return
+        }
+        setAspect(CanvasRatio.closestTo(clip.displayWidth, clip.displayHeight))
+    }
+
     fun split() {
         val current = _state.value
         val before = current.project.clips.size
@@ -588,6 +593,16 @@ class EditorEngine(
     private fun notify(message: String) {
         _state.update { it.copy(notice = message) }
     }
+
+    /**
+     * Surfaces a failure from somewhere that has no other way to speak.
+     *
+     * The preview renderer is the case this exists for. It runs on its own
+     * thread with no way to reach the user, and a graphics failure there used
+     * to be swallowed: the picture simply stopped, which is indistinguishable
+     * from every control being broken.
+     */
+    fun report(message: String) = notify(message)
 
     fun clearNotice() {
         _state.update { it.copy(notice = null) }

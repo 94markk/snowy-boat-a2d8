@@ -87,8 +87,17 @@ dependencies {
     implementation(libs.coil.compose)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     testImplementation(platform(libs.androidx.compose.bom))
+
+    // Run on a device or an emulator. These are what finally execute the
+    // shader, the decoder and the screen, none of which a JVM test can reach.
+    androidTestImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 }

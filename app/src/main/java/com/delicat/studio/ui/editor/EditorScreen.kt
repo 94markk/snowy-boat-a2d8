@@ -93,7 +93,7 @@ fun EditorScreen(onClose: () -> Unit) {
                 PreviewPane(
                     scene = scene,
                     onSurface = editor::attachSurface,
-                    onError = { /* reported through the engine's notices */ },
+                    onError = editor::report,
                     modifier = Modifier.fillMaxSize(),
                 )
                 if (state.isEmpty) {
@@ -362,7 +362,11 @@ private fun ToolSheet(tool: Tool, state: EditorState, editor: EditorEngine) {
                 onPick = editor::setTransition,
             )
 
-            Tool.CANVAS -> CanvasPanel(state.project.aspect, editor::setAspect)
+            Tool.CANVAS -> CanvasPanel(
+                current = state.project.aspect,
+                onPick = editor::setAspect,
+                onMatchClip = editor::matchCanvasToClip,
+            )
         }
     }
 }

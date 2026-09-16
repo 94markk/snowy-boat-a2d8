@@ -140,3 +140,70 @@ jobs:
             while IFS= read -r -d '' f; do
               echo "- \`$(basename "$f")\` — $(du -h "$f" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
             done
+
+  # A separate job on purpose. It is the slowest thing here and the only one
+  # that needs virtualisation, and the APK should never wait on it.
+  device:
+    name: Run on a device
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Ensure Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          SDKMGR="$(find "$SDK/cmdline-tools" -name sdkmanager -type f | head -1)"
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+          "$SDKMGR" --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+          cache-read-only: false
+
+      # The emulator will not start without access to the host's virtualisation
+      # device, and the runner image does not grant it by default.
+      - name: Allow the emulator to use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: default
+          arch: x86_64
+          # swiftshader_indirect gives a real GLES 2 implementation without a
+          # display, which is what the grading tests read their pixels back
+          # from. The default host GPU mode has no display to draw into here.
+          emulator-options: >-
+            -no-window -no-snapshot -noaudio -no-boot-anim
+            -gpu swiftshader_indirect -camera-back none -camera-front none
+          disable-animations: true
+          script: gradle --no-daemon --console=plain connectedDebugAndroidTest
+
+      - name: Show what failed
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for report in app/build/outputs/androidTest-results/connected/**/*.xml; do
+            grep -q '<failure\|<error' "$report" || continue
+            echo "--- $(basename "$report")"
+            sed -n '/<\(failure\|error\)/,/<\/\(failure\|error\)>/p' "$report" | head -60
+          done
