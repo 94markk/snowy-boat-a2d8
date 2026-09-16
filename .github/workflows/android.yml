@@ -57,8 +57,14 @@ jobs:
           echo "Installed platforms:"; ls "$SDK/platforms"
           echo "Installed build-tools:"; ls "$SDK/build-tools"
 
+      # setup-gradle keeps the cache read-only on non-default branches by
+      # default, so every run here re-dexed the whole of Compose and media3
+      # from scratch. Letting this branch write its cache is what makes the
+      # second and later runs quick.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
 
       # Split and time-boxed on purpose. A step that hangs past its box is
       # killed, which is the only way the job ends and its logs become
