@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -773,7 +774,16 @@ private fun FilterPanel(state: VideoEditorState) {
 
 @Composable
 private fun CanvasPanel(state: VideoEditorState) {
-    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    // The sheet is height-capped, so a panel that cannot scroll simply loses
+    // whatever sits past the cap — on a short screen that was the Export
+    // button itself, and a button you cannot reach looks like one that does
+    // nothing.
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         OutlinedTextField(
             value = state.project.name,
             onValueChange = { state.rename(it) },
@@ -814,7 +824,16 @@ private fun ExportPanel(state: VideoEditorState, onMessage: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    // The sheet is height-capped, so a panel that cannot scroll simply loses
+    // whatever sits past the cap — on a short screen that was the Export
+    // button itself, and a button you cannot reach looks like one that does
+    // nothing.
+    Column(
+        modifier = Modifier
+            .verticalScroll(rememberScrollState())
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         Text("Resolution", style = MaterialTheme.typography.labelMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(720, 1080, 1440, 2160).forEach { value ->
