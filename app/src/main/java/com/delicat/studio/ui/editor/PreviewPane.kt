@@ -76,6 +76,10 @@ fun PreviewPane(
             factory = { context ->
                 GLSurfaceView(context).apply {
                     setEGLContextClientVersion(2)
+                    // Eight bits a channel and no alpha. The default chooser
+                    // settles for 565, which puts visible steps through every
+                    // sky and gradient the user is here to grade.
+                    setEGLConfigChooser(8, 8, 8, 0, 0, 0)
                     setRenderer(renderer)
                     // Drawing on demand rather than sixty times a second. A
                     // paused editor showing a still frame should cost nothing,
