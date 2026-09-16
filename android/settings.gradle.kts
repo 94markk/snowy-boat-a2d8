@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Vixel Studio"
+rootProject.name = "Delicat Studio"
 include(":app")

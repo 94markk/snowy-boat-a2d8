@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="vixel_background">#FF0B0B0F</color>
-    <color name="vixel_surface">#FF15151C</color>
+    <color name="delicat_background">#FF000000</color>
+    <color name="delicat_surface">#FF0A0A0C</color>
     <color name="ic_launcher_background">#FF101018</color>
 </resources>

@@ -3,7 +3,7 @@
     <!-- Compose owns all in-app styling; this theme only has to hand the window
          a dark background and let content draw edge to edge. -->
     <style name="Theme.Vixel" parent="android:Theme.Material.NoActionBar">
-        <item name="android:windowBackground">@color/vixel_background</item>
+        <item name="android:windowBackground">@color/delicat_background</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
