@@ -44,9 +44,14 @@ jobs:
           echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
 
+      # Gradle is pinned here rather than through a committed wrapper jar. The
+      # runner ships Gradle 9, which AGP 8.7.3 refuses to run under, so the
+      # version has to be stated somewhere either way and this keeps a binary
+      # out of the repository.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
+          gradle-version: "8.11.1"
           # Without this the cache is read-only on any branch that is not the
           # default one, so every run re-dexes the whole of Compose from cold.
           cache-read-only: false
@@ -55,15 +60,15 @@ jobs:
       # slow packaging step rather than after it.
       - name: Compile
         timeout-minutes: 15
-        run: ./gradlew --no-daemon --console=plain compileDebugKotlin
+        run: gradle --no-daemon --console=plain compileDebugKotlin
 
       - name: Test
         timeout-minutes: 15
-        run: ./gradlew --no-daemon --console=plain testDebugUnitTest
+        run: gradle --no-daemon --console=plain testDebugUnitTest
 
       - name: Assemble debug APK
         timeout-minutes: 20
-        run: ./gradlew --no-daemon --console=plain assembleDebug
+        run: gradle --no-daemon --console=plain assembleDebug
 
       # Uploaded the moment it exists. Nothing optional downstream should be
       # able to hold the installable artifact hostage.
