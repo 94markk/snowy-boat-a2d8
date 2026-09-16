@@ -59,16 +59,14 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: android
 
       - name: Assemble debug APK
         working-directory: android
-        run: ./gradlew --no-daemon --stacktrace assembleDebug
+        run: ./gradlew --no-daemon assembleDebug
 
       - name: Assemble release APK
         working-directory: android
-        run: ./gradlew --no-daemon --stacktrace assembleRelease
+        run: ./gradlew --no-daemon assembleRelease
 
       - name: Report APK sizes
         working-directory: android
