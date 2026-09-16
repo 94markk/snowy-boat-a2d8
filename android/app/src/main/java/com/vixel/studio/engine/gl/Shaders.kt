@@ -109,6 +109,14 @@ uniform float uLutStrength;
 uniform float uOpacity;
 uniform float uSeed;
 
+// Mask. uMaskShape follows MaskShape.ordinal; 0 disables it.
+uniform int   uMaskShape;
+uniform vec2  uMaskCenter;
+uniform vec2  uMaskSize;
+uniform float uMaskRotation;
+uniform float uMaskFeather;
+uniform float uMaskInvert;
+
 uniform float uHslHue[8];
 uniform float uHslSat[8];
 uniform float uHslLum[8];
@@ -199,6 +207,42 @@ vec3 applyHslBands(vec3 c) {
     hsl.y = clamp(hsl.y * (1.0 + ds), 0.0, 1.0);
     hsl.z = clamp(hsl.z + dl * 0.25, 0.0, 1.0);
     return hsl2rgb(hsl);
+}
+
+/**
+ * Coverage at this pixel: 1 keeps the footage, 0 reveals the canvas behind.
+ * Feather is applied as a smoothstep band around the shape's own edge so the
+ * transition width stays consistent whatever the shape's size.
+ */
+float maskCoverage(vec2 uv) {
+    if (uMaskShape == 0) return 1.0;
+
+    vec2 p = uv - uMaskCenter;
+    float a = radians(uMaskRotation);
+    p = vec2(p.x * cos(a) + p.y * sin(a), -p.x * sin(a) + p.y * cos(a));
+
+    float feather = max(uMaskFeather, 0.001);
+    float coverage = 1.0;
+
+    if (uMaskShape == 1) {
+        // Rectangle: distance outside the box on the worst axis.
+        vec2 d = abs(p) - uMaskSize;
+        float outside = max(d.x, d.y);
+        coverage = 1.0 - smoothstep(-feather, feather, outside);
+    } else if (uMaskShape == 2) {
+        // Ellipse: normalised radius, so feather reads evenly all the way round.
+        vec2 n = p / max(uMaskSize, vec2(0.001));
+        coverage = 1.0 - smoothstep(1.0 - feather, 1.0 + feather, length(n));
+    } else if (uMaskShape == 3) {
+        // Linear: a soft horizontal band edge, rotated by uMaskRotation.
+        coverage = 1.0 - smoothstep(-feather, feather, p.y - uMaskSize.y);
+    } else if (uMaskShape == 4) {
+        float r = length(p / max(uMaskSize, vec2(0.001)));
+        coverage = 1.0 - smoothstep(0.0, 1.0, r);
+    }
+
+    if (uMaskInvert > 0.5) coverage = 1.0 - coverage;
+    return clamp(coverage, 0.0, 1.0);
 }
 
 float hash(vec2 p) {
@@ -311,7 +355,11 @@ void main() {
         c += n * uGrain * 0.22 * mix(0.4, 1.0, midtone);
     }
 
-    fragColor = vec4(clamp(c, 0.0, 1.0), src.a * uOpacity);
+    float coverage = maskCoverage(vTex);
+    // Premultiplied out: colour and alpha fall together, so a masked edge
+    // blends against the canvas instead of fringing.
+    float alpha = src.a * uOpacity * coverage;
+    fragColor = vec4(clamp(c, 0.0, 1.0) * alpha, alpha);
 }
 """
 }

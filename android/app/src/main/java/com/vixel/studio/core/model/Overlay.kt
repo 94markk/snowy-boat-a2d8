@@ -40,6 +40,8 @@ sealed interface Overlay {
     val animationIn: OverlayAnimation
     val animationOut: OverlayAnimation
     val animationDurationUs: Long
+    val keyframes: List<KeyframeTrack>
+    val blend: BlendMode
 
     val durationUs: Long get() = max(0L, endUs - startUs)
 
@@ -60,6 +62,27 @@ sealed interface Overlay {
         if (remaining >= animationDurationUs) return 1f
         return (remaining.toFloat() / animationDurationUs).coerceIn(0f, 1f)
     }
+
+    /**
+     * Transform at [timeUs], with any keyframed property replacing its static
+     * value. Keys are timed from the overlay's own start, so retiming it
+     * carries the animation along.
+     */
+    fun transformAt(timeUs: Long): OverlayTransform {
+        if (keyframes.isEmpty()) return transform
+        val local = timeUs - startUs
+        return transform.copy(
+            x = Keyframes.valueAt(keyframes, KeyframeProperty.OFFSET_X, local, transform.x),
+            y = Keyframes.valueAt(keyframes, KeyframeProperty.OFFSET_Y, local, transform.y),
+            scale = Keyframes.valueAt(keyframes, KeyframeProperty.SCALE, local, transform.scale),
+            rotationDegrees = Keyframes.valueAt(
+                keyframes, KeyframeProperty.ROTATION, local, transform.rotationDegrees,
+            ),
+            opacity = Keyframes.valueAt(keyframes, KeyframeProperty.OPACITY, local, transform.opacity),
+        )
+    }
+
+    fun withKeyframes(tracks: List<KeyframeTrack>): Overlay
 
     fun withTiming(startUs: Long, endUs: Long): Overlay
     fun withTransform(transform: OverlayTransform): Overlay
@@ -114,9 +137,13 @@ data class TextOverlay(
     override val animationIn: OverlayAnimation = OverlayAnimation.FADE,
     override val animationOut: OverlayAnimation = OverlayAnimation.FADE,
     override val animationDurationUs: Long = 400_000L,
+    override val keyframes: List<KeyframeTrack> = emptyList(),
+    override val blend: BlendMode = BlendMode.NORMAL,
 ) : Overlay {
     override fun withTiming(startUs: Long, endUs: Long): Overlay =
         copy(startUs = startUs, endUs = endUs)
+
+    override fun withKeyframes(tracks: List<KeyframeTrack>): Overlay = copy(keyframes = tracks)
 
     override fun withTransform(transform: OverlayTransform): Overlay =
         copy(transform = transform)
@@ -157,9 +184,13 @@ data class StickerOverlay(
     override val animationIn: OverlayAnimation = OverlayAnimation.POP,
     override val animationOut: OverlayAnimation = OverlayAnimation.FADE,
     override val animationDurationUs: Long = 350_000L,
+    override val keyframes: List<KeyframeTrack> = emptyList(),
+    override val blend: BlendMode = BlendMode.NORMAL,
 ) : Overlay {
     override fun withTiming(startUs: Long, endUs: Long): Overlay =
         copy(startUs = startUs, endUs = endUs)
+
+    override fun withKeyframes(tracks: List<KeyframeTrack>): Overlay = copy(keyframes = tracks)
 
     override fun withTransform(transform: OverlayTransform): Overlay =
         copy(transform = transform)

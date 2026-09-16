@@ -81,6 +81,7 @@ private enum class VideoTab(val label: String) {
     CLIP("Clip"),
     ADJUST("Adjust"),
     FILTERS("Filters"),
+    MOTION("Motion"),
     TEXT("Text"),
     STICKERS("Stickers"),
     AUDIO("Audio"),
@@ -235,6 +236,7 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
                         overlays = state.project.overlays,
                         timelineUs = state.positionUs,
                         opacity = previewOpacity(state),
+                        motion = previewMotion(state),
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -283,6 +285,7 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
                         VideoTab.CLIP -> ClipPanel(state)
                         VideoTab.ADJUST -> AdjustPanel(state, group) { group = it }
                         VideoTab.FILTERS -> FilterPanel(state)
+                        VideoTab.MOTION -> MotionPanel(state)
                         VideoTab.TEXT -> TextPanel(state)
                         VideoTab.STICKERS -> StickerPanel(state)
                         VideoTab.AUDIO -> AudioPanel(state) { message ->
@@ -306,6 +309,25 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
 private fun previewOpacity(state: VideoEditorState): Float {
     val composition = state.project.compositionAt(state.positionUs)
     return if (composition.isTransitioning) composition.progress.coerceIn(0.05f, 1f) else 1f
+}
+
+/**
+ * Keyframed transform and mask for the clip under the playhead, so the preview
+ * shows the animation rather than only the static transform.
+ */
+private fun previewMotion(state: VideoEditorState): PreviewMotion {
+    val index = state.project.clipIndexAt(state.positionUs)
+    val clip = state.project.clips.getOrNull(index) ?: return PreviewMotion()
+    val localUs = (state.positionUs - state.project.startOf(index)).coerceAtLeast(0L)
+    val transform = clip.transformAt(localUs)
+    return PreviewMotion(
+        scale = transform.scale,
+        offsetX = transform.offsetX,
+        offsetY = transform.offsetY,
+        rotationDegrees = transform.rotationDegrees,
+        opacity = clip.keyedOpacityAt(localUs),
+        mask = clip.mask,
+    )
 }
 
 private fun Clip.toMediaItem(): MediaItem {

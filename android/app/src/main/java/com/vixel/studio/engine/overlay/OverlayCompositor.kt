@@ -3,6 +3,7 @@ package com.vixel.studio.engine.overlay
 import android.graphics.Bitmap
 import android.opengl.GLES30
 import android.opengl.Matrix
+import com.vixel.studio.core.model.BlendMode
 import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.core.model.OverlayAnimation
 import com.vixel.studio.engine.gl.GlUtils
@@ -61,18 +62,48 @@ class OverlayCompositor {
 
         GLES30.glViewport(canvasX, canvasY, canvasWidth, canvasHeight)
         GLES30.glEnable(GLES30.GL_BLEND)
-        // Android bitmaps are premultiplied, so the source factor is ONE.
-        GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)
         GLES30.glUseProgram(program)
 
         // Pixel space with y up, matching the framebuffer's own origin.
         Matrix.orthoM(projection, 0, 0f, canvasWidth.toFloat(), 0f, canvasHeight.toFloat(), -1f, 1f)
 
         for (overlay in active) {
+            applyBlend(overlay.blend)
             drawOne(overlay, timeUs, canvasWidth, canvasHeight)
         }
 
+        // Leave the pipeline as we found it for whatever draws next.
+        GLES30.glBlendEquation(GLES30.GL_FUNC_ADD)
         GLES30.glDisable(GLES30.GL_BLEND)
+    }
+
+    /**
+     * Sets the fixed-function state for a blend mode.
+     *
+     * Bitmaps arrive premultiplied, so the source factor is ONE for the
+     * ordinary case. Darken and lighten use a min/max equation rather than a
+     * weighted sum, which is why the equation is reset each time.
+     */
+    private fun applyBlend(mode: BlendMode) {
+        GLES30.glBlendEquation(GLES30.GL_FUNC_ADD)
+        when (mode) {
+            BlendMode.NORMAL ->
+                GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+            BlendMode.MULTIPLY ->
+                GLES30.glBlendFunc(GLES30.GL_DST_COLOR, GLES30.GL_ONE_MINUS_SRC_ALPHA)
+            BlendMode.SCREEN ->
+                GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_COLOR)
+            BlendMode.ADD ->
+                GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE)
+            BlendMode.DARKEN -> {
+                GLES30.glBlendEquation(GLES30.GL_MIN)
+                GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE)
+            }
+            BlendMode.LIGHTEN -> {
+                GLES30.glBlendEquation(GLES30.GL_MAX)
+                GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE)
+            }
+        }
     }
 
     private fun drawOne(overlay: Overlay, timeUs: Long, canvasWidth: Int, canvasHeight: Int) {
@@ -81,23 +112,27 @@ class OverlayCompositor {
         val enter = animationFor(overlay.animationIn, overlay.enterProgress(timeUs))
         val exit = animationFor(overlay.animationOut, overlay.exitProgress(timeUs))
 
-        val opacity = (overlay.transform.opacity * enter.alpha * exit.alpha).coerceIn(0f, 1f)
+        // Keyframes override the static transform; the entry and exit
+        // animations then multiply on top of whatever they produce.
+        val animated = overlay.transformAt(timeUs)
+
+        val opacity = (animated.opacity * enter.alpha * exit.alpha).coerceIn(0f, 1f)
         if (opacity <= 0.001f) return
 
-        val scale = overlay.transform.scale * enter.scale * exit.scale
+        val scale = animated.scale * enter.scale * exit.scale
         val halfWidth = cached.width * scale / 2f
         val halfHeight = cached.height * scale / 2f
         if (halfWidth <= 0f || halfHeight <= 0f) return
 
         // transform.y is measured from the top; the projection is y-up.
-        val centreX = (overlay.transform.x + enter.dx + exit.dx) * canvasWidth
-        val centreY = (1f - (overlay.transform.y + enter.dy + exit.dy)) * canvasHeight
+        val centreX = (animated.x + enter.dx + exit.dx) * canvasWidth
+        val centreY = (1f - (animated.y + enter.dy + exit.dy)) * canvasHeight
 
         Matrix.setIdentityM(model, 0)
         Matrix.translateM(model, 0, centreX, centreY, 0f)
         // Positive rotation reads as clockwise on screen, which is what the
         // control in the editor implies.
-        Matrix.rotateM(model, 0, -overlay.transform.rotationDegrees, 0f, 0f, 1f)
+        Matrix.rotateM(model, 0, -animated.rotationDegrees, 0f, 0f, 1f)
         Matrix.scaleM(model, 0, halfWidth, halfHeight, 1f)
 
         Matrix.multiplyMM(mvp, 0, projection, 0, model, 0)

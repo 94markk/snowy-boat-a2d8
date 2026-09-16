@@ -168,6 +168,7 @@ fun StickerPanel(state: OverlayHost) {
         }
 
         item { PlacementControls(selected, state) }
+        item { OverlayMotionControls(selected, state) }
         item { TimingControls(selected, state) }
     }
 }

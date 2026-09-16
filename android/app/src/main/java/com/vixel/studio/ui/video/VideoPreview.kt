@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.FitMode
+import com.vixel.studio.core.model.Mask
 import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.video.VideoPreviewRenderer
 
@@ -41,6 +42,7 @@ fun VideoPreview(
     overlays: List<Overlay>,
     timelineUs: Long,
     opacity: Float = 1f,
+    motion: PreviewMotion = PreviewMotion(),
     modifier: Modifier = Modifier,
 ) {
     val holder = remember { PreviewHolder() }
@@ -89,7 +91,12 @@ fun VideoPreview(
             renderer.sourceHeight = clip?.displayHeight ?: 0
             renderer.overlays = overlays
             renderer.timelineUs = timelineUs
-            renderer.opacity = opacity
+            renderer.opacity = opacity * motion.opacity
+            renderer.scale = motion.scale
+            renderer.offsetX = motion.offsetX
+            renderer.offsetY = motion.offsetY
+            renderer.rotationDegrees = motion.rotationDegrees
+            renderer.mask = motion.mask
             view.requestRender()
         },
         onRelease = { view ->
@@ -100,6 +107,16 @@ fun VideoPreview(
         },
     )
 }
+
+/** Animated state for the clip under the playhead. */
+data class PreviewMotion(
+    val scale: Float = 1f,
+    val offsetX: Float = 0f,
+    val offsetY: Float = 0f,
+    val rotationDegrees: Float = 0f,
+    val opacity: Float = 1f,
+    val mask: Mask = Mask(),
+)
 
 private class PreviewHolder {
     var view: GLSurfaceView? = null

@@ -16,12 +16,18 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import com.vixel.studio.core.model.BlendMode
+import com.vixel.studio.core.model.KeyframeProperty
+import com.vixel.studio.core.model.Keyframes
 import com.vixel.studio.core.model.Overlay
+import com.vixel.studio.core.model.StickerOverlay
+import com.vixel.studio.core.model.TextOverlay
 import com.vixel.studio.core.model.OverlayAnimation
 import com.vixel.studio.ui.common.Chip
 import com.vixel.studio.ui.common.OverlayHost
@@ -148,6 +154,88 @@ fun PlacementControls(overlay: Overlay, state: OverlayHost) {
         },
         onFinished = { state.endGesture() },
     )
+}
+
+/**
+ * Blend mode and keyframes.
+ *
+ * Only the modes expressible with fixed-function GL blending are listed; the
+ * rest would each cost a full-canvas read-back pass.
+ */
+@Composable
+fun OverlayMotionControls(overlay: Overlay, state: OverlayHost) {
+    SectionLabel("Blend")
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        BlendMode.entries.forEach { mode ->
+            Chip(
+                label = mode.label,
+                selected = mode == overlay.blend,
+                onClick = {
+                    state.commitSelectedOverlay { current ->
+                        when (current) {
+                            is TextOverlay -> current.copy(blend = mode)
+                            is StickerOverlay -> current.copy(blend = mode)
+                        }
+                    }
+                },
+            )
+        }
+    }
+
+    if (!state.supportsTiming) return
+
+    SectionLabel("Motion keyframes")
+    Text(
+        "Keys are placed at the playhead, timed from where this overlay starts.",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(horizontal = 16.dp),
+    )
+
+    val localUs = (state.playheadUs - overlay.startUs).coerceAtLeast(0L)
+    val animated = overlay.transformAt(state.playheadUs)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        KeyframeProperty.entries.forEach { property ->
+            val existing = Keyframes.track(overlay.keyframes, property)
+            Chip(
+                label = existing?.let { "${property.label} (${it.keys.size})" } ?: property.label,
+                selected = existing != null,
+                onClick = {
+                    val value = when (property) {
+                        KeyframeProperty.SCALE -> animated.scale
+                        KeyframeProperty.OFFSET_X -> animated.x
+                        KeyframeProperty.OFFSET_Y -> animated.y
+                        KeyframeProperty.ROTATION -> animated.rotationDegrees
+                        KeyframeProperty.OPACITY -> animated.opacity
+                    }
+                    state.commitSelectedOverlay {
+                        it.withKeyframes(Keyframes.setKey(it.keyframes, property, localUs, value))
+                    }
+                },
+            )
+        }
+    }
+
+    if (Keyframes.hasAny(overlay.keyframes)) {
+        Row(modifier = Modifier.padding(horizontal = 12.dp)) {
+            TextButton(
+                onClick = { state.commitSelectedOverlay { it.withKeyframes(emptyList()) } },
+            ) { Text("Clear keyframes") }
+        }
+    }
 }
 
 /** Start/end on the timeline, plus entry and exit animations. */

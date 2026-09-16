@@ -6,6 +6,7 @@ import android.opengl.Matrix
 import android.view.Surface
 import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.FitMode
+import com.vixel.studio.core.model.Mask
 import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.gl.ColorGrader
 import com.vixel.studio.engine.overlay.OverlayCompositor
@@ -52,6 +53,22 @@ class VideoPreviewRenderer(
 
     @Volatile
     var opacity: Float = 1f
+
+    /** Extra scale/offset/rotation from the clip's keyframes at the playhead. */
+    @Volatile
+    var scale: Float = 1f
+
+    @Volatile
+    var offsetX: Float = 0f
+
+    @Volatile
+    var offsetY: Float = 0f
+
+    @Volatile
+    var rotationDegrees: Float = 0f
+
+    @Volatile
+    var mask: Mask = Mask()
 
     /** Overlays to draw above the frame, and where the playhead is. */
     @Volatile
@@ -154,8 +171,12 @@ class VideoPreviewRenderer(
             FitMode.STRETCH -> Unit
         }
 
-        val x = canvasX + (canvasW - drawW) / 2
-        val y = canvasY + (canvasH - drawH) / 2
+        val scaled = scale.coerceIn(0.1f, 8f)
+        drawW = (drawW * scaled).roundToInt().coerceAtLeast(1)
+        drawH = (drawH * scaled).roundToInt().coerceAtLeast(1)
+
+        val x = canvasX + (canvasW - drawW) / 2 + (offsetX * canvasW).roundToInt()
+        val y = canvasY + (canvasH - drawH) / 2 - (offsetY * canvasH).roundToInt()
 
         // Keep the clip inside the canvas letterbox.
         GLES30.glEnable(GLES30.GL_SCISSOR_TEST)
@@ -171,6 +192,7 @@ class VideoPreviewRenderer(
             adjustments = adjustments,
             targetX = x,
             targetY = y,
+            mask = mask,
             opacity = opacity,
         )
         GLES30.glDisable(GLES30.GL_SCISSOR_TEST)

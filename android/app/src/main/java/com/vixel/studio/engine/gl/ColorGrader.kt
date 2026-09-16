@@ -6,6 +6,7 @@ import android.opengl.GLES20
 import android.opengl.GLES30
 import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.Filters
+import com.vixel.studio.core.model.Mask
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -64,6 +65,7 @@ class ColorGrader {
         adjustments: Adjustments,
         targetX: Int = 0,
         targetY: Int = 0,
+        mask: Mask = Mask(),
         opacity: Float = 1f,
         seed: Float = 0f,
     ) {
@@ -124,6 +126,11 @@ class ColorGrader {
 
         // Pass 3 - the colour stack, straight into the caller's target.
         GLES20.glViewport(targetX, targetY, targetWidth, targetHeight)
+        // The colour pass emits premultiplied alpha so a mask or a fade can
+        // reveal whatever was already in the target. Without blending the
+        // draw would replace the cleared background with premultiplied black.
+        GLES30.glEnable(GLES30.GL_BLEND)
+        GLES30.glBlendFunc(GLES30.GL_ONE, GLES30.GL_ONE_MINUS_SRC_ALPHA)
         GLES30.glUseProgram(colorProgram)
         bindTexture(colorProgram, "uTexture", 0, sharp.textureId, false)
         bindTexture(colorProgram, "uBlurred", 1, if (needsBlur) softTexture else sharp.textureId, false)
@@ -137,7 +144,9 @@ class ColorGrader {
             opacity = opacity,
             seed = seed,
         )
+        bindMask(colorProgram, mask)
         drawQuad(colorProgram)
+        GLES30.glDisable(GLES30.GL_BLEND)
     }
 
     private fun bindAdjustments(
@@ -229,6 +238,32 @@ class ColorGrader {
         }
         f("uHasLut", if (hasLut && lutTexture != 0) 1f else 0f)
         f("uLutStrength", adjustments.filterStrength)
+    }
+
+    private fun bindMask(program: Int, mask: Mask) {
+        GLES30.glUniform1i(
+            GLES30.glGetUniformLocation(program, "uMaskShape"),
+            if (mask.isActive) mask.shape.ordinal else 0,
+        )
+        if (!mask.isActive) return
+        GLES30.glUniform2f(
+            GLES30.glGetUniformLocation(program, "uMaskCenter"),
+            mask.centerX,
+            // Shader uv has its origin at the bottom; the model measures y
+            // from the top, as the controls do.
+            1f - mask.centerY,
+        )
+        GLES30.glUniform2f(
+            GLES30.glGetUniformLocation(program, "uMaskSize"),
+            mask.width.coerceAtLeast(0.001f),
+            mask.height.coerceAtLeast(0.001f),
+        )
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(program, "uMaskRotation"), mask.rotationDegrees)
+        GLES30.glUniform1f(GLES30.glGetUniformLocation(program, "uMaskFeather"), mask.feather)
+        GLES30.glUniform1f(
+            GLES30.glGetUniformLocation(program, "uMaskInvert"),
+            if (mask.invert) 1f else 0f,
+        )
     }
 
     private fun bindTexture(program: Int, name: String, unit: Int, texture: Int, external: Boolean) {

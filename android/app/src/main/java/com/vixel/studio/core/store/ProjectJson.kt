@@ -3,6 +3,13 @@ package com.vixel.studio.core.store
 import com.vixel.studio.core.model.AdjustSpec
 import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.AspectRatio
+import com.vixel.studio.core.model.BlendMode
+import com.vixel.studio.core.model.Easing
+import com.vixel.studio.core.model.Keyframe
+import com.vixel.studio.core.model.KeyframeProperty
+import com.vixel.studio.core.model.KeyframeTrack
+import com.vixel.studio.core.model.Mask
+import com.vixel.studio.core.model.MaskShape
 import com.vixel.studio.core.model.AudioClip
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.CurvePoint
@@ -68,6 +75,9 @@ object ProjectJson {
         put("sourceWidth", clip.sourceWidth)
         put("sourceHeight", clip.sourceHeight)
         put("sourceRotationDegrees", clip.sourceRotationDegrees)
+        put("keyframes", keyframesToJson(clip.keyframes))
+        put("mask", maskToJson(clip.mask))
+        put("blend", clip.blend.name)
         put("adjustments", adjustmentsToJson(clip.adjustments))
         put("transform", transformToJson(clip.transform))
         put(
@@ -77,6 +87,41 @@ object ProjectJson {
                 put("durationUs", clip.transition.durationUs)
             },
         )
+    }
+
+    private fun keyframesToJson(tracks: List<KeyframeTrack>): JSONArray = JSONArray().apply {
+        tracks.forEach { track ->
+            put(
+                JSONObject().apply {
+                    put("property", track.property.name)
+                    put(
+                        "keys",
+                        JSONArray().apply {
+                            track.keys.forEach { key ->
+                                put(
+                                    JSONObject().apply {
+                                        put("timeUs", key.timeUs)
+                                        put("value", key.value.toDouble())
+                                        put("easing", key.easing.name)
+                                    },
+                                )
+                            }
+                        },
+                    )
+                },
+            )
+        }
+    }
+
+    private fun maskToJson(mask: Mask): JSONObject = JSONObject().apply {
+        put("shape", mask.shape.name)
+        put("centerX", mask.centerX.toDouble())
+        put("centerY", mask.centerY.toDouble())
+        put("width", mask.width.toDouble())
+        put("height", mask.height.toDouble())
+        put("rotationDegrees", mask.rotationDegrees.toDouble())
+        put("feather", mask.feather.toDouble())
+        put("invert", mask.invert)
     }
 
     private fun adjustmentsToJson(a: Adjustments): JSONObject = JSONObject().apply {
@@ -135,6 +180,8 @@ object ProjectJson {
                 put("opacity", o.transform.opacity.toDouble())
             },
         )
+        put("keyframes", keyframesToJson(o.keyframes))
+        put("blend", o.blend.name)
         when (o) {
             is TextOverlay -> {
                 put("kind", "text")
@@ -218,6 +265,9 @@ object ProjectJson {
             muted = json.optBoolean("muted", false),
             reversed = json.optBoolean("reversed", false),
             adjustments = adjustmentsFromJson(json.optJSONObject("adjustments")),
+            keyframes = keyframesFromJson(json.optJSONArray("keyframes")),
+            mask = maskFromJson(json.optJSONObject("mask")),
+            blend = enumOr(json.optString("blend"), BlendMode.NORMAL),
             transform = transformFromJson(json.optJSONObject("transform")),
             fadeInUs = json.optLong("fadeInUs", 0L),
             fadeOutUs = json.optLong("fadeOutUs", 0L),
@@ -230,6 +280,40 @@ object ProjectJson {
             sourceWidth = json.optInt("sourceWidth", 0),
             sourceHeight = json.optInt("sourceHeight", 0),
             sourceRotationDegrees = json.optInt("sourceRotationDegrees", 0),
+        )
+    }
+
+    private fun keyframesFromJson(array: JSONArray?): List<KeyframeTrack> {
+        if (array == null) return emptyList()
+        return (0 until array.length()).mapNotNull { index ->
+            val trackJson = array.optJSONObject(index) ?: return@mapNotNull null
+            val property = enumOrNull<KeyframeProperty>(trackJson.optString("property"))
+                ?: return@mapNotNull null
+            val keysJson = trackJson.optJSONArray("keys") ?: return@mapNotNull null
+            val keys = (0 until keysJson.length()).mapNotNull { keyIndex ->
+                val key = keysJson.optJSONObject(keyIndex) ?: return@mapNotNull null
+                Keyframe(
+                    timeUs = key.optLong("timeUs", 0L),
+                    value = key.optDouble("value", 0.0).toFloat(),
+                    easing = enumOr(key.optString("easing"), Easing.EASE_IN_OUT),
+                )
+            }
+            if (keys.isEmpty()) null else KeyframeTrack(property, keys.sortedBy { it.timeUs })
+        }
+    }
+
+    private fun maskFromJson(json: JSONObject?): Mask {
+        if (json == null) return Mask()
+        val d = Mask()
+        return Mask(
+            shape = enumOr(json.optString("shape"), MaskShape.NONE),
+            centerX = json.optDouble("centerX", d.centerX.toDouble()).toFloat(),
+            centerY = json.optDouble("centerY", d.centerY.toDouble()).toFloat(),
+            width = json.optDouble("width", d.width.toDouble()).toFloat(),
+            height = json.optDouble("height", d.height.toDouble()).toFloat(),
+            rotationDegrees = json.optDouble("rotationDegrees", 0.0).toFloat(),
+            feather = json.optDouble("feather", d.feather.toDouble()).toFloat(),
+            invert = json.optBoolean("invert", false),
         )
     }
 
@@ -290,6 +374,8 @@ object ProjectJson {
         val animationIn = enumOr(json.optString("animationIn"), OverlayAnimation.FADE)
         val animationOut = enumOr(json.optString("animationOut"), OverlayAnimation.FADE)
         val animationDurationUs = json.optLong("animationDurationUs", 400_000L)
+        val keyframes = keyframesFromJson(json.optJSONArray("keyframes"))
+        val blend = enumOr(json.optString("blend"), BlendMode.NORMAL)
 
         val transformJson = json.optJSONObject("transform")
         val transform = if (transformJson == null) {
@@ -315,6 +401,8 @@ object ProjectJson {
                 animationIn = animationIn,
                 animationOut = animationOut,
                 animationDurationUs = animationDurationUs,
+                keyframes = keyframes,
+                blend = blend,
             )
             "sticker" -> StickerOverlay(
                 id = id,
@@ -333,6 +421,8 @@ object ProjectJson {
                 animationIn = animationIn,
                 animationOut = animationOut,
                 animationDurationUs = animationDurationUs,
+                keyframes = keyframes,
+                blend = blend,
             )
             else -> null
         }
@@ -389,4 +479,7 @@ object ProjectJson {
 
     private inline fun <reified T : Enum<T>> enumOr(name: String?, fallback: T): T =
         enumValues<T>().firstOrNull { it.name == name } ?: fallback
+
+    private inline fun <reified T : Enum<T>> enumOrNull(name: String?): T? =
+        enumValues<T>().firstOrNull { it.name == name }
 }

@@ -14,6 +14,7 @@ import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.FitMode
 import com.vixel.studio.core.model.MediaKind
 import com.vixel.studio.core.model.Project
+import com.vixel.studio.core.model.Transform
 import com.vixel.studio.engine.audio.AacEncoder
 import com.vixel.studio.engine.audio.AudioMixer
 import com.vixel.studio.engine.audio.MixSource
@@ -296,7 +297,8 @@ class VideoExporter(
             if (source.textureId == 0) return@use
 
             val placement = placementFor(
-                clip, sourceWidth, sourceHeight, canvasWidth, canvasHeight, source.transform(),
+                clip.transformAt(localUs), sourceWidth, sourceHeight,
+                canvasWidth, canvasHeight, source.transform(),
             )
 
             grader.render(
@@ -310,7 +312,8 @@ class VideoExporter(
                 adjustments = clip.adjustments,
                 targetX = placement.x,
                 targetY = placement.y,
-                opacity = fadeOpacity(clip, localUs),
+                mask = clip.mask,
+                opacity = fadeOpacity(clip, localUs) * clip.keyedOpacityAt(localUs),
                 seed = (localUs % 1000L).toFloat(),
             )
         }
@@ -338,14 +341,13 @@ class VideoExporter(
      * and crops through the texture matrix instead.
      */
     private fun placementFor(
-        clip: Clip,
+        transform: Transform,
         sourceWidth: Int,
         sourceHeight: Int,
         canvasWidth: Int,
         canvasHeight: Int,
         baseMatrix: FloatArray,
     ): Placement {
-        val transform = clip.transform
         val sourceAspect = sourceWidth.toFloat() / max(1, sourceHeight)
         val canvasAspect = canvasWidth.toFloat() / max(1, canvasHeight)
 

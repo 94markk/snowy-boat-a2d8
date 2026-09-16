@@ -94,6 +94,10 @@ data class Clip(
     val sourceWidth: Int = 0,
     val sourceHeight: Int = 0,
     val sourceRotationDegrees: Int = 0,
+    /** Animated overrides for transform properties, timed from clip start. */
+    val keyframes: List<KeyframeTrack> = emptyList(),
+    val mask: Mask = Mask(),
+    val blend: BlendMode = BlendMode.NORMAL,
 ) {
     /** Length of the trimmed region before speed is applied. */
     val trimmedDurationUs: Long get() = max(0L, trimEndUs - trimStartUs)
@@ -108,6 +112,26 @@ data class Clip(
 
     val displayHeight: Int
         get() = if (sourceRotationDegrees % 180 == 0) sourceHeight else sourceWidth
+
+    /**
+     * Transform at [localUs] from the start of this clip, with any keyframed
+     * property replacing its static value.
+     */
+    fun transformAt(localUs: Long): Transform {
+        if (keyframes.isEmpty()) return transform
+        return transform.copy(
+            scale = Keyframes.valueAt(keyframes, KeyframeProperty.SCALE, localUs, transform.scale),
+            offsetX = Keyframes.valueAt(keyframes, KeyframeProperty.OFFSET_X, localUs, transform.offsetX),
+            offsetY = Keyframes.valueAt(keyframes, KeyframeProperty.OFFSET_Y, localUs, transform.offsetY),
+            rotationDegrees = Keyframes.valueAt(
+                keyframes, KeyframeProperty.ROTATION, localUs, transform.rotationDegrees,
+            ),
+        )
+    }
+
+    /** Keyframed opacity, multiplied onto whatever the fades produce. */
+    fun keyedOpacityAt(localUs: Long): Float =
+        Keyframes.valueAt(keyframes, KeyframeProperty.OPACITY, localUs, 1f).coerceIn(0f, 1f)
 
     fun withTrim(startUs: Long, endUs: Long): Clip {
         val safeStart = startUs.coerceIn(0L, max(0L, sourceDurationUs - MIN_CLIP_US))
