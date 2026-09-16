@@ -61,6 +61,8 @@ import com.vixel.studio.core.model.FilterPreset
 import com.vixel.studio.core.model.Filters
 import com.vixel.studio.core.model.FitMode
 import com.vixel.studio.core.model.MediaKind
+import com.vixel.studio.core.model.Transition
+import com.vixel.studio.core.model.TransitionType
 import com.vixel.studio.engine.video.ExportConfig
 import com.vixel.studio.engine.video.ExportResult
 import com.vixel.studio.engine.video.MediaProbe
@@ -203,6 +205,7 @@ fun VideoEditorScreen(onBack: () -> Unit) {
                         canvasColor = state.project.backgroundColor,
                         overlays = state.project.overlays,
                         timelineUs = state.positionUs,
+                        opacity = previewOpacity(state),
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -262,6 +265,15 @@ fun VideoEditorScreen(onBack: () -> Unit) {
             }
         }
     }
+}
+
+/**
+ * Stand-in for a transition while scrubbing. The preview has only one decoded
+ * clip available, so the incoming one ramps up instead of cross-blending.
+ */
+private fun previewOpacity(state: VideoEditorState): Float {
+    val composition = state.project.compositionAt(state.positionUs)
+    return if (composition.isTransitioning) composition.progress.coerceIn(0.05f, 1f) else 1f
 }
 
 private fun Clip.toMediaItem(): MediaItem {
@@ -339,6 +351,7 @@ private fun ClipPanel(state: VideoEditorState) {
     }
 
     LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+        item { TransitionSection(state, clip) }
         item {
             SimpleSlider(
                 label = "Trim start",
@@ -441,6 +454,82 @@ private fun ClipPanel(state: VideoEditorState) {
                     onClick = { state.moveSelected(1) },
                 )
             }
+        }
+    }
+}
+
+/**
+ * A transition belongs to the clip it plays *into*, so the first clip on the
+ * timeline has nothing to configure.
+ */
+@Composable
+private fun TransitionSection(state: VideoEditorState, clip: Clip) {
+    val index = state.project.clips.indexOfFirst { it.id == clip.id }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(
+            "Transition from previous clip",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 16.dp, bottom = 4.dp),
+        )
+
+        if (index <= 0) {
+            Text(
+                "The first clip has nothing before it. Select a later clip to add one.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            return
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TransitionType.entries.forEach { type ->
+                Chip(
+                    label = type.label,
+                    selected = type == clip.transition.type,
+                    onClick = {
+                        state.commitSelected {
+                            it.copy(
+                                transition = it.transition.copy(
+                                    type = type,
+                                    durationUs = it.transition.durationUs
+                                        .coerceIn(Transition.MIN_US, Transition.MAX_US),
+                                ),
+                            )
+                        }
+                    },
+                )
+            }
+        }
+
+        if (clip.transition.type != TransitionType.NONE) {
+            SimpleSlider(
+                label = "Transition length",
+                value = clip.transition.durationUs.toFloat(),
+                range = Transition.MIN_US.toFloat()..Transition.MAX_US.toFloat(),
+                display = formatTime(state.project.overlapBefore(index)),
+                onChange = { v ->
+                    state.beginGesture()
+                    state.updateSelected {
+                        it.copy(transition = it.transition.copy(durationUs = v.toLong()))
+                    }
+                },
+                onFinished = { state.endGesture() },
+            )
+            Text(
+                "Clips overlap for this long, so a transition shortens the timeline.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp),
+            )
         }
     }
 }

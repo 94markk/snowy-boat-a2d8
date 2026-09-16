@@ -25,6 +25,11 @@ import com.vixel.studio.engine.video.VideoPreviewRenderer
  *
  * media3's @UnstableApi is enforced by lint rather than by the compiler, so
  * there is no opt-in annotation to carry here.
+ *
+ * ExoPlayer plays one clip at a time, so a transition cannot be shown exactly
+ * here the way the exporter shows it. [opacity] carries an approximation: the
+ * incoming clip ramps up over the transition window. The exported file has the
+ * real two-source blend.
  */
 @Composable
 fun VideoPreview(
@@ -35,6 +40,7 @@ fun VideoPreview(
     canvasColor: Int,
     overlays: List<Overlay>,
     timelineUs: Long,
+    opacity: Float = 1f,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember { PreviewHolder() }
@@ -83,6 +89,7 @@ fun VideoPreview(
             renderer.sourceHeight = clip?.displayHeight ?: 0
             renderer.overlays = overlays
             renderer.timelineUs = timelineUs
+            renderer.opacity = opacity
             view.requestRender()
         },
         onRelease = { view ->

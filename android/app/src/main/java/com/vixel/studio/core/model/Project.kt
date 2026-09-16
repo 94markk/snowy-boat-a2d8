@@ -89,8 +89,8 @@ data class Clip(
     val transform: Transform = Transform(),
     val fadeInUs: Long = 0L,
     val fadeOutUs: Long = 0L,
-    /** Cross-fade into this clip from the previous one. */
-    val transitionUs: Long = 0L,
+    /** Transition into this clip from the previous one. */
+    val transition: Transition = Transition.NONE,
     val sourceWidth: Int = 0,
     val sourceHeight: Int = 0,
     val sourceRotationDegrees: Int = 0,
@@ -149,7 +149,28 @@ data class Project(
     val backgroundColor: Int = 0xFF000000.toInt(),
     val createdAt: Long = System.currentTimeMillis(),
 ) {
-    val durationUs: Long get() = clips.sumOf { it.timelineDurationUs }
+    val durationUs: Long
+        get() {
+            if (clips.isEmpty()) return 0L
+            return startOf(clips.size - 1) + clips.last().timelineDurationUs
+        }
+
+    /**
+     * How far clip [index] overlaps the one before it.
+     *
+     * Clamped to half of the shorter neighbour so a long transition between
+     * two short clips cannot consume either of them entirely.
+     */
+    fun overlapBefore(index: Int): Long {
+        if (index <= 0 || index >= clips.size) return 0L
+        val transition = clips[index].transition
+        if (!transition.isActive) return 0L
+        val shorter = minOf(
+            clips[index - 1].timelineDurationUs,
+            clips[index].timelineDurationUs,
+        )
+        return transition.durationUs.coerceIn(0L, shorter / 2)
+    }
 
     val isEmpty: Boolean get() = clips.isEmpty() && audio.isEmpty() && overlays.isEmpty()
 
@@ -165,19 +186,55 @@ data class Project(
     /** Timeline start of [index], in microseconds. */
     fun startOf(index: Int): Long {
         var acc = 0L
-        for (i in 0 until index.coerceAtMost(clips.size)) acc += clips[i].timelineDurationUs
+        val limit = index.coerceIn(0, clips.size)
+        for (i in 0 until limit) {
+            acc += clips[i].timelineDurationUs
+            acc -= overlapBefore(i + 1)
+        }
         return acc
     }
 
-    /** Index of the clip covering [positionUs], or -1 past the end. */
+    /**
+     * Index of the clip covering [positionUs], or -1 past the end.
+     *
+     * Where two clips overlap in a transition the later one wins, so the
+     * playhead belongs to the incoming clip as soon as it starts.
+     */
     fun clipIndexAt(positionUs: Long): Int {
-        var acc = 0L
-        clips.forEachIndexed { index, clip ->
-            val end = acc + clip.timelineDurationUs
-            if (positionUs < end) return index
-            acc = end
+        for (index in clips.indices.reversed()) {
+            val start = startOf(index)
+            if (positionUs >= start && positionUs < start + clips[index].timelineDurationUs) {
+                return index
+            }
         }
         return -1
+    }
+
+    /** What to draw at [positionUs], including any transition in progress. */
+    fun compositionAt(positionUs: Long): Composition {
+        val index = clipIndexAt(positionUs)
+        if (index < 0) return Composition(primaryIndex = -1)
+
+        val overlap = overlapBefore(index)
+        if (overlap <= 0L || index == 0) return Composition(primaryIndex = index)
+
+        val into = positionUs - startOf(index)
+        if (into >= overlap) return Composition(primaryIndex = index)
+
+        return Composition(
+            primaryIndex = index,
+            fromIndex = index - 1,
+            progress = (into.toFloat() / overlap).coerceIn(0f, 1f),
+            transition = clips[index].transition,
+        )
+    }
+
+    /** Source position inside clip [index] for timeline time [positionUs]. */
+    fun sourceTimeFor(index: Int, positionUs: Long): Long {
+        val clip = clips.getOrNull(index) ?: return 0L
+        val into = (positionUs - startOf(index)).coerceAtLeast(0L)
+        val scaled = (into * clip.speed).toLong()
+        return (clip.trimStartUs + scaled).coerceIn(clip.trimStartUs, clip.trimEndUs)
     }
 
     fun updateClip(id: String, transform: (Clip) -> Clip): Project =
@@ -222,7 +279,9 @@ data class Project(
             id = UUID.randomUUID().toString(),
             trimStartUs = cut,
             fadeInUs = 0L,
-            transitionUs = 0L,
+            // A split is a hard cut; inheriting the head's transition would
+            // insert one in the middle of what was continuous footage.
+            transition = Transition.NONE,
         )
         return copy(
             clips = clips.toMutableList().apply {

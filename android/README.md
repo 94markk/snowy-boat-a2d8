@@ -66,10 +66,31 @@ core/model/      Adjustments, Filters, Project/Clip/AudioClip, AspectRatio
 core/io/         image decode, EXIF, MediaStore output
 engine/gl/       EGL, shaders, ColorGrader render graph, LUT + curve baking
 engine/photo/    still rendering, background removal, collage
-engine/video/    probe, decode surface, preview renderer, exporter, remuxer
+engine/video/    probe, clip sources, preview renderer, exporter, remuxer
+engine/overlay/  text and sticker rasterising, GL overlay compositing
 engine/audio/    PCM decode/resample, mixer, AAC encoder, WAV + M4A export
 ui/              Compose screens
 ```
+
+### Timeline-driven compositing
+
+The exporter asks the timeline what is visible at each output frame, then pulls
+that frame from each participating clip:
+
+```
+for each output frame t:
+    composition = project.compositionAt(t)      # one clip, or two mid-transition
+    grade each visible clip into its own canvas-sized target
+    blend the two targets when a transition is running
+    draw overlays for t
+    present to the encoder surface
+```
+
+Pulling frames rather than pushing them is what makes a transition possible at
+all — two clips have to be on screen at the same instant — and it pins the
+output to exactly the chosen frame rate instead of inheriting whatever cadence
+the sources happened to have. Decoders are opened and closed as clips enter and
+leave the window, because devices cap how many codec instances can exist.
 
 ### One colour pipeline, two consumers
 
@@ -106,6 +127,19 @@ reorder, speed (0.25×–4×), volume, mute, fade in/out, per-clip colour grade 
 look, canvas aspect presets, fit/fill/stretch, MP4 export at 720p–2160p and
 24/30/60 fps with progress.
 
+**Transitions** — dissolve, fade to black or white, slide and wipe in four
+directions, zoom in/out, and defocus blur, with adjustable length. A transition
+overlaps the two clips it joins, so adding one shortens the timeline.
+
+**Text** — multi-line with wrapping and alignment, five font families, bold and
+italic, size, colour, outline, drop shadow and a rounded plate behind. Position,
+rotation, opacity, start/end timing, snap to playhead, and eight entry/exit
+animations.
+
+**Stickers** — 24 emoji from the system font plus eight path-drawn shapes with
+colour, sharing the placement, timing and animation controls with text. Neither
+costs anything in APK size.
+
 **Photo** — 18 live parameters (exposure, brightness, contrast, highlights,
 shadows, whites, blacks, saturation, vibrance, temperature, tint, hue, sharpen,
 blur, grain, fade, vignette, glow), 8-band HSL, per-channel + master tone
@@ -137,6 +171,13 @@ Worth being straight about:
   is strong on a clear subject against a reasonably plain background and weak
   on a busy one. Green screen footage should use the chroma key path, which is
   exact. A proper on-device segmentation model would need ML Kit.
+- **Transitions are approximated in the preview.** ExoPlayer decodes one clip
+  at a time, so the preview ramps the incoming clip up instead of showing the
+  real two-source blend. The exported file has the true transition. Making the
+  preview exact means replacing ExoPlayer with the same pull-based decoder the
+  exporter uses, along with its own clock and audio sync.
+- **Text and stickers are video-only.** The photo editor renders through a
+  separate path that does not composite overlays yet.
 - **Speed changes pitch.** Audio is resampled, so a sped-up clip rises in
   pitch like tape. There is no pitch-preserving time stretch yet.
 - **Export re-encodes every clip**, including ones that were not modified.
@@ -144,10 +185,8 @@ Worth being straight about:
   effect classes need a keep-rule pass before shrinking can be trusted.
 - **No project persistence.** Closing the app loses the timeline. The activity
   handles configuration changes, so this only bites on process death.
-- **Not built yet:** keyframes, transitions between clips, masks, blend modes,
-  motion tracking, text and stickers, auto captions, voiceover recording,
-  and a standalone audio studio. The `Clip` model already carries fields for
-  transitions and transforms; the UI and render paths are the missing part.
+- **Not built yet:** keyframes, masks, blend modes, motion tracking, auto
+  captions, voiceover recording, and a standalone audio studio.
 
 ## Why CI builds the APK
 

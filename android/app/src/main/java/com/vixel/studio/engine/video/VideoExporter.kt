@@ -1,7 +1,6 @@
 package com.vixel.studio.engine.video
 
 import android.content.Context
-import android.graphics.Bitmap
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaExtractor
@@ -11,25 +10,23 @@ import android.net.Uri
 import android.opengl.GLES30
 import android.opengl.Matrix
 import android.util.Log
-import com.vixel.studio.core.io.ImageIo
-import com.vixel.studio.engine.audio.AacEncoder
-import com.vixel.studio.engine.audio.AudioMixer
-import com.vixel.studio.engine.audio.MixSource
-import com.vixel.studio.engine.audio.PcmDecoder
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.FitMode
 import com.vixel.studio.core.model.MediaKind
 import com.vixel.studio.core.model.Project
+import com.vixel.studio.engine.audio.AacEncoder
+import com.vixel.studio.engine.audio.AudioMixer
+import com.vixel.studio.engine.audio.MixSource
+import com.vixel.studio.engine.audio.PcmDecoder
 import com.vixel.studio.engine.gl.ColorGrader
 import com.vixel.studio.engine.gl.EglCore
-import com.vixel.studio.engine.gl.GlUtils
+import com.vixel.studio.engine.gl.GlFramebuffer
+import com.vixel.studio.engine.gl.TransitionRenderer
 import com.vixel.studio.engine.overlay.OverlayCompositor
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.math.max
-import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 
 private const val TAG = "VixelExport"
 
@@ -57,16 +54,22 @@ sealed interface ExportResult {
         val durationUs: Long,
         val warning: String? = null,
     ) : ExportResult
+
     data class Failure(val message: String, val cause: Throwable? = null) : ExportResult
 }
 
 /**
  * Renders a [Project] to an MP4.
  *
- * Every clip is decoded to an OES texture, put through the same [ColorGrader]
- * the preview uses, and drawn straight onto the encoder's input surface — so
- * the exported file matches the preview by construction rather than by two
- * implementations agreeing.
+ * The compositor is timeline-driven: for each output frame it asks whichever
+ * clips are visible at that instant for their frame, grades each one, and
+ * blends them. Pulling frames rather than pushing them is what makes a
+ * transition possible at all, since two clips have to be visible at once, and
+ * it also pins the output to exactly [ExportConfig.fps] instead of inheriting
+ * whatever cadence the sources happened to have.
+ *
+ * Grading uses the same [ColorGrader] as the preview, so the file matches the
+ * screen by construction rather than by two implementations agreeing.
  *
  * Call [export] from a background thread.
  */
@@ -94,13 +97,15 @@ class VideoExporter(
             return ExportResult.Failure("There is nothing on the timeline to export")
         }
 
-        val workDir = File(outputFile.parentFile ?: context.cacheDir, "work-${System.currentTimeMillis()}")
+        val workDir = File(
+            outputFile.parentFile ?: context.cacheDir,
+            "work-${System.currentTimeMillis()}",
+        )
         workDir.mkdirs()
         val tempVideo = File(workDir, "video.mp4")
 
         try {
-            renderVideo(tempVideo) { p -> onProgress(p * VIDEO_SHARE) }
-                ?.let { return it }
+            renderVideo(tempVideo) { p -> onProgress(p * VIDEO_SHARE) }?.let { return it }
 
             if (cancelled) return ExportResult.Failure("Export cancelled")
 
@@ -119,9 +124,7 @@ class VideoExporter(
                 false
             }
 
-            if (!joined) {
-                tempVideo.copyTo(outputFile, overwrite = true)
-            }
+            if (!joined) tempVideo.copyTo(outputFile, overwrite = true)
 
             onProgress(1f)
             val uri = runCatching { VideoIo.publishToGallery(context, outputFile) }.getOrNull()
@@ -135,6 +138,298 @@ class VideoExporter(
         }
     }
 
+    // ----------------------------------------------------------------- video
+
+    private fun renderVideo(outputFile: File, onProgress: (Float) -> Unit): ExportResult.Failure? {
+        val (width, height) = project.aspect.sizeFor(config.shortEdge)
+        val frameDurationUs = 1_000_000L / config.fps
+        val totalFrames = max(1L, project.durationUs / frameDurationUs)
+
+        var encoder: MediaCodec? = null
+        var muxer: MediaMuxer? = null
+        var egl: EglCore? = null
+        var eglSurface: android.opengl.EGLSurface? = null
+
+        val grader = ColorGrader()
+        val transitions = TransitionRenderer()
+        val overlays = OverlayCompositor()
+        val primaryTarget = GlFramebuffer()
+        val outgoingTarget = GlFramebuffer()
+        val sources = HashMap<Int, ClipSource>()
+
+        try {
+            encoder = MediaCodec.createEncoderByType(MIME_VIDEO)
+            val format = MediaFormat.createVideoFormat(MIME_VIDEO, width, height).apply {
+                setInteger(
+                    MediaFormat.KEY_COLOR_FORMAT,
+                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface,
+                )
+                setInteger(MediaFormat.KEY_BIT_RATE, config.resolvedBitRate(width, height))
+                setInteger(MediaFormat.KEY_FRAME_RATE, config.fps)
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
+            }
+            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+
+            val inputSurface = encoder.createInputSurface()
+            egl = EglCore(recordable = true)
+            eglSurface = egl.createWindowSurface(inputSurface)
+            egl.makeCurrent(eglSurface)
+
+            grader.init()
+            transitions.init()
+            overlays.init()
+            primaryTarget.ensure(width, height)
+            outgoingTarget.ensure(width, height)
+
+            encoder.start()
+            muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
+            val state = MuxState(muxer)
+
+            for (frameIndex in 0 until totalFrames) {
+                if (cancelled) return ExportResult.Failure("Export cancelled")
+
+                val timeUs = frameIndex * frameDurationUs
+                val composition = project.compositionAt(timeUs)
+                if (composition.primaryIndex < 0) break
+
+                // Drop decoders for clips that are no longer on screen. Holding
+                // them open would keep a codec instance per clip, and devices
+                // cap how many can exist at once.
+                val needed = buildSet {
+                    add(composition.primaryIndex)
+                    if (composition.fromIndex >= 0) add(composition.fromIndex)
+                }
+                sources.keys.toList()
+                    .filterNot { it in needed }
+                    .forEach { sources.remove(it)?.release() }
+
+                renderClip(composition.primaryIndex, timeUs, primaryTarget, sources, grader, width, height)
+
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+                if (composition.isTransitioning) {
+                    renderClip(
+                        composition.fromIndex, timeUs, outgoingTarget, sources, grader, width, height,
+                    )
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+                    transitions.render(
+                        fromTexture = outgoingTarget.textureId,
+                        toTexture = primaryTarget.textureId,
+                        type = composition.transition.type,
+                        progress = composition.progress,
+                        width = width,
+                        height = height,
+                    )
+                } else {
+                    transitions.blit(primaryTarget.textureId, width, height)
+                }
+
+                overlays.draw(
+                    overlays = project.overlays,
+                    timeUs = timeUs,
+                    canvasX = 0,
+                    canvasY = 0,
+                    canvasWidth = width,
+                    canvasHeight = height,
+                )
+
+                egl.setPresentationTime(eglSurface, timeUs * 1000L)
+                egl.swapBuffers(eglSurface)
+                drainEncoder(encoder, state, endOfStream = false)
+
+                if (frameIndex % 8 == 0L) {
+                    onProgress((frameIndex.toFloat() / totalFrames).coerceIn(0f, 0.99f))
+                }
+            }
+
+            encoder.signalEndOfInputStream()
+            drainEncoder(encoder, state, endOfStream = true)
+            state.finish()
+            onProgress(1f)
+            return null
+        } catch (t: Throwable) {
+            Log.e(TAG, "video pass failed", t)
+            runCatching { outputFile.delete() }
+            return ExportResult.Failure(t.message ?: "Export failed", t)
+        } finally {
+            sources.values.forEach { runCatching { it.release() } }
+            runCatching { primaryTarget.release() }
+            runCatching { outgoingTarget.release() }
+            runCatching { overlays.release() }
+            runCatching { transitions.release() }
+            runCatching { grader.release() }
+            runCatching { encoder?.stop() }
+            runCatching { encoder?.release() }
+            runCatching { muxer?.release() }
+            if (egl != null && eglSurface != null) runCatching { egl.releaseSurface(eglSurface) }
+            runCatching { egl?.release() }
+        }
+    }
+
+    /** Pulls the frame for [index] at [timeUs] and grades it into [target]. */
+    private fun renderClip(
+        index: Int,
+        timeUs: Long,
+        target: GlFramebuffer,
+        sources: MutableMap<Int, ClipSource>,
+        grader: ColorGrader,
+        canvasWidth: Int,
+        canvasHeight: Int,
+    ) {
+        val clip = project.clips.getOrNull(index) ?: return
+        val source = sources.getOrPut(index) { createSource(clip) }
+
+        source.advanceTo(project.sourceTimeFor(index, timeUs))
+
+        val localUs = timeUs - project.startOf(index)
+        target.use {
+            val bg = project.backgroundColor
+            GLES30.glClearColor(
+                ((bg shr 16) and 0xFF) / 255f,
+                ((bg shr 8) and 0xFF) / 255f,
+                (bg and 0xFF) / 255f,
+                1f,
+            )
+            GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
+
+            val sourceWidth = source.sourceWidth.takeIf { it > 0 } ?: canvasWidth
+            val sourceHeight = source.sourceHeight.takeIf { it > 0 } ?: canvasHeight
+            if (source.textureId == 0) return@use
+
+            val placement = placementFor(
+                clip, sourceWidth, sourceHeight, canvasWidth, canvasHeight, source.transform(),
+            )
+
+            grader.render(
+                sourceTexture = source.textureId,
+                isExternal = source.isExternal,
+                texMatrix = placement.texMatrix,
+                sourceWidth = sourceWidth,
+                sourceHeight = sourceHeight,
+                targetWidth = placement.width,
+                targetHeight = placement.height,
+                adjustments = clip.adjustments,
+                targetX = placement.x,
+                targetY = placement.y,
+                opacity = fadeOpacity(clip, localUs),
+                seed = (localUs % 1000L).toFloat(),
+            )
+        }
+    }
+
+    private fun createSource(clip: Clip): ClipSource =
+        if (clip.kind == MediaKind.IMAGE) {
+            ImageClipSource(context, clip)
+        } else {
+            VideoClipSource(context, clip).also { it.prepare() }
+        }
+
+    private class Placement(
+        val x: Int,
+        val y: Int,
+        val width: Int,
+        val height: Int,
+        val texMatrix: FloatArray,
+    )
+
+    /**
+     * Works out where the clip sits inside the canvas.
+     *
+     * FIT letterboxes by shrinking the viewport; FILL keeps the full viewport
+     * and crops through the texture matrix instead.
+     */
+    private fun placementFor(
+        clip: Clip,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        canvasWidth: Int,
+        canvasHeight: Int,
+        baseMatrix: FloatArray,
+    ): Placement {
+        val transform = clip.transform
+        val sourceAspect = sourceWidth.toFloat() / max(1, sourceHeight)
+        val canvasAspect = canvasWidth.toFloat() / max(1, canvasHeight)
+
+        var width = canvasWidth
+        var height = canvasHeight
+        val texMatrix = FloatArray(16)
+        System.arraycopy(baseMatrix, 0, texMatrix, 0, 16)
+
+        when (transform.fit) {
+            FitMode.FIT -> {
+                if (sourceAspect > canvasAspect) {
+                    height = (canvasWidth / sourceAspect).roundToInt().coerceAtLeast(1)
+                } else {
+                    width = (canvasHeight * sourceAspect).roundToInt().coerceAtLeast(1)
+                }
+            }
+            FitMode.FILL -> {
+                val scaleX: Float
+                val scaleY: Float
+                if (sourceAspect > canvasAspect) {
+                    scaleX = canvasAspect / sourceAspect
+                    scaleY = 1f
+                } else {
+                    scaleX = 1f
+                    scaleY = sourceAspect / canvasAspect
+                }
+                applyCrop(texMatrix, scaleX, scaleY)
+            }
+            FitMode.STRETCH -> Unit
+        }
+
+        val scale = transform.scale.coerceIn(0.1f, 8f)
+        width = (width * scale).roundToInt().coerceAtLeast(1)
+        height = (height * scale).roundToInt().coerceAtLeast(1)
+
+        if (transform.flipHorizontal) applyFlip(texMatrix, horizontal = true)
+        if (transform.flipVertical) applyFlip(texMatrix, horizontal = false)
+
+        val x = ((canvasWidth - width) / 2f + transform.offsetX * canvasWidth).roundToInt()
+        val y = ((canvasHeight - height) / 2f - transform.offsetY * canvasHeight).roundToInt()
+
+        return Placement(x, y, width, height, texMatrix)
+    }
+
+    /** 1.0 in the body of the clip, ramping at either end when fades are set. */
+    private fun fadeOpacity(clip: Clip, localUs: Long): Float {
+        var opacity = 1f
+        if (clip.fadeInUs > 0 && localUs < clip.fadeInUs) {
+            opacity *= (localUs.toFloat() / clip.fadeInUs).coerceIn(0f, 1f)
+        }
+        val duration = clip.timelineDurationUs
+        if (clip.fadeOutUs > 0 && localUs > duration - clip.fadeOutUs) {
+            opacity *= ((duration - localUs).toFloat() / clip.fadeOutUs).coerceIn(0f, 1f)
+        }
+        return opacity.coerceIn(0f, 1f)
+    }
+
+    private fun applyCrop(matrix: FloatArray, scaleX: Float, scaleY: Float) {
+        val crop = FloatArray(16)
+        Matrix.setIdentityM(crop, 0)
+        Matrix.translateM(crop, 0, (1f - scaleX) / 2f, (1f - scaleY) / 2f, 0f)
+        Matrix.scaleM(crop, 0, scaleX, scaleY, 1f)
+        val result = FloatArray(16)
+        Matrix.multiplyMM(result, 0, matrix, 0, crop, 0)
+        System.arraycopy(result, 0, matrix, 0, 16)
+    }
+
+    private fun applyFlip(matrix: FloatArray, horizontal: Boolean) {
+        val flip = FloatArray(16)
+        Matrix.setIdentityM(flip, 0)
+        if (horizontal) {
+            Matrix.translateM(flip, 0, 1f, 0f, 0f)
+            Matrix.scaleM(flip, 0, -1f, 1f, 1f)
+        } else {
+            Matrix.translateM(flip, 0, 0f, 1f, 0f)
+            Matrix.scaleM(flip, 0, 1f, -1f, 1f)
+        }
+        val result = FloatArray(16)
+        Matrix.multiplyMM(result, 0, matrix, 0, flip, 0)
+        System.arraycopy(result, 0, matrix, 0, 16)
+    }
+
+    // ----------------------------------------------------------------- audio
+
     /**
      * Decodes every audible source to PCM, mixes them onto one timeline and
      * encodes the result to AAC.
@@ -144,13 +439,11 @@ class VideoExporter(
     private fun buildAudioTrack(workDir: File, onProgress: (Float) -> Unit): File? {
         val sources = mutableListOf<MixSource>()
         var index = 0
-        var timelineUs = 0L
 
-        // Audio that rides along with the video clips.
-        for (clip in project.clips) {
-            val clipStartUs = timelineUs
-            timelineUs += clip.timelineDurationUs
-            if (clip.kind != MediaKind.VIDEO || clip.muted || clip.volume <= 0f) continue
+        // Audio riding along with the video clips. Placement uses startOf so a
+        // transition's overlap pulls the incoming audio earlier too.
+        project.clips.forEachIndexed { clipIndex, clip ->
+            if (clip.kind != MediaKind.VIDEO || clip.muted || clip.volume <= 0f) return@forEachIndexed
 
             val pcm = File(workDir, "clip_${index++}.pcm")
             val frames = PcmDecoder.decode(
@@ -163,11 +456,11 @@ class VideoExporter(
             )
             if (frames <= 0) {
                 pcm.delete()
-                continue
+                return@forEachIndexed
             }
             sources += MixSource(
                 pcm = pcm,
-                startFrame = PcmDecoder.usToFrames(clipStartUs),
+                startFrame = PcmDecoder.usToFrames(project.startOf(clipIndex)),
                 volume = clip.volume,
                 fadeInFrames = PcmDecoder.usToFrames(clip.fadeInUs),
                 fadeOutFrames = PcmDecoder.usToFrames(clip.fadeOutUs),
@@ -175,7 +468,6 @@ class VideoExporter(
         }
         onProgress(0.5f)
 
-        // Music and voiceover tracks.
         for (audio in project.audio) {
             if (audio.volume <= 0f) continue
             val pcm = File(workDir, "audio_${index++}.pcm")
@@ -213,414 +505,6 @@ class VideoExporter(
         return encoded
     }
 
-    private fun renderVideo(outputFile: File, onProgress: (Float) -> Unit): ExportResult.Failure? {
-        if (project.clips.isEmpty()) {
-            return ExportResult.Failure("There is nothing on the timeline to export")
-        }
-
-        val (width, height) = project.aspect.sizeFor(config.shortEdge)
-        val totalDurationUs = project.durationUs.coerceAtLeast(1L)
-
-        var encoder: MediaCodec? = null
-        var muxer: MediaMuxer? = null
-        var egl: EglCore? = null
-        var eglSurface: android.opengl.EGLSurface? = null
-        val grader = ColorGrader()
-        val overlays = OverlayCompositor()
-
-        try {
-            encoder = MediaCodec.createEncoderByType(MIME_VIDEO)
-            val format = MediaFormat.createVideoFormat(MIME_VIDEO, width, height).apply {
-                setInteger(
-                    MediaFormat.KEY_COLOR_FORMAT,
-                    MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface,
-                )
-                setInteger(MediaFormat.KEY_BIT_RATE, config.resolvedBitRate(width, height))
-                setInteger(MediaFormat.KEY_FRAME_RATE, config.fps)
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
-            }
-            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-
-            val inputSurface = encoder.createInputSurface()
-            egl = EglCore(recordable = true)
-            eglSurface = egl.createWindowSurface(inputSurface)
-            egl.makeCurrent(eglSurface)
-            grader.init()
-
-            encoder.start()
-            muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-
-            val state = MuxState(muxer)
-            var timelineUs = 0L
-
-            for ((index, clip) in project.clips.withIndex()) {
-                if (cancelled) return ExportResult.Failure("Export cancelled")
-
-                val clipStart = timelineUs
-                when (clip.kind) {
-                    MediaKind.IMAGE -> renderStillClip(
-                        clip = clip,
-                        grader = grader,
-                        overlays = overlays,
-                        egl = egl,
-                        eglSurface = eglSurface,
-                        encoder = encoder,
-                        state = state,
-                        canvasWidth = width,
-                        canvasHeight = height,
-                        timelineStartUs = clipStart,
-                    )
-                    else -> renderVideoClip(
-                        clip = clip,
-                        grader = grader,
-                        overlays = overlays,
-                        egl = egl,
-                        eglSurface = eglSurface,
-                        encoder = encoder,
-                        state = state,
-                        canvasWidth = width,
-                        canvasHeight = height,
-                        timelineStartUs = clipStart,
-                    ) { sourceProgressUs ->
-                        val done = clipStart + sourceProgressUs
-                        onProgress((done.toFloat() / totalDurationUs).coerceIn(0f, 0.99f))
-                    }
-                }
-
-                timelineUs += clip.timelineDurationUs
-                onProgress((timelineUs.toFloat() / totalDurationUs).coerceIn(0f, 0.99f))
-                Log.d(TAG, "clip ${index + 1}/${project.clips.size} done at ${timelineUs}us")
-            }
-
-            // Signal end of stream and flush whatever the encoder still holds.
-            encoder.signalEndOfInputStream()
-            drainEncoder(encoder, state, endOfStream = true)
-
-            state.finish()
-            onProgress(1f)
-            return null
-        } catch (t: Throwable) {
-            Log.e(TAG, "export failed", t)
-            runCatching { outputFile.delete() }
-            return ExportResult.Failure(t.message ?: "Export failed", t)
-        } finally {
-            runCatching { encoder?.stop() }
-            runCatching { encoder?.release() }
-            runCatching { muxer?.release() }
-            runCatching { overlays.release() }
-            runCatching { grader.release() }
-            if (egl != null && eglSurface != null) runCatching { egl.releaseSurface(eglSurface) }
-            runCatching { egl?.release() }
-        }
-    }
-
-    // ---------------------------------------------------------------- video
-
-    private fun renderVideoClip(
-        clip: Clip,
-        grader: ColorGrader,
-        overlays: OverlayCompositor,
-        egl: EglCore,
-        eglSurface: android.opengl.EGLSurface,
-        encoder: MediaCodec,
-        state: MuxState,
-        canvasWidth: Int,
-        canvasHeight: Int,
-        timelineStartUs: Long,
-        onProgress: (Long) -> Unit,
-    ) {
-        val extractor = MediaExtractor()
-        var decoder: MediaCodec? = null
-        var decoderSurface: DecoderSurface? = null
-
-        try {
-            extractor.setDataSource(context, Uri.parse(clip.uri), null)
-            val trackIndex = selectTrack(extractor, "video/")
-            if (trackIndex < 0) {
-                Log.w(TAG, "no video track in ${clip.uri}")
-                return
-            }
-            extractor.selectTrack(trackIndex)
-            val inputFormat = extractor.getTrackFormat(trackIndex)
-
-            decoderSurface = DecoderSurface()
-            decoder = MediaCodec.createDecoderByType(
-                inputFormat.getString(MediaFormat.KEY_MIME) ?: return,
-            )
-            decoder.configure(inputFormat, decoderSurface.surface, null, 0)
-            decoder.start()
-
-            extractor.seekTo(clip.trimStartUs, MediaExtractor.SEEK_TO_PREVIOUS_SYNC)
-
-            val bufferInfo = MediaCodec.BufferInfo()
-            var inputDone = false
-            var outputDone = false
-
-            while (!outputDone && !cancelled) {
-                if (!inputDone) {
-                    val inputIndex = decoder.dequeueInputBuffer(TIMEOUT_US)
-                    if (inputIndex >= 0) {
-                        val buffer = decoder.getInputBuffer(inputIndex)
-                        val sampleSize = if (buffer == null) -1 else extractor.readSampleData(buffer, 0)
-                        if (sampleSize < 0) {
-                            decoder.queueInputBuffer(
-                                inputIndex, 0, 0, 0L, MediaCodec.BUFFER_FLAG_END_OF_STREAM,
-                            )
-                            inputDone = true
-                        } else {
-                            decoder.queueInputBuffer(
-                                inputIndex, 0, sampleSize, extractor.sampleTime, 0,
-                            )
-                            extractor.advance()
-                        }
-                    }
-                }
-
-                val outputIndex = decoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
-                when {
-                    outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER -> Unit
-                    outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> Unit
-                    outputIndex >= 0 -> {
-                        val eos = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0
-                        val ptUs = bufferInfo.presentationTimeUs
-
-                        val keep = bufferInfo.size > 0 &&
-                            ptUs >= clip.trimStartUs &&
-                            ptUs <= clip.trimEndUs
-
-                        decoder.releaseOutputBuffer(outputIndex, keep)
-
-                        if (keep && decoderSurface.awaitNewImage()) {
-                            val outUs = timelineStartUs +
-                                ((ptUs - clip.trimStartUs) / clip.speed).roundToLong()
-
-                            drawFrame(
-                                grader = grader,
-                                overlays = overlays,
-                                clip = clip,
-                                textureId = decoderSurface.textureId,
-                                texMatrix = decoderSurface.transform(),
-                                canvasWidth = canvasWidth,
-                                canvasHeight = canvasHeight,
-                                sourceWidth = clip.displayWidth.takeIf { it > 0 } ?: canvasWidth,
-                                sourceHeight = clip.displayHeight.takeIf { it > 0 } ?: canvasHeight,
-                                isExternal = true,
-                                timelineUs = outUs - timelineStartUs,
-                                absoluteUs = outUs,
-                            )
-
-                            egl.setPresentationTime(eglSurface, outUs * 1000L)
-                            egl.swapBuffers(eglSurface)
-                            drainEncoder(encoder, state, endOfStream = false)
-                            onProgress(((ptUs - clip.trimStartUs) / clip.speed).roundToLong())
-                        }
-
-                        if (eos || ptUs > clip.trimEndUs) outputDone = true
-                    }
-                }
-            }
-        } catch (t: Throwable) {
-            Log.e(TAG, "clip decode failed for ${clip.uri}", t)
-        } finally {
-            runCatching { decoder?.stop() }
-            runCatching { decoder?.release() }
-            runCatching { decoderSurface?.release() }
-            runCatching { extractor.release() }
-        }
-    }
-
-    // ---------------------------------------------------------------- stills
-
-    private fun renderStillClip(
-        clip: Clip,
-        grader: ColorGrader,
-        overlays: OverlayCompositor,
-        egl: EglCore,
-        eglSurface: android.opengl.EGLSurface,
-        encoder: MediaCodec,
-        state: MuxState,
-        canvasWidth: Int,
-        canvasHeight: Int,
-        timelineStartUs: Long,
-    ) {
-        val bitmap: Bitmap = ImageIo.decode(context, Uri.parse(clip.uri), maxEdge = 2160) ?: return
-        var texture = 0
-        try {
-            texture = GlUtils.createTextureFromBitmap(bitmap)
-            val frameCount = max(
-                1,
-                (clip.timelineDurationUs * config.fps / 1_000_000L).toInt(),
-            )
-            val frameDurationUs = 1_000_000L / config.fps
-
-            for (frame in 0 until frameCount) {
-                if (cancelled) return
-                val localUs = frame * frameDurationUs
-                drawFrame(
-                    grader = grader,
-                    overlays = overlays,
-                    clip = clip,
-                    textureId = texture,
-                    texMatrix = ColorGrader.IDENTITY,
-                    canvasWidth = canvasWidth,
-                    canvasHeight = canvasHeight,
-                    sourceWidth = bitmap.width,
-                    sourceHeight = bitmap.height,
-                    isExternal = false,
-                    timelineUs = localUs,
-                    absoluteUs = timelineStartUs + localUs,
-                )
-                egl.setPresentationTime(eglSurface, (timelineStartUs + localUs) * 1000L)
-                egl.swapBuffers(eglSurface)
-                drainEncoder(encoder, state, endOfStream = false)
-            }
-        } finally {
-            GlUtils.deleteTexture(texture)
-            bitmap.recycle()
-        }
-    }
-
-    // ---------------------------------------------------------------- drawing
-
-    /**
-     * Clears the canvas and draws one graded frame, honouring the clip's fit
-     * mode, transform and fades.
-     */
-    private fun drawFrame(
-        grader: ColorGrader,
-        overlays: OverlayCompositor,
-        clip: Clip,
-        textureId: Int,
-        texMatrix: FloatArray,
-        canvasWidth: Int,
-        canvasHeight: Int,
-        sourceWidth: Int,
-        sourceHeight: Int,
-        isExternal: Boolean,
-        timelineUs: Long,
-        absoluteUs: Long,
-    ) {
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
-        GLES30.glViewport(0, 0, canvasWidth, canvasHeight)
-        val bg = project.backgroundColor
-        GLES30.glClearColor(
-            ((bg shr 16) and 0xFF) / 255f,
-            ((bg shr 8) and 0xFF) / 255f,
-            (bg and 0xFF) / 255f,
-            1f,
-        )
-        GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
-
-        val transform = clip.transform
-        val sourceAspect = sourceWidth.toFloat() / max(1, sourceHeight)
-        val canvasAspect = canvasWidth.toFloat() / max(1, canvasHeight)
-
-        // FIT letterboxes by shrinking the viewport; FILL keeps the full
-        // viewport and crops through the texture matrix instead.
-        var viewportW = canvasWidth
-        var viewportH = canvasHeight
-        val effectiveTexMatrix = FloatArray(16)
-        System.arraycopy(texMatrix, 0, effectiveTexMatrix, 0, 16)
-
-        when (transform.fit) {
-            FitMode.FIT -> {
-                if (sourceAspect > canvasAspect) {
-                    viewportH = (canvasWidth / sourceAspect).roundToInt().coerceAtLeast(1)
-                } else {
-                    viewportW = (canvasHeight * sourceAspect).roundToInt().coerceAtLeast(1)
-                }
-            }
-            FitMode.FILL -> {
-                val scaleX: Float
-                val scaleY: Float
-                if (sourceAspect > canvasAspect) {
-                    scaleX = canvasAspect / sourceAspect
-                    scaleY = 1f
-                } else {
-                    scaleX = 1f
-                    scaleY = sourceAspect / canvasAspect
-                }
-                cropMatrix(effectiveTexMatrix, scaleX, scaleY)
-            }
-            FitMode.STRETCH -> Unit
-        }
-
-        val scale = transform.scale.coerceIn(0.1f, 8f)
-        viewportW = (viewportW * scale).roundToInt().coerceAtLeast(1)
-        viewportH = (viewportH * scale).roundToInt().coerceAtLeast(1)
-
-        val x = ((canvasWidth - viewportW) / 2f + transform.offsetX * canvasWidth).roundToInt()
-        val y = ((canvasHeight - viewportH) / 2f - transform.offsetY * canvasHeight).roundToInt()
-
-        if (transform.flipHorizontal) flipMatrix(effectiveTexMatrix, horizontal = true)
-        if (transform.flipVertical) flipMatrix(effectiveTexMatrix, horizontal = false)
-
-        grader.render(
-            sourceTexture = textureId,
-            isExternal = isExternal,
-            texMatrix = effectiveTexMatrix,
-            sourceWidth = sourceWidth,
-            sourceHeight = sourceHeight,
-            targetWidth = viewportW,
-            targetHeight = viewportH,
-            adjustments = clip.adjustments,
-            targetX = x,
-            targetY = y,
-            opacity = fadeOpacity(clip, timelineUs),
-            seed = (timelineUs % 1000L).toFloat(),
-        )
-
-        // Overlays sit above the graded frame and span the whole canvas, so
-        // they are unaffected by the clip's own fit and transform.
-        overlays.draw(
-            overlays = project.overlays,
-            timeUs = absoluteUs,
-            canvasX = 0,
-            canvasY = 0,
-            canvasWidth = canvasWidth,
-            canvasHeight = canvasHeight,
-        )
-    }
-
-    /** 1.0 in the body of the clip, ramping at either end when fades are set. */
-    private fun fadeOpacity(clip: Clip, localUs: Long): Float {
-        var opacity = 1f
-        if (clip.fadeInUs > 0 && localUs < clip.fadeInUs) {
-            opacity *= (localUs.toFloat() / clip.fadeInUs).coerceIn(0f, 1f)
-        }
-        val duration = clip.timelineDurationUs
-        if (clip.fadeOutUs > 0 && localUs > duration - clip.fadeOutUs) {
-            val remaining = (duration - localUs).toFloat()
-            opacity *= (remaining / clip.fadeOutUs).coerceIn(0f, 1f)
-        }
-        return opacity.coerceIn(0f, 1f)
-    }
-
-    private fun cropMatrix(matrix: FloatArray, scaleX: Float, scaleY: Float) {
-        val crop = FloatArray(16)
-        Matrix.setIdentityM(crop, 0)
-        Matrix.translateM(crop, 0, (1f - scaleX) / 2f, (1f - scaleY) / 2f, 0f)
-        Matrix.scaleM(crop, 0, scaleX, scaleY, 1f)
-        val result = FloatArray(16)
-        Matrix.multiplyMM(result, 0, matrix, 0, crop, 0)
-        System.arraycopy(result, 0, matrix, 0, 16)
-    }
-
-    private fun flipMatrix(matrix: FloatArray, horizontal: Boolean) {
-        val flip = FloatArray(16)
-        Matrix.setIdentityM(flip, 0)
-        if (horizontal) {
-            Matrix.translateM(flip, 0, 1f, 0f, 0f)
-            Matrix.scaleM(flip, 0, -1f, 1f, 1f)
-        } else {
-            Matrix.translateM(flip, 0, 0f, 1f, 0f)
-            Matrix.scaleM(flip, 0, 1f, -1f, 1f)
-        }
-        val result = FloatArray(16)
-        Matrix.multiplyMM(result, 0, matrix, 0, flip, 0)
-        System.arraycopy(result, 0, matrix, 0, 16)
-    }
-
     // ---------------------------------------------------------------- muxing
 
     private fun drainEncoder(encoder: MediaCodec, state: MuxState, endOfStream: Boolean) {
@@ -628,6 +512,7 @@ class VideoExporter(
         // Bounded so a codec that never reports EOS fails the export instead of
         // hanging the thread forever. 10ms per attempt gives ~5s of grace.
         var attemptsLeft = if (endOfStream) 500 else Int.MAX_VALUE
+
         while (true) {
             val index = encoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
             when {
@@ -643,8 +528,7 @@ class VideoExporter(
                 }
                 index >= 0 -> {
                     val buffer: ByteBuffer = encoder.getOutputBuffer(index) ?: continue
-                    val isConfig =
-                        (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0
+                    val isConfig = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0
                     if (!isConfig && bufferInfo.size > 0) {
                         buffer.position(bufferInfo.offset)
                         buffer.limit(bufferInfo.offset + bufferInfo.size)
@@ -657,6 +541,7 @@ class VideoExporter(
         }
     }
 
+    @Suppress("unused")
     private fun selectTrack(extractor: MediaExtractor, prefix: String): Int {
         for (i in 0 until extractor.trackCount) {
             val mime = extractor.getTrackFormat(i).getString(MediaFormat.KEY_MIME).orEmpty()
@@ -702,9 +587,10 @@ class VideoExporter(
 
     private companion object {
         const val MIME_VIDEO = MediaFormat.MIMETYPE_VIDEO_AVC
+        const val TIMEOUT_US = 10_000L
+
         /** Video is the long pass; audio decode/mix/encode is comparatively quick. */
         const val VIDEO_SHARE = 0.85f
         const val AUDIO_SHARE = 0.15f
-        const val TIMEOUT_US = 10_000L
     }
 }
