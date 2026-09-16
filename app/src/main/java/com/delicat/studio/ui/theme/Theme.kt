@@ -30,7 +30,7 @@ object Ink {
     val Line = Color(0xFF3A3A42)
 }
 
-object Text {
+object Palette {
     val Primary = Color(0xFFF5F5F7)
     val Secondary = Color(0xFF9B9BA6)
     val Faint = Color(0xFF66666F)
@@ -49,15 +49,15 @@ private val DelicatColors = darkColorScheme(
     primary = Accent,
     onPrimary = Ink.Black,
     primaryContainer = AccentDim,
-    onPrimaryContainer = Text.Primary,
+    onPrimaryContainer = Palette.Primary,
     secondary = Color(0xFFB08CFF),
     onSecondary = Ink.Black,
     background = Ink.Black,
-    onBackground = Text.Primary,
+    onBackground = Palette.Primary,
     surface = Ink.Near,
-    onSurface = Text.Primary,
+    onSurface = Palette.Primary,
     surfaceVariant = Ink.Raised,
-    onSurfaceVariant = Text.Secondary,
+    onSurfaceVariant = Palette.Secondary,
     outline = Ink.Line,
     outlineVariant = Ink.Chip,
     error = Danger,

@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             DelicatTheme {
-                DelicatRoot()
+                DelicatRoot(onExit = { finish() })
             }
         }
     }
