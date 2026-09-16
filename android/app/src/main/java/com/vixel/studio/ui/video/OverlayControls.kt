@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.core.model.OverlayAnimation
 import com.vixel.studio.ui.common.Chip
+import com.vixel.studio.ui.common.OverlayHost
 
 /** Labelled slider used across the overlay panels. */
 @Composable
@@ -100,7 +101,7 @@ fun ColorRow(colors: List<Int>, selected: Int, onPick: (Int) -> Unit) {
 
 /** Position, rotation and opacity — shared by text and stickers. */
 @Composable
-fun PlacementControls(overlay: Overlay, state: VideoEditorState) {
+fun PlacementControls(overlay: Overlay, state: OverlayHost) {
     val t = overlay.transform
     SectionLabel("Placement")
     OverlaySlider(
@@ -151,8 +152,12 @@ fun PlacementControls(overlay: Overlay, state: VideoEditorState) {
 
 /** Start/end on the timeline, plus entry and exit animations. */
 @Composable
-fun TimingControls(overlay: Overlay, state: VideoEditorState) {
-    val projectDuration = state.project.durationUs.coerceAtLeast(1_000_000L)
+fun TimingControls(overlay: Overlay, state: OverlayHost) {
+    if (!state.supportsTiming) {
+        AnimationControls(overlay, state)
+        return
+    }
+    val projectDuration = state.timelineDurationUs.coerceAtLeast(1_000_000L)
 
     SectionLabel("Timing")
     OverlaySlider(
@@ -192,7 +197,7 @@ fun TimingControls(overlay: Overlay, state: VideoEditorState) {
             selected = false,
             onClick = {
                 state.commitSelectedOverlay {
-                    val start = state.positionUs
+                    val start = state.playheadUs
                     it.withTiming(start, maxOf(it.endUs, start + MIN_OVERLAY_US))
                 }
             },
@@ -202,13 +207,18 @@ fun TimingControls(overlay: Overlay, state: VideoEditorState) {
             selected = false,
             onClick = {
                 state.commitSelectedOverlay {
-                    val end = maxOf(state.positionUs, it.startUs + MIN_OVERLAY_US)
+                    val end = maxOf(state.playheadUs, it.startUs + MIN_OVERLAY_US)
                     it.withTiming(it.startUs, end)
                 }
             },
         )
     }
 
+    AnimationControls(overlay, state)
+}
+
+@Composable
+private fun AnimationControls(overlay: Overlay, state: OverlayHost) {
     SectionLabel("Animation in")
     AnimationRow(overlay.animationIn) { animation ->
         state.commitSelectedOverlay { current ->

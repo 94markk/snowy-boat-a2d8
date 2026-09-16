@@ -64,6 +64,7 @@ looks exactly like an editor "stuck in landscape".
 ```
 core/model/      Adjustments, Filters, Project/Clip/AudioClip, AspectRatio
 core/io/         image decode, EXIF, MediaStore output
+core/store/      project JSON and on-disk project store
 engine/gl/       EGL, shaders, ColorGrader render graph, LUT + curve baking
 engine/photo/    still rendering, background removal, collage
 engine/video/    probe, clip sources, preview renderer, exporter, remuxer
@@ -140,7 +141,18 @@ animations.
 colour, sharing the placement, timing and animation controls with text. Neither
 costs anything in APK size.
 
-**Photo** — 18 live parameters (exposure, brightness, contrast, highlights,
+**Projects** — the timeline is saved to disk as JSON and listed on the home
+screen. Autosave is debounced, so a slider drag writes once when it settles
+rather than on every frame of the gesture. Saves are written to a temporary
+file and swapped in, so an interrupted write cannot leave a project that fails
+to open.
+
+**Audio tracks** — add music, or record a voiceover straight into the timeline
+at the playhead. Per-track volume, position, trim and fades, mixed into the
+export alongside clip audio.
+
+**Photo** — text and stickers with the same controls as video, 18 live
+parameters (exposure, brightness, contrast, highlights,
 shadows, whites, blacks, saturation, vibrance, temperature, tint, hue, sharpen,
 blur, grain, fade, vignette, glow), 8-band HSL, per-channel + master tone
 curves, 24 looks with strength, rotate/flip, gesture-grouped undo/redo,
@@ -176,17 +188,19 @@ Worth being straight about:
   real two-source blend. The exported file has the true transition. Making the
   preview exact means replacing ExoPlayer with the same pull-based decoder the
   exporter uses, along with its own clock and audio sync.
-- **Text and stickers are video-only.** The photo editor renders through a
-  separate path that does not composite overlays yet.
 - **Speed changes pitch.** Audio is resampled, so a sped-up clip rises in
   pitch like tape. There is no pitch-preserving time stretch yet.
 - **Export re-encodes every clip**, including ones that were not modified.
 - **R8 is off**, so the release APK is larger than it needs to be. The GL and
   effect classes need a keep-rule pass before shrinking can be trusted.
-- **No project persistence.** Closing the app loses the timeline. The activity
-  handles configuration changes, so this only bites on process death.
-- **Not built yet:** keyframes, masks, blend modes, motion tracking, auto
-  captions, voiceover recording, and a standalone audio studio.
+- **Media is referenced, not copied.** A project stores the uri it was given
+  rather than duplicating the file, so a project opens only while that media is
+  still reachable. Clips whose media has gone are reported by name when the
+  project loads instead of rendering as black frames. Copying every import
+  would make projects self-contained at the cost of duplicating every video the
+  user edits.
+- **Not built yet:** keyframes, masks, blend modes, motion tracking and auto
+  captions.
 
 ## Why CI builds the APK
 

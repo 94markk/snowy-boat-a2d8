@@ -34,6 +34,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -63,6 +64,7 @@ import com.vixel.studio.core.model.FitMode
 import com.vixel.studio.core.model.MediaKind
 import com.vixel.studio.core.model.Transition
 import com.vixel.studio.core.model.TransitionType
+import com.vixel.studio.core.store.ProjectStore
 import com.vixel.studio.engine.video.ExportConfig
 import com.vixel.studio.engine.video.ExportResult
 import com.vixel.studio.engine.video.MediaProbe
@@ -81,12 +83,13 @@ private enum class VideoTab(val label: String) {
     FILTERS("Filters"),
     TEXT("Text"),
     STICKERS("Stickers"),
+    AUDIO("Audio"),
     CANVAS("Canvas"),
     EXPORT("Export"),
 }
 
 @Composable
-fun VideoEditorScreen(onBack: () -> Unit) {
+fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state = remember { VideoEditorState() }
@@ -94,6 +97,32 @@ fun VideoEditorScreen(onBack: () -> Unit) {
 
     var tab by remember { mutableStateOf(VideoTab.CLIP) }
     var group by remember { mutableStateOf(AdjustSpec.Group.LIGHT) }
+
+    // Open an existing project, and report any clip whose media has gone.
+    LaunchedEffect(projectId) {
+        if (projectId == null) return@LaunchedEffect
+        val loaded = withContext(Dispatchers.IO) { ProjectStore.load(context, projectId) }
+        if (loaded == null) {
+            snackbar.showSnackbar("That project could not be opened")
+            return@LaunchedEffect
+        }
+        state.replaceProject(loaded)
+        val missing = withContext(Dispatchers.IO) { ProjectStore.missingMedia(context, loaded) }
+        state.missingMediaIds = missing.toSet()
+        if (missing.isNotEmpty()) {
+            snackbar.showSnackbar(
+                "${missing.size} clip(s) can no longer be opened. Re-add the media to fix them.",
+            )
+        }
+    }
+
+    // Autosave, debounced: a slider drag produces a burst of states and only
+    // the settled one is worth writing.
+    LaunchedEffect(state.project) {
+        if (state.project.isEmpty) return@LaunchedEffect
+        delay(1200)
+        withContext(Dispatchers.IO) { ProjectStore.save(context, state.project) }
+    }
 
     val player = remember {
         ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_OFF }
@@ -256,6 +285,9 @@ fun VideoEditorScreen(onBack: () -> Unit) {
                         VideoTab.FILTERS -> FilterPanel(state)
                         VideoTab.TEXT -> TextPanel(state)
                         VideoTab.STICKERS -> StickerPanel(state)
+                        VideoTab.AUDIO -> AudioPanel(state) { message ->
+                            scope.launch { snackbar.showSnackbar(message) }
+                        }
                         VideoTab.CANVAS -> CanvasPanel(state)
                         VideoTab.EXPORT -> ExportPanel(state) { message ->
                             scope.launch { snackbar.showSnackbar(message) }
@@ -627,6 +659,13 @@ private fun FilterPanel(state: VideoEditorState) {
 @Composable
 private fun CanvasPanel(state: VideoEditorState) {
     Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedTextField(
+            value = state.project.name,
+            onValueChange = { state.rename(it) },
+            label = { Text("Project name") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
         Text("Aspect ratio", style = MaterialTheme.typography.labelMedium)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),

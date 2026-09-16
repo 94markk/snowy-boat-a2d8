@@ -28,10 +28,11 @@ import com.vixel.studio.core.model.StickerLibrary
 import com.vixel.studio.core.model.StickerOverlay
 import com.vixel.studio.core.model.StickerShape
 import com.vixel.studio.ui.common.Chip
+import com.vixel.studio.ui.common.OverlayHost
 
 @Composable
-fun StickerPanel(state: VideoEditorState) {
-    val stickers = state.project.overlays.filterIsInstance<StickerOverlay>()
+fun StickerPanel(state: OverlayHost) {
+    val stickers = state.overlays.filterIsInstance<StickerOverlay>()
     val selected = state.selectedOverlay as? StickerOverlay
 
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -57,7 +58,7 @@ fun StickerPanel(state: VideoEditorState) {
                             )
                             .clickable {
                                 state.addOverlay(
-                                    newStickerAt(state.positionUs, state.project.durationUs)
+                                    newStickerAt(state.playheadUs, state.timelineDurationUs)
                                         .copy(art = StickerArt.Emoji(glyph)),
                                 )
                             },
@@ -84,7 +85,7 @@ fun StickerPanel(state: VideoEditorState) {
                         selected = false,
                         onClick = {
                             state.addOverlay(
-                                newStickerAt(state.positionUs, state.project.durationUs)
+                                newStickerAt(state.playheadUs, state.timelineDurationUs)
                                     .copy(
                                         art = StickerArt.Shape(shape, 0xFFFFFFFF.toInt()),
                                     ),

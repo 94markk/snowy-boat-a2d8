@@ -63,6 +63,8 @@ import com.vixel.studio.engine.photo.PhotoEngine
 import com.vixel.studio.ui.common.Chip
 import com.vixel.studio.ui.common.ParamSlider
 import com.vixel.studio.ui.common.PhotoPreview
+import com.vixel.studio.ui.video.StickerPanel
+import com.vixel.studio.ui.video.TextPanel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -70,6 +72,8 @@ import kotlinx.coroutines.withContext
 private enum class Tab(val label: String) {
     ADJUST("Adjust"),
     FILTERS("Filters"),
+    TEXT("Text"),
+    STICKERS("Stickers"),
     TRANSFORM("Transform"),
     EXPORT("Export"),
 }
@@ -128,6 +132,7 @@ fun PhotoEditorScreen(onBack: () -> Unit) {
                     PhotoPreview(
                         bitmap = state.source,
                         adjustments = state.effective,
+                        overlays = if (state.showOriginal) emptyList() else state.overlays,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -143,6 +148,8 @@ fun PhotoEditorScreen(onBack: () -> Unit) {
                     when (tab) {
                         Tab.ADJUST -> AdjustPanel(state, group, onGroupChange = { group = it })
                         Tab.FILTERS -> FilterPanel(state)
+                        Tab.TEXT -> TextPanel(state)
+                        Tab.STICKERS -> StickerPanel(state)
                         Tab.TRANSFORM -> TransformPanel(state, scope)
                         Tab.EXPORT -> ExportPanel(state) { message ->
                             scope.launch { snackbar.showSnackbar(message) }
@@ -409,7 +416,9 @@ private fun ExportPanel(state: PhotoEditorState, onMessage: (String) -> Unit) {
                     state.busy = true
                     val result = runCatching {
                         withContext(Dispatchers.IO) {
-                            val rendered = PhotoEngine.render(source, state.adjustments)
+                            val rendered = PhotoEngine.render(
+                                source, state.adjustments, state.overlays,
+                            )
                             val uri = ImageIo.saveToGallery(
                                 context = context,
                                 bitmap = rendered,

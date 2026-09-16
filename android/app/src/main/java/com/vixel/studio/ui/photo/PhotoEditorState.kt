@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.vixel.studio.core.model.Adjustments
+import com.vixel.studio.core.model.Overlay
+import com.vixel.studio.ui.common.OverlayHost
 
 /**
  * Editor state plus undo history.
@@ -15,7 +17,7 @@ import com.vixel.studio.core.model.Adjustments
  * [endGesture] commits it when the finger lifts.
  */
 @Stable
-class PhotoEditorState {
+class PhotoEditorState : OverlayHost {
 
     var source: Bitmap? by mutableStateOf(null)
         private set
@@ -27,6 +29,42 @@ class PhotoEditorState {
     var showOriginal: Boolean by mutableStateOf(false)
 
     var busy: Boolean by mutableStateOf(false)
+
+    // ---- Overlays. A still has no timeline, so these are simply always on.
+
+    override var overlays: List<Overlay> by mutableStateOf(emptyList())
+        private set
+
+    override var selectedOverlayId: String? by mutableStateOf(null)
+
+    override val supportsTiming: Boolean = false
+
+    override val timelineDurationUs: Long = 0L
+
+    override val playheadUs: Long = 0L
+
+    override fun addOverlay(overlay: Overlay) {
+        // A still is sampled at one fixed instant, so an overlay carrying the
+        // video default of a three-second window would fall outside it and
+        // never draw. Widen it to cover any sampling time.
+        val timeless = overlay.withTiming(0L, ALWAYS_UNTIL_US)
+        overlays = overlays + timeless
+        selectedOverlayId = timeless.id
+    }
+
+    override fun removeSelectedOverlay() {
+        val id = selectedOverlayId ?: return
+        overlays = overlays.filterNot { it.id == id }
+        selectedOverlayId = overlays.lastOrNull()?.id
+    }
+
+    override fun updateSelectedOverlay(transform: (Overlay) -> Overlay) {
+        val id = selectedOverlayId ?: return
+        overlays = overlays.map { if (it.id == id) transform(it) else it }
+    }
+
+    override fun commitSelectedOverlay(transform: (Overlay) -> Overlay) =
+        updateSelectedOverlay(transform)
 
     var canUndo: Boolean by mutableStateOf(false)
         private set
@@ -46,6 +84,7 @@ class PhotoEditorState {
         source?.takeIf { it !== bitmap && !it.isRecycled }?.recycle()
         source = bitmap
         adjustments = Adjustments()
+        clearOverlays()
         undoStack.clear()
         redoStack.clear()
         syncFlags()
@@ -58,11 +97,11 @@ class PhotoEditorState {
         if (previous != null && previous !== bitmap && !previous.isRecycled) previous.recycle()
     }
 
-    fun beginGesture() {
+    override fun beginGesture() {
         if (gestureSnapshot == null) gestureSnapshot = adjustments
     }
 
-    fun endGesture() {
+    override fun endGesture() {
         val snapshot = gestureSnapshot ?: return
         gestureSnapshot = null
         if (snapshot != adjustments) pushUndo(snapshot)
@@ -109,6 +148,9 @@ class PhotoEditorState {
     }
 
     private companion object {
+        /** Comfortably past OverlayCompositor.STILL_TIME_US. */
+        const val ALWAYS_UNTIL_US = Long.MAX_VALUE / 4
+
         const val MAX_HISTORY = 60
         val NEUTRAL = Adjustments()
     }

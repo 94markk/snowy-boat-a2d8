@@ -1,7 +1,9 @@
 package com.vixel.studio.ui
 
 import androidx.compose.runtime.Composable
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.navArgument
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.vixel.studio.ui.home.HomeScreen
@@ -32,7 +34,21 @@ fun VixelNavHost(
                 onBack = { nav.popBackStack() },
             )
         }
-        composable(Routes.VIDEO_EDITOR) { VideoEditorScreen(onBack = { nav.popBackStack() }) }
+        composable(
+            route = Routes.VIDEO_EDITOR_ROUTE,
+            arguments = listOf(
+                navArgument(Routes.ARG_PROJECT_ID) {
+                    type = NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                },
+            ),
+        ) { entry ->
+            VideoEditorScreen(
+                projectId = entry.arguments?.getString(Routes.ARG_PROJECT_ID),
+                onBack = { nav.popBackStack() },
+            )
+        }
         composable(Routes.PHOTO_EDITOR) { PhotoEditorScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.COLLAGE) { CollageScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.CUTOUT) { CutoutScreen(onBack = { nav.popBackStack() }) }

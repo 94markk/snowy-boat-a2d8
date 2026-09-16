@@ -21,6 +21,7 @@ import com.vixel.studio.core.model.TextAlignment
 import com.vixel.studio.core.model.TextFont
 import com.vixel.studio.core.model.TextOverlay
 import com.vixel.studio.ui.common.Chip
+import com.vixel.studio.ui.common.OverlayHost
 
 private val textColors = listOf(
     0xFFFFFFFF.toInt(), 0xFF000000.toInt(), 0xFF6FE3C9.toInt(), 0xFFB08CFF.toInt(),
@@ -33,8 +34,8 @@ private val plateColors = listOf(
 )
 
 @Composable
-fun TextPanel(state: VideoEditorState) {
-    val texts = state.project.overlays.filterIsInstance<TextOverlay>()
+fun TextPanel(state: OverlayHost) {
+    val texts = state.overlays.filterIsInstance<TextOverlay>()
     val selected = state.selectedOverlay as? TextOverlay
 
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
@@ -47,10 +48,10 @@ fun TextPanel(state: VideoEditorState) {
                     onClick = {
                         // New text starts at the playhead and runs three
                         // seconds, clamped to the end of the timeline.
-                        val start = state.positionUs
+                        val start = state.playheadUs
                         val end = minOf(
                             start + 3_000_000L,
-                            state.project.durationUs.coerceAtLeast(start + MIN_OVERLAY_US),
+                            state.timelineDurationUs.coerceAtLeast(start + MIN_OVERLAY_US),
                         )
                         state.addOverlay(TextOverlay(startUs = start, endUs = end))
                     },

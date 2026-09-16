@@ -4,8 +4,10 @@ import android.graphics.Bitmap
 import android.opengl.GLES30
 import android.opengl.GLSurfaceView
 import com.vixel.studio.core.model.Adjustments
+import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.gl.ColorGrader
 import com.vixel.studio.engine.gl.GlUtils
+import com.vixel.studio.engine.overlay.OverlayCompositor
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.min
@@ -24,12 +26,21 @@ class PhotoPreviewRenderer(
     private val previewMaxEdge = 2048
 
     private val grader = ColorGrader()
+    private val overlayCompositor = OverlayCompositor()
 
     @Volatile
     private var pendingBitmap: Bitmap? = null
 
     @Volatile
     var adjustments: Adjustments = Adjustments()
+        set(value) {
+            field = value
+            requestRender()
+        }
+
+    /** Text and stickers drawn over the image. */
+    @Volatile
+    var overlays: List<Overlay> = emptyList()
         set(value) {
             field = value
             requestRender()
@@ -53,6 +64,7 @@ class PhotoPreviewRenderer(
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         grader.init()
+        overlayCompositor.init()
         // A surface loss invalidates every GL name we held.
         texture = 0
         textureWidth = 0
@@ -97,6 +109,23 @@ class PhotoPreviewRenderer(
             targetX = x,
             targetY = y,
         )
+
+        // Overlays are placed relative to the image, not the whole view, so
+        // they stay put when the preview is letterboxed.
+        val list = overlays
+        if (list.isNotEmpty()) {
+            GLES30.glEnable(GLES30.GL_SCISSOR_TEST)
+            GLES30.glScissor(x, y, drawW, drawH)
+            overlayCompositor.draw(
+                overlays = list,
+                timeUs = OverlayCompositor.STILL_TIME_US,
+                canvasX = x,
+                canvasY = y,
+                canvasWidth = drawW,
+                canvasHeight = drawH,
+            )
+            GLES30.glDisable(GLES30.GL_SCISSOR_TEST)
+        }
     }
 
     private fun consumePendingBitmap() {
@@ -121,6 +150,7 @@ class PhotoPreviewRenderer(
     fun release() {
         GlUtils.deleteTexture(texture)
         texture = 0
+        overlayCompositor.release()
         grader.release()
     }
 }

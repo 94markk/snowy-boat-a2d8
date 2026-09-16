@@ -3,10 +3,12 @@ package com.vixel.studio.engine.photo
 import android.graphics.Bitmap
 import android.opengl.GLES30
 import com.vixel.studio.core.model.Adjustments
+import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.gl.ColorGrader
 import com.vixel.studio.engine.gl.EglCore
 import com.vixel.studio.engine.gl.GlFramebuffer
 import com.vixel.studio.engine.gl.GlUtils
+import com.vixel.studio.engine.overlay.OverlayCompositor
 
 /**
  * Renders a still through the same colour stack the video path uses, off the
@@ -20,7 +22,11 @@ object PhotoEngine {
     /**
      * @return a new bitmap; the caller owns it. [source] is left untouched.
      */
-    fun render(source: Bitmap, adjustments: Adjustments): Bitmap {
+    fun render(
+        source: Bitmap,
+        adjustments: Adjustments,
+        overlays: List<Overlay> = emptyList(),
+    ): Bitmap {
         if (source.isRecycled) throw IllegalArgumentException("source bitmap is recycled")
 
         val (width, height) = ColorGrader.fit(source.width, source.height, MAX_EDGE)
@@ -28,6 +34,7 @@ object PhotoEngine {
         val egl = EglCore()
         var surface = egl.createOffscreenSurface(width, height)
         val grader = ColorGrader()
+        val overlayCompositor = OverlayCompositor()
         val target = GlFramebuffer()
         var texture = 0
         try {
@@ -57,12 +64,23 @@ object PhotoEngine {
                     targetHeight = height,
                     adjustments = adjustments,
                 )
+                if (overlays.isNotEmpty()) {
+                    overlayCompositor.draw(
+                        overlays = overlays,
+                        timeUs = OverlayCompositor.STILL_TIME_US,
+                        canvasX = 0,
+                        canvasY = 0,
+                        canvasWidth = width,
+                        canvasHeight = height,
+                    )
+                }
                 result = grader.readPixels(width, height)
             }
             return result ?: throw IllegalStateException("render produced no output")
         } finally {
             GlUtils.deleteTexture(texture)
             target.release()
+            overlayCompositor.release()
             grader.release()
             egl.releaseSurface(surface)
             egl.release()

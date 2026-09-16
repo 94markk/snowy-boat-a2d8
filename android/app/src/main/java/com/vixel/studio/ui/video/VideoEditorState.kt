@@ -8,20 +8,21 @@ import com.vixel.studio.core.model.AudioClip
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.core.model.Project
+import com.vixel.studio.ui.common.OverlayHost
 
 /**
  * Timeline editing state. The [Project] itself is immutable; every edit swaps
  * in a new one, which makes undo a matter of keeping the old references.
  */
 @Stable
-class VideoEditorState {
+class VideoEditorState : OverlayHost {
 
     var project: Project by mutableStateOf(Project())
         private set
 
     var selectedClipId: String? by mutableStateOf(null)
 
-    var selectedOverlayId: String? by mutableStateOf(null)
+    override var selectedOverlayId: String? by mutableStateOf(null)
 
     /** Playhead, in microseconds from the start of the timeline. */
     var positionUs: Long by mutableStateOf(0L)
@@ -48,14 +49,36 @@ class VideoEditorState {
     val selectedIndex: Int
         get() = project.clips.indexOfFirst { it.id == selectedClipId }
 
-    val selectedOverlay: Overlay?
-        get() = project.overlays.firstOrNull { it.id == selectedOverlayId }
+    override val overlays: List<Overlay> get() = project.overlays
 
-    fun beginGesture() {
+    override val supportsTiming: Boolean = true
+
+    override val timelineDurationUs: Long get() = project.durationUs
+
+    override val playheadUs: Long get() = positionUs
+
+    /** Replaces the whole project, as when opening one from disk. */
+    fun replaceProject(next: Project) {
+        project = next
+        undoStack.clear()
+        redoStack.clear()
+        gestureSnapshot = null
+        selectedClipId = next.clips.firstOrNull()?.id
+        selectedOverlayId = next.overlays.firstOrNull()?.id
+        positionUs = 0L
+        syncFlags()
+    }
+
+    fun rename(name: String) = edit { it.copy(name = name) }
+
+    /** Clip ids whose media could not be opened when the project was loaded. */
+    var missingMediaIds: Set<String> by mutableStateOf(emptySet())
+
+    override fun beginGesture() {
         if (gestureSnapshot == null) gestureSnapshot = project
     }
 
-    fun endGesture() {
+    override fun endGesture() {
         val snapshot = gestureSnapshot ?: return
         gestureSnapshot = null
         if (snapshot != project) push(snapshot)
@@ -84,24 +107,24 @@ class VideoEditorState {
     fun addAudio(audio: AudioClip) = commit { it.copy(audio = it.audio + audio) }
 
     /** Adds an overlay and selects it, so the controls act on it immediately. */
-    fun addOverlay(overlay: Overlay) {
+    override fun addOverlay(overlay: Overlay) {
         commit { it.addOverlay(overlay) }
         selectedOverlayId = overlay.id
     }
 
-    fun removeSelectedOverlay() {
+    override fun removeSelectedOverlay() {
         val id = selectedOverlayId ?: return
         commit { it.removeOverlay(id) }
         selectedOverlayId = project.overlays.lastOrNull()?.id
     }
 
     /** Live overlay edit during a drag; no undo entry of its own. */
-    fun updateSelectedOverlay(transform: (Overlay) -> Overlay) {
+    override fun updateSelectedOverlay(transform: (Overlay) -> Overlay) {
         val id = selectedOverlayId ?: return
         edit { it.updateOverlay(id, transform) }
     }
 
-    fun commitSelectedOverlay(transform: (Overlay) -> Overlay) {
+    override fun commitSelectedOverlay(transform: (Overlay) -> Overlay) {
         val id = selectedOverlayId ?: return
         commit { it.updateOverlay(id, transform) }
     }

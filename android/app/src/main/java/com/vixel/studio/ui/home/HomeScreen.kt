@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.AutoFixHigh
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Movie
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material3.Icon
@@ -31,6 +32,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +46,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import com.vixel.studio.core.store.ProjectStore
+import com.vixel.studio.core.store.ProjectSummary
 import com.vixel.studio.ui.Routes
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.vixel.studio.ui.theme.Aqua
 import com.vixel.studio.ui.theme.Azure
 import com.vixel.studio.ui.theme.Violet
@@ -61,6 +74,16 @@ private val tools = listOf(
 
 @Composable
 fun HomeScreen(onOpenTool: (String) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var projects by remember { mutableStateOf<List<ProjectSummary>>(emptyList()) }
+    var reloadToken by remember { mutableStateOf(0) }
+
+    // Re-read on every visit so a project saved in the editor shows up here.
+    LaunchedEffect(reloadToken) {
+        projects = withContext(Dispatchers.IO) { ProjectStore.list(context) }
+    }
+
     Scaffold { inner ->
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -75,7 +98,31 @@ fun HomeScreen(onOpenTool: (String) -> Unit) {
                 Header(onSettings = { onOpenTool(Routes.SETTINGS) })
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                NewProjectCard(onClick = { onOpenTool(Routes.VIDEO_EDITOR) })
+                NewProjectCard(onClick = { onOpenTool(Routes.videoEditor(null)) })
+            }
+
+            if (projects.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        "Your projects",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 12.dp, bottom = 2.dp),
+                    )
+                }
+                items(projects, span = { GridItemSpan(maxLineSpan) }) { summary ->
+                    ProjectRow(
+                        summary = summary,
+                        onOpen = { onOpenTool(Routes.videoEditor(summary.id)) },
+                        onDelete = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    ProjectStore.delete(context, summary.id)
+                                }
+                                reloadToken++
+                            }
+                        },
+                    )
+                }
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
@@ -132,6 +179,60 @@ private fun NewProjectCard(onClick: () -> Unit) {
             )
         }
     }
+}
+
+@Composable
+private fun ProjectRow(
+    summary: ProjectSummary,
+    onOpen: () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+            .clickable(onClick = onOpen)
+            .padding(start = 14.dp, top = 10.dp, bottom = 10.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                summary.name.ifBlank { "Untitled" },
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                buildString {
+                    append(summary.aspectId)
+                    append("  ·  ")
+                    append("${summary.clipCount} clip${if (summary.clipCount == 1) "" else "s"}")
+                    if (summary.overlayCount > 0) {
+                        append("  ·  ")
+                        append("${summary.overlayCount} overlay${if (summary.overlayCount == 1) "" else "s"}")
+                    }
+                    append("  ·  ")
+                    append(formatDuration(summary.durationUs))
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = onDelete) {
+            Icon(
+                Icons.Rounded.Delete,
+                contentDescription = "Delete project",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun formatDuration(us: Long): String {
+    val totalSeconds = us / 1_000_000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "%d:%02d".format(minutes, seconds)
 }
 
 @Composable

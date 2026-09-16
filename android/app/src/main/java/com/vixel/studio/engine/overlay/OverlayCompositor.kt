@@ -188,23 +188,30 @@ class OverlayCompositor {
         initialised = false
     }
 
-    private companion object {
-        const val STRIDE = 4 * 4
-        const val MAX_CACHED = 24
+    companion object {
+        /**
+         * Time used when compositing onto a still. Past any entry animation,
+         * so an overlay created with one is drawn fully formed rather than at
+         * frame zero of its own fade.
+         */
+        const val STILL_TIME_US = 10_000_000L
+
+        private const val STRIDE = 4 * 4
+        private const val MAX_CACHED = 24
 
         /**
          * Bitmap row 0 is the top of the image but maps to t = 0, which the
          * quad places at the bottom. Flipping v here puts overlays the right
          * way up.
          */
-        val FLIP_V = floatArrayOf(
+        private val FLIP_V = floatArrayOf(
             1f, 0f, 0f, 0f,
             0f, -1f, 0f, 0f,
             0f, 0f, 1f, 0f,
             0f, 1f, 0f, 1f,
         )
 
-        const val VERTEX = """#version 300 es
+        private const val VERTEX = """#version 300 es
 layout(location = 0) in vec4 aPosition;
 layout(location = 1) in vec2 aTexCoord;
 uniform mat4 uMvp;
@@ -216,7 +223,7 @@ void main() {
 }
 """
 
-        const val FRAGMENT = """#version 300 es
+        private const val FRAGMENT = """#version 300 es
 precision mediump float;
 in vec2 vTex;
 out vec4 fragColor;

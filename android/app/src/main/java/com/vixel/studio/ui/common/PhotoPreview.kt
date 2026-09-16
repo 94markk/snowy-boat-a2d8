@@ -11,6 +11,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.vixel.studio.core.model.Adjustments
+import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.photo.PhotoPreviewRenderer
 
 /**
@@ -21,6 +22,7 @@ import com.vixel.studio.engine.photo.PhotoPreviewRenderer
 fun PhotoPreview(
     bitmap: Bitmap?,
     adjustments: Adjustments,
+    overlays: List<Overlay> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val holder = remember { PreviewHolder() }
@@ -58,6 +60,7 @@ fun PhotoPreview(
                 renderer.setBitmap(bitmap)
             }
             renderer.adjustments = adjustments
+            renderer.overlays = overlays
             view.requestRender()
         },
         onRelease = { view ->
