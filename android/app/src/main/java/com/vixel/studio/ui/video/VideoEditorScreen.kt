@@ -350,7 +350,10 @@ private fun ClipPanel(state: VideoEditorState) {
             SimpleSlider(
                 label = "Trim end",
                 value = clip.trimEndUs.toFloat(),
-                range = Clip.MIN_CLIP_US.toFloat()..clip.sourceDurationUs.coerceAtLeast(1L).toFloat(),
+                // Guard the range: a clip barely longer than MIN_CLIP_US would
+                // otherwise hand Slider a start >= end and blow up.
+                range = Clip.MIN_CLIP_US.toFloat()..
+                    maxOf(clip.sourceDurationUs, Clip.MIN_CLIP_US + 1L).toFloat(),
                 display = formatTime(clip.trimEndUs),
                 onChange = { v ->
                     state.beginGesture()
