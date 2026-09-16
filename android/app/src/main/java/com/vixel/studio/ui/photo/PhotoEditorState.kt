@@ -80,6 +80,11 @@ class PhotoEditorState : OverlayHost {
     val effective: Adjustments
         get() = if (showOriginal) NEUTRAL.copy(filterStrength = 0f) else adjustments
 
+    fun clearOverlays() {
+        overlays = emptyList()
+        selectedOverlayId = null
+    }
+
     fun load(bitmap: Bitmap?) {
         source?.takeIf { it !== bitmap && !it.isRecycled }?.recycle()
         source = bitmap
