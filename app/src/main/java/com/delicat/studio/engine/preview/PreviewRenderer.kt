@@ -107,6 +107,7 @@ class PreviewRenderer(
             renderer = GLES20.glGetString(GLES20.GL_RENDERER).orEmpty(),
             version = GLES20.glGetString(GLES20.GL_VERSION).orEmpty(),
             shaderCompiled = renderer.isReady,
+            gradingAvailable = renderer.gradingAvailable,
             shaderError = renderer.failure,
             surfaceReady = surface != null,
         )

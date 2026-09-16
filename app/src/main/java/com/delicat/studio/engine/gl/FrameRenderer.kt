@@ -77,19 +77,45 @@ class FrameRenderer {
     var failure: String? = null
         private set
 
+    /**
+     * False when only the fallback shader would compile.
+     *
+     * The picture still appears; the colour controls simply have nothing to
+     * act through, and the UI says so rather than letting them look broken.
+     */
+    var gradingAvailable: Boolean = false
+        private set
+
     fun setup() {
         if (isReady) return
+        GLES20.glDisable(GLES20.GL_DEPTH_TEST)
+        GLES20.glDisable(GLES20.GL_CULL_FACE)
+
         try {
             external = Program(Shaders.FRAGMENT_EXTERNAL)
             flat = Program(Shaders.FRAGMENT_FLAT)
             repeat(2) { luts += Lut() }
-            GLES20.glDisable(GLES20.GL_DEPTH_TEST)
-            GLES20.glDisable(GLES20.GL_CULL_FACE)
             GlUtil.checkGl("setup")
             isReady = true
+            gradingAvailable = true
             failure = null
+            return
         } catch (e: Throwable) {
             failure = e.message ?: e.javaClass.simpleName
+            release()
+        }
+
+        // Second attempt, without the colour chain. A device that cannot
+        // compile the full shader can almost always manage this, and footage
+        // the user can see beats a correct refusal to draw.
+        try {
+            external = Program(Shaders.PLAIN_EXTERNAL)
+            flat = Program(Shaders.PLAIN_FLAT)
+            GlUtil.checkGl("fallback setup")
+            isReady = true
+            gradingAvailable = false
+        } catch (e: Throwable) {
+            failure = "${failure.orEmpty()} / fallback: ${e.message ?: e.javaClass.simpleName}"
             release()
         }
     }
@@ -102,6 +128,7 @@ class FrameRenderer {
         luts.forEach { it.release() }
         luts.clear()
         isReady = false
+        gradingAvailable = false
     }
 
     /** Clears the canvas to [argb] and points the viewport at it. */
@@ -152,9 +179,11 @@ class FrameRenderer {
         GLES20.glBindTexture(target, texture)
         GLES20.glUniform1i(program.source, 0)
 
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lutFor(adjustments))
-        GLES20.glUniform1i(program.lut, 1)
+        if (gradingAvailable) {
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE1)
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, lutFor(adjustments))
+            GLES20.glUniform1i(program.lut, 1)
+        }
 
         val w = if (sourceWidth > 0) sourceWidth.toFloat() else 1920f
         val h = if (sourceHeight > 0) sourceHeight.toFloat() else 1080f

@@ -220,6 +220,44 @@ precision mediump float;
 uniform samplerExternalOES uSource;
 """ + FRAGMENT_BODY
 
+    /**
+     * The same picture with none of the colour work.
+     *
+     * Compiled only if the full shader will not, which happens on hardware
+     * that lacks something the grading chain needs. Showing the footage
+     * ungraded is a poor editor; showing a black rectangle is not an editor at
+     * all, and the difference between them is these nine lines.
+     *
+     * Transitions still work, because opacity and the wash over a frame are
+     * all that most of them are.
+     */
+    private const val PLAIN_BODY = """
+varying vec2 vTex;
+varying vec2 vQuad;
+varying vec2 vScreen;
+
+uniform float uAlpha;
+uniform vec4 uOverlay;
+
+void main() {
+    vec3 colour = SAMPLE(uSource, clamp(vTex, vec2(0.0), vec2(1.0))).rgb;
+    colour = mix(colour, uOverlay.rgb, clamp(uOverlay.a, 0.0, 1.0));
+    gl_FragColor = vec4(colour, uAlpha);
+}
+"""
+
+    val PLAIN_EXTERNAL: String = """
+#extension GL_OES_EGL_image_external : require
+""" + PRECISION + """
+#define SAMPLE texture2D
+uniform samplerExternalOES uSource;
+""" + PLAIN_BODY
+
+    val PLAIN_FLAT: String = PRECISION + """
+#define SAMPLE texture2D
+uniform sampler2D uSource;
+""" + PLAIN_BODY
+
     /** Reads a still: a photo, or a cached frame standing in for a clip. */
     val FRAGMENT_FLAT: String = PRECISION + """
 #define SAMPLE texture2D

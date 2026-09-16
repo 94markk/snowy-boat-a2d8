@@ -397,11 +397,25 @@ private fun PreviewTrouble(state: EditorState) {
             .fillMaxSize()
             .padding(20.dp),
     ) {
+        val gradingOff = preview != null && preview.shaderCompiled && !preview.gradingAvailable
         Text(
-            if (broken) "The preview could not start" else "This clip would not play",
+            when {
+                gradingOff -> "Showing your footage without colour"
+                broken -> "The preview could not start"
+                else -> "This clip would not play"
+            },
             style = MaterialTheme.typography.titleMedium,
             color = Palette.Primary,
         )
+        if (gradingOff) {
+            Text(
+                "This device would not compile the colour shader, so Adjust and " +
+                    "Looks have nothing to act through. Everything else works.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Palette.Secondary,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
         state.playbackError?.let { reason ->
             Text(
                 reason,

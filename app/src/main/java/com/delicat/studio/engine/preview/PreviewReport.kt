@@ -14,18 +14,21 @@ data class PreviewReport(
     val renderer: String = "",
     val version: String = "",
     val shaderCompiled: Boolean = false,
+    /** False when only the fallback shader compiled, so colour has no effect. */
+    val gradingAvailable: Boolean = false,
     val shaderError: String? = null,
     val surfaceReady: Boolean = false,
     val framesDrawn: Long = 0L,
     val videoFramesReceived: Long = 0L,
 ) {
-    val isHealthy: Boolean get() = shaderCompiled && surfaceReady
+    val isHealthy: Boolean get() = shaderCompiled && surfaceReady && gradingAvailable
 
     /** One line per fact, for a screen small enough that prose will not fit. */
     fun lines(): List<String> = listOf(
         "GPU  ${renderer.ifBlank { "unknown" }}",
         "GL   ${version.ifBlank { "unknown" }}",
         "Shader  ${if (shaderCompiled) "compiled" else "FAILED"}",
+        "Colour  ${if (gradingAvailable) "active" else "UNAVAILABLE on this device"}",
         "Surface ${if (surfaceReady) "ready" else "missing"}",
         "Frames drawn $framesDrawn, from video $videoFramesReceived",
     ) + listOfNotNull(shaderError?.let { "Error  $it" })
