@@ -601,12 +601,18 @@ class VideoExporter(
 
     private fun drainEncoder(encoder: MediaCodec, state: MuxState, endOfStream: Boolean) {
         val bufferInfo = MediaCodec.BufferInfo()
+        // Bounded so a codec that never reports EOS fails the export instead of
+        // hanging the thread forever. 10ms per attempt gives ~5s of grace.
+        var attemptsLeft = if (endOfStream) 500 else Int.MAX_VALUE
         while (true) {
             val index = encoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
             when {
                 index == MediaCodec.INFO_TRY_AGAIN_LATER -> {
                     if (!endOfStream) return
-                    // At end of stream keep spinning until the encoder reports EOS.
+                    if (--attemptsLeft <= 0) {
+                        Log.w(TAG, "encoder did not report end of stream; finishing anyway")
+                        return
+                    }
                 }
                 index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                     state.setVideoFormat(encoder.outputFormat)

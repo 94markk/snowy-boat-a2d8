@@ -47,6 +47,7 @@ object AacEncoder {
             val bufferInfo = MediaCodec.BufferInfo()
             var framesSubmitted = 0L
             var inputDone = false
+            var drainAttemptsLeft = 500
 
             BufferedInputStream(FileInputStream(pcm), 1 shl 16).use { input ->
                 val chunk = ByteArray(1 shl 12)
@@ -82,6 +83,14 @@ object AacEncoder {
                     }
 
                     val outIndex = encoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
+                    if (outIndex == MediaCodec.INFO_TRY_AGAIN_LATER && inputDone) {
+                        // Same guard as the video path: do not spin forever if
+                        // the encoder never flags end of stream.
+                        if (--drainAttemptsLeft <= 0) {
+                            Log.w(TAG, "aac encoder did not report end of stream")
+                            return@use
+                        }
+                    }
                     when {
                         outIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                             if (!started) {
@@ -104,7 +113,6 @@ object AacEncoder {
                                 return@use
                             }
                         }
-                        outIndex == MediaCodec.INFO_TRY_AGAIN_LATER && inputDone -> Unit
                     }
                 }
             }
