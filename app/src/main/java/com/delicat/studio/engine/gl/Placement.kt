@@ -1,6 +1,5 @@
 package com.delicat.studio.engine.gl
 
-import android.opengl.Matrix
 import com.delicat.studio.model.FitMode
 
 /**
@@ -34,7 +33,7 @@ data class Placement(
 
     fun modelViewProjection(out: FloatArray) {
         require(out.size >= 16) { "matrix needs 16 floats" }
-        Matrix.setIdentityM(out, 0)
+        Mat4.identity(out)
 
         val cw = canvasWidth.toFloat()
         val ch = canvasHeight.toFloat()
@@ -54,8 +53,8 @@ data class Placement(
         var sy = 1f
         if (inside) sy = canvasAspect / sourceAspect else sx = sourceAspect / canvasAspect
 
-        Matrix.translateM(out, 0, offsetX, offsetY, 0f)
-        Matrix.scaleM(out, 0, sx * scale, sy * scale, 1f)
+        Mat4.translate(out, offsetX, offsetY, 0f)
+        Mat4.scale(out, sx * scale, sy * scale, 1f)
     }
 
     /**
@@ -68,18 +67,27 @@ data class Placement(
     fun textureMatrix(sourceMatrix: FloatArray?, out: FloatArray, scratch: FloatArray) {
         require(out.size >= 16 && scratch.size >= 16) { "matrices need 16 floats" }
 
-        Matrix.setIdentityM(scratch, 0)
+        Mat4.identity(scratch)
         // Rotation is about the middle of the unit square, so a quarter turn
         // maps the square onto itself and no content leaves the frame.
-        Matrix.translateM(scratch, 0, 0.5f, 0.5f, 0f)
-        Matrix.rotateM(scratch, 0, -90f * turns, 0f, 0f, 1f)
-        if (flipVertically) Matrix.scaleM(scratch, 0, 1f, -1f, 1f)
-        Matrix.translateM(scratch, 0, -0.5f, -0.5f, 0f)
+        Mat4.translate(scratch, 0.5f, 0.5f, 0f)
+        // Order matters and is not symmetric. The rotation is what the user
+        // asked for, expressed in the frame they are looking at; the flip is
+        // a fact about how a bitmap is stored, and correcting it has to come
+        // after the rotation rather than before. Applied the other way round,
+        // a quarter turn clockwise comes out as three.
+        //
+        // The angle is positive because this transforms the coordinate being
+        // sampled rather than the picture: turning the image clockwise means
+        // reading from a point that has turned anticlockwise.
+        if (flipVertically) Mat4.scale(scratch, 1f, -1f, 1f)
+        Mat4.rotateZ(scratch, 90f * turns)
+        Mat4.translate(scratch, -0.5f, -0.5f, 0f)
 
         if (sourceMatrix == null) {
             System.arraycopy(scratch, 0, out, 0, 16)
         } else {
-            Matrix.multiplyMM(out, 0, sourceMatrix, 0, scratch, 0)
+            Mat4.multiply(out, sourceMatrix, scratch)
         }
     }
 }

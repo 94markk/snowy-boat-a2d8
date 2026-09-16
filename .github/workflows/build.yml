@@ -66,6 +66,19 @@ jobs:
         timeout-minutes: 15
         run: gradle --no-daemon --console=plain testDebugUnitTest
 
+      # Gradle prints the path to an HTML report nobody can open from a log.
+      # The XML beside it holds the actual assertion, so it is echoed here.
+      - name: Show what failed
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for report in app/build/test-results/testDebugUnitTest/*.xml; do
+            grep -q '<failure\|<error' "$report" || continue
+            echo "--- $(basename "$report")"
+            sed -n 's/.*\(<\(failure\|error\)[^>]*\).*/\1/p' "$report" | head -20
+            sed -n '/<\(failure\|error\)/,/<\/\(failure\|error\)>/p' "$report" | head -40
+          done
+
       - name: Assemble debug APK
         timeout-minutes: 20
         run: gradle --no-daemon --console=plain assembleDebug

@@ -1,5 +1,6 @@
 package com.delicat.studio
 
+import com.delicat.studio.engine.gl.Mat4
 import com.delicat.studio.engine.gl.Placement
 import com.delicat.studio.engine.gl.Transitions
 import com.delicat.studio.model.Clip
@@ -257,5 +258,93 @@ class PlacementTest {
         )
         assertEquals(base.copy(quarterTurns = 1).displayWidth, base.copy(quarterTurns = -3).displayWidth)
         assertEquals(base.copy(quarterTurns = 1).displayWidth, base.copy(quarterTurns = 5).displayWidth)
+    }
+}
+
+/**
+ * Which pixel of the source ends up under which corner of the canvas.
+ *
+ * Written because this is genuinely hard to hold in one's head: the rotation
+ * turns the coordinate being sampled rather than the picture, so its sign is
+ * the opposite of the one the user asked for, and the flip that corrects a
+ * bitmap's row order has to be applied after it rather than before. Getting
+ * either wrong produces a picture that is rotated, just not by what was asked.
+ */
+class TextureMatrixTest {
+
+    private fun sample(turns: Int, flip: Boolean, quadX: Float, quadY: Float): Pair<Float, Float> {
+        val placement = Placement(
+            canvasWidth = 1080, canvasHeight = 1920,
+            sourceWidth = 1920, sourceHeight = 1080,
+            quarterTurns = turns,
+            flipVertically = flip,
+        )
+        val matrix = FloatArray(16)
+        placement.textureMatrix(null, matrix, FloatArray(16))
+
+        val out = FloatArray(4)
+        Mat4.transform(out, matrix, quadX, quadY, 0f, 1f)
+        return out[0] to out[1]
+    }
+
+    private fun assertCorner(expected: Pair<Float, Float>, actual: Pair<Float, Float>, what: String) {
+        assertEquals("$what x", expected.first, actual.first, 1e-4f)
+        assertEquals("$what y", expected.second, actual.second, 1e-4f)
+    }
+
+    /**
+     * A still's first row is its top, which is the opposite end from where the
+     * quad's first row lands, so an unrotated photo samples the bottom of the
+     * image at the bottom of the screen by reading v = 1.
+     */
+    @Test
+    fun `an unrotated still is the right way up`() {
+        assertCorner(0f to 1f, sample(0, flip = true, 0f, 0f), "bottom left")
+        assertCorner(1f to 0f, sample(0, flip = true, 1f, 1f), "top right")
+    }
+
+    @Test
+    fun `an unrotated video frame is sampled as it arrives`() {
+        assertCorner(0f to 0f, sample(0, flip = false, 0f, 0f), "bottom left")
+        assertCorner(1f to 1f, sample(0, flip = false, 1f, 1f), "top right")
+    }
+
+    /**
+     * One turn clockwise puts the source's bottom right corner at the bottom
+     * left of the canvas, for a still and for a video frame alike. That the
+     * two agree is the point: the same rotation control drives both.
+     */
+    @Test
+    fun `a quarter turn goes clockwise for both kinds of source`() {
+        assertCorner(1f to 1f, sample(1, flip = true, 0f, 0f), "still, one turn")
+        assertCorner(1f to 0f, sample(1, flip = false, 0f, 0f), "video, one turn")
+    }
+
+    @Test
+    fun `turning four times comes back to where it started`() {
+        for (flip in listOf(true, false)) {
+            for (corner in listOf(0f to 0f, 1f to 0f, 0f to 1f, 1f to 1f)) {
+                assertCorner(
+                    sample(0, flip, corner.first, corner.second),
+                    sample(4, flip, corner.first, corner.second),
+                    "flip=$flip corner=$corner",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `every turn keeps the whole source inside the frame`() {
+        for (turns in 0..3) {
+            for (flip in listOf(true, false)) {
+                for (x in listOf(0f, 1f)) {
+                    for (y in listOf(0f, 1f)) {
+                        val (u, v) = sample(turns, flip, x, y)
+                        assertTrue("turns=$turns flip=$flip maps outside the texture", u in -1e-4f..1.0001f)
+                        assertTrue("turns=$turns flip=$flip maps outside the texture", v in -1e-4f..1.0001f)
+                    }
+                }
+            }
+        }
     }
 }

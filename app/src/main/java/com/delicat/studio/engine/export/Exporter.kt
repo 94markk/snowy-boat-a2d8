@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -471,7 +472,9 @@ class Exporter(private val context: Context) {
                     }
                     val buffer = codec.getInputBuffer(index) ?: break
                     buffer.clear()
-                    val shorts = buffer.asShortBuffer()
+                    // The encoder reads PCM in the device's byte order; see
+                    // the note in AudioTimeline for what happens otherwise.
+                    val shorts = buffer.order(ByteOrder.nativeOrder()).asShortBuffer()
                     val take = minOf(shorts.remaining(), count - offset)
                     shorts.put(pcm, offset, take)
                     val presentationUs =

@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.net.Uri
+import java.nio.ByteOrder
 import com.delicat.studio.model.MediaKind
 import com.delicat.studio.model.Project
 import kotlin.math.max
@@ -199,7 +200,11 @@ class AudioTimeline(private val context: Context) {
                     if (buffer != null) {
                         buffer.position(info.offset)
                         buffer.limit(info.offset + info.size)
-                        val shorts = buffer.asShortBuffer()
+                        // Raw PCM from a decoder is in the device's own byte
+                        // order. A ByteBuffer defaults to big-endian, so
+                        // reading shorts without saying otherwise swaps every
+                        // pair of bytes and turns the audio into noise.
+                        val shorts = buffer.order(ByteOrder.nativeOrder()).asShortBuffer()
                         val available = shorts.remaining() / sourceChannels
 
                         // A seek lands on the sync sample before the trim, so
