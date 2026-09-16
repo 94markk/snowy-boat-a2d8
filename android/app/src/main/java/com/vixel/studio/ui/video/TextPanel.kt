@@ -34,11 +34,15 @@ private val plateColors = listOf(
 )
 
 @Composable
-fun TextPanel(state: OverlayHost) {
+fun TextPanel(state: OverlayHost, onMessage: (String) -> Unit = {}) {
     val texts = state.overlays.filterIsInstance<TextOverlay>()
     val selected = state.selectedOverlay as? TextOverlay
 
     LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        (state as? VideoEditorState)?.let { videoState ->
+            item { CaptionControls(videoState, onMessage) }
+        }
+
         item {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),

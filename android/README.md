@@ -169,6 +169,14 @@ is invariant to brightness, so a subject moving through shade stays locked
 where a plain difference metric would lose it. The result is written as
 ordinary position keyframes, so it can be nudged afterwards like anything else.
 
+**Auto captions** — transcribes speech and lays it out as timed captions,
+entirely on device. Since API 31 the platform recogniser accepts a file
+descriptor instead of the microphone, so audio already on disk can be fed
+straight in; no model ships in the APK and no request leaves the phone. Audio
+is segmented by voice activity first, so each caption spans a real utterance
+rather than an arbitrary window. Captions land as ordinary text overlays, so
+they can be edited and restyled like anything else.
+
 **Photo** — text and stickers with the same controls as video, 18 live
 parameters (exposure, brightness, contrast, highlights,
 shadows, whites, blacks, saturation, vibrance, temperature, tint, hue, sharpen,
@@ -229,10 +237,15 @@ Worth being straight about:
   before the search window loses it. A low-contrast or heavily occluded subject
   will drift; the match score holds the last good position rather than snapping
   somewhere wrong.
-- **Not built yet: auto captions.** The platform's speech recogniser listens to
-  a live microphone and will not transcribe a file, so this needs either a
-  bundled recognition model or a cloud service — a different kind of dependency
-  from anything else here, and not a small addition.
+- **Captions need Android 12 and an installed language pack.** Feeding audio
+  from a descriptor arrived in API 31, and on-device recognition only works
+  once a language has been downloaded in system settings; the app says which
+  of the two is missing rather than producing empty captions. Recognition is
+  deliberately on-device only — the networked recogniser is often better, but
+  it would send the user's audio to a server, which an offline editor should
+  not start doing quietly.
+- **Caption timing is per utterance, not per word.** The platform exposes word
+  timings on API 34+; using them would allow karaoke-style captions.
 
 ## Why CI builds the APK
 

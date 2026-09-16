@@ -286,7 +286,9 @@ fun VideoEditorScreen(projectId: String? = null, onBack: () -> Unit) {
                         VideoTab.ADJUST -> AdjustPanel(state, group) { group = it }
                         VideoTab.FILTERS -> FilterPanel(state)
                         VideoTab.MOTION -> MotionPanel(state)
-                        VideoTab.TEXT -> TextPanel(state)
+                        VideoTab.TEXT -> TextPanel(state) { message ->
+                            scope.launch { snackbar.showSnackbar(message) }
+                        }
                         VideoTab.STICKERS -> StickerPanel(state)
                         VideoTab.AUDIO -> AudioPanel(state) { message ->
                             scope.launch { snackbar.showSnackbar(message) }
