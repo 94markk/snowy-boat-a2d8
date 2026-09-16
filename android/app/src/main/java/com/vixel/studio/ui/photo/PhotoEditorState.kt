@@ -42,7 +42,7 @@ class PhotoEditorState {
     val effective: Adjustments
         get() = if (showOriginal) NEUTRAL.copy(filterStrength = 0f) else adjustments
 
-    fun setSource(bitmap: Bitmap?) {
+    fun load(bitmap: Bitmap?) {
         source?.takeIf { it !== bitmap && !it.isRecycled }?.recycle()
         source = bitmap
         adjustments = Adjustments()

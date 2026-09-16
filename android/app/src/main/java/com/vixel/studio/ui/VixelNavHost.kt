@@ -7,6 +7,7 @@ import androidx.navigation.compose.rememberNavController
 import com.vixel.studio.ui.home.HomeScreen
 import com.vixel.studio.ui.photo.PhotoEditorScreen
 import com.vixel.studio.ui.settings.SettingsScreen
+import com.vixel.studio.ui.video.VideoEditorScreen
 
 @Composable
 fun VixelNavHost(
@@ -28,7 +29,7 @@ fun VixelNavHost(
                 onBack = { nav.popBackStack() },
             )
         }
-        composable(Routes.VIDEO_EDITOR) { ToolPlaceholder("Video editor") { nav.popBackStack() } }
+        composable(Routes.VIDEO_EDITOR) { VideoEditorScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.PHOTO_EDITOR) { PhotoEditorScreen(onBack = { nav.popBackStack() }) }
         composable(Routes.COLLAGE) { ToolPlaceholder("Collage") { nav.popBackStack() } }
         composable(Routes.CUTOUT) { ToolPlaceholder("Background remover") { nav.popBackStack() } }

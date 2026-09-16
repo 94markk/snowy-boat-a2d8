@@ -60,6 +60,7 @@ import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.FilterPreset
 import com.vixel.studio.core.model.Filters
 import com.vixel.studio.engine.photo.PhotoEngine
+import com.vixel.studio.ui.common.Chip
 import com.vixel.studio.ui.common.ParamSlider
 import com.vixel.studio.ui.common.PhotoPreview
 import kotlinx.coroutines.Dispatchers
@@ -94,7 +95,7 @@ fun PhotoEditorScreen(onBack: () -> Unit) {
             if (bitmap == null) {
                 snackbar.showSnackbar("Could not open that image")
             } else {
-                state.setSource(bitmap)
+                state.load(bitmap)
             }
         }
     }
@@ -242,42 +243,6 @@ private fun TabRow(current: Tab, onSelect: (Tab) -> Unit) {
                 onClick = { onSelect(entry) },
             )
         }
-    }
-}
-
-@Composable
-private fun Chip(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(
-                if (selected) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-                } else {
-                    MaterialTheme.colorScheme.surface
-                },
-            )
-            .border(
-                1.dp,
-                if (selected) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.outlineVariant
-                },
-                RoundedCornerShape(50),
-            )
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-        )
     }
 }
 

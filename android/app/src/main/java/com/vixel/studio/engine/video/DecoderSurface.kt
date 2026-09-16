@@ -22,6 +22,14 @@ class DecoderSurface {
     private val frameSyncObject = Object()
     private var frameAvailable = false
 
+    /**
+     * Notified whenever the decoder posts a frame. Live preview uses this to
+     * schedule a repaint; the export path ignores it and blocks on
+     * [awaitNewImage] instead.
+     */
+    @Volatile
+    var onFrameAvailable: (() -> Unit)? = null
+
     private val transformMatrix = FloatArray(16)
 
     init {
@@ -43,6 +51,7 @@ class DecoderSurface {
                 frameAvailable = true
                 frameSyncObject.notifyAll()
             }
+            onFrameAvailable?.invoke()
         }
         surface = Surface(surfaceTexture)
     }
@@ -72,6 +81,27 @@ class DecoderSurface {
         surfaceTexture.updateTexImage()
         surfaceTexture.getTransformMatrix(transformMatrix)
         return true
+    }
+
+    /**
+     * Non-blocking variant for live preview: consumes a frame if one has
+     * arrived, otherwise leaves the texture showing the previous frame.
+     *
+     * @return true when the texture was updated.
+     */
+    fun updateIfAvailable(): Boolean {
+        synchronized(frameSyncObject) {
+            if (!frameAvailable) return false
+            frameAvailable = false
+        }
+        surfaceTexture.updateTexImage()
+        surfaceTexture.getTransformMatrix(transformMatrix)
+        return true
+    }
+
+    /** Preview surfaces must match the view, not the decoder's natural size. */
+    fun setDefaultBufferSize(width: Int, height: Int) {
+        if (width > 0 && height > 0) surfaceTexture.setDefaultBufferSize(width, height)
     }
 
     /** Valid only after a successful [awaitNewImage]. */
