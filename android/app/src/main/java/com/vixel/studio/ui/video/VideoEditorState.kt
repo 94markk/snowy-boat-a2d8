@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.vixel.studio.core.model.AudioClip
 import com.vixel.studio.core.model.Clip
+import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.core.model.Project
 
 /**
@@ -19,6 +20,8 @@ class VideoEditorState {
         private set
 
     var selectedClipId: String? by mutableStateOf(null)
+
+    var selectedOverlayId: String? by mutableStateOf(null)
 
     /** Playhead, in microseconds from the start of the timeline. */
     var positionUs: Long by mutableStateOf(0L)
@@ -44,6 +47,9 @@ class VideoEditorState {
 
     val selectedIndex: Int
         get() = project.clips.indexOfFirst { it.id == selectedClipId }
+
+    val selectedOverlay: Overlay?
+        get() = project.overlays.firstOrNull { it.id == selectedOverlayId }
 
     fun beginGesture() {
         if (gestureSnapshot == null) gestureSnapshot = project
@@ -76,6 +82,29 @@ class VideoEditorState {
     }
 
     fun addAudio(audio: AudioClip) = commit { it.copy(audio = it.audio + audio) }
+
+    /** Adds an overlay and selects it, so the controls act on it immediately. */
+    fun addOverlay(overlay: Overlay) {
+        commit { it.addOverlay(overlay) }
+        selectedOverlayId = overlay.id
+    }
+
+    fun removeSelectedOverlay() {
+        val id = selectedOverlayId ?: return
+        commit { it.removeOverlay(id) }
+        selectedOverlayId = project.overlays.lastOrNull()?.id
+    }
+
+    /** Live overlay edit during a drag; no undo entry of its own. */
+    fun updateSelectedOverlay(transform: (Overlay) -> Overlay) {
+        val id = selectedOverlayId ?: return
+        edit { it.updateOverlay(id, transform) }
+    }
+
+    fun commitSelectedOverlay(transform: (Overlay) -> Overlay) {
+        val id = selectedOverlayId ?: return
+        commit { it.updateOverlay(id, transform) }
+    }
 
     fun removeSelected() {
         val id = selectedClipId ?: return
@@ -133,6 +162,9 @@ class VideoEditorState {
     private fun clampSelection() {
         if (project.clips.none { it.id == selectedClipId }) {
             selectedClipId = project.clips.firstOrNull()?.id
+        }
+        if (project.overlays.none { it.id == selectedOverlayId }) {
+            selectedOverlayId = project.overlays.firstOrNull()?.id
         }
         positionUs = positionUs.coerceIn(0L, project.durationUs)
     }

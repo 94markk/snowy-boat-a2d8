@@ -6,7 +6,9 @@ import android.opengl.Matrix
 import android.view.Surface
 import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.FitMode
+import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.gl.ColorGrader
+import com.vixel.studio.engine.overlay.OverlayCompositor
 import javax.microedition.khronos.egl.EGLConfig
 import javax.microedition.khronos.opengles.GL10
 import kotlin.math.max
@@ -25,6 +27,7 @@ class VideoPreviewRenderer(
 ) : GLSurfaceView.Renderer {
 
     private val grader = ColorGrader()
+    private val overlayCompositor = OverlayCompositor()
     private var decoderSurface: DecoderSurface? = null
 
     /** Called on the GL thread once the decoder surface exists. */
@@ -50,6 +53,13 @@ class VideoPreviewRenderer(
     @Volatile
     var opacity: Float = 1f
 
+    /** Overlays to draw above the frame, and where the playhead is. */
+    @Volatile
+    var overlays: List<Overlay> = emptyList()
+
+    @Volatile
+    var timelineUs: Long = 0L
+
     /** Colour behind the canvas (the editor surround). */
     @Volatile
     var surroundColor: Int = 0xFF07070B.toInt()
@@ -63,6 +73,7 @@ class VideoPreviewRenderer(
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
         grader.init()
+        overlayCompositor.init()
         val surface = DecoderSurface()
         surface.onFrameAvailable = { requestRender() }
         decoderSurface = surface
@@ -100,7 +111,10 @@ class VideoPreviewRenderer(
 
         val srcW = sourceWidth
         val srcH = sourceHeight
-        if (srcW <= 0 || srcH <= 0) return
+        if (srcW <= 0 || srcH <= 0) {
+            drawOverlays(canvasX, canvasY, canvasW, canvasH)
+            return
+        }
 
         // Clip fitted inside the canvas.
         val sourceAspect = srcW.toFloat() / srcH
@@ -160,6 +174,24 @@ class VideoPreviewRenderer(
             opacity = opacity,
         )
         GLES30.glDisable(GLES30.GL_SCISSOR_TEST)
+
+        drawOverlays(canvasX, canvasY, canvasW, canvasH)
+    }
+
+    private fun drawOverlays(canvasX: Int, canvasY: Int, canvasW: Int, canvasH: Int) {
+        val list = overlays
+        if (list.isEmpty()) return
+        GLES30.glEnable(GLES30.GL_SCISSOR_TEST)
+        GLES30.glScissor(canvasX, canvasY, canvasW, canvasH)
+        overlayCompositor.draw(
+            overlays = list,
+            timeUs = timelineUs,
+            canvasX = canvasX,
+            canvasY = canvasY,
+            canvasWidth = canvasW,
+            canvasHeight = canvasH,
+        )
+        GLES30.glDisable(GLES30.GL_SCISSOR_TEST)
     }
 
     private fun clear(color: Int, x: Int, y: Int, width: Int, height: Int) {
@@ -177,6 +209,7 @@ class VideoPreviewRenderer(
     fun release() {
         decoderSurface?.release()
         decoderSurface = null
+        overlayCompositor.release()
         grader.release()
     }
 }

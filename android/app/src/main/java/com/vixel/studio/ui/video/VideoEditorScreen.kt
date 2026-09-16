@@ -77,6 +77,8 @@ private enum class VideoTab(val label: String) {
     CLIP("Clip"),
     ADJUST("Adjust"),
     FILTERS("Filters"),
+    TEXT("Text"),
+    STICKERS("Stickers"),
     CANVAS("Canvas"),
     EXPORT("Export"),
 }
@@ -199,6 +201,8 @@ fun VideoEditorScreen(onBack: () -> Unit) {
                         adjustments = (state.selectedClip ?: state.project.clips.first()).adjustments,
                         canvasAspect = state.project.aspect.ratio,
                         canvasColor = state.project.backgroundColor,
+                        overlays = state.project.overlays,
+                        timelineUs = state.positionUs,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -247,6 +251,8 @@ fun VideoEditorScreen(onBack: () -> Unit) {
                         VideoTab.CLIP -> ClipPanel(state)
                         VideoTab.ADJUST -> AdjustPanel(state, group) { group = it }
                         VideoTab.FILTERS -> FilterPanel(state)
+                        VideoTab.TEXT -> TextPanel(state)
+                        VideoTab.STICKERS -> StickerPanel(state)
                         VideoTab.CANVAS -> CanvasPanel(state)
                         VideoTab.EXPORT -> ExportPanel(state) { message ->
                             scope.launch { snackbar.showSnackbar(message) }

@@ -23,6 +23,7 @@ import com.vixel.studio.core.model.Project
 import com.vixel.studio.engine.gl.ColorGrader
 import com.vixel.studio.engine.gl.EglCore
 import com.vixel.studio.engine.gl.GlUtils
+import com.vixel.studio.engine.overlay.OverlayCompositor
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.math.max
@@ -225,6 +226,7 @@ class VideoExporter(
         var egl: EglCore? = null
         var eglSurface: android.opengl.EGLSurface? = null
         val grader = ColorGrader()
+        val overlays = OverlayCompositor()
 
         try {
             encoder = MediaCodec.createEncoderByType(MIME_VIDEO)
@@ -259,6 +261,7 @@ class VideoExporter(
                     MediaKind.IMAGE -> renderStillClip(
                         clip = clip,
                         grader = grader,
+                        overlays = overlays,
                         egl = egl,
                         eglSurface = eglSurface,
                         encoder = encoder,
@@ -270,6 +273,7 @@ class VideoExporter(
                     else -> renderVideoClip(
                         clip = clip,
                         grader = grader,
+                        overlays = overlays,
                         egl = egl,
                         eglSurface = eglSurface,
                         encoder = encoder,
@@ -303,6 +307,7 @@ class VideoExporter(
             runCatching { encoder?.stop() }
             runCatching { encoder?.release() }
             runCatching { muxer?.release() }
+            runCatching { overlays.release() }
             runCatching { grader.release() }
             if (egl != null && eglSurface != null) runCatching { egl.releaseSurface(eglSurface) }
             runCatching { egl?.release() }
@@ -314,6 +319,7 @@ class VideoExporter(
     private fun renderVideoClip(
         clip: Clip,
         grader: ColorGrader,
+        overlays: OverlayCompositor,
         egl: EglCore,
         eglSurface: android.opengl.EGLSurface,
         encoder: MediaCodec,
@@ -390,6 +396,7 @@ class VideoExporter(
 
                             drawFrame(
                                 grader = grader,
+                                overlays = overlays,
                                 clip = clip,
                                 textureId = decoderSurface.textureId,
                                 texMatrix = decoderSurface.transform(),
@@ -399,6 +406,7 @@ class VideoExporter(
                                 sourceHeight = clip.displayHeight.takeIf { it > 0 } ?: canvasHeight,
                                 isExternal = true,
                                 timelineUs = outUs - timelineStartUs,
+                                absoluteUs = outUs,
                             )
 
                             egl.setPresentationTime(eglSurface, outUs * 1000L)
@@ -426,6 +434,7 @@ class VideoExporter(
     private fun renderStillClip(
         clip: Clip,
         grader: ColorGrader,
+        overlays: OverlayCompositor,
         egl: EglCore,
         eglSurface: android.opengl.EGLSurface,
         encoder: MediaCodec,
@@ -449,6 +458,7 @@ class VideoExporter(
                 val localUs = frame * frameDurationUs
                 drawFrame(
                     grader = grader,
+                    overlays = overlays,
                     clip = clip,
                     textureId = texture,
                     texMatrix = ColorGrader.IDENTITY,
@@ -458,6 +468,7 @@ class VideoExporter(
                     sourceHeight = bitmap.height,
                     isExternal = false,
                     timelineUs = localUs,
+                    absoluteUs = timelineStartUs + localUs,
                 )
                 egl.setPresentationTime(eglSurface, (timelineStartUs + localUs) * 1000L)
                 egl.swapBuffers(eglSurface)
@@ -477,6 +488,7 @@ class VideoExporter(
      */
     private fun drawFrame(
         grader: ColorGrader,
+        overlays: OverlayCompositor,
         clip: Clip,
         textureId: Int,
         texMatrix: FloatArray,
@@ -486,6 +498,7 @@ class VideoExporter(
         sourceHeight: Int,
         isExternal: Boolean,
         timelineUs: Long,
+        absoluteUs: Long,
     ) {
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
         GLES30.glViewport(0, 0, canvasWidth, canvasHeight)
@@ -555,6 +568,17 @@ class VideoExporter(
             targetY = y,
             opacity = fadeOpacity(clip, timelineUs),
             seed = (timelineUs % 1000L).toFloat(),
+        )
+
+        // Overlays sit above the graded frame and span the whole canvas, so
+        // they are unaffected by the clip's own fit and transform.
+        overlays.draw(
+            overlays = project.overlays,
+            timeUs = absoluteUs,
+            canvasX = 0,
+            canvasY = 0,
+            canvasWidth = canvasWidth,
+            canvasHeight = canvasHeight,
         )
     }
 

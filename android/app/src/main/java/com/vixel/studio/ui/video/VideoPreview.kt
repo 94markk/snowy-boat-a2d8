@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.vixel.studio.core.model.Adjustments
 import com.vixel.studio.core.model.Clip
 import com.vixel.studio.core.model.FitMode
+import com.vixel.studio.core.model.Overlay
 import com.vixel.studio.engine.video.VideoPreviewRenderer
 
 /**
@@ -32,6 +33,8 @@ fun VideoPreview(
     adjustments: Adjustments,
     canvasAspect: Float,
     canvasColor: Int,
+    overlays: List<Overlay>,
+    timelineUs: Long,
     modifier: Modifier = Modifier,
 ) {
     val holder = remember { PreviewHolder() }
@@ -78,6 +81,8 @@ fun VideoPreview(
             renderer.fitMode = clip?.transform?.fit ?: FitMode.FIT
             renderer.sourceWidth = clip?.displayWidth ?: 0
             renderer.sourceHeight = clip?.displayHeight ?: 0
+            renderer.overlays = overlays
+            renderer.timelineUs = timelineUs
             view.requestRender()
         },
         onRelease = { view ->

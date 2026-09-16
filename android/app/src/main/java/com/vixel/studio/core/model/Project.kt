@@ -145,12 +145,22 @@ data class Project(
     val aspect: AspectRatio = AspectRatio.DEFAULT,
     val clips: List<Clip> = emptyList(),
     val audio: List<AudioClip> = emptyList(),
+    val overlays: List<Overlay> = emptyList(),
     val backgroundColor: Int = 0xFF000000.toInt(),
     val createdAt: Long = System.currentTimeMillis(),
 ) {
     val durationUs: Long get() = clips.sumOf { it.timelineDurationUs }
 
-    val isEmpty: Boolean get() = clips.isEmpty() && audio.isEmpty()
+    val isEmpty: Boolean get() = clips.isEmpty() && audio.isEmpty() && overlays.isEmpty()
+
+    fun overlaysAt(timeUs: Long): List<Overlay> = overlays.filter { it.isActiveAt(timeUs) }
+
+    fun addOverlay(overlay: Overlay): Project = copy(overlays = overlays + overlay)
+
+    fun removeOverlay(id: String): Project = copy(overlays = overlays.filterNot { it.id == id })
+
+    fun updateOverlay(id: String, transform: (Overlay) -> Overlay): Project =
+        copy(overlays = overlays.map { if (it.id == id) transform(it) else it })
 
     /** Timeline start of [index], in microseconds. */
     fun startOf(index: Int): Long {
