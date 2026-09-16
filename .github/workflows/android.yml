@@ -71,15 +71,27 @@ jobs:
 
       - name: Assemble debug APK
         working-directory: android
-        timeout-minutes: 15
+        timeout-minutes: 20
         run: ./gradlew --no-daemon --console=plain assembleDebug
+
+      # Upload the installable APK the moment it exists. The release build is
+      # optional, and it must never be able to hold the deliverable hostage.
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vixel-studio-apk-debug
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Assemble release APK
         working-directory: android
-        timeout-minutes: 15
+        timeout-minutes: 20
+        continue-on-error: true
         run: ./gradlew --no-daemon --console=plain assembleRelease
 
       - name: Report APK sizes
+        if: always()
         working-directory: android
         run: |
           echo "### APK build output" >> "$GITHUB_STEP_SUMMARY"
@@ -91,12 +103,11 @@ jobs:
             echo "| \`$(basename "$f")\` | $size |" >> "$GITHUB_STEP_SUMMARY"
           done
 
-      - name: Upload APKs
+      - name: Upload release APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vixel-studio-apk
-          path: |
-            android/app/build/outputs/apk/debug/*.apk
-            android/app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
+          name: vixel-studio-apk-release
+          path: android/app/build/outputs/apk/release/*.apk
+          if-no-files-found: ignore
           retention-days: 30
