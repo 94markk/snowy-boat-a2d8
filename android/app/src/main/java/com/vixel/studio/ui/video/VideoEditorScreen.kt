@@ -5,6 +5,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -429,6 +433,7 @@ private fun ClipPanel(state: VideoEditorState) {
     }
 
     LazyColumn(contentPadding = PaddingValues(bottom = 16.dp)) {
+        item { ClipActions(state) }
         item { TransitionSection(state, clip) }
         item {
             SimpleSlider(
@@ -540,6 +545,70 @@ private fun ClipPanel(state: VideoEditorState) {
  * A transition belongs to the clip it plays *into*, so the first clip on the
  * timeline has nothing to configure.
  */
+/**
+ * Cut, copy and delete for the clip under the playhead.
+ *
+ * These are the three most-used actions in the whole editor, so they sit at
+ * the top of the first panel rather than inside a list of sliders. Split works
+ * off the playhead, which is why the timeline puts the playhead in the middle
+ * of the screen: the cut lands where you are already looking.
+ */
+@Composable
+private fun ClipActions(state: VideoEditorState) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ClipAction(
+            icon = Icons.Rounded.ContentCut,
+            label = "Split",
+            onClick = { state.splitAtPlayhead() },
+        )
+        ClipAction(
+            icon = Icons.Rounded.ContentCopy,
+            label = "Duplicate",
+            onClick = { state.duplicateSelected() },
+        )
+        ClipAction(
+            icon = Icons.Rounded.Delete,
+            label = "Delete",
+            onClick = { state.removeSelected() },
+        )
+    }
+}
+
+@Composable
+private fun ClipAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 9.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
 @Composable
 private fun TransitionSection(state: VideoEditorState, clip: Clip) {
     val index = state.project.clips.indexOfFirst { it.id == clip.id }
