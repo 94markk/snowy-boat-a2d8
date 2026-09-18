@@ -27,7 +27,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * the other eight documents, so renaming a slug in WordPress keeps every
  * cross-reference working.
  *
- * Requires PHP 8.3 (gated in the main plugin file).
+ * Requires PHP 8.5 (gated in the main plugin file).
  */
 final class Delicat_Builder_V9_Legal {
 

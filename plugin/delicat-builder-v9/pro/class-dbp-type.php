@@ -24,7 +24,7 @@
  * media="print" with an inline onload that LiteSpeed's combiner dropped. A
  * technique that can leave the store unstyled is not used here at any cost.
  *
- * Requires PHP 8.3 (gated in the main plugin file).
+ * Requires PHP 8.5 (gated in the main plugin file).
  *
  * @package Delicat_Builder_V9_Pro
  */

@@ -16,7 +16,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * owner of mobile type variables. Native browser pull-to-refresh is preserved;
  * the legacy custom gesture is opt-in only.
  *
- * Front end only. Safe Mode aware. Requires PHP 8.3 (gated in the main plugin file).
+ * Front end only. Safe Mode aware. Requires PHP 8.5 (gated in the main plugin file).
  */
 final class Delicat_Builder_V9_App_Polish {
 

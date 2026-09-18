@@ -1,3 +1,12 @@
+9.2.0-pro.38: two formula bugs that could sell a product for 0.00 are fixed. An unknown
+variable in a pricing formula resolved to 0 and still reported success; every arithmetic failure
+(division by zero, modulo by zero, sqrt of a negative, an incomplete formula) returned 0.0, which
+evaluate_checked() could not tell apart from a formula that legitimately equals zero, so
+compute_total() took the success branch and priced the product free with nothing logged.
+`{base} / {qty}` with an inactive qty field reached this on ordinary configuration. PHP
+requirement restored to 8.5. New tests/test-formula-eval.php covers both. Purge LiteSpeed and
+Cloudflare caches after updating.
+
 9.2.0-pro.37: Pro Kernel boots again (a wp_rand() call on the boot path threw before
 WordPress had loaded pluggable.php, which silently disabled instant navigation, route-scoped
 assets, critical CSS and the shared state store). Asset pipeline switched from duplicate hashed

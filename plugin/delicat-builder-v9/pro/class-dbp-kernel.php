@@ -7,7 +7,7 @@
  * session state. Feature modules are untouched; only the coordination layers
  * are replaced, so every V9 shortcode, option key and render path is preserved.
  *
- * Requires PHP 8.3 (gated in the main plugin file).
+ * Requires PHP 8.5 (gated in the main plugin file).
  *
  * @package Delicat_Builder_V9_Pro
  */

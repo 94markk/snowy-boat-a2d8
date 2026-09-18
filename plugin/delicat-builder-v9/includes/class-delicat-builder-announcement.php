@@ -7,7 +7,7 @@
  * decision to show it is taken client-side from a cookie, never from PHP.
  *
  * Constraints honoured here:
- *  - Requires PHP 8.3 (gated in the main plugin file).
+ *  - Requires PHP 8.5 (gated in the main plugin file).
  *  - no backdrop-filter, no localStorage / sessionStorage
  *  - vanilla ES5 runtime
  */

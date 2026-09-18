@@ -11,7 +11,7 @@
  * all emit inline configuration, and a policy that blocks them would break the
  * store rather than protect it.
  *
- * Requires PHP 8.3 (gated in the main plugin file).
+ * Requires PHP 8.5 (gated in the main plugin file).
  *
  * @package Delicat_Builder_V9_Pro
  */

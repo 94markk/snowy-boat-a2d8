@@ -33,7 +33,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    Guest-only cart-fragments removal matches the Native Product rules.
  *
  * Every behavior is filterable via delicat_builder_v9_storefront_fix_{feature}
- * and the module respects Core enable/safe-mode. Front-end only. Requires PHP 8.3 (gated in the main plugin file).
+ * and the module respects Core enable/safe-mode. Front-end only. Requires PHP 8.5 (gated in the main plugin file).
  */
 final class Delicat_Builder_V9_Storefront_Fix {
 

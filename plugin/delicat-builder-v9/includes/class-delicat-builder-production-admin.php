@@ -115,7 +115,7 @@ final class Delicat_Builder_V9_Production_Admin {
 	private static function disable_preflight(): array {
 		$failures = array();
 
-		if ( PHP_VERSION_ID < 80300 ) {
+		if ( PHP_VERSION_ID < 80500 ) {
 			$failures[] = 'php_version';
 		}
 

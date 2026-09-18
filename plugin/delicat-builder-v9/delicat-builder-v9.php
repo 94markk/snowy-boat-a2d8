@@ -3,10 +3,10 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.37
+ * Version: 9.2.0-pro.38
 
  * Requires at least: 6.4
- * Requires PHP: 8.3
+ * Requires PHP: 8.5
  * Author: Delicat Store
  * Text Domain: delicat-builder-v9
  */
@@ -16,25 +16,26 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /*
- * pro.37 PHP 8.3 GATE
+ * pro.38 PHP 8.5 GATE
  * -------------------
- * This gate read 8.5 from pro.33 to pro.36, which was wrong and expensive: the
- * whole plugin silently switched itself off on any host below 8.5, and 8.5 is
- * new enough that most managed WordPress hosts do not offer it yet.
+ * This build targets PHP 8.5, which is what delicastoreha.com runs.
  *
- * The real floor is 8.3, and it is one feature: the typed class constants in
- * includes/class-delicat-builder-heart-engine.php. Nothing in this plugin uses
- * 8.4 or 8.5 syntax or functions — every file parses on 8.3.
+ * For the record, because it matters if this plugin is ever moved: the syntax
+ * floor is 8.3, not 8.5 — one feature, the typed class constants in
+ * includes/class-delicat-builder-heart-engine.php. Nothing here uses 8.4 or 8.5
+ * syntax or functions. The gate is a deliberate host-requirement, not a parse
+ * requirement, so a future maintainer can lower it to 8.3 without touching code
+ * if the plugin needs to run somewhere older.
  *
- * This build targets PHP 8.3 and may use syntax an older engine cannot parse,
- * so nothing below this block is read on an older PHP. The storefront keeps
- * running on plain WordPress and WooCommerce, administrators are told why,
- * and the builder resumes by itself once the server runs PHP 8.3.
+ * Nothing below this block is read on an older PHP, so the check must never be
+ * the thing that fatals. The storefront keeps running on plain WordPress and
+ * WooCommerce, administrators are told why, and the builder resumes by itself
+ * once the server runs PHP 8.5.
  *
  * Keep this block, and everything above it, to syntax any PHP that WordPress
- * supports can parse: the check must never be the thing that fatals.
+ * supports can parse.
  */
-if ( PHP_VERSION_ID < 80300 ) {
+if ( PHP_VERSION_ID < 80500 ) {
 	if ( function_exists( 'add_action' ) ) {
 		add_action(
 			'admin_notices',
@@ -43,7 +44,7 @@ if ( PHP_VERSION_ID < 80300 ) {
 					return;
 				}
 				echo '<div class="notice notice-error"><p><strong>Delicat Builder V9 Pro</strong> '
-					. esc_html( sprintf( 'est en pause : cette version exige PHP 8.3 ou plus récent, et ce serveur utilise PHP %s. La boutique continue sans le builder jusqu’à la mise à jour de PHP ; rien n’est perdu.', PHP_VERSION ) )
+					. esc_html( sprintf( 'est en pause : cette version exige PHP 8.5 ou plus récent, et ce serveur utilise PHP %s. La boutique continue sans le builder jusqu’à la mise à jour de PHP ; rien n’est perdu.', PHP_VERSION ) )
 					. '</p></div>';
 			}
 		);
@@ -187,7 +188,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.37' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.38' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -1287,9 +1288,9 @@ add_action(
 register_activation_hook(
 	__FILE__,
 	static function () {
-		if ( PHP_VERSION_ID < 80300 ) {
+		if ( PHP_VERSION_ID < 80500 ) {
 			deactivate_plugins( plugin_basename( __FILE__ ) );
-			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 8.3 or newer.', 'delicat-builder-v9' ) );
+			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 8.5 or newer.', 'delicat-builder-v9' ) );
 		}
 
 		/* RC17: activation is deliberately boring. Seed only primitive options;

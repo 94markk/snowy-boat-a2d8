@@ -30,6 +30,14 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 		'pow'   => 2,
 	);
 
+	/**
+	 * Name of the unresolved variable that aborted the last tokenize(), so the
+	 * caller's log line can name it instead of saying only "tokenize".
+	 *
+	 * @var string
+	 */
+	protected static $unknown_var = '';
+
 	/** @var array Operators => precedence/associativity/arity. */
 	protected static $ops = array(
 		'u-' => array( 'prec' => 5, 'assoc' => 'right', 'args' => 1 ),
@@ -74,16 +82,24 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 		if ( strlen( $expr ) > self::MAX_LEN ) {
 			return $fail( 'too_long' );
 		}
-		$tokens = self::tokenize( $expr, $vars );
+		self::$unknown_var = '';
+		$tokens            = self::tokenize( $expr, $vars );
 		if ( false === $tokens || array() === $tokens ) {
-			return $fail( 'tokenize' );
+			return $fail( '' !== self::$unknown_var ? 'unknown_var:' . self::$unknown_var : 'tokenize' );
 		}
 		$rpn = self::to_rpn( $tokens );
 		if ( false === $rpn || array() === $rpn ) {
 			return $fail( 'parse' );
 		}
 		$result = self::eval_rpn( $rpn );
-		if ( ! is_finite( $result ) ) {
+		/* Strict, and before is_finite(): is_finite( false ) coerces false to 0.0
+		 * and returns true, which is how every arithmetic-stage failure used to be
+		 * reported as a successful 0.00. A formula that legitimately equals zero
+		 * returns float 0.0 and passes. */
+		if ( false === $result ) {
+			return $fail( 'eval' );
+		}
+		if ( ! is_finite( (float) $result ) ) {
 			return $fail( 'not_finite' );
 		}
 		return array( 'ok' => true, 'value' => (float) $result, 'error' => '' );
@@ -124,8 +140,26 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 			// {variable}.
 			if ( '{' === $ch ) {
 				if ( preg_match( '/\G\{([A-Za-z0-9_]+)\}/', $expr, $m, 0, $i ) ) {
-					$name     = $m[1];
-					$val      = isset( $vars[ $name ] ) ? (float) $vars[ $name ] : 0.0;
+					$name = $m[1];
+					/* PRO38: an unknown variable used to resolve to 0.0 and the
+					 * expression still reported ok, which defeated the whole point
+					 * of evaluate_checked(). A formula naming a field that was
+					 * renamed, deleted or simply mistyped — `{base} * {qty_mult}`
+					 * against a field actually called `qty_multiplier` — evaluated
+					 * to `base * 0` and priced the product at 0.00, silently, with
+					 * nothing logged. That is exactly the outcome compute_total()
+					 * says must never happen.
+					 *
+					 * Rejecting is safe: the caller seeds $vars with base, rate and
+					 * EVERY configured field id (inactive fields are seeded 0.0), so
+					 * a name missing from $vars cannot be a legitimate reference.
+					 * Unknown FUNCTION calls were already rejected a few lines down
+					 * for the same reason; this closes the variable half. */
+					if ( ! isset( $vars[ $name ] ) ) {
+						self::$unknown_var = $name;
+						return false;
+					}
+					$val      = (float) $vars[ $name ];
 					$tokens[] = array( 'num', $val );
 					$i       += strlen( $m[0] );
 					$prev     = 'num';
@@ -155,8 +189,13 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 						$prev     = 'func';
 						continue;
 					}
-					// Otherwise treat as a variable.
-					$val      = isset( $vars[ $m[0] ] ) ? (float) $vars[ $m[0] ] : 0.0;
+					// Otherwise treat as a variable. Unknown names are rejected
+					// rather than silently zeroed -- see the {var} branch above.
+					if ( ! isset( $vars[ $m[0] ] ) ) {
+						self::$unknown_var = $m[0];
+						return false;
+					}
+					$val      = (float) $vars[ $m[0] ];
 					$tokens[] = array( 'num', $val );
 					$i       += $len;
 					$prev     = 'num';
@@ -283,6 +322,20 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 	 * @param array $rpn RPN tokens.
 	 * @return float
 	 */
+	/*
+	 * PRO38: this returned 0.0 for every failure -- stack underflow, division by
+	 * zero, modulo by zero, sqrt of a negative, a leftover stack -- which made an
+	 * error indistinguishable from a formula that legitimately equals zero.
+	 * evaluate_checked() then reported ok => true with value 0.0, so
+	 * compute_total() took the success branch and the product sold for 0.00 with
+	 * nothing logged. `{base} / {qty}` with the qty field inactive (the caller
+	 * seeds inactive fields 0.0) reached that on ordinary configuration.
+	 *
+	 * Failure is now false, which 0.0 can never collide with.
+	 *
+	 * @param array $rpn Token list in RPN order.
+	 * @return float|false Result, or false when the expression cannot be evaluated.
+	 */
 	protected static function eval_rpn( $rpn ) {
 		$stack = array();
 
@@ -295,14 +348,14 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 				$op = $t[1];
 				if ( 'u-' === $op ) {
 					if ( ! $stack ) {
-						return 0.0;
+						return false;
 					}
 					$a       = array_pop( $stack );
 					$stack[] = -$a;
 					continue;
 				}
 				if ( count( $stack ) < 2 ) {
-					return 0.0;
+					return false;
 				}
 				$b = array_pop( $stack );
 				$a = array_pop( $stack );
@@ -317,10 +370,16 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 						$stack[] = $a * $b;
 						break;
 					case '/':
-						$stack[] = ( 0.0 === (float) $b ) ? 0.0 : $a / $b;
+						if ( 0.0 === (float) $b ) {
+							return false;
+						}
+						$stack[] = $a / $b;
 						break;
 					case '%':
-						$stack[] = ( 0.0 === (float) $b ) ? 0.0 : fmod( $a, $b );
+						if ( 0.0 === (float) $b ) {
+							return false;
+						}
+						$stack[] = fmod( $a, $b );
 						break;
 					case '^':
 						$stack[] = pow( $a, $b );
@@ -332,7 +391,7 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 				$name  = $t[1];
 				$arity = self::$funcs[ $name ];
 				if ( count( $stack ) < $arity ) {
-					return 0.0;
+					return false;
 				}
 				$args = array();
 				for ( $k = 0; $k < $arity; $k++ ) {
@@ -352,7 +411,10 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 						$stack[] = round( $args[0] );
 						break;
 					case 'sqrt':
-						$stack[] = $args[0] >= 0 ? sqrt( $args[0] ) : 0.0;
+						if ( $args[0] < 0 ) {
+							return false;
+						}
+						$stack[] = sqrt( $args[0] );
 						break;
 					case 'min':
 						$stack[] = min( $args[0], $args[1] );
@@ -368,6 +430,6 @@ class Delicat_Builder_V9_Product_Fields_Eval {
 			}
 		}
 
-		return count( $stack ) === 1 ? (float) $stack[0] : 0.0;
+		return 1 === count( $stack ) ? (float) $stack[0] : false;
 	}
 }
