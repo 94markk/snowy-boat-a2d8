@@ -46,7 +46,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    clamp() — because LiteSpeed's CSS combiner strips the spaces those
  *    functions require and the browser then discards the whole declaration.
  *
- * Requires PHP 8.5 (gated in the main plugin file). Front end only. Stands down in safe mode.
+ * Requires PHP 8.3 (gated in the main plugin file). Front end only. Stands down in safe mode.
  */
 final class Delicat_Builder_V9_App_Tuning {
 

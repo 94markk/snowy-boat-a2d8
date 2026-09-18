@@ -18,7 +18,7 @@
  * carousel.js builds the same tree from the same path for cards it
  * materialises later, and heart.js owns every movement.
  *
- * Requires PHP 8.5; the main plugin file refuses to load on anything older.
+ * Requires PHP 8.3; the main plugin file refuses to load on anything older. (These typed class constants are the single feature that sets that floor.)
  */
 
 defined( 'ABSPATH' ) || exit;

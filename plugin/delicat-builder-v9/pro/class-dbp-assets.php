@@ -24,7 +24,7 @@
  * What remains is where the real weight was and where the risk is not:
  * route-scoped shipping, additive inline shell CSS, and a narrow opt-in defer.
  *
- * Requires PHP 8.5 (gated in the main plugin file).
+ * Requires PHP 8.3 (gated in the main plugin file).
  *
  * @package Delicat_Builder_V9_Pro
  */

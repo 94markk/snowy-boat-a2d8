@@ -15,7 +15,7 @@
  * at the tick. The state response carries fresh nonces and the client patches
  * them into the document.
  *
- * Requires PHP 8.5 (gated in the main plugin file).
+ * Requires PHP 8.3 (gated in the main plugin file).
  *
  * @package Delicat_Builder_V9_Pro
  */

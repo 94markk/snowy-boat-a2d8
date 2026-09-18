@@ -30,7 +30,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * Every behavior is filterable via delicat_builder_v9_front_slim_{feature}
  * and the whole module respects Core enable/safe-mode. Front-end only.
- * Requires PHP 8.5 (gated in the main plugin file). The inline loader is ES5.
+ * Requires PHP 8.3 (gated in the main plugin file). The inline loader is ES5.
  */
 final class Delicat_Builder_V9_Front_Slim {
 

@@ -6,7 +6,7 @@
  * store, the layer responsible can be turned off in one click without
  * disabling Pro or rolling back the plugin.
  *
- * Requires PHP 8.5 (gated in the main plugin file).
+ * Requires PHP 8.3 (gated in the main plugin file).
  *
  * @package Delicat_Builder_V9_Pro
  */

@@ -1,3 +1,13 @@
+9.2.0-pro.43: the plugin is installable again. The header declared `Requires PHP: 8.5` to match
+the host, and WordPress refuses an uploaded plugin whose requirement exceeds the server's --
+decided with version_compare() on the REPORTED VERSION STRING, not PHP_VERSION_ID. A
+release-candidate string like 8.5.0RC2 compares lower than a plain 8.5, and a control panel's
+configured version is not always what the web SAPI reports, so the package stopped installing on
+a server that genuinely runs 8.5. The requirement is now 8.3, which is what the code actually
+needs -- one feature, the typed class constants in heart-engine. Nothing uses 8.4 or 8.5 syntax.
+Running on 8.5 is unchanged. A new test asserts the header, all three runtime gates and the real
+syntax floor stay in agreement, so this cannot recur.
+
 9.2.0-pro.42: fixes a regression introduced in pro.40. Loading the Compiler on every admin
 request meant the first request after an update ran a 250-page stylesheet compile -- and that is
 very often the request installing, updating or deleting a plugin, while WordPress is moving files
