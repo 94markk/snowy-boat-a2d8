@@ -32,6 +32,17 @@ final class Delicat_Builder_V9_Multi_Currency {
 	private ?bool $public_cache_variant_cache = null;
 
 	/**
+	 * The currency cookie exactly as the BROWSER sent it, captured before any
+	 * persist() can write to $_COOKIE during this request.
+	 *
+	 * This is the only value a shared cache can key on, so it is the only value
+	 * the vary path may trust. See cache_vary_safe().
+	 *
+	 * @var string
+	 */
+	private string $incoming_cookie = '';
+
+	/**
 	 * Legacy-shape adapters used only by the migrated Product Fields runtime.
 	 * They intentionally point back to this same isolated V9 object, so there is
 	 * still only one currency/rate owner and no DMC global/class collision.
@@ -45,6 +56,57 @@ final class Delicat_Builder_V9_Multi_Currency {
 	private function __construct() {
 		$this->currencies = $this;
 		$this->price      = $this;
+		/* Captured here, not read on demand: persist() assigns to $_COOKIE so a
+		 * later read cannot tell a browser-sent cookie from one this request
+		 * just minted, and only a browser-sent one is in the cache key. */
+		if ( isset( $_COOKIE[ self::COOKIE ] ) ) {
+			$this->incoming_cookie = strtoupper( sanitize_key( (string) wp_unslash( $_COOKIE[ self::COOKIE ] ) ) );
+		}
+	}
+
+	/**
+	 * May a non-default-currency response be cached as ONE SHARED COPY PER
+	 * CURRENCY, instead of not being cached at all?
+	 *
+	 * PRO44. Until now any shopper on a non-default currency bypassed the page
+	 * cache entirely -- correct, but on a store with USD/CAD/EUR enabled it
+	 * means a large share of traffic pays a full PHP render on every page.
+	 * LiteSpeed can key its cache on a cookie value (the plugin already does
+	 * this for woocommerce_items_in_cart), which gives one cached copy per
+	 * currency rather than none.
+	 *
+	 * The danger is serving one currency's prices under another's key, so every
+	 * condition below must hold:
+	 *
+	 * 1. LiteSpeed is actually present. Without it there is no vary mechanism.
+	 * 2. The BROWSER sent the cookie. A currency resolved from the Woo session or
+	 *    from geolocation is invisible to the cache, and a cookie this request
+	 *    is only now minting is not in the key of the copy being stored.
+	 * 3. The cookie is valid and non-default. A default-currency cookie creates
+	 *    no useful variant (display_choice() already retires those).
+	 * 4. The cookie matches what is actually being rendered. display_choice()
+	 *    resolves session BEFORE cookie, so the two can in principle disagree;
+	 *    when they do, the rendered prices would not match the cache key. Bypass.
+	 *
+	 * Fails closed: any doubt returns false and the old bypass applies.
+	 *
+	 * @return bool
+	 */
+	public function cache_vary_safe(): bool {
+		if ( ! (bool) apply_filters( 'delicat_builder_v9_currency_cache_vary', true ) ) {
+			return false;
+		}
+		/* LiteSpeed Cache defines this on load; without it nothing varies. */
+		if ( ! defined( 'LSCWP_V' ) ) {
+			return false;
+		}
+		if ( '' === $this->incoming_cookie || ! $this->is_valid( $this->incoming_cookie ) ) {
+			return false;
+		}
+		if ( $this->incoming_cookie === $this->default_currency() ) {
+			return false;
+		}
+		return $this->incoming_cookie === $this->current();
 	}
 
 	public static function instance(): self {
@@ -341,12 +403,15 @@ final class Delicat_Builder_V9_Multi_Currency {
 			return $this->public_cache_variant_cache = false;
 		}
 
+		/* PRO44: when the cache can key on this currency, a shared copy per
+		 * currency is safe and far cheaper than refusing to cache at all. */
+		if ( $this->cache_vary_safe() ) {
+			return $this->public_cache_variant_cache = false;
+		}
+
 		$default = $this->default_currency();
-		if ( isset( $_COOKIE[ self::COOKIE ] ) ) {
-			$cookie = strtoupper( sanitize_key( (string) wp_unslash( $_COOKIE[ self::COOKIE ] ) ) );
-			if ( $this->is_valid( $cookie ) && $cookie !== $default ) {
-				return $this->public_cache_variant_cache = true;
-			}
+		if ( '' !== $this->incoming_cookie && $this->is_valid( $this->incoming_cookie ) && $this->incoming_cookie !== $default ) {
+			return $this->public_cache_variant_cache = true;
 		}
 		if ( function_exists( 'WC' ) && WC() && WC()->session ) {
 			$session = strtoupper( sanitize_key( (string) WC()->session->get( self::COOKIE ) ) );

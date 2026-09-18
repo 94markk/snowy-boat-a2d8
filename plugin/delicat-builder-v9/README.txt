@@ -1,3 +1,15 @@
+9.2.0-pro.44: non-base currencies are cacheable again. A shopper who picked USD, CAD or EUR
+used to bypass the page cache entirely -- safe, but on a store with three foreign currencies
+enabled that is a large share of traffic paying a full PHP render on every page. LiteSpeed can key
+its cache on a cookie value (the plugin already did this for the cart cookie), so dmc_currency now
+joins the vary set and each currency gets its own cached copy. The vary is only taken when the
+BROWSER sent the cookie, it is valid and non-default, and it matches the currency actually being
+rendered -- display_choice() resolves the Woo session before the cookie, and geolocation can pick a
+currency with no cookie at all, so anything else still bypasses rather than risk serving one
+currency's prices under another's key. Switch it off with the delicat_builder_v9_currency_cache_vary
+filter. Matomo's mtm_/pk_ campaign parameters join the cache-safe query allowlist alongside utm_.
+Purge LiteSpeed and Cloudflare after updating.
+
 9.2.0-pro.43: the plugin is installable again. The header declared `Requires PHP: 8.5` to match
 the host, and WordPress refuses an uploaded plugin whose requirement exceeds the server's --
 decided with version_compare() on the REPORTED VERSION STRING, not PHP_VERSION_ID. A

@@ -414,6 +414,13 @@ final class Delicat_Builder_V9_Security {
 				0 === strpos( $name, 'utm_' )
 				|| 0 === strpos( $name, 'filter_' )
 				|| 0 === strpos( $name, 'query_type_' )
+				/* PRO44: Matomo's campaign parameters, the self-hosted analytics
+				 * equivalent of utm_*. Content-neutral in exactly the same way:
+				 * they change the URL and nothing in the document. Deliberately
+				 * NOT added: ?lang= and ?attribute_pa_* both change what is
+				 * rendered, so they need a cache VARIANT, not an allowlist entry. */
+				|| 0 === strpos( $name, 'mtm_' )
+				|| 0 === strpos( $name, 'pk_' )
 			) {
 				continue;
 			}
@@ -868,6 +875,22 @@ add_filter(
 	static function ( $cookies ) {
 		$cookies = is_array( $cookies ) ? $cookies : array();
 		$cookies[] = 'woocommerce_items_in_cart';
+		/*
+		 * PRO44: the currency preference joins the vary set.
+		 *
+		 * Until now a shopper on a non-default currency bypassed the page cache
+		 * outright, so on a store with USD/CAD/EUR enabled a large share of
+		 * traffic paid a full PHP render on every page. Keying on this cookie
+		 * gives one cached copy per currency instead of none.
+		 *
+		 * Registering it here is necessary but not sufficient: the decision to
+		 * take that path lives in Multi_Currency::cache_vary_safe(), which also
+		 * requires that the browser actually sent the cookie and that it matches
+		 * the currency being rendered. Listing it unconditionally is still right
+		 * -- the cookie must be in the key whenever it exists, or a copy stored
+		 * for one currency could be served to another.
+		 */
+		$cookies[] = 'dmc_currency';
 		return array_values( array_unique( $cookies ) );
 	}
 );
