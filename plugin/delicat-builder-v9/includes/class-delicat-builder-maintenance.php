@@ -183,6 +183,22 @@ final class Delicat_Builder_V9_Maintenance {
 	 * The lock as it applies to THIS visitor: enabled, and the visitor is not
 	 * an administrator (or otherwise explicitly allowed).
 	 */
+	/**
+	 * True when the store is closed to this visitor AND the administrator asked
+	 * for the APIs to be closed with it.
+	 *
+	 * PRO41: the three maintenance gates key off wp_doing_ajax(), XML-RPC and
+	 * template_redirect, which between them miss any endpoint that answers
+	 * earlier on a plain front-end GET. Such an endpoint has to ask for itself,
+	 * and this is what it asks. is_locked() already exempts administrators,
+	 * allow-listed roles and IPs, and preview-link holders.
+	 *
+	 * @return bool
+	 */
+	public static function api_locked(): bool {
+		return self::is_locked() && ! empty( self::settings()['lock_api'] );
+	}
+
 	public static function is_locked(): bool {
 		if ( null !== self::$locked_cache ) {
 			return self::$locked_cache;

@@ -73,6 +73,14 @@ $GLOBALS['T_OPTIONS'] = array( 'woocommerce_currency' => 'HTG' );
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['REQUEST_URI']    = '/';
 
+/* public_cache_allowed() memoises; clear it between scenarios. */
+function reset_public_memo(): void {
+	$r = new ReflectionClass( 'Delicat_Builder_V9_Security' );
+	$p = $r->getProperty( 'public_cache_static' );
+	$p->setAccessible( true );
+	$p->setValue( null, null );
+}
+
 $pass = 0;
 $fail = 0;
 function check( string $label, $got, $want ): void {
@@ -132,6 +140,41 @@ foreach ( array(
 	$code  = preg_replace( '#//[^\n]*#', '', (string) $code );
 	$hits  = preg_match_all( '/!\s*empty\(\s*\$_GET\s*\)/', (string) $code );
 	check( basename( $relative ) . ' has no `! empty($_GET)` gate', 0 === $hits, true );
+}
+
+/*
+ * PRO41 invariant. The gate that decides whether the CACHE may store a response
+ * and the gate that decides whether the RENDERER personalises it must agree.
+ *
+ * response_cache_tier() asked only about login and private cookies, while
+ * shared_document() also honoured the query allowlist and the currency variant.
+ * Where they diverged the header printed the shopper's real basket AND the
+ * response shipped with no cache headers at all. `/?s=...` with a basket is the
+ * everyday case, and no prepare_cache_policy() handler runs on a search page, so
+ * this predicate was the only thing standing there.
+ */
+echo "\n=== cache tier and render gate must never disagree ===\n";
+$GLOBALS['T_LOGGED'] = false;
+foreach ( array(
+	'clean guest'            => array(),
+	'?paged=2'               => array( 'paged' => '2' ),
+	'?fbclid= (ad landing)'  => array( 'fbclid' => 'x' ),
+	'?s= (site search)'      => array( 's' => 'rum' ),
+	'?lang= (translation)'   => array( 'lang' => 'en' ),
+	'?mtm_source= (Matomo)'  => array( 'mtm_source' => 'ig' ),
+	'?attribute_pa_size='    => array( 'attribute_pa_size' => 'm' ),
+	'?anything_unknown'      => array( 'really_anything' => '1' ),
+) as $label => $query ) {
+	$_GET = $query;
+	reset_public_memo();
+	$tier   = Delicat_Builder_V9_Security::response_cache_tier();
+	reset_public_memo();
+	$shared = Delicat_Builder_V9_Security::shared_document();
+	check(
+		$label . ' (tier=' . $tier . ')',
+		( 'shared' === $tier ) === $shared,
+		true
+	);
 }
 
 echo "\n---------------------------------------------\n";

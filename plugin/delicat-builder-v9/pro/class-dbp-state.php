@@ -73,6 +73,35 @@ final class DBP_State {
 			status_header( 403 );
 			self::send( array( 'ok' => false, 'error' => 'origin' ) );
 		}
+		/*
+		 * PRO41: honour maintenance mode's API lock.
+		 *
+		 * This endpoint answers on init:5 and exits, so template_redirect never
+		 * runs and Maintenance::guard_frontend() never sees the request.
+		 * guard_early() runs on init:1 but returns unless wp_doing_ajax() or
+		 * XMLRPC_REQUEST, and `GET /?dbp_state=1` is neither. So with the store
+		 * closed and "Fermer aussi les API" on -- which the admin screen promises
+		 * means "REST, admin-ajax, wc-ajax et XML-RPC repondent 503" -- this kept
+		 * serving identity, wallet balance, cart totals and fresh nonces,
+		 * including wp_rest. The sibling ?wc-ajax=delicat_session was correctly
+		 * 503'd, which is the behaviour this now matches.
+		 *
+		 * No privilege escalation either way: it only ever served the caller's own
+		 * session. The cost was that a shutdown the owner relies on during an
+		 * incident did not actually stop scripted reads or nonce minting.
+		 */
+		if (
+			class_exists( 'Delicat_Builder_V9_Maintenance', false )
+			&& is_callable( array( 'Delicat_Builder_V9_Maintenance', 'api_locked' ) )
+			&& Delicat_Builder_V9_Maintenance::api_locked()
+		) {
+			status_header( 503 );
+			if ( ! headers_sent() ) {
+				header( 'Retry-After: 300' );
+			}
+			self::send( array( 'ok' => false, 'error' => 'maintenance' ) );
+		}
+
 		if ( ! defined( 'LITESPEED_NO_OPTM' ) ) { define( 'LITESPEED_NO_OPTM', true ); }
 		add_filter( 'litespeed_comment', '__return_false', PHP_INT_MAX );
 
@@ -285,8 +314,51 @@ final class DBP_State {
 
 		$route = DBP_Kernel::route();
 		$private_cookie = class_exists( 'Delicat_Builder_V9_Security', false ) && Delicat_Builder_V9_Security::has_private_cookie();
+
+		/*
+		 * PRO41: Security::has_private_cookie() deliberately does NOT count the
+		 * WooCommerce cart cookies -- pro.30 removed them so a guest carrying a
+		 * basket can still be served the shared cached copy. That is right for
+		 * the cache, but it means the flag cannot be used on its own to decide
+		 * whether a guest has state worth fetching. Check the basket cookies
+		 * separately: a guest with items must still have their badge corrected,
+		 * while a guest with no cookies at all has nothing to correct.
+		 */
+		$has_basket = false;
+		foreach ( array_keys( $_COOKIE ) as $cookie_name ) {
+			$name = strtolower( sanitize_key( (string) $cookie_name ) );
+			if (
+				0 === strpos( $name, 'woocommerce_items_in_cart' )
+				|| 0 === strpos( $name, 'woocommerce_cart_hash' )
+				|| 0 === strpos( $name, 'wp_woocommerce_session' )
+				|| 0 === strpos( $name, 'dbv9_fav' )
+			) {
+				$has_basket = true;
+				break;
+			}
+		}
 		$config = array(
-			'initial'  => ( is_user_logged_in() || $private_cookie || in_array( $route, array( 'product', 'cart', 'checkout', 'account', 'wallet' ), true ) ) ? 1 : 0,
+			/*
+			 * PRO41: 'product' used to be in this list, which meant a brand-new
+			 * guest -- no login, no cart, no cookie of any kind -- still fired
+			 * /?dbp_state=1 on every product view. That endpoint is a full
+			 * WordPress + WooCommerce bootstrap, so the store's most-visited
+			 * route cost roughly twice the origin PHP requests it needed, and the
+			 * answer for such a visitor is always "guest, empty cart" -- exactly
+			 * what shared_document() already rendered into the cached HTML.
+			 *
+			 * It is idle-scheduled so it does not hurt LCP on a fast connection,
+			 * but on a shared host it lengthens TTFB for everyone, including the
+			 * visitors being served from cache. Cold ad traffic lands on product
+			 * pages, so this was the worst place to spend a request.
+			 *
+			 * A shopper who actually has state -- signed in, or carrying a cart,
+			 * favourites or currency cookie -- still probes here, because
+			 * is_user_logged_in() and $private_cookie cover them. The purchase
+			 * surfaces stay unconditional: on cart, checkout, account and wallet
+			 * the session is the point of the page.
+			 */
+			'initial'  => ( is_user_logged_in() || $private_cookie || $has_basket || in_array( $route, array( 'cart', 'checkout', 'account', 'wallet' ), true ) ) ? 1 : 0,
 			'url'      => self::endpoint(),
 			'loggedIn' => is_user_logged_in() ? 1 : 0,
 			'interval' => 0,

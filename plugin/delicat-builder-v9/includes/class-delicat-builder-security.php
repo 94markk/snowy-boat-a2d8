@@ -585,7 +585,34 @@ final class Delicat_Builder_V9_Security {
 			) {
 				return 'sensitive';
 			}
-			return ( is_user_logged_in() || self::has_private_cookie() ) ? 'personal' : 'shared';
+			/*
+			 * PRO41: this must agree with the RENDER gate, and it did not.
+			 *
+			 * shared_document() returns public_cache_allowed(), which also requires
+			 * query_is_cache_safe() (the pro.30 allowlist) and the multi-currency
+			 * variant check. This tier asked only about login and private cookies.
+			 * Fail one of the other two and the plugin did both halves wrong at
+			 * once: shared_document() went false, so the header cart panel printed
+			 * the visitor's real basket -- product names, thumbnails, quantities,
+			 * line prices, subtotal -- while this returned 'shared', so
+			 * protect_private_response() emitted no DONOTCACHEPAGE, no
+			 * nocache_headers(), no Cache-Control and no Vary. A personalised
+			 * document shipped with nothing telling a shared cache not to store it.
+			 *
+			 * Plain site search with a basket (`/?s=...`) is the everyday case, and
+			 * no prepare_cache_policy() handler runs on a search results page, so
+			 * this was the only gate there. Others: ?lang=, ?mtm_*, ?attribute_pa_*,
+			 * and any parameter outside the allowlist.
+			 *
+			 * This is a pro.30 leftover: the Woo cart cookies used to be in
+			 * has_private_cookie() and covered these shapes; pro.30 removed them
+			 * and widened public_cache_allowed() without widening this predicate.
+			 *
+			 * Deferring to the same function makes the two agree by construction.
+			 * It costs no cacheable traffic: a clean guest, `?paged=2` and
+			 * `?fbclid=` all keep public_cache_allowed() true and stay 'shared'.
+			 */
+			return ( is_user_logged_in() || self::has_private_cookie() || ! self::public_cache_allowed() ) ? 'personal' : 'shared';
 		} catch ( Throwable $error ) {
 			/* RC18: context probes call into optional modules; never let one fatal
 			 * inside this critical file. Fail closed: treat the response as private. */

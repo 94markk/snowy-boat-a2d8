@@ -1,3 +1,15 @@
+9.2.0-pro.41: from the 60-agent adversarial audit. A declined card PERMANENTLY locked a
+signed-in customer out of checkout: guard_classic() takes a mutex for every signed-in classic
+checkout on every gateway, WooCommerce creates the order before charging, and reclaim_abandoned()
+refused on order_id BEFORE its age check -- so the guard could never be reclaimed at any age and
+only an admin could free them. Nothing had been charged. Every product view fired a second full
+WordPress bootstrap (/?dbp_state=1) even for a guest with no cookies, roughly doubling origin PHP
+on the most-visited route; it now fires only for visitors who actually have state. The cache-tier
+gate disagreed with the render gate, so six request shapes -- site search with a basket being the
+everyday one -- printed the shopper's real cart AND shipped with no cache headers at all. The Pro
+state endpoint answered on init:5 and walked through maintenance mode's API lock. Purge LiteSpeed
+and Cloudflare after updating.
+
 9.2.0-pro.40: speed. pro.30 replaced "any query string is private" with an allowlist in
 public_cache_allowed(), but THREE other gates kept the old rule and vetoed it -- including one
 that defines DONOTCACHEPAGE, killing the page cache, the fragment cache and LiteSpeed for the

@@ -149,8 +149,35 @@ final class Delicat_Builder_V9_Express_Payment {
    $record = self::read( 'delicat_payment_' . $uid . '_' . $held );
    if ( ! is_array( $record ) ) { return false; }
 
-   if ( ! empty( $record['creating'] ) || ! empty( $record['order_id'] ) ) { return false; }
    if ( ( time() - (int) ( $record['created'] ?? time() ) ) < self::ABANDONED_AFTER ) { return false; }
+
+   /*
+    * PRO41: this used to refuse on `creating`/`order_id` BEFORE the age test,
+    * and therefore forever.
+    *
+    * guard_classic() takes this mutex for every signed-in classic checkout on
+    * every gateway, and WooCommerce creates the order before asking the gateway
+    * to charge. So a declined card, a gateway timeout or an exception in
+    * process_payment() left order_id set with `finished` never reached,
+    * shutdown() retained the guard, and this function could never reclaim it at
+    * any age. The customer was told "Un paiement est deja en cours ou a verifier
+    * dans vos commandes." on every subsequent attempt, with a new cart, days
+    * later, having been charged nothing -- until an administrator released it by
+    * hand. One declined card ended that customer's ability to buy.
+    *
+    * The guard is there to stop a double charge while the outcome is UNKNOWN.
+    * Past the abandon threshold we can often prove nothing was taken: only
+    * reclaim when the order still exists, is not paid, and still needs payment.
+    * A paid order, an order that no longer needs payment (an offsite gateway
+    * that completed late), or an order we cannot load keeps the guard.
+    */
+   if ( ! empty( $record['creating'] ) || ! empty( $record['order_id'] ) ) {
+    $order_id = (int) ( $record['order_id'] ?? 0 );
+    if ( $order_id <= 0 || ! function_exists( 'wc_get_order' ) ) { return false; }
+    $order = wc_get_order( $order_id );
+    if ( ! $order || ! is_callable( array( $order, 'is_paid' ) ) || ! is_callable( array( $order, 'needs_payment' ) ) ) { return false; }
+    if ( $order->is_paid() || ! $order->needs_payment() ) { return false; }
+   }
 
    /* Compare-and-swap on the owner, so a guard taken between the read above
       and here is left alone. */
