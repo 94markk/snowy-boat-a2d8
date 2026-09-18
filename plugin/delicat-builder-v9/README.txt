@@ -1,3 +1,12 @@
+9.2.0-pro.42: fixes a regression introduced in pro.40. Loading the Compiler on every admin
+request meant the first request after an update ran a 250-page stylesheet compile -- and that is
+very often the request installing, updating or deleting a plugin, while WordPress is moving files
+on disk. The combination could exceed max_execution_time, so the plugin appeared unable to
+install or uninstall itself. The repair now skips every plugin/theme management screen and every
+non-idempotent request, and carries a wall-clock budget so it can never time out an admin page;
+it resumes on the next ordinary admin page. Ordinary screens still repair the stylesheets, which
+was the point of the pro.40 change.
+
 9.2.0-pro.41: from the 60-agent adversarial audit. A declined card PERMANENTLY locked a
 signed-in customer out of checkout: guard_classic() takes a mutex for every signed-in classic
 checkout on every gateway, WooCommerce creates the order before charging, and reclaim_abandoned()

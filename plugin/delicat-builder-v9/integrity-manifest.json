@@ -1,9 +1,9 @@
 {
     "algorithm": "sha256",
-    "built": "2026-09-18T19:34:11.000000+00:00",
-    "version": "9.2.0-pro.41",
-    "bytes": 4355564,
-    "count": 251,
+    "built": "2026-09-18T20:18:47.000000+00:00",
+    "version": "9.2.0-pro.42",
+    "bytes": 4364653,
+    "count": 252,
     "files": {
         "AUDIT-PRO35.md": {
             "bytes": 12206,
@@ -30,8 +30,8 @@
             "sha256": "1c4df19dc1fa2c987d2e739910047c481aefc26b58e505d9783453a92f57835e"
         },
         "README.txt": {
-            "bytes": 12369,
-            "sha256": "a223b2a4fcf2b79b692be95079ffd45b7ed150d0b2c2174734636e1c2efe1f11"
+            "bytes": 13073,
+            "sha256": "7a32c8da5771e20207aaaffe047b6dcd02197fd8edabd8dd3baea2d54a8bfdb2"
         },
         "asset-versions.php": {
             "bytes": 5957,
@@ -471,7 +471,7 @@
         },
         "delicat-builder-v9.php": {
             "bytes": 79231,
-            "sha256": "82fd691b555326f4050301aa77b9241df02090ce9b9101592145e161d1a3616e"
+            "sha256": "29ea6aa631ac7476994f0f58fd252c98a8f28fbc49c83a9f19d4e9e7a9e32ba1"
         },
         "includes/class-delicat-builder-admin.php": {
             "bytes": 23021,
@@ -522,8 +522,8 @@
             "sha256": "cc0a0b8a111ff9db52913c8e248ba4d5cfcb96f99e19967e4b277cd3e383802c"
         },
         "includes/class-delicat-builder-compiler.php": {
-            "bytes": 21000,
-            "sha256": "42c285ac397ed69bebd079ebfd36cde6ba7b15b9d4c15436329db65b6afbfa4f"
+            "bytes": 24414,
+            "sha256": "6c4f347c7c63a50f92831b65aadcd6b4db64b01fa920c585add130bccfbfd786"
         },
         "includes/class-delicat-builder-core.php": {
             "bytes": 12177,
@@ -996,6 +996,10 @@
         "tests/test-formula-eval.php": {
             "bytes": 4854,
             "sha256": "da40d688622f4c87d6c72babb04ed87681ecb1bee75ffd7eb02fd6fba3ffd248"
+        },
+        "tests/test-recompile-gate.php": {
+            "bytes": 4971,
+            "sha256": "f1401d894b432cb83c8190fadae9505d071c559ddeef7e4e41d07c3236c160e9"
         },
         "tests/test-shared-document.php": {
             "bytes": 4347,

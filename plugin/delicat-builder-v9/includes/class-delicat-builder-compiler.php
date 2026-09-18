@@ -441,8 +441,75 @@ final class Delicat_Builder_V9_Compiler {
 	 * admin visit. A short-lived lock keeps the retry from running on every
 	 * request while one pass is already in flight.
 	 */
+	/**
+	 * Is this a request we may spend a full recompile on?
+	 *
+	 * PRO42. pro.40 started loading this class on every admin request so the
+	 * first wp-admin page after an update repairs the compiled stylesheets. The
+	 * repair itself is not cheap -- it queries up to 250 Builder pages and
+	 * writes a stylesheet for each -- and the request where the version stamp is
+	 * FIRST seen to be stale is, very often, the request that is installing,
+	 * updating or deleting a plugin. WordPress is moving files on disk during
+	 * those, and adding a 250-page CSS compile to the same PHP process pushed
+	 * them into max_execution_time or the memory limit: the plugin then appeared
+	 * unable to install or uninstall itself.
+	 *
+	 * Plugin and theme management screens are therefore off limits, as is any
+	 * non-idempotent request. Every other admin page still performs the repair,
+	 * so the behaviour pro.40 wanted is intact.
+	 *
+	 * @return bool
+	 */
+	private static function recompile_request_is_safe(): bool {
+		if ( defined( 'WP_INSTALLING' ) && WP_INSTALLING ) {
+			return false;
+		}
+		if ( ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			return false;
+		}
+
+		/* Only idempotent page loads. An install, update, delete, activate or
+		 * deactivate arrives as POST, or as GET carrying an action. */
+		$method = strtoupper( isset( $_SERVER['REQUEST_METHOD'] ) ? sanitize_text_field( wp_unslash( (string) $_SERVER['REQUEST_METHOD'] ) ) : 'GET' );
+		if ( 'GET' !== $method && 'HEAD' !== $method ) {
+			return false;
+		}
+
+		$pagenow = isset( $GLOBALS['pagenow'] ) ? (string) $GLOBALS['pagenow'] : '';
+		if ( in_array(
+			$pagenow,
+			array(
+				'update.php',
+				'update-core.php',
+				'plugins.php',
+				'plugin-install.php',
+				'plugin-editor.php',
+				'themes.php',
+				'theme-install.php',
+				'theme-editor.php',
+				'site-health.php',
+				'import.php',
+				'export.php',
+			),
+			true
+		) ) {
+			return false;
+		}
+
+		/* Belt and braces: any admin request carrying an upgrader-shaped action. */
+		$action = isset( $_REQUEST['action'] ) && is_scalar( $_REQUEST['action'] ) ? sanitize_key( (string) wp_unslash( $_REQUEST['action'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only scheduling gate.
+		if ( '' !== $action && preg_match( '/(install|update|upgrade|delete|activate|deactivate|upload)/', $action ) ) {
+			return false;
+		}
+
+		return true;
+	}
+
 	public static function maybe_recompile_for_version(): void {
-		if ( wp_doing_ajax() || ! current_user_can( 'manage_options' ) ) {
+		if ( wp_doing_ajax() || wp_doing_cron() || ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		if ( ! self::recompile_request_is_safe() ) {
 			return;
 		}
 		if ( DELICAT_BUILDER_V9_VERSION === (string) get_option( 'delicat_builder_v9_compiled_stamp', '' ) ) {
@@ -455,8 +522,24 @@ final class Delicat_Builder_V9_Compiler {
 		}
 		set_transient( 'delicat_builder_v9_compiling', 1, 5 * MINUTE_IN_SECONDS );
 
-		$failed = 0;
-		$changed = 0;
+		$failed   = 0;
+		$changed  = 0;
+		$deferred = false;
+
+		/*
+		 * PRO42: a wall-clock budget.
+		 *
+		 * Even on a page we are allowed to work on, 250 layouts is more than a
+		 * shared host will finish inside max_execution_time, and a pass that dies
+		 * mid-way takes the admin page down with it. Spend a fraction of the
+		 * limit, then stop cleanly and leave the stamp unwritten so the next
+		 * admin page picks up where this one stopped -- already-compiled pages
+		 * are skipped on the retry, so it converges.
+		 */
+		$limit  = (int) ini_get( 'max_execution_time' );
+		$budget = $limit > 0 ? max( 5.0, min( 15.0, $limit * 0.5 ) ) : 15.0;
+		$started = microtime( true );
+
 		try {
 			$ids = get_posts(
 				array(
@@ -470,6 +553,10 @@ final class Delicat_Builder_V9_Compiler {
 				)
 			);
 			foreach ( (array) $ids as $page_id ) {
+				if ( ( microtime( true ) - $started ) > $budget ) {
+					$deferred = true;
+					break;
+				}
 				/* Per page, so one unparseable layout cannot cost every other
 				 * page its bundle. */
 				try {
@@ -496,7 +583,7 @@ final class Delicat_Builder_V9_Compiler {
 
 			/* Stamp only successful builds. Failed storage writes are retried after
 			 * a cooldown; already-current compiled pages are skipped on retries. */
-			if ( 0 === $failed ) {
+			if ( 0 === $failed && ! $deferred ) {
 				update_option( 'delicat_builder_v9_compiled_stamp', DELICAT_BUILDER_V9_VERSION, true );
 			}
 			if ( $failed > 0 ) {
@@ -528,6 +615,8 @@ final class Delicat_Builder_V9_Compiler {
 			if ( $failed > 0 ) {
 				set_transient( 'delicat_builder_v9_compiling', 1, 15 * MINUTE_IN_SECONDS );
 			} else {
+				/* Includes the budget stop: the work is unfinished but healthy, so
+				 * release the lock and let the next admin page carry on. */
 				delete_transient( 'delicat_builder_v9_compiling' );
 			}
 		}
