@@ -288,6 +288,24 @@ final class Delicat_Builder_V9_Server_Engine {
 	/**
 	 * Conservative anonymous fragment-cache gate.
 	 */
+	/**
+	 * PRO40: defer to the pro.30 allowlist instead of "any query string is private".
+	 *
+	 * Security::query_is_cache_safe() lets recognised campaign and catalog-navigation
+	 * keys (utm_*, fbclid, gclid, paged, orderby, filter_*, ...) through while an
+	 * unrecognised parameter still bypasses, so this cannot mint cache entries for
+	 * arbitrary keys. Falls back to the old rule when Security is not loaded, so the
+	 * behaviour can only get safer, never looser.
+	 *
+	 * @return bool
+	 */
+	private static function query_is_cache_safe(): bool {
+		if ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'query_is_cache_safe' ) ) ) {
+			return Delicat_Builder_V9_Security::query_is_cache_safe();
+		}
+		return empty( $_GET ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache gate only.
+	}
+
 	private static function fragment_cache_allowed(): bool {
 		$s = self::settings();
 		if ( empty( $s['server_fragment_cache'] ) || is_user_logged_in() || self::sensitive_request() ) {
@@ -296,7 +314,7 @@ final class Delicat_Builder_V9_Server_Engine {
 		if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
 			return false;
 		}
-		if ( ! empty( $_GET ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache bypass only.
+		if ( ! self::query_is_cache_safe() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache bypass only.
 			return false;
 		}
 		if (
@@ -417,11 +435,22 @@ final class Delicat_Builder_V9_Server_Engine {
 			return;
 		}
 		/* RC32: a signed-in customer's copy may be cached privately by LiteSpeed. */
-		if ( is_user_logged_in() && ! self::sensitive_request() && empty( $_GET ) && class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'private_cache_allowed' ) ) && Delicat_Builder_V9_Security::private_cache_allowed() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( is_user_logged_in() && ! self::sensitive_request() && self::query_is_cache_safe() && class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'private_cache_allowed' ) ) && Delicat_Builder_V9_Security::private_cache_allowed() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			Delicat_Builder_V9_Security::hint_private_cache( 'Delicat V9 native server page (signed-in)' );
 			return;
 		}
-		$private = is_user_logged_in() || self::sensitive_request() || ! empty( $_GET ) || self::has_private_cookie(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache policy only.
+		/*
+		 * PRO40: this line was the single biggest cost on an ad-driven store.
+		 *
+		 * `! empty( $_GET )` made every campaign landing private, and because this
+		 * branch defines DONOTCACHEPAGE it did not merely skip one cache -- it
+		 * vetoed the page cache, the fragment cache and LiteSpeed for the whole
+		 * request, overriding the pro.30 allowlist that Security had already
+		 * applied correctly. A shopper arriving on ?fbclid=... or ?utm_source=...
+		 * got a full PHP render of the homepage or product page every single time,
+		 * and on this store that is most of the traffic.
+		 */
+		$private = is_user_logged_in() || self::sensitive_request() || ! self::query_is_cache_safe() || self::has_private_cookie(); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache policy only.
 		if ( $private ) {
 			if ( ! defined( 'DONOTCACHEPAGE' ) ) {
 				define( 'DONOTCACHEPAGE', true );

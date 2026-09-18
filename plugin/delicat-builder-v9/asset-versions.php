@@ -114,7 +114,7 @@ return array(
  'modules/product-fields/assets/js/calc-front.js' => 'b715a9b757a4',
  'pro/assets/dbp-app.css' => '7a879c9be0ba',
  'pro/assets/dbp-critical.css' => 'fe8be8e23362',
- 'pro/assets/dbp-nav.js' => 'd35790808a98',
+ 'pro/assets/dbp-nav.js' => 'ed4df3f4d991',
  'pro/assets/dbp-state.js' => '7db5d40e54bf',
  'pro/assets/dbp-type.css' => 'b55df9990c0e',
 );

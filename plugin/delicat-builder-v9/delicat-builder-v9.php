@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.2.0-pro.39
+ * Version: 9.2.0-pro.40
 
  * Requires at least: 6.4
  * Requires PHP: 8.5
@@ -188,7 +188,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.39' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.2.0-pro.40' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -1037,6 +1037,24 @@ if ( $delicat_builder_v9_activating ) {
 			'includes/class-delicat-builder-security.php',
 			'includes/class-delicat-builder-core.php',
 			'includes/class-delicat-builder-admin.php',
+			/*
+			 * PRO40: the per-page compiled stylesheets rebuild from
+			 * Compiler::maybe_recompile_for_version() on admin_init, but the
+			 * Compiler was only parsed on BUILDER admin requests. After every
+			 * plugin update each page's manifest names the old version, so
+			 * Assets::detect_page_needs() discards it and the managed homepage
+			 * falls back to the 176 KB all-components.min.css bundle on top of
+			 * the 93 KB storefront chrome -- render-blocking, on every visit,
+			 * until somebody happened to open a Delicat Builder screen. On a
+			 * site that auto-updates, nobody necessarily does.
+			 *
+			 * Loading it on ordinary admin requests makes the first visit to
+			 * ANY wp-admin page repair it, which is what Self-Test has always
+			 * told the merchant would happen. maybe_recompile_for_version()
+			 * returns immediately when the recorded version already matches, so
+			 * the steady-state cost is one primed option read.
+			 */
+			'includes/class-delicat-builder-compiler.php',
 			/* RC29: the "Avis" dashboard is the reviews post type's own list screen;
 			 * its class must register the type on every admin request or the menu
 			 * entry and edit.php?post_type=delicat_review disappear. */

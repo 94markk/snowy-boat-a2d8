@@ -275,7 +275,12 @@ final class Delicat_Builder_V9_Security {
 		if ( ! in_array( $method, array( 'GET', 'HEAD' ), true ) ) {
 			return false;
 		}
-		if ( ! empty( $_GET ) || self::request_has_sensitive_action() || self::is_private_context() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache bypass only.
+		/* PRO40: was `! empty( $_GET )`. pro.30 replaced that rule with
+		 * query_is_cache_safe() in public_cache_allowed() but left it standing here,
+		 * so a signed-in shopper arriving on any tracked link lost private caching
+		 * for the same reason guests lost public caching. Same predicate, same
+		 * allowlist: an unrecognised parameter still bypasses. */
+		if ( ! self::query_is_cache_safe() || self::request_has_sensitive_action() || self::is_private_context() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache bypass only.
 			return false;
 		}
 		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url() ) {
@@ -366,7 +371,7 @@ final class Delicat_Builder_V9_Security {
 	 * An unrecognised parameter still bypasses the cache rather than minting
 	 * cache entries for arbitrary keys.
 	 */
-	private static function query_is_cache_safe(): bool {
+	public static function query_is_cache_safe(): bool {
 		if ( empty( $_GET ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache gate only.
 			return true;
 		}

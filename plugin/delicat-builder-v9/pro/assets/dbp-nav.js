@@ -162,7 +162,28 @@
     for (var j = 0; j < scripts.length; j++) {
       var script = scripts[j], src = script.getAttribute('src') || script.getAttribute('data-src');
       var type = script.getAttribute('type') || '';
-      if (type === 'module') throw new Error('module-lifecycle');
+      // PRO40: a module that is ALREADY loaded is not a lifecycle hazard.
+      //
+      // This threw for any type="module" tag before checking whether that exact
+      // module was already running on the current page. WordPress 6.5+ emits
+      // module scripts on essentially every page through the Interactivity API
+      // (image lightbox, query loop, navigation and file blocks) via
+      // wp_enqueue_script_module, identically on each one -- so one such tag in
+      // the destination aborted EVERY soft navigation, on every route, and the
+      // engine fell back to a hard load. The page had already been fetched by
+      // then, so the browser downloaded it a second time: instant navigation was
+      // not merely unavailable, it cost an extra full document.
+      //
+      // indexExistingAssets() indexes every script[src] regardless of type, so a
+      // module already on this page is in loadedScripts. Re-appending it could
+      // not re-execute it anyway -- the browser's module map dedupes by URL --
+      // so skipping is both safe and what already happens in practice. A
+      // genuinely NEW module, or any inline module (whose side effects cannot be
+      // deduped), still forces a full load.
+      if (type === 'module') {
+        if (src && loadedScripts[normalise(new URL(src, response.url || location.href).href)]) continue;
+        throw new Error('module-lifecycle');
+      }
       if (type && !/^(text\/javascript|application\/javascript|litespeed\/javascript)$/.test(type)) continue;
       if (src) {
         var absolute = new URL(src, response.url || location.href).href;
@@ -233,7 +254,8 @@
 
     var inline = doc.querySelectorAll('script[id]');
     for (i = 0; i < inline.length; i++) {
-      if (!inline[i].src) loadedInline[inline[i].id] = true;
+      // PRO40: remember WHAT ran, not merely that something with this id ran.
+      if (!inline[i].src) loadedInline[inline[i].id] = inline[i].textContent || '';
     }
   }
 
@@ -306,7 +328,16 @@
       return chain.then(function () {
         if (token !== navToken) return;
         if (item.inline) {
-          if (item.inline.id && loadedInline[item.inline.id]) return;
+          /* PRO40: skip an inline block only when it is BYTE-IDENTICAL to the one
+             already running. These are WordPress's -js-before / -js-extra /
+             -js-after / -js-translations blocks, i.e. the wp_localize_script and
+             wp_add_inline_script payloads: nonces, per-page config, product ids,
+             currency. Keying on id alone froze them at the first page's values
+             for the whole soft-navigation session, so every later page ran on the
+             previous page's data. Comparing content still avoids re-executing an
+             identical block (which is what the id check was protecting against)
+             while letting genuinely different data through. */
+          if (item.inline.id && loadedInline[item.inline.id] === item.inline.code) return;
           return runInline(item.inline);
         }
         if ((item.external.id && scriptIds[item.external.id]) || loadedScripts[normalise(item.external.src)]) return;
@@ -316,7 +347,7 @@
   }
 
   function runInline(block) {
-    if (block.id) loadedInline[block.id] = true;
+    if (block.id) loadedInline[block.id] = block.code;
     var node = doc.createElement('script');
     if (block.id) {
       var previous = doc.getElementById(block.id);
@@ -534,6 +565,23 @@
     /* Product links leave as real documents. Record where the shopper was, so a
        later engine-handled Back can put them back on the same row of the list. */
     try { scrollPositions[key(parseUrl(location.href))] = window.pageYOffset; } catch (e) { /* no-op */ }
+    /* PRO40: hand scroll restoration back to the browser before leaving.
+     *
+     * applySwap() sets history.scrollRestoration = 'manual' on the first soft
+     * swap and nothing ever set it back, but that setting persists on the
+     * session history entry -- and product links are ALWAYS hard-navigated
+     * (nativeProducts is forced true server-side). So the sequence that matters
+     * most on a storefront -- scroll the listing, open a product, press Back --
+     * left the browser forbidden from restoring scroll while the engine was no
+     * longer in the document to do it itself, and scrollPositions had died with
+     * the old JS heap. The shopper was dumped at the top of the list every time,
+     * which is the single most website-like thing a store can do.
+     *
+     * 'manual' is only correct while the engine owns same-document swaps. Once
+     * we leave as a real document the browser owns it, and its native
+     * restoration is better than anything we can reconstruct. applySwap() sets
+     * 'manual' again on the next soft swap. */
+    try { if (history.scrollRestoration) history.scrollRestoration = 'auto'; } catch (e) { /* no-op */ }
     if (replace) window.location.replace(url.href); else window.location.href = url.href;
   }
 

@@ -1,3 +1,16 @@
+9.2.0-pro.40: speed. pro.30 replaced "any query string is private" with an allowlist in
+public_cache_allowed(), but THREE other gates kept the old rule and vetoed it -- including one
+that defines DONOTCACHEPAGE, killing the page cache, the fragment cache and LiteSpeed for the
+whole request. Every ad click (?fbclid, ?utm_*, ?gclid) and every ?paged/?orderby hit was a full
+PHP render. On an ad-driven store that is most of the traffic. Instant navigation was aborting on
+EVERY page: one <script type="module"> in the destination (WordPress 6.5+ emits them everywhere
+via the Interactivity API) threw before checking whether that module was already running, so the
+engine hard-navigated and the browser downloaded the document a second time. Back from a product
+dumped shoppers at the top of the listing. Inline wp_localize_script data froze at the first
+page's values across soft navigation. Compiled page stylesheets now rebuild on any admin page
+instead of only Delicat Builder screens, so the homepage stops falling back to the 176 KB bundle
+after an update. Purge LiteSpeed and Cloudflare after updating.
+
 9.2.0-pro.39: two money/checkout bugs. Cart prices COMPOUNDED: apply_cart_prices()
 recomputed from the product object it had already marked up, and WooCommerce fires
 woocommerce_before_calculate_totals several times per request, so a 250 base with a 50
