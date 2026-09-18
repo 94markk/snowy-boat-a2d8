@@ -918,6 +918,14 @@ class Delicat_Builder_V9_Product_Fields_Calculator {
 		return $item;
 	}
 
+	/**
+	 * Catalogue price of each cart line, captured the first time we see it this
+	 * request. See apply_cart_prices() for why this has to exist.
+	 *
+	 * @var array<string,float> cart item key => pristine base price.
+	 */
+	private $pristine_base = array();
+
 	public function apply_cart_prices( $cart ) {
 		if ( ! $cart instanceof WC_Cart ) {
 			return;
@@ -937,6 +945,31 @@ class Delicat_Builder_V9_Product_Fields_Calculator {
 			   kept charging the stale amount for the life of the session. */
 			$product_id = ! empty( $item['product_id'] ) ? (int) $item['product_id'] : 0;
 			$cfg        = $product_id ? $this->get_config( $product_id ) : null;
+
+			/*
+			 * PRO39: restore the catalogue price before recomputing.
+			 *
+			 * compute_total() reads its {base} from the product object it is handed,
+			 * and the object handed in here is $item['data'] -- the very object the
+			 * previous pass called set_price() on. WooCommerce fires
+			 * woocommerce_before_calculate_totals more than once per request (the cart
+			 * page, update_order_review at checkout, any shipping recalculation, any
+			 * plugin calling WC()->cart->calculate_totals()), and $item['data'] is
+			 * rebuilt from the session only once per request, so each extra pass
+			 * treated the ALREADY MARKED-UP price as the base and applied the markup
+			 * again. A 250 base with a 50 gift-wrap option charged 300, then 350, then
+			 * 400; a percentage or a {base}*{qty} formula compounded geometrically
+			 * (750 -> 2250 -> 6750). The shopper was overcharged, silently.
+			 *
+			 * Capturing the base once per cart line and restoring it before each
+			 * recompute makes this idempotent however many times the hook fires,
+			 * without depending on wc_get_product() being reachable here.
+			 */
+			if ( ! array_key_exists( $key, $this->pristine_base ) ) {
+				$this->pristine_base[ $key ] = (float) $item['data']->get_price( 'edit' );
+			}
+			$item['data']->set_price( $this->pristine_base[ $key ] );
+
 			if ( $cfg && isset( $item['dmc_calc']['values'] ) && is_array( $item['dmc_calc']['values'] ) ) {
 				$values = $item['dmc_calc']['values'];
 				$active = isset( $item['dmc_calc']['active'] ) && is_array( $item['dmc_calc']['active'] )

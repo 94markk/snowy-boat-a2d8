@@ -416,7 +416,27 @@ final class Delicat_Builder_V9_Multi_Currency {
 		if ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'order-pay' ) ) { return true; }
 		if ( isset( $_GET['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			$action = sanitize_key( (string) wp_unslash( $_GET['wc-ajax'] ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-			if ( in_array( $action, array( 'checkout', 'complete_order', 'update_order_review' ), true ) ) { return true; }
+			/*
+			 * PRO39: the express sheet is a payment context and must settle like one.
+			 *
+			 * Express_Payment::fields() issues the cart hash from
+			 * woocommerce_review_order_before_submit, which fires while
+			 * wc-ajax=delicat_express_form renders checkout/form-checkout.php. That
+			 * request is not is_checkout(), does not define WOOCOMMERCE_CHECKOUT and
+			 * was not listed here, so the sheet priced the cart in the SHOPPER'S
+			 * display currency. Express_Payment::pay() then defines
+			 * WOOCOMMERCE_CHECKOUT one line before calling begin(), which re-hashes
+			 * the cart -- now in base currency -- and hash_equals() could never match.
+			 * Every express payment failed with "Le panier a changé. Actualisez pour
+			 * vérifier le total.", and refreshing never helped because the mismatch is
+			 * structural, not a race. Anyone browsing in USD, CAD or EUR on an HTG
+			 * store could not use express checkout at all.
+			 *
+			 * Listing both endpoints makes the sheet render, and the hash issue, in
+			 * the same currency the payment is taken in -- which is also what
+			 * settlement_notice() already tells the shopper is happening.
+			 */
+			if ( in_array( $action, array( 'checkout', 'complete_order', 'update_order_review', 'delicat_express_form', 'delicat_express_pay' ), true ) ) { return true; }
 		}
 		if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
 			$uri = isset( $_SERVER['REQUEST_URI'] ) ? (string) wp_unslash( $_SERVER['REQUEST_URI'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized

@@ -1,3 +1,13 @@
+9.2.0-pro.39: two money/checkout bugs. Cart prices COMPOUNDED: apply_cart_prices()
+recomputed from the product object it had already marked up, and WooCommerce fires
+woocommerce_before_calculate_totals several times per request, so a 250 base with a 50
+option charged 300, then 350, then 400 -- and a percentage or {base}*{qty} formula
+compounded geometrically. Shoppers were overcharged silently. Express checkout was
+UNUSABLE in any non-base currency: the review sheet issued its cart hash in the display
+currency while pay() re-hashed in base currency, so every express payment failed with
+"Le panier a change" and refreshing never helped. Two new regression tests, both
+verified to fail on the unfixed code. Purge LiteSpeed and Cloudflare after updating.
+
 9.2.0-pro.38: two formula bugs that could sell a product for 0.00 are fixed. An unknown
 variable in a pricing formula resolved to 0 and still reported success; every arithmetic failure
 (division by zero, modulo by zero, sqrt of a negative, an incomplete formula) returned 0.0, which
