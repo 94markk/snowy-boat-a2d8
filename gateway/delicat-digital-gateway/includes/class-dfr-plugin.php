@@ -2494,7 +2494,12 @@ final class DFR_Plugin {
                 foreach ($order->get_items('line_item') as $item_id => $item) {
                     $remote = trim((string) $item->get_meta('_dfr_remote_order_id', true));
                     $status = $this->normalize_supplier_status($item->get_meta('_dfr_remote_status', true));
-                    if (!preg_match('/^ord-[0-9]+$/', $remote) || in_array($status, array('failed','refunded'), true)) { continue; }
+                    if (in_array($status, array('failed','refunded'), true)) { continue; }
+                    if (!preg_match('/^ord-[0-9]+$/', $remote)) {
+                        // 4.15.2: a paid item the supplier never received.
+                        $this->recover_unsubmitted_item($order, $item_id, $item);
+                        continue;
+                    }
                     $needs_code = $this->item_requires_delivery_code($item);
                     $has_code = $this->item_has_delivery_codes($item);
                     if ($status === 'completed' && (!$needs_code || $has_code)) {
@@ -2528,6 +2533,69 @@ final class DFR_Plugin {
      * Upgrade self-heal: dispatch recent Processing/On-hold remote items through the
      * cron-independent loopback path. It never POSTs a new supplier order.
      */
+    /**
+     * Re-submit a paid line item that never reached the supplier.
+     *
+     * 4.15.2. submit_supplier_order() gives up after six attempts on the 'create'
+     * backoff — 3+6+10+20+35+60 seconds, about two minutes in total — and the
+     * reconciliation watchdog then skipped the item entirely, because it requires
+     * a `_dfr_remote_order_id` matching /^ord-[0-9]+$/ and an unsubmitted item has
+     * none. A supplier outage lasting longer than those two minutes therefore left
+     * the customer charged, the order sitting in Processing, and NO worker that
+     * would ever try again. The only recovery was a merchant noticing by hand.
+     *
+     * Resubmission is safe because the supplier idempotency key is derived purely
+     * from the order and item ids ('wc-<order>-item-<item>-v1'), so a retry returns
+     * the original upstream order rather than creating a second one — which is
+     * exactly why this is a retry and not a new purchase.
+     *
+     * Bounded: after the cap the item is left alone and the merchant is told once,
+     * so a genuinely unfulfillable item cannot be retried forever.
+     *
+     * @param object $order   WooCommerce order.
+     * @param int    $item_id Line item id.
+     * @param object $item    Line item.
+     * @return void
+     */
+    private function recover_unsubmitted_item($order, $item_id, $item) {
+        if (!$order || !$item) { return; }
+        // Only items we actually prepared for fulfillment; the encrypted snapshot
+        // is what submit_supplier_order() replays.
+        if ((string) $item->get_meta('_dfr_fulfill_request_enc', true) === '') { return; }
+        // A failed Player-ID revalidation is a decision, not an outage.
+        if ((string) $item->get_meta('_dfr_uid_revalidation_failed', true) !== '') { return; }
+        if (!$this->item_service_type($item)) { return; }
+
+        $cap = (int) apply_filters('dfr_unsubmitted_recovery_attempts', 48, $order, $item_id);
+        $attempts = absint($item->get_meta('_dfr_resubmit_attempts', true));
+        if ($attempts >= max(1, $cap)) {
+            if (!$item->get_meta('_dfr_resubmit_exhausted_notified', true)) {
+                $item->update_meta_data('_dfr_resubmit_exhausted_notified', gmdate('c'));
+                $item->save();
+                $order->add_order_note(sprintf(
+                    /* translators: %d: line item id */
+                    __('Digital gateway: item %d was paid but never accepted by the supplier after repeated retries. Fulfil it manually or refund the customer.', 'delicat-fazercards'),
+                    (int) $item_id
+                ));
+                $this->log('error', 'Paid item never submitted to supplier; recovery exhausted', array(
+                    'order_id' => $order->get_id(),
+                    'item_id' => $item_id,
+                    'attempts' => $attempts,
+                ));
+            }
+            return;
+        }
+
+        $item->update_meta_data('_dfr_resubmit_attempts', $attempts + 1);
+        $item->save();
+        $this->log('warning', 'Re-submitting a paid item the supplier never received', array(
+            'order_id' => $order->get_id(),
+            'item_id' => $item_id,
+            'attempt' => $attempts + 1,
+        ));
+        $this->schedule_order_item_retry($order->get_id(), $item_id, max(30, $this->adaptive_retry_delay(min(6, $attempts + 1), 'create')));
+    }
+
     public function repair_stuck_reconcile_once() {
         $repair_version = (string) get_option('dfr_reconcile_repair_pending_v414', '') === '1'
             ? 'v414'
@@ -2986,6 +3054,31 @@ final class DFR_Plugin {
                 if (!$item->get_meta('_dfr_delivery_ready_at', true)) { $item->update_meta_data('_dfr_delivery_ready_at', gmdate('c')); }
                 $item->update_meta_data('_dfr_timing_delivery_ready', gmdate('c'));
                 $item->delete_meta_data('_dfr_delivery_waiting_since');
+
+                /*
+                 * 4.15.2: a supplier order that came back with fewer codes than the
+                 * customer bought is a shortfall, not a delivery. Reconciliation
+                 * keeps chasing it (see item_has_delivery_codes), but the merchant
+                 * is told once as soon as it is visible, because the customer has
+                 * already paid for units they have not received.
+                 */
+                $expected_codes = $this->item_expected_code_count($item);
+                if ($expected_codes > 1 && count($codes) < $expected_codes && !$item->get_meta('_dfr_codes_short_notified', true)) {
+                    $item->update_meta_data('_dfr_codes_short_notified', gmdate('c'));
+                    $order->add_order_note(sprintf(
+                        /* translators: 1: delivered code count, 2: purchased quantity, 3: item name */
+                        __('Digital gateway: supplier delivered %1$d of %2$d codes for "%3$s". The shortfall is being retried; if it does not resolve, refund or fulfil the remainder manually.', 'delicat-fazercards'),
+                        (int) count($codes),
+                        (int) $expected_codes,
+                        (string) $item->get_name()
+                    ));
+                    $this->log('warning', 'Short digital delivery from supplier', array(
+                        'order_id' => $order->get_id(),
+                        'item_id' => $item_id,
+                        'delivered' => count($codes),
+                        'expected' => $expected_codes,
+                    ));
+                }
             } else {
                 $this->log('error', 'Delivery code encryption failed', array('order_id' => $order->get_id(), 'item_id' => $item_id, 'error' => $enc->get_error_message()));
             }
@@ -3138,11 +3231,93 @@ final class DFR_Plugin {
         return in_array($this->item_service_type($item), array('giftcard', 'gamekey'), true);
     }
 
+    /**
+     * How many codes this line item owes the customer.
+     *
+     * One supplier order carries the whole line: submit_supplier_order() sends
+     * 'quantity' => $item->get_quantity(), and extract_codes() collects a LIST
+     * from cards[]/keys[] capped at 100 because, as that method's own comment
+     * says, "Supplier order quantity is capped at 100." Quantity N therefore owes
+     * N codes.
+     *
+     * @param object $item Order line item.
+     * @return int 0 when the item is not code-based.
+     */
+    private function item_expected_code_count($item) {
+        if (!$item || !$this->item_requires_delivery_code($item)) { return 0; }
+        $qty = is_callable(array($item, 'get_quantity')) ? (int) $item->get_quantity() : 1;
+        return max(1, min(100, $qty));
+    }
+
+    /**
+     * How long a short delivery is chased before it is accepted and escalated.
+     *
+     * @return int Seconds.
+     */
+    private function short_delivery_grace() {
+        return (int) apply_filters('dfr_short_delivery_grace', 6 * HOUR_IN_SECONDS);
+    }
+
+    private function item_delivered_code_count($item) {
+        if (!$item) { return 0; }
+        $count = absint($item->get_meta('_dfr_codes_count', true));
+        if ($count > 0 && (string) $item->get_meta('_dfr_codes_enc', true) !== '') { return $count; }
+        return count((array) $this->decrypt_item_codes($item));
+    }
+
+    /**
+     * Is this item's digital delivery COMPLETE?
+     *
+     * 4.15.2: this returned true as soon as a single code existed, whatever the
+     * quantity. Every caller uses it to decide whether to keep reconciling, so an
+     * order for five gift cards that received one code was treated as delivered:
+     * reconciliation stopped permanently, the customer kept the four they paid
+     * for and never received, and nothing anywhere recorded a shortfall.
+     *
+     * A short delivery is now incomplete, so the existing reconciliation keeps
+     * working. It cannot chase forever, though — if the supplier genuinely sends
+     * fewer codes than units for some product, that would loop and re-poll
+     * indefinitely. After a grace window the shortfall is accepted, stamped and
+     * escalated to the merchant once, which is the difference between a bounded
+     * retry and a silent loss.
+     *
+     * @param object $item Order line item.
+     * @return bool
+     */
     private function item_has_delivery_codes($item) {
         if (!$item) { return false; }
-        $count = absint($item->get_meta('_dfr_codes_count', true));
-        if ($count > 0 && (string) $item->get_meta('_dfr_codes_enc', true) !== '') { return true; }
-        return !empty($this->decrypt_item_codes($item));
+        $delivered = $this->item_delivered_code_count($item);
+        if ($delivered < 1) { return false; }
+
+        $expected = $this->item_expected_code_count($item);
+        if ($expected <= 1 || $delivered >= $expected) {
+            if ($item->get_meta('_dfr_codes_short_since', true)) {
+                $item->delete_meta_data('_dfr_codes_short_since');
+            }
+            return true;
+        }
+
+        // Short. Keep reconciling until the grace window closes.
+        $since = (string) $item->get_meta('_dfr_codes_short_since', true);
+        if ($since === '') {
+            $item->update_meta_data('_dfr_codes_short_since', gmdate('c'));
+            if (is_callable(array($item, 'save'))) { $item->save(); }
+            return false;
+        }
+        $started = strtotime($since);
+        if ($started === false) {
+            /* Corrupt stamp. Re-stamp rather than trusting it: returning false on
+             * an unparseable value would chase this item forever, and returning
+             * true would accept a shortfall that may never have been given its
+             * grace window. Re-stamping does neither and self-heals. */
+            $item->update_meta_data('_dfr_codes_short_since', gmdate('c'));
+            if (is_callable(array($item, 'save'))) { $item->save(); }
+            return false;
+        }
+        if ((time() - $started) < $this->short_delivery_grace()) {
+            return false;
+        }
+        return true;
     }
 
     private function queue_item_delivery_refresh($order, $item_id, $item, $delay = 1) {
@@ -3847,7 +4022,18 @@ final class DFR_Plugin {
                     $codes = $this->decrypt_item_codes($item);
                     $count = count($codes);
                 }
-                if ($count > 0) { $state['ready'] = true; $state['count'] += $count; }
+                if ($count > 0) {
+                    // 4.15.2: short deliveries stay 'pending' on the customer's
+                    // surfaces while they are still being chased, so the order does
+                    // not read as fully delivered when it is not.
+                    $expected = $this->item_expected_code_count($item);
+                    if ($expected > 1 && $count < $expected && !$item->get_meta('_dfr_codes_short_since', true)) {
+                        $state['pending'] = true;
+                    } else {
+                        $state['ready'] = true;
+                    }
+                    $state['count'] += $count;
+                }
                 continue;
             }
             $remote = (string) $item->get_meta('_dfr_remote_order_id', true);
