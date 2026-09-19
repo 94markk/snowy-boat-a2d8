@@ -893,7 +893,28 @@ final class DFR_Catalog {
             if ($id === '') {
                 continue;
             }
-            $price = isset($row['price_usd']) && is_numeric($row['price_usd']) ? (float) $row['price_usd'] : 0.0;
+            /*
+             * 4.15.1 — a missing or non-numeric supplier price is NOT a price of zero.
+             *
+             * This coerced anything unparseable to 0.0, and automatic pricing then
+             * derived a store price from a cost of zero: the product was published,
+             * and sold, for nothing, while still costing full supplier price to
+             * fulfil. Every loss was silent — the sync reported the row as updated.
+             *
+             * An offer we cannot price is an offer we cannot sell, so it is skipped
+             * entirely. Sync then sees it as absent, and the removal guards above
+             * decide what that means. A genuinely free offer sends 0 explicitly and
+             * is still accepted.
+             */
+            if (!isset($row['price_usd']) || !is_numeric($row['price_usd']) || (float) $row['price_usd'] < 0) {
+                $this->plugin()->log('warning', 'Supplier offer skipped: missing or unusable price', array(
+                    'service' => $service,
+                    'category_id' => (string) $category_id,
+                    'offer_id' => $id,
+                ));
+                continue;
+            }
+            $price = (float) $row['price_usd'];
             $stock = isset($row['stock']) && is_numeric($row['stock']) ? max(0, (int) $row['stock']) : null;
             $items[] = array(
                 'id' => $id,
@@ -905,12 +926,25 @@ final class DFR_Catalog {
                 'product_id' => isset($existing[$id]) ? (int) $existing[$id] : 0,
             );
         }
+        /*
+         * 4.15.1 — record whether the supplier said this list is incomplete.
+         *
+         * The offers endpoints are called with a category id and nothing else: no
+         * limit, no cursor. If the supplier ever paginates them server-side, every
+         * offer past the first page would look withdrawn to the sync. Removal is
+         * now destructive (it takes products off sale), so a truncated list must
+         * never be used to infer that anything was removed.
+         */
+        $offer_meta = !empty($raw['meta']) && is_array($raw['meta']) ? $raw['meta'] : array();
+        $truncated = !empty($offer_meta['has_more']) || !empty($offer_meta['next_cursor']);
+
         $result = array(
             'service' => $service,
             'category_id' => $category_id,
             'category_name' => $category_name,
             'fields' => $fields,
             'items' => $items,
+            'truncated' => (bool) $truncated,
         );
         set_transient($cache_key, $result, $this->cache_ttl());
         return $result;
@@ -1768,6 +1802,32 @@ final class DFR_Catalog {
                  * discontinuation still converges; a transient supplier blip does not
                  * pull the catalogue out of stock.
                  */
+                /*
+                 * 4.15.1 — do not infer removals from a list the supplier called
+                 * incomplete, and do not let any single response strip most of a
+                 * category. Products still get their stock, price and limits
+                 * refreshed from what WAS returned; only the "this offer is gone"
+                 * conclusion is withheld, because that one takes items off sale.
+                 */
+                $offers_truncated = !empty($remote['truncated']);
+                $group_size = count($group['products']);
+                $would_miss = 0;
+                foreach ($group['products'] as $probe_id) {
+                    $probe_offer = (string) get_post_meta($probe_id, '_dfr_offer_id', true);
+                    if ($probe_offer !== '' && !isset($remote_map[$probe_offer])) { $would_miss++; }
+                }
+                $mass_removal = ($group_size >= 4 && $would_miss > (int) floor($group_size / 2));
+                $trust_removals = !$offers_truncated && !$mass_removal;
+                if (!$trust_removals) {
+                    $skipped_suspect++;
+                    $this->plugin()->log('warning', 'Refusing to infer supplier removals from this response', array(
+                        'group' => $group_key,
+                        'reason' => $offers_truncated ? 'supplier_marked_list_incomplete' : 'more_than_half_the_category_would_be_removed',
+                        'would_remove' => $would_miss,
+                        'group_size' => $group_size,
+                    ));
+                }
+
                 if (!$remote_map && $group['products']) {
                     $streak = (int) ($empty_streaks[$group_key] ?? 0) + 1;
                     $empty_streaks[$group_key] = $streak;
@@ -1798,6 +1858,10 @@ final class DFR_Catalog {
                     }
                     if ($product->get_parent_id()) {
                         $touched_variable_parents[(int) $product->get_parent_id()] = true;
+                    }
+                    if (!isset($remote_map[$offer_id]) && !$trust_removals) {
+                        // Refresh nothing, conclude nothing; the next run re-decides.
+                        continue;
                     }
                     if (!isset($remote_map[$offer_id])) {
                         /*
