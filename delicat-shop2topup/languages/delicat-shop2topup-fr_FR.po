@@ -148,22 +148,22 @@ msgstr "Catalogue"
 msgid "Settings"
 msgstr "Réglages"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:575 delicat-shop2topup/includes/class-dst2t-admin.php:1004
+#: delicat-shop2topup/includes/class-dst2t-admin.php:668 delicat-shop2topup/includes/class-dst2t-admin.php:1123
 msgid "Test connection"
 msgstr "Tester la connexion"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:869
+#: delicat-shop2topup/includes/class-dst2t-admin.php:988
 msgid "Save settings"
 msgstr "Enregistrer les réglages"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:823
+#: delicat-shop2topup/includes/class-dst2t-admin.php:942
 msgid "Complete WooCommerce orders automatically"
 msgstr "Terminer automatiquement les commandes WooCommerce"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:825
+#: delicat-shop2topup/includes/class-dst2t-admin.php:944
 msgid "Maximum cost increase"
 msgstr "Augmentation maximale du coût"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:865
+#: delicat-shop2topup/includes/class-dst2t-admin.php:984
 msgid "Debug logging"
 msgstr "Journalisation de débogage"

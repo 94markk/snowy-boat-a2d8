@@ -5,6 +5,19 @@ defined( 'ABSPATH' ) || exit;
 final class DST2T_API_Client {
 	const BASE_URL = 'https://shop2topup.com/api/endpoints/v1';
 
+	/**
+	 * Credential shapes this client can present, in detection order.
+	 *
+	 * Reseller panels issue either a single API key or a key-id/secret pair, and
+	 * present it over one of a few conventional headers. Rather than assume one,
+	 * the connection test walks these against the read-only account endpoint and
+	 * remembers whichever the account actually accepts.
+	 */
+	const AUTH_MODES = array( 'bearer_key', 'bearer_pair', 'bearer_secret', 'x_api_key', 'raw_key' );
+
+	/** Error codes that mean "the credential was rejected", not "the call failed". */
+	const AUTH_ERRORS = array( 'INVALID_API_KEY', 'MISSING_API_KEY', 'UNAUTHORIZED', 'FORBIDDEN', 'INVALID_CREDENTIALS', 'AUTHENTICATION_FAILED', 'HTTP_401', 'HTTP_403' );
+
 	/** @var DST2T_Settings */
 	private $settings;
 
@@ -15,6 +28,45 @@ final class DST2T_API_Client {
 	public function account() {
 		$data = $this->request( 'GET', '/account' );
 		return isset( $data['account'] ) && is_array( $data['account'] ) ? $data['account'] : array();
+	}
+
+	/**
+	 * Reads the account endpoint with one specific credential shape.
+	 *
+	 * Used only by the connection test. GET /account is read-only and idempotent,
+	 * so trying a handful of shapes cannot spend anything.
+	 *
+	 * @param string $mode One of self::AUTH_MODES.
+	 */
+	public function probe( $mode ) {
+		$data = $this->request( 'GET', '/account', null, array(), $mode );
+		return isset( $data['account'] ) && is_array( $data['account'] ) ? $data['account'] : array();
+	}
+
+	/**
+	 * Builds the authentication headers for a credential shape.
+	 *
+	 * @param string $mode One of self::AUTH_MODES, or '' for the configured mode.
+	 * @return array Empty when the configured credentials cannot form this shape.
+	 */
+	public function auth_headers( $mode = '' ) {
+		$mode   = $mode ? $mode : $this->settings->auth_mode();
+		$key    = $this->settings->api_key_id();
+		$secret = $this->settings->api_secret();
+
+		switch ( $mode ) {
+			case 'bearer_pair':
+				return $key && $secret ? array( 'Authorization' => 'Bearer ' . $key . '.' . $secret ) : array();
+			case 'bearer_secret':
+				return $secret ? array( 'Authorization' => 'Bearer ' . $secret ) : array();
+			case 'x_api_key':
+				return $key ? array( 'X-API-Key' => $key ) : array();
+			case 'raw_key':
+				return $key ? array( 'Authorization' => $key ) : array();
+			case 'bearer_key':
+			default:
+				return $key ? array( 'Authorization' => 'Bearer ' . $key ) : array();
+		}
 	}
 
 	public function big_categories( $for_ui = true ) {
@@ -106,9 +158,9 @@ final class DST2T_API_Client {
 		);
 	}
 
-	private function request( $method, $path, $body = null, $query = array() ) {
-		$token = $this->settings->token();
-		if ( '' === $token ) {
+	private function request( $method, $path, $body = null, $query = array(), $auth_mode = '' ) {
+		$auth = $this->auth_headers( $auth_mode );
+		if ( ! $auth ) {
 			throw new DST2T_API_Exception( 'Top-up API credentials are not configured.', 'MISSING_API_KEY', 401 );
 		}
 		if ( ! preg_match( '#^/[A-Za-z0-9_./:-]+$#', $path ) ) {
@@ -126,11 +178,13 @@ final class DST2T_API_Client {
 			'redirection' => 0,
 			'sslverify'   => true,
 			'limit_response_size' => 4194304,
-			'headers'     => array(
-				'Authorization' => 'Bearer ' . $token,
-				'Accept'        => 'application/json',
-				'Content-Type'  => 'application/json',
-				'User-Agent'    => 'Delicat-Shop2TopUp/' . DST2T_VERSION . '; ' . home_url( '/' ),
+			'headers'     => array_merge(
+				$auth,
+				array(
+					'Accept'       => 'application/json',
+					'Content-Type' => 'application/json',
+					'User-Agent'   => 'Delicat-Shop2TopUp/' . DST2T_VERSION . '; ' . home_url( '/' ),
+				)
 			),
 		);
 
@@ -143,7 +197,7 @@ final class DST2T_API_Client {
 
 		// Space status reads and batch calls, including administrator-triggered calls.
 		$interval = '/orders/batch' === $path ? 31 : ( preg_match( '#^/orders/[0-9a-f-]{36}$#i', $path ) ? 21 : 0 );
-		$cooldown_key = 'dst2t_api_' . md5( $token . '|' . $path );
+		$cooldown_key = 'dst2t_api_' . md5( implode( '|', $auth ) . '|' . $path );
 		$remaining = (int) get_transient( $cooldown_key ) - time();
 		if ( $remaining > 0 ) {
 			throw new DST2T_API_Exception( 'API call deferred by local rate limiter.', 'RATE_LIMIT_EXCEEDED', 429, $remaining );

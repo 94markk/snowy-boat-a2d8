@@ -374,6 +374,32 @@ $GLOBALS['skus'][DST2T_Brand::sku_for_item(4245)]=557; $GLOBALS['postmeta'][557]
 try { invoke($admin,'import_item',7,['item_id'=>4245,'name'=>'X','price'=>'1.00'],[],''); check(false,'SKU collision refuses to overwrite an unrelated product'); }
 catch (RuntimeException $e) { check(true,'SKU collision refuses to overwrite an unrelated product'); }
 
+// ------------------------------------------------------------- credentials
+defaults_restore(); reset_http();
+check($api->auth_headers('bearer_key')===['Authorization'=>'Bearer test'],'A single API key is sent as a plain bearer token');
+check($api->auth_headers('bearer_pair')===['Authorization'=>'Bearer test.test'],'A key/secret pair is joined for the bearer token');
+check($api->auth_headers('x_api_key')===['X-API-Key'=>'test'],'The key can be sent as an X-API-Key header');
+check($api->auth_headers('raw_key')===['Authorization'=>'test'],'The key can be sent without a bearer prefix');
+check($settings->auth_mode()==='bearer_pair','With both fields filled the pair format is chosen automatically');
+$settings->set('auth_mode','x_api_key');
+reset_http(); respond(['success'=>true,'account'=>['balance'=>'1.00']]); $api->account();
+check(!isset($GLOBALS['calls'][0][1]['headers']['Authorization']) && $GLOBALS['calls'][0][1]['headers']['X-API-Key']==='test','The configured credential format is what actually goes on the wire');
+$settings->set('auth_mode','auto');
+
+// The provider rejects the first shape; detection walks on and keeps the one that works.
+reset_http();
+respond(['success'=>false,'error'=>['code'=>'INVALID_API_KEY']],401);
+respond(['success'=>true,'account'=>['balance'=>'5.00']]);
+$detected=invoke($admin,'detect_auth_mode');
+check($detected['mode']==='bearer_pair' && $detected['tried']===['bearer_key','bearer_pair'],'A rejected credential format is detected and the working one is found');
+check(count($GLOBALS['calls'])===2 && strpos($GLOBALS['calls'][0][0],'/account')!==false,'Detection only ever reads the account endpoint, so nothing can be spent');
+// A non-credential refusal is reported as itself rather than blamed on the format.
+reset_http();
+respond(['success'=>false,'error'=>['code'=>'IP_NOT_ALLOWED']],403);
+$detected=invoke($admin,'detect_auth_mode');
+check($detected['mode']==='' && $detected['blocked']==='IP_NOT_ALLOWED','A non-credential refusal stops detection and is reported as itself');
+defaults_restore();
+
 // --------------------------------------------------------------- catalog sync
 defaults_restore(); reset_http();
 $GLOBALS['postmeta']=[]; $GLOBALS['wc_products']=[];

@@ -47,10 +47,50 @@ final class DST2T_Settings {
 		return $this->vault->decrypt( $this->get( 'webhook_secret', '' ) );
 	}
 
+	/**
+	 * A representative credential string. Used to decide whether the integration
+	 * is configured at all and to key the local rate limiter; the header actually
+	 * sent is built by DST2T_API_Client::auth_headers() from the resolved mode.
+	 */
 	public function token() {
 		$key_id = $this->api_key_id();
 		$secret = $this->api_secret();
-		return $key_id && $secret ? $key_id . '.' . $secret : '';
+		if ( '' === $key_id && '' === $secret ) {
+			return '';
+		}
+		if ( '' === $secret ) {
+			return $key_id;
+		}
+		if ( '' === $key_id ) {
+			return $secret;
+		}
+		return $key_id . '.' . $secret;
+	}
+
+	/**
+	 * The credential shape to present.
+	 *
+	 * 'auto' picks the shape the saved fields can form; the connection test
+	 * replaces it with whatever the provider actually accepted.
+	 */
+	public function auth_mode() {
+		$mode = (string) $this->get( 'auth_mode', 'auto' );
+		if ( in_array( $mode, DST2T_API_Client::AUTH_MODES, true ) ) {
+			return $mode;
+		}
+		$key    = $this->api_key_id();
+		$secret = $this->api_secret();
+		if ( $key && $secret ) {
+			return 'bearer_pair';
+		}
+		return $key ? 'bearer_key' : 'bearer_secret';
+	}
+
+	/** Persists one setting without going through the whole form. */
+	public function set( $key, $value ) {
+		$settings         = $this->all();
+		$settings[ $key ] = $value;
+		update_option( self::OPTION, $settings, false );
 	}
 
 	public function credentials_configured() {
@@ -72,6 +112,10 @@ final class DST2T_Settings {
 		$next['balance_interval']      = (string) $this->bounded_int( isset( $input['balance_interval'] ) ? $input['balance_interval'] : 10, 1, 1440, 10 );
 		$next['catalog_sync_interval'] = (string) $this->bounded_int( isset( $input['catalog_sync_interval'] ) ? $input['catalog_sync_interval'] : 0, 0, 10080, 0 );
 
+		if ( isset( $input['auth_mode'] ) ) {
+			$mode              = sanitize_key( wp_unslash( (string) $input['auth_mode'] ) );
+			$next['auth_mode'] = in_array( $mode, DST2T_API_Client::AUTH_MODES, true ) ? $mode : 'auto';
+		}
 		if ( isset( $input['brand_label'] ) ) {
 			$label               = sanitize_text_field( wp_unslash( (string) $input['brand_label'] ) );
 			$next['brand_label'] = '' !== trim( $label ) ? substr( trim( $label ), 0, 60 ) : '';
@@ -131,6 +175,7 @@ final class DST2T_Settings {
 			'api_key_id'               => '',
 			'api_secret'               => '',
 			'webhook_secret'           => '',
+			'auth_mode'                => 'auto',
 
 			// Fulfillment safety.
 			'validate_player'          => 'yes',

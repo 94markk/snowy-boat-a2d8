@@ -42,7 +42,8 @@ The API is live-only. Import creates drafts, but a paid order for a mapped produ
 2. Install and activate WooCommerce.
 3. Upload the plugin ZIP through Plugins > Add New > Upload Plugin.
 4. Open WooCommerce > (your provider label) > Settings.
-5. Enter the key ID, key secret, and callback signing secret.
+5. Enter the API key (most accounts have a single key; leave the secret field empty unless yours issued a
+   pair) and the callback signing secret.
 6. Test the connection. The wallet balance starts refreshing automatically.
 7. Copy the callback URL from the dashboard into the provider API access panel, then send a signed test.
 8. Import products as drafts, or map an existing product in Product data > Top-Up.
@@ -124,6 +125,13 @@ chooses a variation.
 
 No. It places the WooCommerce order on hold and preserves both states for review. Refunds require a store
 manager because payment gateways and business rules differ.
+
+= Test connection says INVALID_API_KEY. =
+
+Reseller panels differ in how they expect an API key to be presented. Press Test connection again: it tries
+every known credential format against the read-only account endpoint and saves whichever one works, then tells
+you which it was. If it reports that the credentials were accepted but the request was refused, that is not a
+key problem — check the IP allowlist in the provider panel.
 
 = The provider says my webhook URL failed validation. =
 

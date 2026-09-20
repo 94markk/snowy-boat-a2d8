@@ -22,7 +22,11 @@ The plugin folder, text domain, and internal prefixes keep their original names 
 
 1. Install the ZIP and activate it after WooCommerce.
 2. Open **WooCommerce → your provider label → Settings**.
-3. Save credentials, or define them in `wp-config.php`:
+3. Save credentials. **Most accounts issue a single API key** — paste it into **API key** and leave **API key
+   secret** empty. Only fill the secret if your account was issued a key/secret *pair*; a value there changes
+   how the key is transmitted. Leave **Credential format** on Automatic.
+
+   Or define them in `wp-config.php`:
 
    ```php
    define( 'DELICAT_S2T_KEY_ID', 'your-key-id' );
@@ -32,8 +36,18 @@ The plugin folder, text domain, and internal prefixes keep their original names 
    ```
 
 4. Use **Test connection**. The wallet balance appears on the dashboard and starts refreshing on its own.
+
+   If the provider rejects the key, Test connection does not just give up: reseller panels differ in how they
+   expect a key to be presented, so it tries each format (`Bearer <key>`, `Bearer <key>.<secret>`,
+   `Bearer <secret>`, an `X-API-Key` header, and a bare `Authorization` value) against the **read-only**
+   account endpoint, saves whichever one the provider accepts, and tells you which it was. Nothing can be
+   spent by that probe. If the credentials are accepted but the request is still refused — typically an IP
+   allowlist — it reports that as itself rather than blaming the key format.
 5. Copy the callback URL from the dashboard into the provider panel and send its signed test.
-6. If the API key has an IP allowlist, add the production server's stable outbound IP.
+6. If the provider panel restricts API access by IP, either enable "Allow all IP addresses" there or add this
+   server's stable **outbound** IP. **Tools → Environment** shows the address this server reports for itself,
+   which on many hosts is not the outbound address — confirm it with your host before relying on it. An
+   allowlist that is switched on with nothing in it can refuse every call.
 7. Import catalog items. They arrive as drafts so you can check the image, title, and selling price.
 8. Place one smallest-denomination real order through your real payment flow before publishing anything.
 

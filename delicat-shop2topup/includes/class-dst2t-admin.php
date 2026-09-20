@@ -174,6 +174,55 @@ final class DST2T_Admin {
 	public function test_connection() {
 		$this->authorize( 'dst2t_test_connection' );
 		$state = $this->balance->refresh( true );
+
+		// A rejected credential is usually the wrong shape rather than the wrong
+		// value: some accounts issue a single API key, others a key/secret pair.
+		// Walk the shapes against the read-only account endpoint and keep the one
+		// the provider accepts, so the operator does not have to guess.
+		if ( '' !== $state['error'] && in_array( $state['error'], DST2T_API_Client::AUTH_ERRORS, true ) ) {
+			$detected = $this->detect_auth_mode();
+
+			if ( '' !== $detected['mode'] ) {
+				$this->settings->set( 'auth_mode', $detected['mode'] );
+				$state = $this->balance->refresh( true );
+				if ( '' === $state['error'] ) {
+					$this->redirect_with_notice(
+						'dashboard',
+						'success',
+						sprintf(
+							/* translators: 1: credential format name, 2: formatted wallet balance. */
+							__( 'Connected using the "%1$s" credential format, which has been saved. Wallet balance: %2$s.', 'delicat-shop2topup' ),
+							$this->auth_mode_label( $detected['mode'] ),
+							'' !== $state['formatted'] ? $state['formatted'] : __( 'unavailable', 'delicat-shop2topup' )
+						)
+					);
+				}
+			}
+
+			if ( '' !== $detected['blocked'] ) {
+				$this->redirect_with_notice(
+					'settings',
+					'error',
+					sprintf(
+						/* translators: %s: error code. */
+						__( 'The credentials were accepted but the request was refused: %s. This is not a key-format problem — check the IP allowlist in the provider panel, or whether the key has been revoked.', 'delicat-shop2topup' ),
+						$detected['blocked']
+					)
+				);
+			}
+
+			$this->redirect_with_notice(
+				'settings',
+				'error',
+				sprintf(
+					/* translators: 1: error code, 2: comma separated list of credential formats. */
+					__( 'The provider rejected the credentials (%1$s). Formats tried: %2$s. Check that the API key is copied exactly, that it has not been revoked, and that the provider panel allows this server\'s IP address.', 'delicat-shop2topup' ),
+					$state['error'],
+					implode( ', ', array_map( array( $this, 'auth_mode_label' ), $detected['tried'] ) )
+				)
+			);
+		}
+
 		if ( '' !== $state['error'] ) {
 			$this->redirect_with_notice( 'settings', 'error', sprintf( /* translators: %s: error code. */ __( 'Connection failed: %s.', 'delicat-shop2topup' ), $state['error'] ) );
 		}
@@ -186,6 +235,50 @@ final class DST2T_Admin {
 				'' !== $state['formatted'] ? $state['formatted'] : __( 'unavailable', 'delicat-shop2topup' )
 			)
 		);
+	}
+
+	/**
+	 * Finds a credential shape the provider accepts.
+	 *
+	 * Only GET /account is used, which is read-only, so nothing can be spent.
+	 *
+	 * @return array {mode, tried, blocked}
+	 */
+	private function detect_auth_mode() {
+		$tried = array();
+
+		foreach ( DST2T_API_Client::AUTH_MODES as $mode ) {
+			if ( ! $this->api->auth_headers( $mode ) ) {
+				continue; // The saved fields cannot form this shape.
+			}
+			$tried[] = $mode;
+
+			try {
+				$this->api->probe( $mode );
+				return array( 'mode' => $mode, 'tried' => $tried, 'blocked' => '' );
+			} catch ( DST2T_API_Exception $error ) {
+				if ( ! in_array( $error->get_api_code(), DST2T_API_Client::AUTH_ERRORS, true ) ) {
+					// Not a credential-shape problem: stop and report the real one.
+					return array( 'mode' => '', 'tried' => $tried, 'blocked' => $error->get_api_code() );
+				}
+			} catch ( Throwable $error ) {
+				return array( 'mode' => '', 'tried' => $tried, 'blocked' => 'UNEXPECTED_ERROR' );
+			}
+		}
+
+		return array( 'mode' => '', 'tried' => $tried, 'blocked' => '' );
+	}
+
+	private function auth_mode_label( $mode ) {
+		$labels = array(
+			'auto'          => __( 'Automatic', 'delicat-shop2topup' ),
+			'bearer_key'    => __( 'Bearer <api key>', 'delicat-shop2topup' ),
+			'bearer_pair'   => __( 'Bearer <key>.<secret>', 'delicat-shop2topup' ),
+			'bearer_secret' => __( 'Bearer <secret>', 'delicat-shop2topup' ),
+			'x_api_key'     => __( 'X-API-Key header', 'delicat-shop2topup' ),
+			'raw_key'       => __( 'Authorization: <api key>', 'delicat-shop2topup' ),
+		);
+		return isset( $labels[ $mode ] ) ? $labels[ $mode ] : $mode;
 	}
 
 	public function refresh_balance() {
@@ -776,8 +869,34 @@ final class DST2T_Admin {
 				<div class="notice notice-info inline"><p><?php esc_html_e( 'One or more credentials are controlled by wp-config.php and override saved values.', 'delicat-shop2topup' ); ?></p></div>
 			<?php endif; ?>
 			<table class="form-table" role="presentation">
-				<tr><th><label for="api_key_id"><?php esc_html_e( 'Key ID', 'delicat-shop2topup' ); ?></label></th><td><input class="regular-text" id="api_key_id" name="api_key_id" type="password" autocomplete="new-password" placeholder="<?php echo $this->settings->api_key_id() ? esc_attr( '••••••••' ) : ''; ?>" /></td></tr>
-				<tr><th><label for="api_secret"><?php esc_html_e( 'Key secret', 'delicat-shop2topup' ); ?></label></th><td><input class="regular-text" id="api_secret" name="api_secret" type="password" autocomplete="new-password" placeholder="<?php echo $this->settings->api_secret() ? esc_attr( '••••••••' ) : ''; ?>" /></td></tr>
+				<tr>
+					<th><label for="api_key_id"><?php esc_html_e( 'API key', 'delicat-shop2topup' ); ?></label></th>
+					<td>
+						<input class="regular-text" id="api_key_id" name="api_key_id" type="password" autocomplete="new-password" placeholder="<?php echo $this->settings->api_key_id() ? esc_attr( '••••••••' ) : ''; ?>" />
+						<p class="description"><?php esc_html_e( 'Most accounts issue a single API key. Paste it here and leave the secret below empty.', 'delicat-shop2topup' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th><label for="api_secret"><?php esc_html_e( 'API key secret', 'delicat-shop2topup' ); ?></label></th>
+					<td>
+						<input class="regular-text" id="api_secret" name="api_secret" type="password" autocomplete="new-password" placeholder="<?php echo $this->settings->api_secret() ? esc_attr( '••••••••' ) : ''; ?>" />
+						<p class="description"><?php esc_html_e( 'Only for accounts issued a key/secret pair. Leave empty otherwise — a value here changes how the key is sent.', 'delicat-shop2topup' ); ?></p>
+					</td>
+				</tr>
+				<tr>
+					<th><label for="auth_mode"><?php esc_html_e( 'Credential format', 'delicat-shop2topup' ); ?></label></th>
+					<td>
+						<select id="auth_mode" name="auth_mode">
+							<?php
+							$current_mode = (string) $this->settings->get( 'auth_mode', 'auto' );
+							foreach ( array_merge( array( 'auto' ), DST2T_API_Client::AUTH_MODES ) as $mode ) :
+								?>
+								<option value="<?php echo esc_attr( $mode ); ?>" <?php selected( $current_mode, $mode ); ?>><?php echo esc_html( $this->auth_mode_label( $mode ) ); ?></option>
+							<?php endforeach; ?>
+						</select>
+						<p class="description"><?php esc_html_e( 'Leave on Automatic. If the provider rejects the key, Test connection tries every format against the read-only account endpoint and saves whichever one works.', 'delicat-shop2topup' ); ?></p>
+					</td>
+				</tr>
 				<tr><th><label for="webhook_secret"><?php esc_html_e( 'Callback signing secret', 'delicat-shop2topup' ); ?></label></th><td><input class="regular-text" id="webhook_secret" name="webhook_secret" type="password" autocomplete="new-password" placeholder="<?php echo $this->settings->webhook_secret() ? esc_attr( '••••••••' ) : ''; ?>" /></td></tr>
 				<tr><th><?php esc_html_e( 'Clear secrets', 'delicat-shop2topup' ); ?></th><td><label><input type="checkbox" name="clear_credentials" value="1" /> <?php esc_html_e( 'Remove all credentials saved in WordPress (constants are unchanged)', 'delicat-shop2topup' ); ?></label></td></tr>
 			</table>
@@ -1037,7 +1156,10 @@ final class DST2T_Admin {
 					<li><span><?php esc_html_e( 'Encryption', 'delicat-shop2topup' ); ?></span><strong><?php echo $vault->available() ? esc_html__( 'AES-256-GCM available', 'delicat-shop2topup' ) : esc_html__( 'OpenSSL missing', 'delicat-shop2topup' ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Encryption key', 'delicat-shop2topup' ); ?></span><strong><?php echo defined( 'DELICAT_S2T_ENCRYPTION_KEY' ) ? esc_html__( 'wp-config.php constant', 'delicat-shop2topup' ) : esc_html__( 'derived from WordPress salts', 'delicat-shop2topup' ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Action Scheduler', 'delicat-shop2topup' ); ?></span><strong><?php echo function_exists( 'as_schedule_recurring_action' ) ? esc_html__( 'Available', 'delicat-shop2topup' ) : esc_html__( 'Missing', 'delicat-shop2topup' ); ?></strong></li>
+					<li><span><?php esc_html_e( 'Credential format', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $this->auth_mode_label( $this->settings->auth_mode() ) ); ?></strong></li>
+					<li><span><?php esc_html_e( 'This server\'s address', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( isset( $_SERVER['SERVER_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_ADDR'] ) ) : '—' ); ?></strong></li>
 				</ul>
+				<p class="description"><?php esc_html_e( 'If the provider panel restricts API access by IP, it needs this server\'s outbound address. That is often different from the address shown here — confirm it with your host before relying on it.', 'delicat-shop2topup' ); ?></p>
 				<?php if ( ! defined( 'DELICAT_S2T_ENCRYPTION_KEY' ) ) : ?>
 					<p class="description"><?php esc_html_e( 'Define DELICAT_S2T_ENCRYPTION_KEY in wp-config.php before storing credentials so rotating WordPress salts cannot make saved secrets and historical voucher codes unreadable.', 'delicat-shop2topup' ); ?></p>
 				<?php endif; ?>
