@@ -1,0 +1,169 @@
+msgid ""
+msgstr "Project-Id-Version: Delicat Top-Up Fulfillment 1.2.0\nReport-Msgid-Bugs-To: support@delicastoreha.com\nPOT-Creation-Date: 2026-09-20 00:00+0000\nPO-Revision-Date: 2026-08-30 00:00+0000\nLast-Translator: Delicat Store\nLanguage-Team: French\nLanguage: fr_FR\nMIME-Version: 1.0\nContent-Type: text/plain; charset=UTF-8\nContent-Transfer-Encoding: 8bit\nPlural-Forms: nplurals=2; plural=(n > 1);\n"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:556
+msgid "Game account details"
+msgstr "Informations du compte de jeu"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:688
+msgid "Player ID"
+msgstr "ID du joueur"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:504 delicat-shop2topup/includes/class-dst2t-product.php:530
+msgid "Player name"
+msgstr "Nom du joueur"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:689
+msgid "Zone ID"
+msgstr "ID de zone"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:690
+msgid "Server"
+msgstr "Serveur"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:691
+msgid "Region"
+msgstr "Région"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:692
+msgid "Genshin server"
+msgstr "Serveur Genshin"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:569
+msgid "Select an option"
+msgstr "Sélectionnez une option"
+
+#, php-format
+#: delicat-shop2topup/includes/class-dst2t-product.php:638
+msgid "%s is required."
+msgstr "%s est obligatoire."
+
+#, php-format
+#: delicat-shop2topup/includes/class-dst2t-product.php:644
+msgid "%s must contain numbers only."
+msgstr "%s doit contenir uniquement des chiffres."
+
+#, php-format
+#: delicat-shop2topup/includes/class-dst2t-product.php:633 delicat-shop2topup/includes/class-dst2t-product.php:641
+msgid "Please choose a valid value for %s."
+msgstr "Veuillez choisir une valeur valide pour %s."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:711
+msgid "Player not found. Check the player ID and zone."
+msgstr "Joueur introuvable. Vérifiez l’ID du joueur et la zone."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:712
+msgid "The game server could not validate this player. Please try again."
+msgstr "Le serveur du jeu n’a pas pu valider ce joueur. Veuillez réessayer."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:713
+msgid "This player is registered in a different region."
+msgstr "Ce joueur est enregistré dans une autre région."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:714
+msgid "The player details do not match this product."
+msgstr "Les informations du joueur ne correspondent pas à ce produit."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:715
+msgid "Validation is temporarily busy. Please wait a moment and try again."
+msgstr "La validation est temporairement occupée. Patientez un instant puis réessayez."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:716
+msgid "The top-up service is temporarily unavailable. Please try again shortly."
+msgstr "Le service de recharge est temporairement indisponible. Veuillez réessayer bientôt."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:718
+msgid "We could not validate these game details. Please check them and try again."
+msgstr "Nous n’avons pas pu valider ces informations de jeu. Vérifiez-les puis réessayez."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:458
+msgid "We could not validate these game details. Please try again."
+msgstr "Nous n’avons pas pu valider ces informations de jeu. Veuillez réessayer."
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:518
+msgid "Voucher codes"
+msgstr "Codes de bon"
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:504
+msgid "Voucher codes:"
+msgstr "Codes de bon :"
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:508 delicat-shop2topup/includes/class-dst2t-fulfillment.php:522
+msgid "Serial:"
+msgstr "Numéro de série :"
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:511 delicat-shop2topup/includes/class-dst2t-fulfillment.php:525
+msgid "Expires:"
+msgstr "Expire le :"
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:607
+msgid "Automatic digital fulfillment paused for safe manual review."
+msgstr "La livraison numérique automatique est suspendue pour une vérification manuelle sécurisée."
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:562
+msgid "Live supplier cost is above the product’s absolute maximum. No supplier purchase was made."
+msgstr "Le coût actuel du fournisseur dépasse le maximum absolu du produit. Aucun achat fournisseur n’a été effectué."
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:570
+msgid "Live supplier cost increased beyond the configured safety limit. No supplier purchase was made."
+msgstr "Le coût actuel du fournisseur dépasse la limite de sécurité configurée. Aucun achat fournisseur n’a été effectué."
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:313
+msgid "Supplier marked the voucher order complete without returning a voucher code."
+msgstr "Le fournisseur a marqué la commande comme terminée sans renvoyer de code."
+
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:178
+msgid "The mapped item, quantity, or delivery details changed after the supplier intent was created. Fulfillment stopped to protect idempotency."
+msgstr "L’article, la quantité ou les informations de livraison ont changé après la création de l’intention fournisseur. La livraison a été arrêtée pour éviter un double débit."
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:99
+msgid "Enable fulfillment"
+msgstr "Activer la livraison"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:106 delicat-shop2topup/includes/class-dst2t-product.php:190
+msgid "Supplier item ID"
+msgstr "ID de l’article fournisseur"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:121 delicat-shop2topup/includes/class-dst2t-product.php:194
+msgid "Supplier category ID"
+msgstr "ID de la catégorie fournisseur"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:114 delicat-shop2topup/includes/class-dst2t-product.php:202
+msgid "Voucher-code product"
+msgstr "Produit avec code"
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:129 delicat-shop2topup/includes/class-dst2t-product.php:198
+msgid "Absolute max unit cost (USD)"
+msgstr "Coût unitaire maximal absolu (USD)"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:129
+msgid "Dashboard"
+msgstr "Tableau de bord"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:130
+msgid "Catalog"
+msgstr "Catalogue"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:132 delicat-shop2topup/includes/class-dst2t-plugin.php:153
+msgid "Settings"
+msgstr "Réglages"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:424 delicat-shop2topup/includes/class-dst2t-admin.php:829
+msgid "Test connection"
+msgstr "Tester la connexion"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:694
+msgid "Save settings"
+msgstr "Enregistrer les réglages"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:648
+msgid "Complete WooCommerce orders automatically"
+msgstr "Terminer automatiquement les commandes WooCommerce"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:650
+msgid "Maximum cost increase"
+msgstr "Augmentation maximale du coût"
+
+#: delicat-shop2topup/includes/class-dst2t-admin.php:690
+msgid "Debug logging"
+msgstr "Journalisation de débogage"

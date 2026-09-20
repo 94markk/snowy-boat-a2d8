@@ -1,0 +1,41 @@
+.dst2t-requirements:not(:empty) {
+	background: #f7f8fa;
+	border: 1px solid #e2e5e9;
+	border-radius: 12px;
+	margin: 0 0 18px;
+	padding: 16px;
+}
+
+.dst2t-fields-title {
+	color: #16181d;
+	font-size: 15px;
+	font-weight: 700;
+	margin: 0 0 12px;
+}
+
+.dst2t-field {
+	margin: 0 0 12px;
+}
+
+.dst2t-field:last-child {
+	margin-bottom: 0;
+}
+
+.dst2t-field label {
+	display: block;
+	font-size: 13px;
+	font-weight: 600;
+	margin: 0 0 6px;
+}
+
+.dst2t-field input,
+.dst2t-field select {
+	box-sizing: border-box;
+	min-height: 44px;
+	width: 100%;
+}
+
+.dst2t-field .required {
+	color: #b42318;
+}
+
