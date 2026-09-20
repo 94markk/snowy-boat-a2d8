@@ -269,7 +269,11 @@ final class DST2T_Balance {
 	}
 
 	public function admin_bar( $bar ) {
-		if ( ! is_admin_bar_showing() || ! current_user_can( 'manage_woocommerce' ) ) {
+		// Admin screens only. On the storefront the node would print the plugin's
+		// own id and the reseller wallet balance into the page for any logged-in
+		// manager, which is both a fingerprint and a number that does not belong
+		// in a public template.
+		if ( ! is_admin() || ! is_admin_bar_showing() || ! current_user_can( 'manage_woocommerce' ) ) {
 			return;
 		}
 		if ( ! $this->settings->enabled( 'admin_bar_balance' ) || ! $this->settings->credentials_configured() ) {

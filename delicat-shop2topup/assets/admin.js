@@ -127,7 +127,16 @@
 			if (force) {
 				body.append('force', '1');
 			}
-			window.fetch(config.ajaxUrl, { method: 'POST', credentials: 'same-origin', body: body })
+			// A request that never settles would leave `busy` stuck and stop polling
+			// for the rest of the page's life, so every call is given a deadline.
+			var options = { method: 'POST', credentials: 'same-origin', body: body };
+			var timer = null;
+			if (window.AbortController) {
+				var controller = new window.AbortController();
+				options.signal = controller.signal;
+				timer = window.setTimeout(function () { controller.abort(); }, 20000);
+			}
+			window.fetch(config.ajaxUrl, options)
 				.then(function (response) { return response.json(); })
 				.then(function (json) {
 					if (json && json.success && json.data) {
@@ -136,6 +145,9 @@
 				})
 				.catch(function () {})
 				.then(function () {
+					if (timer) {
+						window.clearTimeout(timer);
+					}
 					busy = false;
 					if (force && button) {
 						button.disabled = false;

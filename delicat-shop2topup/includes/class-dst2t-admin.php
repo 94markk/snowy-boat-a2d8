@@ -56,6 +56,7 @@ final class DST2T_Admin {
 		add_action( 'admin_post_dst2t_rotate_webhook', array( $this, 'rotate_webhook' ) );
 		add_action( 'admin_post_dst2t_sync_order', array( $this, 'sync_order' ) );
 		add_action( 'admin_post_dst2t_retry_order', array( $this, 'retry_order' ) );
+		add_action( 'admin_post_dst2t_rewrite_skus', array( $this, 'rewrite_skus' ) );
 
 		// Fulfillment state on the WooCommerce order list, HPOS and legacy.
 		add_filter( 'manage_edit-shop_order_columns', array( $this, 'order_column' ) );
@@ -281,6 +282,68 @@ final class DST2T_Admin {
 		$this->fulfillment->reschedule_item( $order->get_id(), absint( $row['wc_item_id'] ), 0 );
 
 		$this->redirect_with_notice( $tab, 'success', __( 'Fulfillment queued for another attempt. Watch the status; no duplicate purchase can be made.', 'delicat-shop2topup' ) );
+	}
+
+	/**
+	 * Replaces provider-derived SKUs left behind by earlier versions.
+	 *
+	 * Before 1.2.0 the SKU was the provider's own item id with a recognisable
+	 * prefix, and WooCommerce publishes SKUs to customers, to JSON-LD, and to the
+	 * unauthenticated Store API. Rewriting is an explicit operator decision
+	 * because a SKU may already appear on invoices and in external systems.
+	 */
+	public function rewrite_skus() {
+		$this->authorize( 'dst2t_rewrite_skus' );
+
+		$rewritten = 0;
+		$skipped   = 0;
+		foreach ( $this->legacy_sku_products() as $product_id ) {
+			$product = wc_get_product( $product_id );
+			$item_id = absint( get_post_meta( $product_id, DST2T_Product::META_ITEM_ID, true ) );
+			if ( ! $product || ! $item_id ) {
+				++$skipped;
+				continue;
+			}
+			try {
+				$product->set_sku( DST2T_Brand::sku_for_item( $item_id ) );
+				$product->save();
+				++$rewritten;
+			} catch ( Throwable $error ) {
+				++$skipped;
+			}
+		}
+
+		$this->redirect_with_notice(
+			'tools',
+			$skipped ? 'error' : 'success',
+			sprintf(
+				/* translators: 1: number of products rewritten, 2: number skipped. */
+				__( '%1$d SKUs replaced with opaque ones, %2$d skipped.', 'delicat-shop2topup' ),
+				$rewritten,
+				$skipped
+			)
+		);
+	}
+
+	/** Product ids whose SKU still encodes the provider's item id. */
+	private function legacy_sku_products() {
+		global $wpdb;
+		return array_map(
+			'absint',
+			(array) $wpdb->get_col(
+				$wpdb->prepare(
+					"SELECT sku.post_id FROM {$wpdb->postmeta} sku
+					 INNER JOIN {$wpdb->postmeta} item ON item.post_id = sku.post_id AND item.meta_key = %s
+					 INNER JOIN {$wpdb->posts} p ON p.ID = sku.post_id
+					 WHERE sku.meta_key = '_sku' AND sku.meta_value LIKE %s
+					 AND p.post_type IN ('product','product_variation')
+					 AND p.post_status NOT IN ('trash','auto-draft')
+					 LIMIT 500",
+					DST2T_Product::META_ITEM_ID,
+					$wpdb->esc_like( 's2t-' ) . '%'
+				)
+			)
+		);
 	}
 
 	public function refresh_product() {
@@ -838,6 +901,24 @@ final class DST2T_Admin {
 					?>
 				</p>
 				<p class="description"><?php echo esc_html( sprintf( /* translators: %d: number of products left in the current sync cycle. */ __( '%d mapped products remain in the current sync cycle.', 'delicat-shop2topup' ), $this->sync->remaining() ) ); ?></p>
+			</section>
+
+			<?php $legacy = count( $this->legacy_sku_products() ); ?>
+			<section class="dst2t-card">
+				<h2><?php esc_html_e( 'Legacy SKUs', 'delicat-shop2topup' ); ?></h2>
+				<?php if ( $legacy ) : ?>
+					<p><?php echo esc_html( sprintf( /* translators: %d: number of products. */ _n( '%d product still has a SKU that encodes the provider item id.', '%d products still have SKUs that encode the provider item id.', $legacy, 'delicat-shop2topup' ), $legacy ) ); ?></p>
+					<p class="description"><?php esc_html_e( 'WooCommerce shows the SKU to customers, to search engines, and in the public Store API. Replacing them makes the mapping unreadable. Do this only if the old SKUs are not referenced by invoices or another system.', 'delicat-shop2topup' ); ?></p>
+					<p class="dst2t-actions">
+						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" class="dst2t-inline-form" data-dst2t-confirm="<?php esc_attr_e( 'Replace these SKUs with opaque ones? Customers and any external system referencing the old SKUs will see the new values.', 'delicat-shop2topup' ); ?>">
+							<input type="hidden" name="action" value="dst2t_rewrite_skus" />
+							<?php wp_nonce_field( 'dst2t_rewrite_skus' ); ?>
+							<?php submit_button( __( 'Replace legacy SKUs', 'delicat-shop2topup' ), 'secondary', 'submit', false ); ?>
+						</form>
+					</p>
+				<?php else : ?>
+					<p><?php esc_html_e( 'No product SKU encodes the provider item id.', 'delicat-shop2topup' ); ?></p>
+				<?php endif; ?>
 			</section>
 
 			<section class="dst2t-card">

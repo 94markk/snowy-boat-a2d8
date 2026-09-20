@@ -65,8 +65,13 @@ final class DST2T_Brand {
 		if ( '' === $text || ! self::stealth() ) {
 			return $text;
 		}
-		$replacement = self::label();
-		$tokens      = self::SUPPLIER_TOKENS;
+
+		// Whole URLs go first. Once the token pass has rewritten the host, the URL
+		// pattern can no longer match and a broken "https://<label>/path" is left
+		// behind in a public product description.
+		$text = preg_replace( '#\bhttps?://[^\s"\'<>]*shop2topup[^\s"\'<>]*#i', '', $text );
+
+		$tokens = self::SUPPLIER_TOKENS;
 		// Longest first: otherwise "shop2topup.com" is only half replaced.
 		usort(
 			$tokens,
@@ -74,11 +79,26 @@ final class DST2T_Brand {
 				return strlen( $right ) - strlen( $left );
 			}
 		);
+
+		// The label is operator-supplied, so it is substituted through a callback.
+		// As a preg_replace replacement string, a label containing $1 or \0 would
+		// be read as a backreference and silently re-insert the provider's name.
+		$replacement = self::label();
 		foreach ( $tokens as $token ) {
-			$text = preg_replace( '/\b' . preg_quote( $token, '/' ) . '\b/i', $replacement, $text );
+			$text = preg_replace_callback(
+				'/\b' . preg_quote( $token, '/' ) . '\b/i',
+				static function () use ( $replacement ) {
+					return $replacement;
+				},
+				$text
+			);
 		}
-		$text = preg_replace( '#\bhttps?://[^\s"\']*shop2topup[^\s"\']*#i', '', (string) $text );
-		return trim( preg_replace( '/\s{2,}/', ' ', (string) $text ) );
+
+		// Collapse stray horizontal runs only; blank lines carry the paragraph
+		// structure that wpautop() turns back into markup.
+		$text = preg_replace( '/[ \t]{2,}/', ' ', (string) $text );
+		$text = preg_replace( '/(\R){3,}/', "\n\n", (string) $text );
+		return trim( (string) $text );
 	}
 
 	/**

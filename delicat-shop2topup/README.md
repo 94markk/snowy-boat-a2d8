@@ -48,23 +48,28 @@ Turn on **Settings → Supplier privacy → Hide the provider from the storefron
   classes, data attributes, form field names, and the style/script element ids all switch from `dst2t-` to a
   neutral `topup-` prefix at the same time, so there is no searchable fingerprint left either.
 - **Imported copy.** Product names and descriptions are scrubbed of provider names and provider URLs on import
-  and on every sync.
+  and on every sync — whole URLs first, so no half-rewritten `https://<label>/…` is left behind, and paragraph
+  breaks survive. Requirement-field placeholders are scrubbed too. Drop-down *values* are deliberately left
+  byte-identical because they are sent back upstream; only the text the customer reads is scrubbed.
 - **Images.** Catalog images are side-loaded into your media library. Nothing hot-links a provider CDN.
 - **Customer order views and emails.** Internal `_dst2t_*` metadata and any row that names the provider is
   removed from the customer-facing item meta. This includes emails rendered *from* wp-admin — WooCommerce sends
   the customer's email during the admin request that changes the order status, so an `is_admin()` check alone
   would have leaked exactly the emails that matter. Shop managers still see everything on the order screen, and
   the customer still sees their own Player ID, server, and region.
-- **REST.** The callback namespace is dropped from `/wp-json/`, a direct namespace index request 404s, and a
-  request that arrives without a valid signature is answered with the same "no route" body WordPress uses for a
-  URL that does not exist — so guessing the URL confirms nothing. The real reason is written to the WooCommerce
-  log instead. The route itself keeps working for correctly signed deliveries.
+- **REST.** The callback namespace is dropped from `/wp-json/`, a direct namespace index request 404s, an
+  `OPTIONS` probe on the route 404s too (WordPress answers `OPTIONS` from the route registry before dispatch,
+  so the index filters alone would not have covered it), and a request that arrives without a valid signature
+  is answered with the same "no route" body WordPress uses for a URL that does not exist — so guessing the URL
+  confirms nothing. The real reason is written to the WooCommerce log instead. The route itself keeps working
+  for correctly signed deliveries.
 - **SKUs.** WooCommerce publishes the SKU in the product summary, in JSON-LD for search engines, in the
   unauthenticated Store API, in the cart, and in order emails. New imports therefore get an **opaque** SKU:
   your **Imported SKU prefix** (default `tu-`) plus a keyed digest of the item, e.g. `tu-9F3A1C4B72`. It is
   stable, so re-imports still de-duplicate on it, but the provider's own item id cannot be read back out of
-  it. Existing SKUs are never renamed — products imported before 1.2.0 keep `s2t-<item id>`, which does encode
-  the provider's id, so change those SKUs by hand if that matters to you.
+  it. Existing SKUs are never renamed automatically, so products imported before 1.2.0 keep `s2t-<item id>`,
+  which does encode the provider's id. **Tools → Legacy SKUs** counts those and can replace them in one action
+  — do that only if the old SKUs are not referenced by invoices or another system.
 
 **Use an unbranded private callback URL** (on by default) serves the callback from a neutral REST namespace
 with a 32-character secret token, e.g. `https://example.com/wp-json/store-callbacks/v1/<token>`. Treat that URL
@@ -109,7 +114,8 @@ Be realistic about the limits:
 - **Low balance alert** compares the wallet against your threshold in USD (0 disables it). Below it you get a
   dashboard warning, an admin notice, a WooCommerce log entry, and — optionally — one email per six hours to the
   WooCommerce stock-notification recipient.
-- The wallet also appears in the admin bar for users who can manage WooCommerce.
+- The wallet also appears in the admin bar for users who can manage WooCommerce — on admin screens only, so a
+  logged-in manager browsing the storefront never prints the balance or a plugin id into a public page.
 - A failed check keeps the last known value and records the error code, so a provider outage never blanks the
   number without saying why.
 
@@ -198,12 +204,15 @@ locks, and transients are all removed.
 ## Validation performed for this build
 
 - PHP 8.4 syntax validation passed for every plugin PHP file.
-- **76 isolated behavioral tests pass**: `php tests/regression.php` from this directory. They mock WordPress,
-  WooCommerce, the database, and HTTP. The 25 tests from 1.1.0 are unchanged and still pass; 51 are new and
-  cover white-labelling, dashboard masking, customer-facing metadata filtering (including the admin-rendered
-  email case), callback signature and event tolerance, probe-resistant rejection, the private callback token
-  and legacy-route retirement, wallet-balance caching and thresholds, settings round-tripping, stock
-  mirroring, and the import-as-draft rules including the SKU-collision refusal.
+- **102 isolated behavioral tests pass**: `php tests/regression.php` from this directory. They mock WordPress,
+  WooCommerce, the database, and HTTP. The 25 tests from 1.1.0 are unchanged and still pass; 77 are new and
+  cover white-labelling and scrubbing, dashboard masking and its reveal control, customer-facing metadata
+  filtering (including the admin-rendered email case and the admin-ajax case), callback signature and event
+  tolerance, probe-resistant rejection, `OPTIONS` discovery blocking, the private callback token and
+  legacy-route retirement, wallet-balance caching, thresholds and scheduling, settings round-tripping, stock
+  mirroring, the full catalog-sync cursor including rate-limit stop and withdrawn items, opaque SKUs, the
+  import-as-draft rules including the SKU-collision refusal, both cost-guard fail-closed cases, and a
+  capability + nonce check on every state-changing endpoint.
 - Every admin tab was additionally smoke-rendered against stubs, and a static pass confirms every cross-class
   call, static method, and class constant in the plugin resolves.
 - These are not full WooCommerce integration tests.

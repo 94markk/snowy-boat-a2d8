@@ -40,6 +40,15 @@ function wp_doing_ajax(){return false;}
 function current_user_can($c){return !empty($GLOBALS['is_manager']);}
 function doing_action($a){return !empty($GLOBALS['doing_action'][$a]);}
 function get_current_user_id(){return 0;}
+function wp_die($m=''){throw new RuntimeException('wp_die:'.$m);}
+function check_admin_referer($a){ if(!empty($GLOBALS['bad_nonce'])) throw new RuntimeException('bad_nonce:'.$a); return true; }
+function check_ajax_referer($a,$b=false,$die=true){ if(!empty($GLOBALS['bad_nonce'])) throw new RuntimeException('bad_nonce:'.$a); return true; }
+function wp_safe_redirect($u){throw new RuntimeException('redirect:'.$u);}
+function wp_next_scheduled($h,$a=[]){return $GLOBALS['cron'][$h] ?? false;}
+function wp_schedule_event($t,$r,$h){$GLOBALS['cron'][$h]=$t;return true;}
+function wp_schedule_single_event($t,$h,$a=[]){$GLOBALS['cron'][$h]=$t;return true;}
+function wp_clear_scheduled_hook($h,$a=[]){unset($GLOBALS['cron'][$h]);}
+$GLOBALS['cron']=[];
 function esc_html($v){return htmlspecialchars((string)$v,ENT_QUOTES);}
 function esc_attr($v){return htmlspecialchars((string)$v,ENT_QUOTES);}
 function esc_attr__($v,$d=''){return esc_attr($v);}
@@ -55,7 +64,7 @@ function update_post_meta($id,$k,$v){$GLOBALS['postmeta'][$id][$k]=$v;return tru
 function delete_post_meta($id,$k){unset($GLOBALS['postmeta'][$id][$k]);return true;}
 function wc_delete_product_transients($id){}
 function wp_get_post_parent_id($id){return 0;}
-function wp_generate_password($l=12,$s=true,$e=false){return str_repeat('a',$l);}
+function wp_generate_password($l=12,$s=true,$e=false){return bin2hex(random_bytes(max(1,(int)($l/2))));}
 function wp_rand($min=0,$max=1){return $min;}
 function rest_url($path=''){return 'https://example.test/wp-json/'.ltrim($path,'/');}
 function wp_send_json_success($d){throw new Exception('json:'.json_encode($d));}
@@ -89,7 +98,15 @@ class WC_Product_Simple extends WC_Product {}
 class TestDB {
  public $options='wp_options'; public $posts='wp_posts'; public $postmeta='wp_postmeta'; public $prefix='wp_';
  function prepare($sql,...$args){return [$sql,$args];}
- function get_var($q){return get_option($q[1][0],'');}
+ function get_var($q){[$sql,$a]=$q;
+  if(strpos($sql,'COUNT(1)')!==false){$n=0;$cursor=isset($a[1])?(int)$a[1]:-1;foreach($GLOBALS['postmeta'] as $id=>$m){if(($m[DST2T_Product::META_ENABLED]??'')==='yes'&&$id>$cursor)$n++;}return $n;}
+  if(strpos($sql,'SELECT m.post_id')!==false){foreach($GLOBALS['postmeta'] as $id=>$m){if((string)($m[DST2T_Product::META_ITEM_ID]??'')===(string)$a[1])return $id;}return '';}
+  if(strpos($sql,'SHOW TABLES')!==false)return '';
+  return get_option($a[0] ?? '','');}
+ function get_col($q){[$sql,$a]=$q;
+  if(strpos($sql,'ORDER BY p.ID ASC')!==false){$cursor=(int)$a[1];$limit=(int)$a[2];$out=[];foreach($GLOBALS['postmeta'] as $id=>$m){if(($m[DST2T_Product::META_ENABLED]??'')==='yes'&&$id>$cursor)$out[]=$id;}sort($out);return array_slice($out,0,$limit);}
+  return [];}
+ function esc_like($v){return $v;}
  function query($q){[$sql,$a]=$q;if(strpos($sql,'INSERT IGNORE')===0){if(isset($GLOBALS['options'][$a[0]]))return 0;update_option($a[0],$a[1]);return 1;}if(strpos($sql,'DELETE')===0){if(get_option($a[0])===$a[1]){unset($GLOBALS['options'][$a[0]]);return 1;}return 0;}if(get_option($a[1])===$a[2]){update_option($a[1],$a[0]);return 1;}return 0;}
 }
 $GLOBALS['wpdb']=new TestDB();
@@ -123,12 +140,12 @@ class WC_Order {
  function add_order_note($n){$this->notes[]=$n;}
  function save(){}
 }
-class WP_REST_Request { public $raw,$headers,$params;function __construct($raw,$headers,$params=[]){$this->raw=$raw;$this->headers=$headers;$this->params=$params;}function get_body(){return $this->raw;}function get_header($k){return $this->headers[$k] ?? '';}function get_param($k){return $this->params[$k] ?? '';}}
+class WP_REST_Request { public $raw,$headers,$params,$method='POST',$route='';function __construct($raw,$headers,$params=[]){$this->raw=$raw;$this->headers=$headers;$this->params=$params;}function get_body(){return $this->raw;}function get_header($k){return $this->headers[$k] ?? '';}function get_param($k){return $this->params[$k] ?? '';}function get_method(){return $this->method;}function get_route(){return $this->route;}}
 function wc_format_decimal($v,$dp=2){return number_format((float)$v,(int)$dp,'.','');}
 function wc_get_price_decimals(){return 2;}
 function add_action(...$a){}
 function add_filter(...$a){}
-class WP_REST_Response { public $data,$status; function __construct($d,$s){$this->data=$d;$this->status=$s;} }
+class WP_REST_Response { public $data,$status; function __construct($d,$s=200){$this->data=$d;$this->status=$s;} function get_data(){return $this->data;} function set_data($d){$this->data=$d;} }
 foreach(['api-exception','decimal','vault','settings','brand','api-client','product','fulfillment','balance','sync','privacy','webhook','admin'] as $file) require dirname(__DIR__).'/includes/class-dst2t-'.$file.'.php';
 $vault=new DST2T_Vault();$settings=new DST2T_Settings($vault);DST2T_Brand::boot($settings);$api=new DST2T_API_Client($settings);$repo=new DST2T_Repository();
 $products=new DST2T_Product($api,$settings);
@@ -173,11 +190,13 @@ check(strpos(DST2T_Brand::scrub('Buy at https://shop2topup.com/item/1 now'),'sho
 settings_with(['stealth_mode'=>'no']);
 check(DST2T_Brand::scrub('Powered by Shop2TopUp')==='Powered by Shop2TopUp','Scrubbing is opt-out');
 defaults_restore();
-check(DST2T_Brand::mask_value('11111111-1111-4111-8111-111111111111',6)==='••••••••111111','Identifier masked to its last characters');
-$secret=DST2T_Brand::secret_html('11111111-1111-4111-8111-111111111111',6);
-check(strpos($secret,'data-dst2t-secret="11111111-1111-4111-8111-111111111111"')!==false && strpos($secret,'<code class="dst2t-secret-value">11111111')===false,'Dashboard renders identifiers masked with an explicit reveal');
+check(DST2T_Brand::mask_value('abcdefghijKLMNOP',6)==='••••••••KLMNOP','Identifier masked to its last characters, not its first');
+$secret=DST2T_Brand::secret_html('abcdefghijKLMNOP',6);
+check(strpos($secret,'data-dst2t-secret="abcdefghijKLMNOP"')!==false && strpos($secret,'>abcdefghijKLMNOP<')===false,'Dashboard never prints an identifier in its visible text while masking is on');
+check(strpos($secret,'dst2t-reveal')!==false && strpos($secret,'••••••••KLMNOP')!==false,'The masked identifier carries a reveal control');
 settings_with(['mask_identifiers'=>'no']);
-check(strpos(DST2T_Brand::secret_html('abc123'),'dst2t-reveal')===false,'Masking can be turned off');
+$plain=DST2T_Brand::secret_html('abcdefghijKLMNOP');
+check(strpos($plain,'dst2t-reveal')===false && strpos($plain,'>abcdefghijKLMNOP<')!==false,'Masking can be turned off');
 defaults_restore();
 check(DST2T_Brand::sku_prefix()==='tu-','Neutral SKU prefix by default');
 
@@ -199,7 +218,18 @@ $GLOBALS['doing_action']=[];$GLOBALS['is_admin']=false;$GLOBALS['is_manager']=fa
 settings_with(['stealth_mode'=>'no']);
 check(count(DST2T_Privacy::filter_item_meta($rows))===3,'Metadata filtering follows the stealth setting');
 defaults_restore();
-check(DST2T_Webhook::owns_namespace('store-callbacks/v1') && DST2T_Webhook::owns_namespace('delicat-shop2topup/v1') && !DST2T_Webhook::owns_namespace('wc/v3'),'Only plugin namespaces are hidden from the REST index');
+check(DST2T_Webhook::owns_namespace('store-callbacks/v1') && DST2T_Webhook::owns_namespace('delicat-shop2topup/v1') && !DST2T_Webhook::owns_namespace('wc/v3'),'Namespace ownership is recognised for both routes and nothing else');
+$index=new WP_REST_Response(['namespaces'=>['wc/v3','store-callbacks/v1','delicat-shop2topup/v1'],'routes'=>['/wc/v3'=>1,'/store-callbacks/v1'=>1,'/delicat-shop2topup/v1/webhook'=>1]],200);
+$hidden=DST2T_Privacy::hide_rest_index($index)->get_data();
+check($hidden['namespaces']===['wc/v3'] && array_keys($hidden['routes'])===['/wc/v3'],'The public REST index lists neither callback namespace');
+settings_with(['stealth_mode'=>'no']);
+$open=DST2T_Privacy::hide_rest_index(new WP_REST_Response(['namespaces'=>['store-callbacks/v1'],'routes'=>[]],200))->get_data();
+check($open['namespaces']===['store-callbacks/v1'],'REST index hiding follows the stealth setting');
+defaults_restore();
+$probe=new WP_REST_Request('',[],[]); $probe->method='OPTIONS'; $probe->route='/delicat-shop2topup/v1/webhook';
+check(is_wp_error(DST2T_Privacy::block_discovery(null,null,$probe)),'An OPTIONS probe cannot discover the callback route');
+$probeOther=new WP_REST_Request('',[],[]); $probeOther->method='OPTIONS'; $probeOther->route='/wc/v3/products';
+check(DST2T_Privacy::block_discovery('untouched',null,$probeOther)==='untouched','OPTIONS on unrelated routes is left alone');
 
 // -------------------------------------------------------------- webhook edge
 function signed($payload,$headers=[],$secret='test-signing-secret'){ $raw=json_encode($payload); return new WP_REST_Request($raw,array_merge(['x-shop2topup-signature'=>'sha256='.hash_hmac('sha256',$raw,$secret)],$headers)); }
@@ -218,8 +248,19 @@ check($ignored->status===200 && !empty($ignored->data['ignored']),'Unrelated eve
 check($web->receive(signed(['event'=>'order.completed','timestamp'=>gmdate('c'),'data'=>['order_id'=>$u]],['x-shop2topup-event'=>'order.failed']))->status===400,'A mismatched event header is still rejected');
 check($web->receive(signed(['event'=>'order.completed','timestamp'=>'2999-01-01T00:00:00Z','data'=>['order_id'=>$u]]))->status===400,'A future-dated callback is rejected');
 check(preg_match('/^[a-f0-9]{32}$/',DST2T_Webhook::token())===1,'A private callback token is generated on demand');
+$first=DST2T_Webhook::token(); DST2T_Webhook::rotate_token();
+check(DST2T_Webhook::token()!==$first,'Rotating the callback token produces a different, unpredictable value');
 $token=DST2T_Webhook::token();
-check($web->receive_private(new WP_REST_Request('{}',[],['token'=>str_repeat('0',32)]))->status===404,'The private callback rejects a wrong token');
+// Stealth off so the token check and the signature check report distinguishable codes.
+settings_with(['stealth_mode'=>'no']);
+[$u,$o,$i]=fixture();
+$payload=['event'=>'order.completed','timestamp'=>gmdate('c'),'data'=>['order_id'=>$u]];
+$raw=json_encode($payload); $sig=['x-shop2topup-signature'=>'sha256='.hash_hmac('sha256',$raw,'test-signing-secret')];
+$good=$web->receive_private(new WP_REST_Request($raw,$sig,['token'=>$token]));
+$bad=$web->receive_private(new WP_REST_Request($raw,$sig,['token'=>str_repeat('0',32)]));
+check($good->status===200,'A correctly signed callback on the private URL is accepted');
+check($bad->status===404 && ($bad->data['code'] ?? '')==='INVALID_ENDPOINT','The private callback rejects a wrong token even when the signature is valid');
+defaults_restore();
 check(strpos(DST2T_Webhook::url(),$token)!==false && strpos(DST2T_Webhook::url(),'shop2topup')===false,'The active callback URL is unbranded');
 check(DST2T_Webhook::legacy_url()==='https://example.test/wp-json/delicat-shop2topup/v1/webhook' && DST2T_Webhook::legacy_enabled(),'The original callback URL keeps working after an upgrade');
 settings_with(['legacy_webhook'=>'no']);check(DST2T_Webhook::legacy_enabled()===false,'The provider-named route can be retired once migration is confirmed');
@@ -231,14 +272,24 @@ reset_http();
 respond(['success'=>true,'account'=>['balance'=>'12.5','currency'=>'USD','enabled'=>true,'verified'=>true]]);
 $state=$balance->refresh(true);
 check($state['formatted']==='12.50 USD','Wallet balance is read from an alternate field name');
-check($state['enabled']===true && $state['latency_ms']>=0 && $state['error']==='','Account flags are cached alongside the balance');
-check($balance->state()['formatted']==='12.50 USD','Cached balance is served without a network call');
+check($state['enabled']===true && $state['verified']===true && $state['error']==='','Account flags are cached alongside the balance');
+$GLOBALS['responses']=[]; $before=count($GLOBALS['calls']);
+check($balance->state()['formatted']==='12.50 USD' && count($GLOBALS['calls'])===$before,'Cached balance is served without any network call');
 settings_with(['low_balance_threshold'=>'20.000000']);
 check($balance->state()['low']===true,'Low balance threshold raises a warning');
 settings_with(['low_balance_threshold'=>'5.000000']);
 check($balance->state()['low']===false,'Sufficient balance clears the warning');
 defaults_restore();
 check($balance->state()['auto']===true && $balance->interval_seconds()===600,'Automatic refresh is on by default every ten minutes');
+$GLOBALS['cron']=[]; delete_option(DST2T_Balance::OPTION_SCHEDULE);
+$balance->ensure_schedule();
+check(isset($GLOBALS['cron'][DST2T_Balance::ACTION_REFRESH]) && (int)get_option(DST2T_Balance::OPTION_SCHEDULE)===600,'Enabling automatic refresh actually schedules the recurring job');
+settings_with(['balance_auto_refresh'=>'no']); $balance->ensure_schedule();
+check(!isset($GLOBALS['cron'][DST2T_Balance::ACTION_REFRESH]),'Turning automatic refresh off unschedules it');
+defaults_restore(); $balance->ensure_schedule();
+$GLOBALS['cron']=[]; $GLOBALS['jobs']=[]; DST2T_Balance::queue_refresh();
+$queued=array_merge(array_column($GLOBALS['jobs'],0),array_keys($GLOBALS['cron']));
+check(in_array(DST2T_Balance::ACTION_NOW,$queued,true) && !in_array(DST2T_Balance::ACTION_REFRESH,$queued,true),'A one-off refresh uses its own hook so the recurring job cannot swallow it');
 reset_http();
 respond(['success'=>false,'error'=>['code'=>'SERVICE_UNAVAILABLE']],503);
 $state=$balance->refresh(true);
@@ -299,5 +350,64 @@ $collision=new WC_Product_Simple(); $collision->id=557; $GLOBALS['wc_products'][
 $GLOBALS['skus'][DST2T_Brand::sku_for_item(4245)]=557; $GLOBALS['postmeta'][557]=[DST2T_Product::META_ITEM_ID=>1];
 try { invoke($admin,'import_item',7,['item_id'=>4245,'name'=>'X','price'=>'1.00'],[],''); check(false,'SKU collision refuses to overwrite an unrelated product'); }
 catch (RuntimeException $e) { check(true,'SKU collision refuses to overwrite an unrelated product'); }
+
+// --------------------------------------------------------------- catalog sync
+defaults_restore(); reset_http();
+$GLOBALS['postmeta']=[]; $GLOBALS['wc_products']=[];
+foreach ([301,302,303] as $index=>$pid) {
+	$GLOBALS['postmeta'][$pid]=[DST2T_Product::META_ENABLED=>'yes',DST2T_Product::META_ITEM_ID=>501+$index,DST2T_Product::META_CATEGORY_ID=>7,DST2T_Product::META_LAST_COST=>'1.000000'];
+	$synced=new WC_Product_Simple(); $synced->id=$pid; $GLOBALS['wc_products'][$pid]=$synced;
+}
+update_option(DST2T_Sync::OPTION_CURSOR,0);
+check($syncer->mapped_count()===3 && $syncer->remaining()===3,'The sync cycle sees every mapped product');
+respond(['success'=>true,'requirements'=>[]]);
+respond(['success'=>true,'price'=>['unit_price'=>'1.05','currency'=>'USD','in_stock'=>true]]);
+respond(['success'=>true,'price'=>['unit_price'=>'1.10','currency'=>'USD','stock'=>7]]);
+$summary=$syncer->run(2);
+check($summary['processed']===2 && $summary['updated']===2 && empty($summary['cycle_complete']),'A sync batch processes exactly its batch size');
+check(get_post_meta(301,DST2T_Product::META_LAST_COST)==='1.050000','Catalog sync refreshes the cached cost');
+check($GLOBALS['wc_products'][302]->get_stock_quantity()===7 && $GLOBALS['wc_products'][302]->get_stock_status()==='instock','Catalog sync mirrors a reported quantity');
+check((int)get_option(DST2T_Sync::OPTION_CURSOR)===302,'The cursor advances so the next batch resumes where this one stopped');
+check(count($GLOBALS['calls'])===3,'Requirements are fetched once per category, not once per product');
+respond(['success'=>true,'price'=>['unit_price'=>'1.20','currency'=>'USD']]);
+$summary=$syncer->run(2);
+check($summary['processed']===1 && !empty($summary['cycle_complete']) && (int)get_option(DST2T_Sync::OPTION_CURSOR)===0,'Finishing the catalog resets the cursor for the next cycle');
+reset_http();
+respond(['success'=>true,'price'=>['unit_price'=>'1.30','currency'=>'USD']]);
+respond(['success'=>false,'error'=>['code'=>'RATE_LIMIT_EXCEEDED']],429);
+$summary=$syncer->run(3);
+check($summary['errors']===1 && (int)get_option(DST2T_Sync::OPTION_CURSOR)<303,'A rate limit stops the run early and keeps the unprocessed products queued');
+reset_http();
+respond(['success'=>false,'error'=>['code'=>'ITEM_NOT_FOUND']],404);
+update_option(DST2T_Sync::OPTION_CURSOR,302);
+$syncer->run(1);
+check($GLOBALS['wc_products'][303]->get_stock_status()==='outofstock' && get_post_meta(303,DST2T_Product::META_SYNC_ERROR)==='ITEM_NOT_FOUND','A withdrawn item goes out of stock instead of disappearing');
+
+// ------------------------------------------------------------ endpoint guards
+$guarded=['retry_order','sync_order','refresh_balance','sync_catalog','rotate_webhook','refresh_product','import_catalog','save_settings','test_connection','sync_now','rewrite_skus'];
+function guard_failures($admin,$handlers,$expected) {
+	$leaked=[];
+	foreach ($handlers as $handler) {
+		try { $admin->$handler(); $leaked[]=$handler; }
+		catch (RuntimeException $error) { if (strpos($error->getMessage(),$expected)!==0) $leaked[]=$handler.'('.$error->getMessage().')'; }
+		catch (Throwable $error) { $leaked[]=$handler.'('.get_class($error).')'; }
+	}
+	return $leaked;
+}
+$GLOBALS['is_manager']=false; $GLOBALS['bad_nonce']=false;
+$leaked=guard_failures($admin,$guarded,'wp_die:');
+check($leaked===[],'Every state-changing endpoint refuses a user without manage_woocommerce'.($leaked?' — leaked: '.implode(', ',$leaked):''));
+$GLOBALS['is_manager']=true; $GLOBALS['bad_nonce']=true;
+$leaked=guard_failures($admin,$guarded,'bad_nonce:');
+check($leaked===[],'Every state-changing endpoint verifies its nonce'.($leaked?' — leaked: '.implode(', ',$leaked):''));
+$GLOBALS['bad_nonce']=false; $GLOBALS['is_manager']=false;
+$denied=false;
+try { $balance->ajax_balance(); } catch (Throwable $error) { $denied = strpos($error->getMessage(),'jsonerr:')===0; }
+check($denied,'The live balance endpoint refuses a user without manage_woocommerce');
+$GLOBALS['is_manager']=true; $GLOBALS['bad_nonce']=true;
+$denied=false;
+try { $balance->ajax_balance(); } catch (Throwable $error) { $denied = strpos($error->getMessage(),'bad_nonce:')===0; }
+check($denied,'The live balance endpoint verifies its nonce');
+$GLOBALS['bad_nonce']=false; $GLOBALS['is_manager']=false;
 
 echo "$n tests passed.\n";

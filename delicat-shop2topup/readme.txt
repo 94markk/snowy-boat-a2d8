@@ -159,6 +159,9 @@ response bodies are not logged.
   spellings are accepted, a missing timestamp no longer rejects the delivery, and unrelated events are
   acknowledged instead of rejected.
 * New WP-CLI commands: `balance`, `sync`, `webhook`.
+* Opaque public SKUs, with a Tools action to replace provider-derived SKUs left by earlier versions.
+* OPTIONS probes can no longer discover the callback route, and an unsigned request is answered as a missing
+  route rather than confirming the integration.
 * Uninstall now also removes hashed order-note markers, plugin transients, and the new options.
 
 = 1.1.0 =

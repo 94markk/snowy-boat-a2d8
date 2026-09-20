@@ -590,7 +590,9 @@ final class DST2T_Product {
 					echo '<option value="">' . esc_html( $placeholder ?: __( 'Select an option', 'delicat-shop2topup' ) ) . '</option>';
 				}
 				foreach ( (array) $field['select_options'] as $option ) {
-					echo '<option value="' . esc_attr( $option ) . '">' . esc_html( $option ) . '</option>';
+					// The value is submitted back upstream and must stay byte-identical;
+					// only the text the customer reads is scrubbed.
+					echo '<option value="' . esc_attr( $option ) . '">' . esc_html( DST2T_Brand::scrub( $option ) ) . '</option>';
 				}
 				echo '</select>';
 			} else {
@@ -720,7 +722,9 @@ final class DST2T_Product {
 			$out[] = array(
 				'field_name'     => $name,
 				'data_type'      => $type,
-				'placeholder'    => isset( $field['placeholder'] ) ? sanitize_text_field( $field['placeholder'] ) : '',
+				// Placeholders are display-only provider copy, so they are scrubbed.
+				// Option values are not: they are sent back upstream verbatim.
+				'placeholder'    => isset( $field['placeholder'] ) ? DST2T_Brand::scrub( sanitize_text_field( $field['placeholder'] ) ) : '',
 				'select_options' => isset( $field['select_options'] ) ? array_values( array_map( 'sanitize_text_field', (array) $field['select_options'] ) ) : array(),
 			);
 		}

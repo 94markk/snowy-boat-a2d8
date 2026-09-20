@@ -32,6 +32,7 @@ final class DST2T_Privacy {
 		add_filter( 'woocommerce_order_item_get_formatted_meta_data', array( __CLASS__, 'filter_item_meta' ), 20, 2 );
 		add_filter( 'rest_index', array( __CLASS__, 'hide_rest_index' ), 20 );
 		add_filter( 'rest_namespace_index', array( __CLASS__, 'hide_namespace_index' ), 20, 2 );
+		add_filter( 'rest_pre_dispatch', array( __CLASS__, 'block_discovery' ), 10, 3 );
 		add_filter( 'woocommerce_rest_prepare_product_object', array( __CLASS__, 'filter_product_response' ), 20 );
 		add_filter( 'woocommerce_rest_prepare_product_variation_object', array( __CLASS__, 'filter_product_response' ), 20 );
 	}
@@ -170,6 +171,26 @@ final class DST2T_Privacy {
 		return $response;
 	}
 
+	/**
+	 * Refuses OPTIONS discovery on the plugin's routes.
+	 *
+	 * WordPress answers OPTIONS from the route registry before dispatch, so the
+	 * index filters never see it: without this, one OPTIONS request returns the
+	 * namespace and the full route schema.
+	 */
+	public static function block_discovery( $result, $server = null, $request = null ) {
+		if ( ! DST2T_Brand::stealth() || ! $request instanceof WP_REST_Request ) {
+			return $result;
+		}
+		if ( 'OPTIONS' !== strtoupper( (string) $request->get_method() ) ) {
+			return $result;
+		}
+		if ( ! DST2T_Webhook::owns_namespace( (string) $request->get_route() ) ) {
+			return $result;
+		}
+		return new WP_Error( 'rest_no_route', __( 'No route was found matching the URL and request method.', 'delicat-shop2topup' ), array( 'status' => 404 ) );
+	}
+
 	/** Keeps fulfillment metadata out of the WooCommerce products REST response. */
 	public static function filter_product_response( $response ) {
 		if ( ! DST2T_Brand::stealth() || ! $response instanceof WP_REST_Response ) {
@@ -204,7 +225,10 @@ final class DST2T_Privacy {
 				return true;
 			}
 		}
-		return ! ( is_admin() && ! wp_doing_ajax() && current_user_can( 'manage_woocommerce' ) );
+		// Admin-ajax is still the manager's own screen: the order editor reloads its
+		// items that way, and stripping meta there would hide fulfillment state
+		// from the person who needs it.
+		return ! ( is_admin() && current_user_can( 'manage_woocommerce' ) );
 	}
 
 	private static function mentions_supplier( $text ) {
