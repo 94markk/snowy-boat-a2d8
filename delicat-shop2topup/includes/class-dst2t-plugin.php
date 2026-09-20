@@ -94,6 +94,7 @@ final class DST2T_Plugin {
 			DST2T_Fulfillment::ACTION_PROCESS,
 			DST2T_Fulfillment::ACTION_WEBHOOK,
 			DST2T_Balance::ACTION_REFRESH,
+			DST2T_Balance::ACTION_NOW,
 			DST2T_Sync::ACTION,
 		);
 

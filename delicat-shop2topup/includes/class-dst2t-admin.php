@@ -276,7 +276,9 @@ final class DST2T_Admin {
 		if ( $order->has_status( 'on-hold' ) ) {
 			$order->update_status( 'processing', __( 'Digital fulfillment retried by a store manager.', 'delicat-shop2topup' ) );
 		}
-		$this->fulfillment->schedule_item( $order->get_id(), absint( $row['wc_item_id'] ), 0 );
+		// A backoff job may already be pending hours out; displace it so the retry
+		// the operator just asked for actually runs now.
+		$this->fulfillment->reschedule_item( $order->get_id(), absint( $row['wc_item_id'] ), 0 );
 
 		$this->redirect_with_notice( $tab, 'success', __( 'Fulfillment queued for another attempt. Watch the status; no duplicate purchase can be made.', 'delicat-shop2topup' ) );
 	}
@@ -378,7 +380,7 @@ final class DST2T_Admin {
 						/* translators: 1: formatted wallet balance, 2: configured threshold. */
 						__( 'Top-up wallet balance is %1$s, below your alert threshold of %2$s. Digital orders will fail once the wallet is empty.', 'delicat-shop2topup' ),
 						'' !== $state['formatted'] ? $state['formatted'] : __( 'unknown', 'delicat-shop2topup' ),
-						$state['threshold']
+						$state['threshold_formatted']
 					)
 				)
 				. '</p></div>';
@@ -876,7 +878,7 @@ final class DST2T_Admin {
 
 	private function import_item( $category_id, $catalog_item, $schema, $category_name = '' ) {
 		$item_id = absint( $catalog_item['item_id'] );
-		$sku     = DST2T_Brand::sku_prefix() . $item_id;
+		$sku     = DST2T_Brand::sku_for_item( $item_id );
 		$id      = wc_get_product_id_by_sku( $sku );
 
 		if ( $id && absint( get_post_meta( $id, DST2T_Product::META_ITEM_ID, true ) ) !== $item_id ) {
@@ -1077,7 +1079,9 @@ final class DST2T_Admin {
 				array(
 					'action'      => 'dst2t_refresh_product',
 					'product_id'  => absint( $product_id ),
-					'redirect_to' => add_query_arg( array( 'page' => self::PAGE, 'tab' => 'catalog' ), admin_url( 'admin.php' ) ),
+					// add_query_arg does not encode the values it is handed, so an
+					// unencoded URL would be truncated at its first ampersand.
+					'redirect_to' => rawurlencode( add_query_arg( array( 'page' => self::PAGE, 'tab' => 'catalog' ), admin_url( 'admin.php' ) ) ),
 				),
 				admin_url( 'admin-post.php' )
 			),

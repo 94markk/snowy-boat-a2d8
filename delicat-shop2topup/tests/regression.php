@@ -260,29 +260,43 @@ check(invoke($products,'apply_stock',$product,['unit_price'=>'1.00','in_stock'=>
 check(invoke($products,'apply_stock',$product,['unit_price'=>'1.00','stock'=>25])===true && $product->get_stock_quantity()===25 && $product->get_stock_status()==='instock','A reported quantity is mirrored onto the product');
 check($products->selling_price('1.500000')==='1.80','Selling price applies the exchange rate and markup');
 
+// ----------------------------------------------------------- cost guard
+reset_http();[$u,$o,$i]=fixture();
+$GLOBALS['postmeta'][1][DST2T_Product::META_LAST_COST]='1.000000';
+respond(['success'=>true,'price'=>['unit_price'=>'2.00','currency'=>'USD']]);
+$ful->process_item(1,1);
+check($o->status==='on-hold'&&$repo->rows[$u]['status']==='price_blocked','A cost spike beyond the guard blocks the purchase');
+reset_http();[$u,$o,$i]=fixture();
+$GLOBALS['postmeta'][1][DST2T_Product::META_LAST_COST]='0.000000';
+respond(['success'=>true,'price'=>['unit_price'=>'2.00','currency'=>'USD']]);
+$ful->process_item(1,1);
+check(count($GLOBALS['calls'])===1&&$repo->rows[$u]['status']==='price_blocked','A zero cached cost fails closed instead of buying at any price');
+$GLOBALS['postmeta'][1][DST2T_Product::META_LAST_COST]='1.000000';
+
 // --------------------------------------------------------------- import flow
 reset_http();
 invoke($admin,'import_item',7,['item_id'=>4242,'name'=>'Shop2TopUp Diamonds 100','description'=>'Delivered by Shop2TopUp','price'=>'1.50'],[],'');
 $imported=$GLOBALS['wc_products'][array_key_last($GLOBALS['wc_products'])];
 check($imported->get_status()==='draft','An imported product is saved as a draft');
 check(strpos($imported->data['name'],'Shop2TopUp')===false && strpos($imported->data['description'],'Shop2TopUp')===false,'Imported copy never names the supplier');
-check($imported->data['sku']==='tu-4242','Imported SKU uses the neutral prefix');
+check(strpos($imported->data['sku'],'tu-')===0 && strpos($imported->data['sku'],'4242')===false,'Imported SKU is opaque and never embeds the provider item id');
+check($imported->data['sku']===DST2T_Brand::sku_for_item(4242) && DST2T_Brand::sku_for_item(4242)!==DST2T_Brand::sku_for_item(4243),'Opaque SKUs are stable per item and distinct between items');
 check($imported->data['regular_price']==='1.80','Import prices with the configured markup');
 
 $live=new WC_Product_Simple(); $live->id=555; $live->data['status']='publish'; $GLOBALS['wc_products'][555]=$live;
-$GLOBALS['skus']['tu-4243']=555; $GLOBALS['postmeta'][555]=[DST2T_Product::META_ITEM_ID=>4243];
+$GLOBALS['skus'][DST2T_Brand::sku_for_item(4243)]=555; $GLOBALS['postmeta'][555]=[DST2T_Product::META_ITEM_ID=>4243];
 invoke($admin,'import_item',7,['item_id'=>4243,'name'=>'Gems','price'=>'2.00'],[],'');
 check($live->get_status()==='draft','Re-importing returns a published product to draft for review');
 
 settings_with(['import_force_draft'=>'no']);
 $kept=new WC_Product_Simple(); $kept->id=556; $kept->data['status']='publish'; $GLOBALS['wc_products'][556]=$kept;
-$GLOBALS['skus']['tu-4244']=556; $GLOBALS['postmeta'][556]=[DST2T_Product::META_ITEM_ID=>4244];
+$GLOBALS['skus'][DST2T_Brand::sku_for_item(4244)]=556; $GLOBALS['postmeta'][556]=[DST2T_Product::META_ITEM_ID=>4244];
 invoke($admin,'import_item',7,['item_id'=>4244,'name'=>'Coins','price'=>'2.00'],[],'');
 check($kept->get_status()==='publish','Operators can opt out of forcing re-imports back to draft');
 defaults_restore();
 
 $collision=new WC_Product_Simple(); $collision->id=557; $GLOBALS['wc_products'][557]=$collision;
-$GLOBALS['skus']['tu-4245']=557; $GLOBALS['postmeta'][557]=[DST2T_Product::META_ITEM_ID=>1];
+$GLOBALS['skus'][DST2T_Brand::sku_for_item(4245)]=557; $GLOBALS['postmeta'][557]=[DST2T_Product::META_ITEM_ID=>1];
 try { invoke($admin,'import_item',7,['item_id'=>4245,'name'=>'X','price'=>'1.00'],[],''); check(false,'SKU collision refuses to overwrite an unrelated product'); }
 catch (RuntimeException $e) { check(true,'SKU collision refuses to overwrite an unrelated product'); }
 

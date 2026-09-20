@@ -11,6 +11,9 @@ defined( 'ABSPATH' ) || exit;
  */
 final class DST2T_Balance {
 	const ACTION_REFRESH  = 'dst2t_refresh_balance';
+	// A separate hook for one-off refreshes: sharing the recurring hook means every
+	// enqueue is swallowed by the pending recurring action's own de-duplication.
+	const ACTION_NOW      = 'dst2t_refresh_balance_now';
 	const OPTION_STATE    = 'dst2t_account_state';
 	const OPTION_SCHEDULE = 'dst2t_balance_scheduled_interval';
 	const OPTION_ALERTED  = 'dst2t_low_balance_alerted_at';
@@ -31,6 +34,7 @@ final class DST2T_Balance {
 
 	public function hooks() {
 		add_action( self::ACTION_REFRESH, array( $this, 'refresh' ) );
+		add_action( self::ACTION_NOW, array( $this, 'refresh_now' ) );
 		add_action( 'init', array( $this, 'ensure_schedule' ), 31 );
 		add_action( 'wp_ajax_dst2t_balance', array( $this, 'ajax_balance' ) );
 		add_action( 'admin_bar_menu', array( $this, 'admin_bar' ), 80 );
@@ -65,6 +69,7 @@ final class DST2T_Balance {
 		$state['low']        = $this->is_low( $state['wallet'] );
 		$state['threshold']  = $this->threshold();
 		$state['formatted']  = $this->format_amount( $state['wallet'], $state['currency'] );
+		$state['threshold_formatted'] = $this->format_amount( $state['threshold'], $state['currency'] );
 		$state['interval']   = $this->interval_seconds();
 		$state['auto']       = $this->auto_enabled();
 
@@ -117,19 +122,24 @@ final class DST2T_Balance {
 		);
 		update_option( self::OPTION_STATE, $state, false );
 
-		$this->maybe_alert( $wallet );
+		$this->maybe_alert( $wallet, $state['currency'] );
 
 		return $this->state();
+	}
+
+	/** Runs an out-of-band refresh, ignoring the short live-call cooldown. */
+	public function refresh_now() {
+		$this->refresh( true );
 	}
 
 	/** Queues an out-of-band refresh, used right after wallet-spending activity. */
 	public static function queue_refresh() {
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( self::ACTION_REFRESH, array(), DST2T_Fulfillment::ACTION_GROUP, true );
+			as_enqueue_async_action( self::ACTION_NOW, array(), DST2T_Fulfillment::ACTION_GROUP );
 			return;
 		}
-		if ( ! wp_next_scheduled( self::ACTION_REFRESH, array() ) ) {
-			wp_schedule_single_event( time() + 10, self::ACTION_REFRESH );
+		if ( ! wp_next_scheduled( self::ACTION_NOW ) ) {
+			wp_schedule_single_event( time() + 10, self::ACTION_NOW );
 		}
 	}
 
@@ -206,9 +216,21 @@ final class DST2T_Balance {
 		check_ajax_referer( 'dst2t_balance', 'nonce' );
 
 		$force = ! empty( $_POST['force'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$state = $force ? $this->refresh( false ) : $this->state();
-		if ( ! $force && ( $state['stale'] || ! $state['checked_at'] ) ) {
-			$state = $this->refresh( false );
+		if ( $force ) {
+			// An explicit click reads live, with its own small guard so a held-down
+			// button cannot turn into a request loop against the provider.
+			$guard = 'dst2t_balance_click_' . get_current_user_id();
+			if ( get_transient( $guard ) ) {
+				$state = $this->state();
+			} else {
+				set_transient( $guard, 1, 10 );
+				$state = $this->refresh( true );
+			}
+		} else {
+			$state = $this->state();
+			if ( $state['stale'] || ! $state['checked_at'] ) {
+				$state = $this->refresh( false );
+			}
 		}
 
 		wp_send_json_success( $this->public_state( $state ) );
@@ -293,7 +315,7 @@ final class DST2T_Balance {
 		}
 	}
 
-	private function maybe_alert( $wallet ) {
+	private function maybe_alert( $wallet, $currency = 'USD' ) {
 		if ( ! $this->is_low( $wallet ) ) {
 			delete_option( self::OPTION_ALERTED );
 			return;
@@ -330,8 +352,8 @@ final class DST2T_Balance {
 			sprintf(
 				/* translators: 1: formatted balance, 2: configured threshold, 3: dashboard URL. */
 				__( "The automatic top-up wallet balance is %1\$s, below your threshold of %2\$s.\n\nDigital orders will start failing when the wallet runs out.\n\nDashboard: %3\$s", 'delicat-shop2topup' ),
-				$this->format_amount( $wallet, $this->extract_currency( array() ) ),
-				$this->threshold(),
+				$this->format_amount( $wallet, $currency ),
+				$this->format_amount( $this->threshold(), $currency ),
 				admin_url( 'admin.php?page=' . DST2T_Admin::PAGE )
 			)
 		);

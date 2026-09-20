@@ -71,6 +71,7 @@ foreach (
 		'dst2t_sync_cursor',
 		'dst2t_sync_state',
 		'dst2t_sync_scheduled_interval',
+		'dst2t_sku_salt',
 	) as $option
 ) {
 	delete_option( $option );

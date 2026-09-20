@@ -123,6 +123,36 @@ final class DST2T_Brand {
 			. esc_html__( 'Reveal', 'delicat-shop2topup' ) . '</button></span>';
 	}
 
+	/**
+	 * Public SKU for a supplier item.
+	 *
+	 * WooCommerce publishes the SKU in the product summary, in JSON-LD for search
+	 * engines, in the unauthenticated Store API, in the cart, and in order emails.
+	 * Embedding the supplier's own item id there would hand a competitor the whole
+	 * catalogue mapping, so the id is put through a keyed digest. It stays stable
+	 * for a given item (imports still de-duplicate on it) and cannot be reversed.
+	 */
+	public static function sku_for_item( $item_id ) {
+		$item_id = absint( $item_id );
+		if ( ! $item_id ) {
+			return '';
+		}
+		return self::sku_prefix() . strtoupper( substr( hash_hmac( 'sha256', (string) $item_id, self::sku_salt() ), 0, 10 ) );
+	}
+
+	/**
+	 * Per-site SKU salt. Stored separately from the WordPress salts so rotating
+	 * those does not change SKUs that customers and invoices already reference.
+	 */
+	public static function sku_salt() {
+		$salt = (string) get_option( 'dst2t_sku_salt', '' );
+		if ( 32 > strlen( $salt ) ) {
+			$salt = wp_generate_password( 64, true, true );
+			update_option( 'dst2t_sku_salt', $salt, false );
+		}
+		return $salt;
+	}
+
 	/** Neutral SKU prefix for imported catalog items. */
 	public static function sku_prefix() {
 		$prefix = strtolower( trim( (string) self::option( 'import_sku_prefix', '' ) ) );

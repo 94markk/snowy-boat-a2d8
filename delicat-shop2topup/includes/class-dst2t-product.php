@@ -15,6 +15,9 @@ final class DST2T_Product {
 
 	/** Player validations allowed per visitor per five minutes. */
 	const VALIDATION_LIMIT  = 20;
+
+	/** Player validations allowed per client address per five minutes. */
+	const ADDRESS_LIMIT     = 300;
 	const META_LAST_SYNC    = '_dst2t_last_sync';
 
 	/** @var DST2T_API_Client */
@@ -168,7 +171,7 @@ final class DST2T_Product {
 				array(
 					'action'      => 'dst2t_refresh_product',
 					'product_id'  => absint( $product_id ),
-					'redirect_to' => get_edit_post_link( absint( $product_id ), 'raw' ),
+					'redirect_to' => rawurlencode( (string) get_edit_post_link( absint( $product_id ), 'raw' ) ),
 				),
 				admin_url( 'admin-post.php' )
 			),
@@ -254,7 +257,9 @@ final class DST2T_Product {
 
 		if ( 'yes' === $enabled && $item_id && $category_id && null === $schema && $this->settings->credentials_configured() ) {
 			try {
-				$this->refresh_mapping( $product_id );
+				// Requirements and cost only: mirroring stock here would overwrite the
+				// "Manage stock?" choice the shop manager just made in the same save.
+				$this->refresh_mapping( $product_id, false );
 			} catch ( Throwable $error ) {
 				// Product saving must never fail because the supplier is unavailable.
 			}
@@ -276,7 +281,14 @@ final class DST2T_Product {
 		$schema = $this->requirements_for( $mapping['category_id'] );
 		$price  = $this->api->price( $mapping['item_id'] );
 		update_post_meta( $product_id, self::META_REQUIREMENTS, wp_json_encode( $this->sanitize_schema( $schema ) ) );
-		update_post_meta( $product_id, self::META_LAST_COST, DST2T_Decimal::normalize( $price['unit_price'] ) );
+		$unit_cost = DST2T_Decimal::normalize( $price['unit_price'] );
+		if ( 0 === DST2T_Decimal::compare( $unit_cost, '0' ) ) {
+			// A zero unit price is a missing price, not a free item. Storing it would
+			// set the relative cost guard to zero and block the product entirely.
+			update_post_meta( $product_id, self::META_SYNC_ERROR, 'ZERO_COST' );
+		} else {
+			update_post_meta( $product_id, self::META_LAST_COST, $unit_cost );
+		}
 		update_post_meta( $product_id, self::META_LAST_SYNC, time() );
 		if ( ! empty( $price['item_name'] ) ) {
 			update_post_meta( $product_id, self::META_PROVIDER_NAME, sanitize_text_field( DST2T_Brand::scrub( $price['item_name'] ) ) );
@@ -285,7 +297,7 @@ final class DST2T_Product {
 		$product = wc_get_product( $product_id );
 		if ( $product ) {
 			$dirty = false;
-			if ( $this->settings->enabled( 'sync_catalog_prices' ) ) {
+			if ( $this->settings->enabled( 'sync_catalog_prices' ) && 0 !== DST2T_Decimal::compare( $unit_cost, '0' ) ) {
 				$selling = $this->selling_price( $price['unit_price'] );
 				if ( '' !== $selling && $selling !== (string) $product->get_regular_price() ) {
 					$product->set_regular_price( $selling );
@@ -535,6 +547,15 @@ final class DST2T_Product {
 		if ( ! is_product() ) {
 			return;
 		}
+		// Only on a product this plugin actually renders fields for: an unrelated
+		// product page should emit nothing at all.
+		$product = wc_get_product( get_queried_object_id() );
+		if ( ! $product instanceof WC_Product ) {
+			return;
+		}
+		if ( ! $product->is_type( 'variable' ) && ! $this->is_mapped( $product->get_id() ) ) {
+			return;
+		}
 		// Inlined while stealth mode is on so no plugin path reaches the page source.
 		DST2T_Privacy::enqueue_frontend();
 	}
@@ -581,22 +602,55 @@ final class DST2T_Product {
 		return (string) ob_get_clean();
 	}
 
-	/** @return bool True when this visitor has spent their validation allowance. */
+	/**
+	 * @return bool True when this visitor has spent their validation allowance.
+	 *
+	 * Two buckets on purpose. A per-visitor bucket stops one customer looping, and
+	 * a much larger per-address bucket stops a single source flooding — keyed on
+	 * the address WooCommerce resolves, so a store behind Cloudflare or a load
+	 * balancer does not put every one of its customers in one bucket.
+	 */
 	private function validation_throttled() {
 		if ( current_user_can( 'manage_woocommerce' ) ) {
 			return false;
 		}
-		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-		if ( '' === $ip ) {
-			return false;
+
+		$buckets = array();
+
+		$visitor = $this->visitor_id();
+		if ( '' !== $visitor ) {
+			$buckets[] = array( 'dst2t_pv_v_' . md5( $visitor ), self::VALIDATION_LIMIT );
 		}
-		$key   = 'dst2t_pv_' . md5( $ip );
-		$count = (int) get_transient( $key );
-		if ( $count >= self::VALIDATION_LIMIT ) {
-			return true;
+
+		$ip = class_exists( 'WC_Geolocation' ) ? (string) WC_Geolocation::get_ip_address() : '';
+		if ( '' === $ip && isset( $_SERVER['REMOTE_ADDR'] ) ) {
+			$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
 		}
-		set_transient( $key, $count + 1, 5 * MINUTE_IN_SECONDS );
+		if ( '' !== $ip ) {
+			$buckets[] = array( 'dst2t_pv_a_' . md5( $ip ), self::ADDRESS_LIMIT );
+		}
+
+		foreach ( $buckets as $bucket ) {
+			list( $key, $limit ) = $bucket;
+			$count               = (int) get_transient( $key );
+			if ( $count >= $limit ) {
+				return true;
+			}
+			set_transient( $key, $count + 1, 5 * MINUTE_IN_SECONDS );
+		}
+
 		return false;
+	}
+
+	/** Stable-per-visitor identifier from the WooCommerce session, when there is one. */
+	private function visitor_id() {
+		if ( function_exists( 'WC' ) && WC() && isset( WC()->session ) && is_object( WC()->session ) && method_exists( WC()->session, 'get_customer_id' ) ) {
+			$id = (string) WC()->session->get_customer_id();
+			if ( '' !== $id ) {
+				return $id;
+			}
+		}
+		return (string) get_current_user_id();
 	}
 
 	private function posted_requirements( $product_id ) {

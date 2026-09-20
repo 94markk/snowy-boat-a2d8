@@ -355,7 +355,10 @@ final class DST2T_Fulfillment {
 			'next_check_at'  => $terminal ? null : time() + 60,
 			'last_error_code' => '',
 		);
-		if ( $event_timestamp ) {
+		// Only ever advance the staleness watermark: an out-of-order delivery must
+		// not move it back and re-open the window for an older replay.
+		$previous_event = ! empty( $row['last_event_at'] ) ? strtotime( $row['last_event_at'] . ' UTC' ) : 0;
+		if ( $event_timestamp && $event_timestamp > $previous_event ) {
 			$args['last_event_at'] = $event_timestamp;
 		}
 		$this->repository->update( $provider_order_id, $status, $args );
@@ -529,6 +532,16 @@ final class DST2T_Fulfillment {
 		echo '</ul></div>';
 	}
 
+	/** Cancels any pending worker job for one line item, then queues a fresh one. */
+	public function reschedule_item( $order_id, $item_id, $delay = 0 ) {
+		$args = array( absint( $order_id ), absint( $item_id ) );
+		if ( function_exists( 'as_unschedule_all_actions' ) ) {
+			as_unschedule_all_actions( self::ACTION_PROCESS, $args, self::ACTION_GROUP );
+		}
+		wp_clear_scheduled_hook( self::ACTION_PROCESS, $args );
+		$this->schedule_item( $order_id, $item_id, $delay );
+	}
+
 	public function schedule_item( $order_id, $item_id, $delay ) {
 		$args = array( absint( $order_id ), absint( $item_id ) );
 		$when = time() + max( 0, absint( $delay ) );
@@ -555,19 +568,30 @@ final class DST2T_Fulfillment {
 		$mapping = $this->products->mapping( $product_id );
 		$live    = DST2T_Decimal::normalize( $live_cost );
 
-		// A ceiling or a cached cost of exactly zero means "not set". Treating a
-		// zero as a real limit would block every purchase for the product.
+		// Both limits fail closed. A ceiling or a cached baseline of exactly zero
+		// means the guard evaluates to zero and every purchase is refused: that is
+		// deliberate, because a zero baseline means the real cost was never learned
+		// and buying against an unknown baseline is how a wallet gets drained. The
+		// note below names the cause so the operator can refresh the product.
 		$max_cost = (string) $mapping['max_cost'];
-		if ( '' !== $max_cost && DST2T_Decimal::compare( $max_cost, '0' ) > 0 && DST2T_Decimal::compare( $live, $max_cost ) > 0 ) {
-			throw new RuntimeException( __( 'Live supplier cost is above the product’s absolute maximum. No supplier purchase was made.', 'delicat-shop2topup' ) );
+		if ( '' !== $max_cost && DST2T_Decimal::compare( $live, $max_cost ) > 0 ) {
+			throw new RuntimeException(
+				0 === DST2T_Decimal::compare( $max_cost, '0' )
+					? __( 'This product’s absolute maximum cost is set to zero, so no purchase can be made. Set a real ceiling or clear the field.', 'delicat-shop2topup' )
+					: __( 'Live supplier cost is above the product’s absolute maximum. No supplier purchase was made.', 'delicat-shop2topup' )
+			);
 		}
 
 		$guard     = $this->settings->get( 'cost_guard_percent', '10.00' );
 		$last_cost = (string) $mapping['last_cost'];
-		if ( '' !== $last_cost && DST2T_Decimal::compare( $last_cost, '0' ) > 0 && DST2T_Decimal::compare( $guard, '0' ) > 0 ) {
+		if ( '' !== $last_cost && DST2T_Decimal::compare( $guard, '0' ) > 0 ) {
 			$limit = DST2T_Decimal::add_percent( $last_cost, $guard );
 			if ( DST2T_Decimal::compare( $live, $limit ) > 0 ) {
-				throw new RuntimeException( __( 'Live supplier cost increased beyond the configured safety limit. No supplier purchase was made.', 'delicat-shop2topup' ) );
+				throw new RuntimeException(
+					0 === DST2T_Decimal::compare( $last_cost, '0' )
+						? __( 'The cached cost for this product is zero, so the safety limit is zero and no purchase can be made. Refresh the product from the provider, then retry.', 'delicat-shop2topup' )
+						: __( 'Live supplier cost increased beyond the configured safety limit. No supplier purchase was made.', 'delicat-shop2topup' )
+				);
 			}
 		}
 	}

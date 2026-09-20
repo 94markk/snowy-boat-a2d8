@@ -59,8 +59,12 @@ Turn on **Settings → Supplier privacy → Hide the provider from the storefron
   request that arrives without a valid signature is answered with the same "no route" body WordPress uses for a
   URL that does not exist — so guessing the URL confirms nothing. The real reason is written to the WooCommerce
   log instead. The route itself keeps working for correctly signed deliveries.
-- **SKUs.** New imports use the **Imported SKU prefix** (default `tu-`). SKUs are customer-visible, so this
-  must not identify the provider. Existing SKUs are never renamed; re-imports are matched by supplier item id.
+- **SKUs.** WooCommerce publishes the SKU in the product summary, in JSON-LD for search engines, in the
+  unauthenticated Store API, in the cart, and in order emails. New imports therefore get an **opaque** SKU:
+  your **Imported SKU prefix** (default `tu-`) plus a keyed digest of the item, e.g. `tu-9F3A1C4B72`. It is
+  stable, so re-imports still de-duplicate on it, but the provider's own item id cannot be read back out of
+  it. Existing SKUs are never renamed — products imported before 1.2.0 keep `s2t-<item id>`, which does encode
+  the provider's id, so change those SKUs by hand if that matters to you.
 
 **Use an unbranded private callback URL** (on by default) serves the callback from a neutral REST namespace
 with a 32-character secret token, e.g. `https://example.com/wp-json/store-callbacks/v1/<token>`. Treat that URL
@@ -129,8 +133,11 @@ missing stock field is never read as zero.
 
 Add-to-cart is unauthenticated, so two paths were bounded:
 
-- Player validation is throttled to 20 attempts per visitor per five minutes (shop managers are exempt). Over
-  the limit the customer sees the normal "validation is busy, try again" message.
+- Player validation is throttled in two buckets: 20 attempts per visitor and 300 per client address, both per
+  five minutes (shop managers are exempt). The address is the one WooCommerce resolves, so a store behind
+  Cloudflare or a load balancer does not end up with all its customers sharing one bucket. Over the limit the
+  customer sees the normal "validation is busy, try again" message.
+- Storefront assets are only enqueued on a product this plugin actually renders fields for.
 - A requirement schema is only fetched when it has never been stored. A category that genuinely has no
   requirement fields stores an empty schema instead of being re-fetched on every attempt.
 
@@ -140,8 +147,10 @@ Add-to-cart is unauthenticated, so two paths were bounded:
 - The UUID is saved to the order item and the lookup table before the supplier call.
 - A timeout triggers `GET /orders/:uuid` before the same UUID may be replayed.
 - Supplier money stays as six-decimal fixed-point strings for comparisons.
-- The global percentage guard compares live cost with cached cost; the optional product-level absolute maximum
-  is stricter.
+- Both cost guards fail closed. A cached baseline or ceiling of zero refuses the purchase rather than allowing
+  it, because a zero baseline means the real cost was never learned; the hold note says exactly that so you can
+  refresh the product and retry. A zero unit price coming back from the provider is treated as a missing price:
+  it is never stored as the baseline and never becomes a selling price.
 - Callback signatures use constant-time comparison over the exact raw bytes. Four header spellings and both
   `sha256=<hex>` and bare `<hex>` are accepted; none of them weakens verification.
 - Any `order.*` event queues an authoritative read of the supplier order rather than trusting the payload.

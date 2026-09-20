@@ -14,29 +14,29 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Domain: delicat-shop2topup\n"
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:597
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:621
 #, php-format
 msgid "%1$s fulfillment requires review (%2$s). No automatic customer refund was issued."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:469
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:472
 #, php-format
 msgid "%1$s sync could not run: %2$s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-balance.php:259
+#: delicat-shop2topup/includes/class-dst2t-balance.php:281
 #, php-format
 msgid "%1$s: %2$s"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:342
+#: delicat-shop2topup/includes/class-dst2t-admin.php:344
 #, php-format
 msgid "%d further selected item was left out: imports run 50 at a time. Import the rest in a second pass."
 msgid_plural "%d further selected items were left out: imports run 50 at a time. Import the rest in a second pass."
 msgstr[0] ""
 msgstr[1] ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:838
+#: delicat-shop2topup/includes/class-dst2t-admin.php:840
 #, php-format
 msgid "%d mapped products remain in the current sync cycle."
 msgstr ""
@@ -48,19 +48,19 @@ msgid_plural "%d need review"
 msgstr[0] ""
 msgstr[1] ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:336
+#: delicat-shop2topup/includes/class-dst2t-admin.php:338
 #, php-format
 msgid "%d product imported or updated as a draft."
 msgid_plural "%d products imported or updated as drafts."
 msgstr[0] ""
 msgstr[1] ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1145 delicat-shop2topup/includes/class-dst2t-balance.php:246
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1149 delicat-shop2topup/includes/class-dst2t-balance.php:268
 #, php-format
 msgid "%s ago"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:184
+#: delicat-shop2topup/includes/class-dst2t-product.php:187
 #, php-format
 msgid "%s fulfillment"
 msgstr ""
@@ -70,21 +70,21 @@ msgstr ""
 msgid "%s Integration"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:638
+#: delicat-shop2topup/includes/class-dst2t-product.php:692
 #, php-format
 msgid "%s is required."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:644
+#: delicat-shop2topup/includes/class-dst2t-product.php:698
 #, php-format
 msgid "%s must contain numbers only."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:658
+#: delicat-shop2topup/includes/class-dst2t-admin.php:660
 msgid "1 USD in store currency"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-balance.php:327
+#: delicat-shop2topup/includes/class-dst2t-balance.php:349
 #, php-format
 msgid "[%s] Top-up wallet balance is low"
 msgstr ""
@@ -93,98 +93,98 @@ msgstr ""
 msgid "A new private callback URL was generated. Register it upstream now — the previous one no longer accepts events."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:369
+#: delicat-shop2topup/includes/class-dst2t-admin.php:371
 msgid "A stored secret could only be read with a superseded encryption key — usually after a site URL change, a salt rotation, or a staging clone. Re-save your credentials so they are re-encrypted with the current key."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:129 delicat-shop2topup/includes/class-dst2t-product.php:198
+#: delicat-shop2topup/includes/class-dst2t-product.php:132 delicat-shop2topup/includes/class-dst2t-product.php:201
 msgid "Absolute max unit cost (USD)"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:418
+#: delicat-shop2topup/includes/class-dst2t-admin.php:420
 msgid "Account"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:421
+#: delicat-shop2topup/includes/class-dst2t-admin.php:423
 msgid "Account enabled"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:422
+#: delicat-shop2topup/includes/class-dst2t-admin.php:424
 msgid "Account verified"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:395 delicat-shop2topup/includes/class-dst2t-admin.php:849
+#: delicat-shop2topup/includes/class-dst2t-admin.php:397 delicat-shop2topup/includes/class-dst2t-admin.php:851
 msgid "Action Scheduler"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:542
+#: delicat-shop2topup/includes/class-dst2t-admin.php:544
 msgid "Actions"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:859
+#: delicat-shop2topup/includes/class-dst2t-admin.php:861
 msgid "Active URL"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:847
+#: delicat-shop2topup/includes/class-dst2t-admin.php:849
 msgid "AES-256-GCM available"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:640
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:664
 #, php-format
 msgid "All %s items are complete; other order items still control the WooCommerce status."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:638
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:662
 #, php-format
 msgid "All %s items were delivered and synchronized."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:738
+#: delicat-shop2topup/includes/class-dst2t-admin.php:740
 msgid "All sections"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:504
+#: delicat-shop2topup/includes/class-dst2t-admin.php:506
 msgid "All statuses"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:684
+#: delicat-shop2topup/includes/class-dst2t-admin.php:686
 msgid "Always import as draft"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:601
+#: delicat-shop2topup/includes/class-dst2t-admin.php:603
 msgid "API credentials"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:683
+#: delicat-shop2topup/includes/class-dst2t-admin.php:685
 msgid "Applies upstream stock when it is reported. A missing stock field is never read as zero."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:540
+#: delicat-shop2topup/includes/class-dst2t-admin.php:542
 msgid "Attempts"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:404
+#: delicat-shop2topup/includes/class-dst2t-admin.php:406
 #, php-format
 msgid "auto every %s"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:661
+#: delicat-shop2topup/includes/class-dst2t-admin.php:663
 msgid "Automatic catalog sync"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:607
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:631
 msgid "Automatic digital fulfillment paused for safe manual review."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:406
+#: delicat-shop2topup/includes/class-dst2t-admin.php:408
 msgid "automatic refresh is off"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:454
+#: delicat-shop2topup/includes/class-dst2t-admin.php:456
 msgid "Automation health"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:849
+#: delicat-shop2topup/includes/class-dst2t-admin.php:851
 msgid "Available"
 msgstr ""
 
@@ -197,19 +197,19 @@ msgstr ""
 msgid "Balance refresh failed: %s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:865
+#: delicat-shop2topup/includes/class-dst2t-admin.php:867
 msgid "Both accept correctly signed events. Only the active URL is unbranded; the compatibility URL exists so the upgrade never drops deliveries. Retire it in Settings once the provider panel is sending to the active URL."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:137
+#: delicat-shop2topup/includes/class-dst2t-product.php:140
 msgid "Cached provider data"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:857
+#: delicat-shop2topup/includes/class-dst2t-admin.php:859
 msgid "Callback endpoints"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:609
+#: delicat-shop2topup/includes/class-dst2t-admin.php:611
 msgid "Callback signing secret"
 msgstr ""
 
@@ -217,20 +217,20 @@ msgstr ""
 msgid "Catalog"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:656
+#: delicat-shop2topup/includes/class-dst2t-admin.php:658
 msgid "Catalog and import"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:348
+#: delicat-shop2topup/includes/class-dst2t-admin.php:350
 #, php-format
 msgid "Catalog import failed: %s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:350
+#: delicat-shop2topup/includes/class-dst2t-admin.php:352
 msgid "Catalog import stopped safely before an invalid product could be published."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:659
+#: delicat-shop2topup/includes/class-dst2t-admin.php:661
 msgid "Catalog markup"
 msgstr ""
 
@@ -239,48 +239,48 @@ msgstr ""
 msgid "Catalog sync batch finished. Processed %1$d, updated %2$d, errors %3$d."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:721
+#: delicat-shop2topup/includes/class-dst2t-admin.php:723
 #, php-format
 msgid "Catalog unavailable: %s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1117
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1121
 msgid "Checking"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:747
+#: delicat-shop2topup/includes/class-dst2t-admin.php:749
 msgid "Choose a category"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:318
+#: delicat-shop2topup/includes/class-dst2t-admin.php:320
 msgid "Choose at least one catalog item."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:610
+#: delicat-shop2topup/includes/class-dst2t-admin.php:612
 msgid "Clear secrets"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:653
+#: delicat-shop2topup/includes/class-dst2t-admin.php:655
 msgid "Compared with the cached cost. Set 0 to disable this relative guard."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:860
+#: delicat-shop2topup/includes/class-dst2t-admin.php:862
 msgid "Compatibility URL"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:651
+#: delicat-shop2topup/includes/class-dst2t-admin.php:653
 msgid "Complete WooCommerce orders automatically"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:436 delicat-shop2topup/includes/class-dst2t-admin.php:1113
+#: delicat-shop2topup/includes/class-dst2t-admin.php:438 delicat-shop2topup/includes/class-dst2t-admin.php:1117
 msgid "Completed"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:420
+#: delicat-shop2topup/includes/class-dst2t-admin.php:422
 msgid "Configured"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:650
+#: delicat-shop2topup/includes/class-dst2t-admin.php:652
 msgid "Confirms the player name and region before the customer pays."
 msgstr ""
 
@@ -302,15 +302,15 @@ msgstr ""
 msgid "Copied"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:685
+#: delicat-shop2topup/includes/class-dst2t-admin.php:687
 msgid "Copies the catalog image into your media library instead of hot-linking it, so no provider URL appears on your site."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:97 delicat-shop2topup/includes/class-dst2t-admin.php:473
+#: delicat-shop2topup/includes/class-dst2t-admin.php:97 delicat-shop2topup/includes/class-dst2t-admin.php:475
 msgid "Copy"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:773
+#: delicat-shop2topup/includes/class-dst2t-admin.php:775
 msgid "Cost"
 msgstr ""
 
@@ -318,11 +318,11 @@ msgstr ""
 msgid "Could not reach the provider."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:686
+#: delicat-shop2topup/includes/class-dst2t-admin.php:688
 msgid "Create product categories on import"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:420
+#: delicat-shop2topup/includes/class-dst2t-admin.php:422
 msgid "Credentials"
 msgstr ""
 
@@ -330,27 +330,27 @@ msgstr ""
 msgid "Dashboard"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:693
+#: delicat-shop2topup/includes/class-dst2t-admin.php:695
 msgid "Debug logging"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:852
+#: delicat-shop2topup/includes/class-dst2t-admin.php:854
 msgid "Define DELICAT_S2T_ENCRYPTION_KEY in wp-config.php before storing credentials so rotating WordPress salts cannot make saved secrets and historical voucher codes unreadable."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:694
+#: delicat-shop2topup/includes/class-dst2t-admin.php:696
 msgid "Delete data when the plugin is uninstalled"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:468
+#: delicat-shop2topup/includes/class-dst2t-admin.php:470
 msgid "Delivery callback"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:848
+#: delicat-shop2topup/includes/class-dst2t-admin.php:850
 msgid "derived from WordPress salts"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:690
+#: delicat-shop2topup/includes/class-dst2t-admin.php:692
 msgid "Diagnostics and cleanup"
 msgstr ""
 
@@ -358,71 +358,71 @@ msgstr ""
 msgid "Digital fulfillment retried by a store manager."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:797
+#: delicat-shop2topup/includes/class-dst2t-admin.php:799
 msgid "Direct top-up"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:642
+#: delicat-shop2topup/includes/class-dst2t-admin.php:644
 msgid "Email me on low balance"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:187
+#: delicat-shop2topup/includes/class-dst2t-product.php:190
 msgid "Enable for this variation"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:99
+#: delicat-shop2topup/includes/class-dst2t-product.php:102
 msgid "Enable fulfillment"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:847
+#: delicat-shop2topup/includes/class-dst2t-admin.php:849
 msgid "Encryption"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:848
+#: delicat-shop2topup/includes/class-dst2t-admin.php:850
 msgid "Encryption key"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:842
+#: delicat-shop2topup/includes/class-dst2t-admin.php:844
 msgid "Environment"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:669
+#: delicat-shop2topup/includes/class-dst2t-admin.php:671
 msgid "Every 12 hours"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:668
+#: delicat-shop2topup/includes/class-dst2t-admin.php:670
 msgid "Every 6 hours"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:667
+#: delicat-shop2topup/includes/class-dst2t-admin.php:669
 msgid "Every hour"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-plugin.php:133
+#: delicat-shop2topup/includes/class-dst2t-plugin.php:134
 msgid "Every minute (top-up reconciliation)"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:511 delicat-shop2topup/includes/class-dst2t-fulfillment.php:525
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:514 delicat-shop2topup/includes/class-dst2t-fulfillment.php:528
 msgid "Expires:"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1115
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1119
 msgid "Failed"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:686
+#: delicat-shop2topup/includes/class-dst2t-admin.php:688
 msgid "Files imported products under a WooCommerce category named after the game or service."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:509
+#: delicat-shop2topup/includes/class-dst2t-admin.php:511
 msgid "Filter"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:431
+#: delicat-shop2topup/includes/class-dst2t-admin.php:433
 msgid "Fulfillment queue"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:281
+#: delicat-shop2topup/includes/class-dst2t-admin.php:283
 msgid "Fulfillment queued for another attempt. Watch the status; no duplicate purchase can be made."
 msgstr ""
 
@@ -430,35 +430,35 @@ msgstr ""
 msgid "Fulfillment record synchronized."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:538
+#: delicat-shop2topup/includes/class-dst2t-admin.php:540
 msgid "Fulfillment reference"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:625
+#: delicat-shop2topup/includes/class-dst2t-admin.php:627
 msgid "Fulfillment references and the callback URL are shown masked until you reveal them."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:647
+#: delicat-shop2topup/includes/class-dst2t-admin.php:649
 msgid "Fulfillment safety"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:131
+#: delicat-shop2topup/includes/class-dst2t-product.php:134
 msgid "Fulfillment stops before purchase when the live supplier cost is above this amount."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:556
+#: delicat-shop2topup/includes/class-dst2t-product.php:577
 msgid "Game account details"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:745
+#: delicat-shop2topup/includes/class-dst2t-admin.php:747
 msgid "Game or service"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:481
+#: delicat-shop2topup/includes/class-dst2t-admin.php:483
 msgid "Generate a new callback URL"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:692
+#: delicat-shop2topup/includes/class-dst2t-product.php:746
 msgid "Genshin server"
 msgstr ""
 
@@ -466,186 +466,186 @@ msgstr ""
 msgid "Hide"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:624
+#: delicat-shop2topup/includes/class-dst2t-admin.php:626
 msgid "Hide the provider from the storefront"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:685
+#: delicat-shop2topup/includes/class-dst2t-admin.php:687
 msgid "Import product images"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:818
+#: delicat-shop2topup/includes/class-dst2t-admin.php:820
 msgid "Import selected products as drafts"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:814
+#: delicat-shop2topup/includes/class-dst2t-admin.php:816
 msgid "Imported products are always saved as drafts. Review the title, image, and selling price, then publish them yourself."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:630
+#: delicat-shop2topup/includes/class-dst2t-admin.php:632
 msgid "Imported SKU prefix"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1142
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1146
 #, php-format
 msgid "in %s"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:435
+#: delicat-shop2topup/includes/class-dst2t-admin.php:437
 msgid "In progress"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:776
+#: delicat-shop2topup/includes/class-dst2t-admin.php:778
 msgid "In store"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:624
+#: delicat-shop2topup/includes/class-dst2t-admin.php:626
 msgid "Inline the storefront assets, scrub provider names from imported catalog copy, strip fulfillment metadata from customer order views and emails, and hide the callback route from the public REST index."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:288
+#: delicat-shop2topup/includes/class-dst2t-admin.php:290
 msgid "Invalid product."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:771
+#: delicat-shop2topup/includes/class-dst2t-admin.php:773
 msgid "Item"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-balance.php:243
+#: delicat-shop2topup/includes/class-dst2t-balance.php:265
 msgid "just now"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:627
+#: delicat-shop2topup/includes/class-dst2t-admin.php:629
 msgid "Keep the old callback URL working"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:614
+#: delicat-shop2topup/includes/class-dst2t-admin.php:616
 msgid "Keeps the upstream provider out of your storefront, your customer emails, and your public REST index."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:607
+#: delicat-shop2topup/includes/class-dst2t-admin.php:609
 msgid "Key ID"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:608
+#: delicat-shop2topup/includes/class-dst2t-admin.php:610
 msgid "Key secret"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:478
+#: delicat-shop2topup/includes/class-dst2t-admin.php:480
 msgid "Last catalog sync"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:410
+#: delicat-shop2topup/includes/class-dst2t-admin.php:412
 #, php-format
 msgid "Last check failed: %s"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:477
+#: delicat-shop2topup/includes/class-dst2t-admin.php:479
 msgid "Last event received"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:423
+#: delicat-shop2topup/includes/class-dst2t-admin.php:425
 msgid "Last response time"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:476
+#: delicat-shop2topup/includes/class-dst2t-admin.php:478
 msgid "Last signed test"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:149
+#: delicat-shop2topup/includes/class-dst2t-product.php:152
 #, php-format
 msgid "last sync error: %s"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:570
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:593
 msgid "Live supplier cost increased beyond the configured safety limit. No supplier purchase was made."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:562
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:581
 msgid "Live supplier cost is above the product’s absolute maximum. No supplier purchase was made."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:753
+#: delicat-shop2topup/includes/class-dst2t-admin.php:755
 msgid "Load products"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:640
+#: delicat-shop2topup/includes/class-dst2t-admin.php:642
 msgid "Low balance alert"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:829
+#: delicat-shop2topup/includes/class-dst2t-admin.php:831
 msgid "Manual jobs"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1122
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1126
 msgid "Manual review"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:460
+#: delicat-shop2topup/includes/class-dst2t-admin.php:462
 msgid "Mapped products"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:625
+#: delicat-shop2topup/includes/class-dst2t-admin.php:627
 msgid "Mask identifiers in the dashboard"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:653
+#: delicat-shop2topup/includes/class-dst2t-admin.php:655
 msgid "Maximum cost increase"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:639
+#: delicat-shop2topup/includes/class-dst2t-admin.php:641
 msgid "minutes"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:683
+#: delicat-shop2topup/includes/class-dst2t-admin.php:685
 msgid "Mirror availability"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:420 delicat-shop2topup/includes/class-dst2t-admin.php:849
+#: delicat-shop2topup/includes/class-dst2t-admin.php:422 delicat-shop2topup/includes/class-dst2t-admin.php:851
 msgid "Missing"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-balance.php:261
+#: delicat-shop2topup/includes/class-dst2t-balance.php:283
 msgid "n/a"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:437
+#: delicat-shop2topup/includes/class-dst2t-admin.php:439
 msgid "Needs review"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:478
+#: delicat-shop2topup/includes/class-dst2t-admin.php:480
 msgid "never"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-balance.php:239
+#: delicat-shop2topup/includes/class-dst2t-balance.php:261
 msgid "never checked"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:684
+#: delicat-shop2topup/includes/class-dst2t-admin.php:686
 msgid "New and re-imported products are saved as drafts so you review the title, image, and selling price before they go live."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:815
+#: delicat-shop2topup/includes/class-dst2t-admin.php:817
 msgid "New products are saved as drafts. Re-imported products keep their current status because \"Always import as draft\" is off."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:458
+#: delicat-shop2topup/includes/class-dst2t-admin.php:460
 msgid "Next balance check"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:459
+#: delicat-shop2topup/includes/class-dst2t-admin.php:461
 msgid "Next catalog sync"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:457
+#: delicat-shop2topup/includes/class-dst2t-admin.php:459
 msgid "Next reconcile"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1132
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1136
 msgid "no"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:547
+#: delicat-shop2topup/includes/class-dst2t-admin.php:549
 msgid "No fulfillments recorded yet."
 msgstr ""
 
@@ -657,48 +657,48 @@ msgstr ""
 msgid "Not configured"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:804
+#: delicat-shop2topup/includes/class-dst2t-admin.php:806
 msgid "Not imported"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:141
+#: delicat-shop2topup/includes/class-dst2t-product.php:144
 msgid "Not refreshed yet"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1138
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1142
 msgid "not scheduled"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:459
+#: delicat-shop2topup/includes/class-dst2t-admin.php:461
 msgid "off"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:666
+#: delicat-shop2topup/includes/class-dst2t-admin.php:668
 msgid "Off"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:694
+#: delicat-shop2topup/includes/class-dst2t-admin.php:696
 msgid "Off by default. Keep it off during upgrades."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:670
+#: delicat-shop2topup/includes/class-dst2t-admin.php:672
 msgid "Once a day"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:628
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:652
 #, php-format
 msgid "One or more %s items require manual review. Provider and WooCommerce states were preserved."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:604
+#: delicat-shop2topup/includes/class-dst2t-admin.php:606
 msgid "One or more credentials are controlled by wp-config.php and override saved values."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:866
+#: delicat-shop2topup/includes/class-dst2t-admin.php:868
 msgid "Only the active URL accepts events. The original provider-named path is no longer served."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:651
+#: delicat-shop2topup/includes/class-dst2t-admin.php:653
 msgid "Only when every line item is mapped and every upstream item is completed."
 msgstr ""
 
@@ -706,15 +706,15 @@ msgstr ""
 msgid "OpenSSL is required to store top-up credentials securely."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:847
+#: delicat-shop2topup/includes/class-dst2t-admin.php:849
 msgid "OpenSSL missing"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:130
+#: delicat-shop2topup/includes/class-dst2t-product.php:133
 msgid "Optional"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:537
+#: delicat-shop2topup/includes/class-dst2t-admin.php:539
 msgid "Order"
 msgstr ""
 
@@ -727,68 +727,68 @@ msgstr ""
 msgid "Paid order is waiting for verified %s delivery."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1114
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1118
 msgid "Partial"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1110
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1114
 msgid "Pending"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:845
+#: delicat-shop2topup/includes/class-dst2t-admin.php:847
 msgid "PHP"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:688
+#: delicat-shop2topup/includes/class-dst2t-product.php:742
 msgid "Player ID"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:504 delicat-shop2topup/includes/class-dst2t-product.php:530
+#: delicat-shop2topup/includes/class-dst2t-product.php:516 delicat-shop2topup/includes/class-dst2t-product.php:542
 msgid "Player name"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:711
+#: delicat-shop2topup/includes/class-dst2t-product.php:765
 msgid "Player not found. Check the player ID and zone."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:710
+#: delicat-shop2topup/includes/class-dst2t-product.php:764
 msgid "Player verification is temporarily unavailable. Your ID has not been rejected. Please try again shortly."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:633 delicat-shop2topup/includes/class-dst2t-product.php:641
+#: delicat-shop2topup/includes/class-dst2t-product.php:687 delicat-shop2topup/includes/class-dst2t-product.php:695
 #, php-format
 msgid "Please choose a valid value for %s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:844
+#: delicat-shop2topup/includes/class-dst2t-admin.php:846
 msgid "Plugin version"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1119
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1123
 msgid "Price blocked"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1111
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1115
 msgid "Processing"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:617
+#: delicat-shop2topup/includes/class-dst2t-admin.php:619
 msgid "Provider label"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1108
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1112
 msgid "Queued"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:486
+#: delicat-shop2topup/includes/class-dst2t-admin.php:488
 msgid "Recent fulfillments"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:449
+#: delicat-shop2topup/includes/class-dst2t-admin.php:451
 msgid "Reconcile now"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:834
+#: delicat-shop2topup/includes/class-dst2t-admin.php:836
 msgid "Reconcile pending orders"
 msgstr ""
 
@@ -796,31 +796,31 @@ msgstr ""
 msgid "Reconciliation requested. Check the order list and logs for results; rate limits may defer checks."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:772
+#: delicat-shop2topup/includes/class-dst2t-admin.php:774
 msgid "Reference"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:833
+#: delicat-shop2topup/includes/class-dst2t-admin.php:835
 msgid "Refresh balance"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:802 delicat-shop2topup/includes/class-dst2t-product.php:156
+#: delicat-shop2topup/includes/class-dst2t-admin.php:804 delicat-shop2topup/includes/class-dst2t-product.php:159
 msgid "Refresh from provider"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:639
+#: delicat-shop2topup/includes/class-dst2t-admin.php:641
 msgid "Refresh interval"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:413
+#: delicat-shop2topup/includes/class-dst2t-admin.php:415
 msgid "Refresh now"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:678
+#: delicat-shop2topup/includes/class-dst2t-admin.php:680
 msgid "Refreshes cached costs, requirement fields, and availability for mapped products in small batches."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:638
+#: delicat-shop2topup/includes/class-dst2t-admin.php:640
 msgid "Refreshes the wallet balance in the background and while the dashboard is open."
 msgstr ""
 
@@ -828,47 +828,47 @@ msgstr ""
 msgid "Refreshing…"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1116
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1120
 msgid "Refunded"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:691
+#: delicat-shop2topup/includes/class-dst2t-product.php:745
 msgid "Region"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:469
+#: delicat-shop2topup/includes/class-dst2t-admin.php:471
 msgid "Register this exact HTTPS callback in the provider panel. The URL contains a private token, so treat it like a password."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:610
+#: delicat-shop2topup/includes/class-dst2t-admin.php:612
 msgid "Remove all credentials saved in WordPress (constants are unchanged)"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:115
+#: delicat-shop2topup/includes/class-dst2t-product.php:118
 msgid "Require secure voucher codes in the completed supplier response."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:292
+#: delicat-shop2topup/includes/class-dst2t-admin.php:294
 msgid "Requirements, live cost, and availability refreshed."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:860
+#: delicat-shop2topup/includes/class-dst2t-admin.php:862
 msgid "retired"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:582
+#: delicat-shop2topup/includes/class-dst2t-admin.php:584
 msgid "Retry"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:577
+#: delicat-shop2topup/includes/class-dst2t-admin.php:579
 msgid "Retry this fulfillment? A held order is returned to processing. The provider order is looked up first, so nothing can be purchased twice."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1112
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1116
 msgid "Retrying"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:94 delicat-shop2topup/includes/class-dst2t-admin.php:472 delicat-shop2topup/includes/class-dst2t-brand.php:123
+#: delicat-shop2topup/includes/class-dst2t-admin.php:94 delicat-shop2topup/includes/class-dst2t-admin.php:474 delicat-shop2topup/includes/class-dst2t-brand.php:123
 msgid "Reveal"
 msgstr ""
 
@@ -876,27 +876,27 @@ msgstr ""
 msgid "Reveal identifier"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:835
+#: delicat-shop2topup/includes/class-dst2t-admin.php:837
 msgid "Run one catalog sync batch"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:704
+#: delicat-shop2topup/includes/class-dst2t-admin.php:706
 msgid "Save API credentials before browsing the live catalog."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:697
+#: delicat-shop2topup/includes/class-dst2t-admin.php:699
 msgid "Save settings"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:456
+#: delicat-shop2topup/includes/class-dst2t-admin.php:458
 msgid "Scheduler"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:602
+#: delicat-shop2topup/includes/class-dst2t-admin.php:604
 msgid "Secrets are encrypted at rest with AES-256-GCM. For the strongest protection, define the DELICAT_S2T_* constants in wp-config.php, including a stable encryption key."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:736
+#: delicat-shop2topup/includes/class-dst2t-admin.php:738
 msgid "Section"
 msgstr ""
 
@@ -904,32 +904,32 @@ msgstr ""
 msgid "Secure random generation failed."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:569
+#: delicat-shop2topup/includes/class-dst2t-product.php:590
 msgid "Select an option"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:100
+#: delicat-shop2topup/includes/class-dst2t-product.php:103
 #, php-format
 msgid "Send this product to %s only after WooCommerce confirms payment."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:642
+#: delicat-shop2topup/includes/class-dst2t-admin.php:644
 msgid "Sends at most one message every six hours to the WooCommerce stock notification recipient."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:508 delicat-shop2topup/includes/class-dst2t-fulfillment.php:522
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:511 delicat-shop2topup/includes/class-dst2t-fulfillment.php:525
 msgid "Serial:"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:690
+#: delicat-shop2topup/includes/class-dst2t-product.php:744
 msgid "Server"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:626
+#: delicat-shop2topup/includes/class-dst2t-admin.php:628
 msgid "Serves the callback from a neutral REST route with a secret token."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:134 delicat-shop2topup/includes/class-dst2t-plugin.php:153
+#: delicat-shop2topup/includes/class-dst2t-admin.php:134 delicat-shop2topup/includes/class-dst2t-plugin.php:154
 msgid "Settings"
 msgstr ""
 
@@ -941,31 +941,31 @@ msgstr ""
 msgid "Settled fulfillments cannot be retried. Use Sync to re-read the current state."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:643
+#: delicat-shop2topup/includes/class-dst2t-admin.php:645
 msgid "Show the balance in the admin bar"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:620
+#: delicat-shop2topup/includes/class-dst2t-admin.php:622
 msgid "Shown everywhere in WordPress instead of the provider name, including this menu entry."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:632
+#: delicat-shop2topup/includes/class-dst2t-admin.php:634
 msgid "SKUs are visible to customers, so this prefix should not identify the provider. Existing SKUs are never renamed."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:502 delicat-shop2topup/includes/class-dst2t-admin.php:539
+#: delicat-shop2topup/includes/class-dst2t-admin.php:504 delicat-shop2topup/includes/class-dst2t-admin.php:541
 msgid "Status"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1118
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1122
 msgid "Submission failed"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1109
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1113
 msgid "Submitting"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:121 delicat-shop2topup/includes/class-dst2t-product.php:194
+#: delicat-shop2topup/includes/class-dst2t-product.php:124 delicat-shop2topup/includes/class-dst2t-product.php:197
 msgid "Supplier category ID"
 msgstr ""
 
@@ -973,7 +973,7 @@ msgstr ""
 msgid "Supplier fulfillment did not start because the local idempotency record could not be stored."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:106 delicat-shop2topup/includes/class-dst2t-product.php:190
+#: delicat-shop2topup/includes/class-dst2t-product.php:109 delicat-shop2topup/includes/class-dst2t-product.php:193
 msgid "Supplier item ID"
 msgstr ""
 
@@ -985,15 +985,15 @@ msgstr ""
 msgid "Supplier price changed repeatedly. No supplier purchase was made."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:613
+#: delicat-shop2topup/includes/class-dst2t-admin.php:615
 msgid "Supplier privacy"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:574
+#: delicat-shop2topup/includes/class-dst2t-admin.php:576
 msgid "Sync"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:145
+#: delicat-shop2topup/includes/class-dst2t-product.php:148
 #, php-format
 msgid "synced %s ago"
 msgstr ""
@@ -1007,21 +1007,25 @@ msgstr ""
 msgid "Synchronization failed: %s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:476
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:479
 #, php-format
 msgid "Synchronize %s status"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:426 delicat-shop2topup/includes/class-dst2t-admin.php:832
+#: delicat-shop2topup/includes/class-dst2t-admin.php:428 delicat-shop2topup/includes/class-dst2t-admin.php:834
 msgid "Test connection"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-balance.php:332
+#: delicat-shop2topup/includes/class-dst2t-balance.php:354
 #, php-format
 msgid "The automatic top-up wallet balance is %1$s, below your threshold of %2$s.\n\nDigital orders will start failing when the wallet runs out.\n\nDashboard: %3$s"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:712
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:592
+msgid "The cached cost for this product is zero, so the safety limit is zero and no purchase can be made. Refresh the product from the provider, then retry."
+msgstr ""
+
+#: delicat-shop2topup/includes/class-dst2t-product.php:766
 msgid "The game server could not validate this player. Please try again."
 msgstr ""
 
@@ -1029,15 +1033,15 @@ msgstr ""
 msgid "The mapped item, quantity, or delivery details changed after the supplier intent was created. Fulfillment stopped to protect idempotency."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:627
+#: delicat-shop2topup/includes/class-dst2t-admin.php:629
 msgid "The original URL contains the provider name. Leave this on until the provider panel is sending to the new URL and you have seen an event arrive, then turn it off to remove that path entirely."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:714
+#: delicat-shop2topup/includes/class-dst2t-product.php:768
 msgid "The player details do not match this product."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:295
+#: delicat-shop2topup/includes/class-dst2t-admin.php:297
 msgid "The product could not be refreshed."
 msgstr ""
 
@@ -1045,7 +1049,7 @@ msgstr ""
 msgid "The secret could not be encrypted."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:716
+#: delicat-shop2topup/includes/class-dst2t-product.php:770
 msgid "The top-up service is temporarily unavailable. Please try again shortly."
 msgstr ""
 
@@ -1053,7 +1057,7 @@ msgstr ""
 msgid "The WooCommerce order or line item no longer exists."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:757
+#: delicat-shop2topup/includes/class-dst2t-admin.php:759
 msgid "This category has no items right now."
 msgstr ""
 
@@ -1061,11 +1065,15 @@ msgstr ""
 msgid "This order was cancelled or refunded. Fulfillment is intentionally not retried."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:713
+#: delicat-shop2topup/includes/class-dst2t-product.php:767
 msgid "This player is registered in a different region."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-plugin.php:159
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:580
+msgid "This product’s absolute maximum cost is set to zero, so no purchase can be made. Set a real ceiling or clear the field."
+msgstr ""
+
+#: delicat-shop2topup/includes/class-dst2t-plugin.php:160
 msgid "This top-up integration requires WooCommerce to be installed and active."
 msgstr ""
 
@@ -1073,28 +1081,28 @@ msgstr ""
 msgid "Tools"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1019 delicat-shop2topup/includes/class-dst2t-admin.php:1023
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1021 delicat-shop2topup/includes/class-dst2t-admin.php:1025
 msgid "Top-up"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-plugin.php:145
+#: delicat-shop2topup/includes/class-dst2t-plugin.php:146
 msgid "Top-up catalog synchronization"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:619 delicat-shop2topup/includes/class-dst2t-brand.php:42
+#: delicat-shop2topup/includes/class-dst2t-admin.php:621 delicat-shop2topup/includes/class-dst2t-brand.php:42
 msgid "Top-Up Provider"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:379
+#: delicat-shop2topup/includes/class-dst2t-admin.php:381
 #, php-format
 msgid "Top-up wallet balance is %1$s, below your alert threshold of %2$s. Digital orders will fail once the wallet is empty."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-plugin.php:139
+#: delicat-shop2topup/includes/class-dst2t-plugin.php:140
 msgid "Top-up wallet balance refresh"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:775
+#: delicat-shop2topup/includes/class-dst2t-admin.php:777
 msgid "Type"
 msgstr ""
 
@@ -1102,7 +1110,7 @@ msgstr ""
 msgid "unavailable"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:380 delicat-shop2topup/includes/class-dst2t-admin.php:1130
+#: delicat-shop2topup/includes/class-dst2t-admin.php:382 delicat-shop2topup/includes/class-dst2t-admin.php:1134
 msgid "unknown"
 msgstr ""
 
@@ -1110,47 +1118,47 @@ msgstr ""
 msgid "Unknown fulfillment record."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:638
+#: delicat-shop2topup/includes/class-dst2t-admin.php:640
 msgid "Update the balance automatically"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:682
+#: delicat-shop2topup/includes/class-dst2t-admin.php:684
 msgid "Update WooCommerce prices during sync"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:541
+#: delicat-shop2topup/includes/class-dst2t-admin.php:543
 msgid "Updated (UTC)"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:626
+#: delicat-shop2topup/includes/class-dst2t-admin.php:628
 msgid "Use an unbranded private callback URL"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:682
+#: delicat-shop2topup/includes/class-dst2t-admin.php:684
 msgid "Uses the exchange rate and markup above. A sale price you set by hand is never overwritten."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:650
+#: delicat-shop2topup/includes/class-dst2t-admin.php:652
 msgid "Validate the player before checkout"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:715
+#: delicat-shop2topup/includes/class-dst2t-product.php:769
 msgid "Validation is temporarily busy. Please wait a moment and try again."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:643
+#: delicat-shop2topup/includes/class-dst2t-admin.php:645
 msgid "Visible only to users who can manage WooCommerce."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:797
+#: delicat-shop2topup/includes/class-dst2t-admin.php:799
 msgid "Voucher"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:518
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:521
 msgid "Voucher codes"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:504
+#: delicat-shop2topup/includes/class-dst2t-fulfillment.php:507
 msgid "Voucher codes:"
 msgstr ""
 
@@ -1158,19 +1166,19 @@ msgstr ""
 msgid "Voucher delivery was completed, but the codes could not be stored securely."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1120
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1124
 msgid "Voucher missing"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1121
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1125
 msgid "Voucher storage error"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:114 delicat-shop2topup/includes/class-dst2t-product.php:202
+#: delicat-shop2topup/includes/class-dst2t-product.php:117 delicat-shop2topup/includes/class-dst2t-product.php:205
 msgid "Voucher-code product"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:399 delicat-shop2topup/includes/class-dst2t-admin.php:636
+#: delicat-shop2topup/includes/class-dst2t-admin.php:401 delicat-shop2topup/includes/class-dst2t-admin.php:638
 msgid "Wallet balance"
 msgstr ""
 
@@ -1179,43 +1187,43 @@ msgstr ""
 msgid "Wallet balance updated: %s."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:640
+#: delicat-shop2topup/includes/class-dst2t-admin.php:642
 msgid "Warn when the wallet falls below this amount. Set 0 to disable."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:718
+#: delicat-shop2topup/includes/class-dst2t-product.php:772
 msgid "We could not validate these game details. Please check them and try again."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:458
+#: delicat-shop2topup/includes/class-dst2t-product.php:470
 msgid "We could not validate these game details. Please try again."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:846
+#: delicat-shop2topup/includes/class-dst2t-admin.php:848
 msgid "WooCommerce"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:869
+#: delicat-shop2topup/includes/class-dst2t-admin.php:871
 msgid "WP-CLI:"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:848
+#: delicat-shop2topup/includes/class-dst2t-admin.php:850
 msgid "wp-config.php constant"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:395
+#: delicat-shop2topup/includes/class-dst2t-admin.php:397
 msgid "WP-Cron fallback"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:463
+#: delicat-shop2topup/includes/class-dst2t-admin.php:465
 msgid "WP-Cron is disabled and Action Scheduler is unavailable. Configure a server cron or background jobs will not run."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:693
+#: delicat-shop2topup/includes/class-dst2t-admin.php:695
 msgid "Writes redacted request timing to WooCommerce logs. Player details and secrets are never logged."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1132
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1136
 msgid "yes"
 msgstr ""
 
@@ -1223,14 +1231,14 @@ msgstr ""
 msgid "You do not have permission to manage this integration."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:1171
+#: delicat-shop2topup/includes/class-dst2t-admin.php:1175
 msgid "You do not have permission to perform this action."
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:774
+#: delicat-shop2topup/includes/class-dst2t-admin.php:776
 msgid "Your price"
 msgstr ""
 
-#: delicat-shop2topup/includes/class-dst2t-product.php:689
+#: delicat-shop2topup/includes/class-dst2t-product.php:743
 msgid "Zone ID"
 msgstr ""
