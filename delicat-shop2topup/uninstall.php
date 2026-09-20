@@ -72,6 +72,8 @@ foreach (
 		'dst2t_sync_state',
 		'dst2t_sync_scheduled_interval',
 		'dst2t_sku_salt',
+		'dst2t_webhook_verify_until',
+		'dst2t_unverified_callbacks',
 	) as $option
 ) {
 	delete_option( $option );

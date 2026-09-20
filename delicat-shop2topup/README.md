@@ -76,6 +76,28 @@ with a 32-character secret token, e.g. `https://example.com/wp-json/store-callba
 like a password; **Generate a new callback URL** rotates it, and the old one stops accepting events
 immediately.
 
+### Registering the URL in the provider panel
+
+The provider validates a callback URL before it will save it: it sends an **unsigned POST** and requires a
+**2xx** response. An endpoint that answers 401 or 404 to that probe can never be registered.
+
+The private URL answers `200` to any request it cannot authenticate, because the secret token in its path
+already proves the caller knows the address — and nothing is processed. So pasting it into the provider panel
+and saving just works, **including before you have entered a signing secret**, which matters because some
+panels only reveal the secret after the URL is saved.
+
+The compatibility URL is guessable, so it refuses that probe by default. If you are registering *that* URL,
+press **Allow verification for 15 minutes** on the dashboard first.
+
+**Test this URL from here** posts to your own callback URL exactly as the provider does — once unsigned, once
+correctly signed — and reports both status codes. That separates "the URL is unreachable" (a firewall, a
+security plugin, a host that blocks loopback, or a URL that simply is not served) from "the signing secret does
+not match".
+
+Callbacks that arrive but cannot be authenticated are counted and shown on the dashboard, so a mismatched
+signing secret appears as a visible warning instead of as silence. Reconciliation keeps orders correct
+regardless; only the speed-up is affected.
+
 The original `delicat-shop2topup/v1/webhook` route — whose *path* names the provider — stays registered so
 upgrading never drops a delivery. Once the provider panel is pointed at the new URL and you have seen an event
 arrive, turn off **Keep the old callback URL working** in Settings and that path stops being served at all.

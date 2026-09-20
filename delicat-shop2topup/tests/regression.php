@@ -259,6 +259,29 @@ $raw=json_encode($payload); $sig=['x-shop2topup-signature'=>'sha256='.hash_hmac(
 $good=$web->receive_private(new WP_REST_Request($raw,$sig,['token'=>$token]));
 $bad=$web->receive_private(new WP_REST_Request($raw,$sig,['token'=>str_repeat('0',32)]));
 check($good->status===200,'A correctly signed callback on the private URL is accepted');
+// The provider registers a URL by POSTing to it unsigned and refuses to save
+// anything that does not answer 2xx. The secret token in the path is what makes
+// answering safe: an unsigned body is acknowledged, never processed.
+DST2T_Webhook::clear_unverified();
+$jobs_before=count($GLOBALS['jobs']);
+$probe=$web->receive_private(new WP_REST_Request('{}',[],['token'=>$token]));
+check($probe->status===200 && !empty($probe->data['received']),'An unsigned validation POST on the secret URL is answered 2xx');
+check(count($GLOBALS['jobs'])===$jobs_before,'The validation POST is acknowledged without processing anything');
+check(DST2T_Webhook::unverified_state()['count']===1 && DST2T_Webhook::unverified_state()['reason']==='invalid_signature','Unauthenticated callbacks are counted so a wrong signing secret is visible');
+$web->receive_private(new WP_REST_Request($raw,$sig,['token'=>$token]));
+check(DST2T_Webhook::unverified_state()['count']===0,'A verified callback clears the warning');
+// Same probe on the guessable compatibility URL is still refused...
+check($web->receive(new WP_REST_Request('{}',[]))->status!==200,'The same unsigned probe on the compatibility URL is refused by default');
+// ...unless the operator deliberately opens a verification window for it.
+DST2T_Webhook::open_verification(60);
+check(DST2T_Webhook::verification_open() && $web->receive(new WP_REST_Request('{}',[]))->status===200,'An open verification window lets the compatibility URL be validated too');
+DST2T_Webhook::close_verification();
+check(!DST2T_Webhook::verification_open() && $web->receive(new WP_REST_Request('{}',[]))->status!==200,'The verification window closes again');
+// A URL probe must succeed even before any signing secret has been saved.
+settings_with(['webhook_secret'=>'']); $GLOBALS['options']['dst2t_settings']['webhook_secret']='';
+$unset=$web->receive_private(new WP_REST_Request('{}',[],['token'=>$token]));
+defaults_restore();
+check($unset->status===200,'The URL validates before a signing secret has been entered');
 check($bad->status===404 && ($bad->data['code'] ?? '')==='INVALID_ENDPOINT','The private callback rejects a wrong token even when the signature is valid');
 defaults_restore();
 check(strpos(DST2T_Webhook::url(),$token)!==false && strpos(DST2T_Webhook::url(),'shop2topup')===false,'The active callback URL is unbranded');
@@ -384,7 +407,7 @@ $syncer->run(1);
 check($GLOBALS['wc_products'][303]->get_stock_status()==='outofstock' && get_post_meta(303,DST2T_Product::META_SYNC_ERROR)==='ITEM_NOT_FOUND','A withdrawn item goes out of stock instead of disappearing');
 
 // ------------------------------------------------------------ endpoint guards
-$guarded=['retry_order','sync_order','refresh_balance','sync_catalog','rotate_webhook','refresh_product','import_catalog','save_settings','test_connection','sync_now','rewrite_skus'];
+$guarded=['retry_order','sync_order','refresh_balance','sync_catalog','rotate_webhook','refresh_product','import_catalog','save_settings','test_connection','sync_now','rewrite_skus','open_verification','selftest_webhook'];
 function guard_failures($admin,$handlers,$expected) {
 	$leaked=[];
 	foreach ($handlers as $handler) {

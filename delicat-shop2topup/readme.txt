@@ -125,6 +125,14 @@ chooses a variation.
 No. It places the WooCommerce order on hold and preserves both states for review. Refunds require a store
 manager because payment gateways and business rules differ.
 
+= The provider says my webhook URL failed validation. =
+
+The provider validates a URL by sending an unsigned POST and requires a 2xx reply. Use the private callback URL
+from the dashboard — it answers 2xx to that check because its secret token already proves the caller knows the
+address, and it does so even before a signing secret is saved. Press "Test this URL from here" on the dashboard
+to see what your own server answers. If you are registering the compatibility URL instead, press "Allow
+verification for 15 minutes" first.
+
 = What happens if a callback is missed? =
 
 A once-per-minute Action Scheduler task reads pending UUIDs in batches of up to 50. This stays within the
@@ -160,6 +168,9 @@ response bodies are not logged.
   acknowledged instead of rejected.
 * New WP-CLI commands: `balance`, `sync`, `webhook`.
 * Opaque public SKUs, with a Tools action to replace provider-derived SKUs left by earlier versions.
+* The private callback URL now answers 2xx to the provider's unsigned URL-validation POST, so it can actually
+  be registered; a dashboard self-test posts to your own URL the same way the provider does, and callbacks
+  that fail authentication are counted and surfaced instead of being dropped silently.
 * OPTIONS probes can no longer discover the callback route, and an unsigned request is answered as a missing
   route rather than confirming the integration.
 * Uninstall now also removes hashed order-note markers, plugin transients, and the new options.

@@ -136,34 +136,34 @@ msgstr "Produit avec code"
 msgid "Absolute max unit cost (USD)"
 msgstr "Coût unitaire maximal absolu (USD)"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:132
+#: delicat-shop2topup/includes/class-dst2t-admin.php:134
 msgid "Dashboard"
 msgstr "Tableau de bord"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:133
+#: delicat-shop2topup/includes/class-dst2t-admin.php:135
 msgid "Catalog"
 msgstr "Catalogue"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:135 delicat-shop2topup/includes/class-dst2t-plugin.php:154
+#: delicat-shop2topup/includes/class-dst2t-admin.php:137 delicat-shop2topup/includes/class-dst2t-plugin.php:154
 msgid "Settings"
 msgstr "Réglages"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:491 delicat-shop2topup/includes/class-dst2t-admin.php:897
+#: delicat-shop2topup/includes/class-dst2t-admin.php:575 delicat-shop2topup/includes/class-dst2t-admin.php:1004
 msgid "Test connection"
 msgstr "Tester la connexion"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:762
+#: delicat-shop2topup/includes/class-dst2t-admin.php:869
 msgid "Save settings"
 msgstr "Enregistrer les réglages"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:716
+#: delicat-shop2topup/includes/class-dst2t-admin.php:823
 msgid "Complete WooCommerce orders automatically"
 msgstr "Terminer automatiquement les commandes WooCommerce"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:718
+#: delicat-shop2topup/includes/class-dst2t-admin.php:825
 msgid "Maximum cost increase"
 msgstr "Augmentation maximale du coût"
 
-#: delicat-shop2topup/includes/class-dst2t-admin.php:758
+#: delicat-shop2topup/includes/class-dst2t-admin.php:865
 msgid "Debug logging"
 msgstr "Journalisation de débogage"

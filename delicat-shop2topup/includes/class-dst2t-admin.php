@@ -57,6 +57,8 @@ final class DST2T_Admin {
 		add_action( 'admin_post_dst2t_sync_order', array( $this, 'sync_order' ) );
 		add_action( 'admin_post_dst2t_retry_order', array( $this, 'retry_order' ) );
 		add_action( 'admin_post_dst2t_rewrite_skus', array( $this, 'rewrite_skus' ) );
+		add_action( 'admin_post_dst2t_open_verification', array( $this, 'open_verification' ) );
+		add_action( 'admin_post_dst2t_selftest_webhook', array( $this, 'selftest_webhook' ) );
 
 		// Fulfillment state on the WooCommerce order list, HPOS and legacy.
 		add_filter( 'manage_edit-shop_order_columns', array( $this, 'order_column' ) );
@@ -292,6 +294,88 @@ final class DST2T_Admin {
 	 * unauthenticated Store API. Rewriting is an explicit operator decision
 	 * because a SKU may already appear on invoices and in external systems.
 	 */
+	/** Opens the window in which the provider may validate the callback URL. */
+	public function open_verification() {
+		$this->authorize( 'dst2t_open_verification' );
+		DST2T_Webhook::open_verification();
+		$this->redirect_with_notice(
+			'dashboard',
+			'success',
+			sprintf(
+				/* translators: %d: number of minutes. */
+				__( 'Endpoint verification is open for %d minutes. Save the callback URL in the provider panel now.', 'delicat-shop2topup' ),
+				(int) round( DST2T_Webhook::VERIFY_WINDOW / MINUTE_IN_SECONDS )
+			)
+		);
+	}
+
+	/**
+	 * Posts to this site's own callback URL exactly as the provider does.
+	 *
+	 * The first request is unsigned, which is what a provider sends when it
+	 * validates a URL before saving it; the second is correctly signed. Between
+	 * them they separate "the URL is unreachable" from "the signing secret is
+	 * wrong" without waiting on the provider panel.
+	 */
+	public function selftest_webhook() {
+		$this->authorize( 'dst2t_selftest_webhook' );
+
+		$url   = DST2T_Webhook::url();
+		$probe = $this->post_to_callback( $url, '{}', array() );
+
+		$secret = $this->settings->webhook_secret();
+		$signed = null;
+		if ( '' !== $secret ) {
+			$payload = wp_json_encode( array( 'event' => 'webhook.test', 'timestamp' => gmdate( 'c' ), 'data' => array() ) );
+			$signed  = $this->post_to_callback(
+				$url,
+				$payload,
+				array(
+					'x-shop2topup-signature' => 'sha256=' . hash_hmac( 'sha256', $payload, $secret ),
+					'x-shop2topup-event'     => 'webhook.test',
+				)
+			);
+		}
+
+		$lines = array(
+			sprintf(
+				/* translators: %s: HTTP status code or transport error. */
+				__( 'Unsigned validation POST (what the provider sends first): %s', 'delicat-shop2topup' ),
+				$probe
+			),
+		);
+		$lines[] = null === $signed
+			? __( 'Signed test: skipped, no signing secret is saved yet.', 'delicat-shop2topup' )
+			: sprintf( /* translators: %s: HTTP status code or transport error. */ __( 'Signed test callback: %s', 'delicat-shop2topup' ), $signed );
+
+		$ok = '200' === (string) $probe;
+		if ( ! $ok ) {
+			$lines[] = __( 'The provider will refuse to save a URL that does not answer 2xx. If this says 404, the plugin is not serving that URL — check the URL you pasted. If it is a transport error, this server cannot reach its own public URL, which usually means a firewall, a security plugin, or a host that blocks loopback requests.', 'delicat-shop2topup' );
+		}
+
+		$this->redirect_with_notice( 'dashboard', $ok ? 'success' : 'error', implode( ' | ', $lines ) );
+	}
+
+	/**
+	 * @return string HTTP status code, or a transport error message.
+	 */
+	private function post_to_callback( $url, $body, $headers ) {
+		$response = wp_remote_post(
+			$url,
+			array(
+				'timeout'     => 20,
+				'redirection' => 0,
+				'sslverify'   => true,
+				'headers'     => array_merge( array( 'Content-Type' => 'application/json' ), $headers ),
+				'body'        => $body,
+			)
+		);
+		if ( is_wp_error( $response ) ) {
+			return sanitize_text_field( $response->get_error_message() );
+		}
+		return (string) absint( wp_remote_retrieve_response_code( $response ) );
+	}
+
 	public function rewrite_skus() {
 		$this->authorize( 'dst2t_rewrite_skus' );
 
@@ -537,14 +621,37 @@ final class DST2T_Admin {
 					<button type="button" class="button" data-dst2t-toggle-url><?php esc_html_e( 'Reveal', 'delicat-shop2topup' ); ?></button>
 					<button type="button" class="button" data-dst2t-copy-url><?php esc_html_e( 'Copy', 'delicat-shop2topup' ); ?></button>
 				</div>
+				<?php $unverified = DST2T_Webhook::unverified_state(); ?>
+				<?php if ( DST2T_Webhook::verification_open() ) : ?>
+					<div class="notice notice-info inline"><p><?php echo esc_html( sprintf( /* translators: %s: human readable duration. */ __( 'Endpoint verification is open for another %s. Any caller reaching this URL is answered 2xx without anything being processed.', 'delicat-shop2topup' ), human_time_diff( time(), time() + DST2T_Webhook::verification_remaining() ) ) ); ?></p></div>
+				<?php endif; ?>
+				<?php if ( $unverified['count'] > 0 ) : ?>
+					<div class="notice notice-warning inline"><p>
+						<?php
+						echo esc_html(
+							sprintf(
+								/* translators: 1: number of callbacks, 2: reason code, 3: human readable time difference. */
+								_n( '%1$d callback could not be authenticated (%2$s, %3$s ago). Nothing was processed.', '%1$d callbacks could not be authenticated (%2$s, most recently %3$s ago). Nothing was processed.', (int) $unverified['count'], 'delicat-shop2topup' ),
+								(int) $unverified['count'],
+								$unverified['reason'] ? $unverified['reason'] : 'unknown',
+								$unverified['last'] ? human_time_diff( (int) $unverified['last'], time() ) : '—'
+							)
+						);
+						?>
+						<?php esc_html_e( 'If the provider panel has already been saved, the signing secret here does not match theirs. Reconciliation still keeps orders correct; only the speed-up is affected.', 'delicat-shop2topup' ); ?>
+					</p></div>
+				<?php endif; ?>
 				<ul class="dst2t-list">
 					<li><span><?php esc_html_e( 'Last signed test', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( get_option( 'dst2t_last_webhook_test', '—' ) ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Last event received', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $webhook['at'] ? $webhook['event'] . ' · ' . $this->when( (int) $webhook['at'] ) : '—' ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Last catalog sync', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $sync['last_run'] ? $this->when( (int) $sync['last_run'] ) : __( 'never', 'delicat-shop2topup' ) ); ?></strong></li>
 				</ul>
 				<p class="dst2t-actions">
+					<?php $this->action_button( 'dst2t_selftest_webhook', __( 'Test this URL from here', 'delicat-shop2topup' ), 'primary' ); ?>
+					<?php $this->action_button( 'dst2t_open_verification', __( 'Allow verification for 15 minutes', 'delicat-shop2topup' ) ); ?>
 					<?php $this->action_button( 'dst2t_rotate_webhook', __( 'Generate a new callback URL', 'delicat-shop2topup' ) ); ?>
 				</p>
+				<p class="description"><?php esc_html_e( 'The provider validates a callback URL by sending an unsigned POST and refuses to save anything that does not answer 2xx. This URL answers 2xx to that check because its secret token already proves the caller knows the address. Use "Allow verification" only if you are registering the compatibility URL instead.', 'delicat-shop2topup' ); ?></p>
 			</section>
 		</div>
 

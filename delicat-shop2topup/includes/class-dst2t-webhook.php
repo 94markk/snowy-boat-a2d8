@@ -8,6 +8,9 @@ final class DST2T_Webhook {
 	const PRIVATE_NAMESPACE = 'store-callbacks/v1';
 	const OPTION_TOKEN      = 'dst2t_webhook_token';
 	const OPTION_LAST_EVENT = 'dst2t_last_webhook_event';
+	const OPTION_VERIFY_UNTIL = 'dst2t_webhook_verify_until';
+	const OPTION_UNVERIFIED   = 'dst2t_unverified_callbacks';
+	const VERIFY_WINDOW       = 900;
 	const MAX_BODY          = 262144;
 
 	/** Signature headers accepted, in preference order. */
@@ -78,26 +81,33 @@ final class DST2T_Webhook {
 		if ( ! hash_equals( self::token(), $token ) ) {
 			return $this->reject( 'INVALID_ENDPOINT', 404 );
 		}
-		return $this->receive( $request );
+		// The caller proved it knows the secret URL, so a body this endpoint cannot
+		// verify is acknowledged instead of refused. That is exactly the shape of a
+		// provider's endpoint-validation probe.
+		return $this->receive( $request, true );
 	}
 
-	public function receive( WP_REST_Request $request ) {
-		// Everything before a valid signature is answered generically while stealth
-		// mode is on: a prober who guesses the URL learns nothing about what runs
-		// here. The real reason is written to the WooCommerce log instead.
+	/**
+	 * @param WP_REST_Request $request        Incoming callback.
+	 * @param bool            $trusted_caller True when the secret URL token already matched.
+	 */
+	public function receive( WP_REST_Request $request, $trusted_caller = false ) {
 		$secret = $this->settings->webhook_secret();
 		if ( '' === $secret ) {
-			return $this->reject( 'WEBHOOK_NOT_CONFIGURED', 503 );
+			return $this->unverified( $trusted_caller, 'WEBHOOK_NOT_CONFIGURED' );
 		}
 
 		$raw = (string) $request->get_body();
 		if ( '' === $raw || strlen( $raw ) > self::MAX_BODY ) {
-			return $this->reject( 'INVALID_BODY', 400 );
+			return $this->unverified( $trusted_caller, '' === $raw ? 'EMPTY_BODY' : 'BODY_TOO_LARGE' );
 		}
 
 		if ( ! $this->signature_valid( $request, $raw, $secret ) ) {
-			return $this->reject( 'INVALID_SIGNATURE', 401 );
+			return $this->unverified( $trusted_caller, 'INVALID_SIGNATURE' );
 		}
+
+		// Past this point the request is authenticated.
+		self::clear_unverified();
 
 		$payload = json_decode( $raw, true );
 		if ( ! is_array( $payload ) || empty( $payload['event'] ) || ! isset( $payload['data'] ) || ! is_array( $payload['data'] ) ) {
@@ -182,7 +192,31 @@ final class DST2T_Webhook {
 	/* ------------------------------------------------------------- helpers */
 
 	/**
-	 * Answers a pre-signature rejection.
+	 * Answers a request whose signature could not be verified.
+	 *
+	 * Providers register a callback URL by POSTing to it unsigned and refusing to
+	 * save anything that does not answer 2xx, and they disable endpoints that
+	 * later start returning errors. So an unverifiable request is acknowledged —
+	 * having processed nothing — whenever the caller already proved it knows the
+	 * secret URL, or while the operator has opened a verification window. Every
+	 * such request is counted and surfaced on the dashboard, so a wrong signing
+	 * secret shows up as a visible warning rather than as silence.
+	 *
+	 * @param bool   $trusted_caller True when the secret URL token already matched.
+	 * @param string $reason         Internal reason code.
+	 */
+	private function unverified( $trusted_caller, $reason ) {
+		self::record_unverified( $reason );
+
+		if ( $trusted_caller || self::verification_open() ) {
+			return new WP_REST_Response( array( 'success' => true, 'received' => true ), 200 );
+		}
+
+		return $this->reject( $reason, 'INVALID_SIGNATURE' === $reason ? 401 : 400 );
+	}
+
+	/**
+	 * Answers a request that is refused outright.
 	 *
 	 * @param string $code   Internal reason, logged but not returned while stealth mode is on.
 	 * @param int    $status HTTP status used when stealth mode is off.
@@ -240,6 +274,50 @@ final class DST2T_Webhook {
 			}
 		}
 		return '';
+	}
+
+	/* ------------------------------------------------- endpoint verification */
+
+	/** Opens a window in which any caller may verify this endpoint. */
+	public static function open_verification( $seconds = self::VERIFY_WINDOW ) {
+		update_option( self::OPTION_VERIFY_UNTIL, time() + absint( $seconds ), false );
+	}
+
+	public static function close_verification() {
+		delete_option( self::OPTION_VERIFY_UNTIL );
+	}
+
+	public static function verification_open() {
+		return self::verification_remaining() > 0;
+	}
+
+	public static function verification_remaining() {
+		return max( 0, absint( get_option( self::OPTION_VERIFY_UNTIL, 0 ) ) - time() );
+	}
+
+	/** Counts callbacks that arrived but could not be authenticated. */
+	public static function record_unverified( $reason ) {
+		$stored = get_option( self::OPTION_UNVERIFIED, array() );
+		$state  = wp_parse_args(
+			is_array( $stored ) ? $stored : array(),
+			array( 'count' => 0, 'last' => 0, 'reason' => '' )
+		);
+		$state['count']  = absint( $state['count'] ) + 1;
+		$state['last']   = time();
+		$state['reason'] = sanitize_key( (string) $reason );
+		update_option( self::OPTION_UNVERIFIED, $state, false );
+	}
+
+	public static function unverified_state() {
+		$stored = get_option( self::OPTION_UNVERIFIED, array() );
+		return wp_parse_args(
+			is_array( $stored ) ? $stored : array(),
+			array( 'count' => 0, 'last' => 0, 'reason' => '' )
+		);
+	}
+
+	public static function clear_unverified() {
+		delete_option( self::OPTION_UNVERIFIED );
 	}
 
 	public static function record_event( $event, $matched ) {
