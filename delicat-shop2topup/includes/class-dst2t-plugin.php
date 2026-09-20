@@ -149,7 +149,7 @@ final class DST2T_Plugin {
 	}
 
 	public function action_links( $links ) {
-		$url = add_query_arg( array( 'page' => 'delicat-shop2topup', 'tab' => 'settings' ), admin_url( 'admin.php' ) );
+		$url = add_query_arg( array( 'page' => DST2T_Admin::PAGE, 'tab' => 'settings' ), admin_url( 'admin.php' ) );
 		array_unshift( $links, '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'delicat-shop2topup' ) . '</a>' );
 		return $links;
 	}

@@ -66,7 +66,15 @@ final class DST2T_Brand {
 			return $text;
 		}
 		$replacement = self::label();
-		foreach ( self::SUPPLIER_TOKENS as $token ) {
+		$tokens      = self::SUPPLIER_TOKENS;
+		// Longest first: otherwise "shop2topup.com" is only half replaced.
+		usort(
+			$tokens,
+			static function ( $left, $right ) {
+				return strlen( $right ) - strlen( $left );
+			}
+		);
+		foreach ( $tokens as $token ) {
 			$text = preg_replace( '/\b' . preg_quote( $token, '/' ) . '\b/i', $replacement, $text );
 		}
 		$text = preg_replace( '#\bhttps?://[^\s"\']*shop2topup[^\s"\']*#i', '', (string) $text );

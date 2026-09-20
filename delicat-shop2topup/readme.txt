@@ -100,9 +100,9 @@ store managers, and the customer email template.
 
 Not from your site, once white-label mode is on: storefront assets are inlined, imported copy and images are
 scrubbed and re-hosted, internal metadata is stripped from customer order views and emails, SKUs use a neutral
-prefix, and the callback route is hidden from the public REST index. The plugin folder and this readme still
-name the provider on disk; rename the plugin folder if you want that closed too. See README.md for the full
-list of limits.
+prefix, and the callback route is hidden from the public REST index and answers a prober as a missing route.
+The bundled .htaccess blocks direct reads of this file; the plugin folder name itself is still a giveaway, so
+rename the folder if you want that closed too. See README.md for the full list of limits.
 
 = Does the balance really update on its own? =
 
@@ -149,8 +149,12 @@ response bodies are not logged.
 * Imports always save as drafts, with an option to return re-imports to draft.
 * Scheduled catalog synchronization of cost, requirement fields, and availability, with withdrawn items set
   out of stock instead of deleted.
-* New Orders and Tools screens, per-row re-sync, big-category catalog browsing, and a rotating private
-  callback URL alongside the original one.
+* New Orders and Tools screens, per-row Sync and Retry, a fulfillment column on the WooCommerce order list, a
+  per-product "Refresh from provider" action, big-category catalog browsing, and a rotating private callback
+  URL that can fully replace the original one once migration is confirmed.
+* Storefront class/attribute/field prefix and the admin page slug are now neutral too.
+* Player validation is throttled per visitor and an empty requirement schema is no longer re-fetched on every
+  add-to-cart attempt.
 * Broader callback handling: every `order.*` event triggers an authoritative read, four signature header
   spellings are accepted, a missing timestamp no longer rejects the delivery, and unrelated events are
   acknowledged instead of rejected.

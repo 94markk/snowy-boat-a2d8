@@ -33,6 +33,7 @@ final class DST2T_Privacy {
 		add_filter( 'rest_index', array( __CLASS__, 'hide_rest_index' ), 20 );
 		add_filter( 'rest_namespace_index', array( __CLASS__, 'hide_namespace_index' ), 20, 2 );
 		add_filter( 'woocommerce_rest_prepare_product_object', array( __CLASS__, 'filter_product_response' ), 20 );
+		add_filter( 'woocommerce_rest_prepare_product_variation_object', array( __CLASS__, 'filter_product_response' ), 20 );
 	}
 
 	/**
@@ -41,25 +42,29 @@ final class DST2T_Privacy {
 	 * page source of a public product page.
 	 */
 	public static function enqueue_frontend() {
+		// The handle becomes the printed element id (dst2t-ui-js-after), so it has
+		// to carry the neutral prefix as well, not just the CSS and markup.
+		$prefix = self::prefix();
+		$handle = $prefix . '-ui';
+
 		if ( ! DST2T_Brand::stealth() ) {
-			wp_enqueue_style( 'dst2t-ui', DST2T_URL . 'assets/frontend.css', array(), DST2T_VERSION );
-			wp_enqueue_script( 'dst2t-ui', DST2T_URL . 'assets/frontend.js', array( 'jquery' ), DST2T_VERSION, true );
+			wp_enqueue_style( $handle, DST2T_URL . 'assets/frontend.css', array(), DST2T_VERSION );
+			wp_enqueue_script( $handle, DST2T_URL . 'assets/frontend.js', array( 'jquery' ), DST2T_VERSION, true );
 			return;
 		}
 
-		$prefix = self::prefix();
-		$css    = str_replace( 'dst2t-', $prefix . '-', self::asset( 'assets/frontend.css' ) );
-		$js     = str_replace( array( 'dst2t-', 'dst2t_' ), array( $prefix . '-', $prefix . '_' ), self::asset( 'assets/frontend.js' ) );
+		$css = str_replace( 'dst2t-', $prefix . '-', self::asset( 'assets/frontend.css' ) );
+		$js  = str_replace( array( 'dst2t-', 'dst2t_' ), array( $prefix . '-', $prefix . '_' ), self::asset( 'assets/frontend.js' ) );
 
 		if ( '' !== $css ) {
-			wp_register_style( 'dst2t-ui', false, array(), DST2T_VERSION );
-			wp_enqueue_style( 'dst2t-ui' );
-			wp_add_inline_style( 'dst2t-ui', $css );
+			wp_register_style( $handle, false, array(), DST2T_VERSION );
+			wp_enqueue_style( $handle );
+			wp_add_inline_style( $handle, $css );
 		}
 		if ( '' !== $js ) {
-			wp_register_script( 'dst2t-ui', false, array( 'jquery' ), DST2T_VERSION, true );
-			wp_enqueue_script( 'dst2t-ui' );
-			wp_add_inline_script( 'dst2t-ui', $js );
+			wp_register_script( $handle, false, array( 'jquery' ), DST2T_VERSION, true );
+			wp_enqueue_script( $handle );
+			wp_add_inline_script( $handle, $js );
 		}
 	}
 
@@ -93,7 +98,10 @@ final class DST2T_Privacy {
 	 * @param array $formatted Formatted meta objects keyed by meta id.
 	 */
 	public static function filter_item_meta( $formatted, $item = null ) {
-		if ( ! is_array( $formatted ) || is_admin() ) {
+		if ( ! is_array( $formatted ) || ! DST2T_Brand::stealth() ) {
+			return $formatted;
+		}
+		if ( ! self::customer_facing() ) {
 			return $formatted;
 		}
 
@@ -181,6 +189,22 @@ final class DST2T_Privacy {
 			$response->set_data( $data );
 		}
 		return $response;
+	}
+
+	/**
+	 * True when the current render will be read by a customer.
+	 *
+	 * is_admin() alone is not enough: WooCommerce renders and sends the customer's
+	 * order email during the admin request that changes an order's status, so an
+	 * admin-context check would leak exactly the emails that matter most.
+	 */
+	private static function customer_facing() {
+		foreach ( array( 'woocommerce_email_order_details', 'woocommerce_email_order_meta', 'woocommerce_email_before_order_table', 'woocommerce_email_after_order_table' ) as $email_action ) {
+			if ( doing_action( $email_action ) ) {
+				return true;
+			}
+		}
+		return ! ( is_admin() && ! wp_doing_ajax() && current_user_can( 'manage_woocommerce' ) );
 	}
 
 	private static function mentions_supplier( $text ) {

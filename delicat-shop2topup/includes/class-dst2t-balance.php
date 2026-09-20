@@ -264,7 +264,7 @@ final class DST2T_Balance {
 			array(
 				'id'    => 'dst2t-balance',
 				'title' => '<span class="dst2t-bar' . ( $state['low'] ? ' dst2t-bar-low' : '' ) . '">' . esc_html( $title ) . '</span>',
-				'href'  => admin_url( 'admin.php?page=delicat-shop2topup' ),
+				'href'  => admin_url( 'admin.php?page=' . DST2T_Admin::PAGE ),
 				'meta'  => array( 'title' => $this->age_label( $state ) ),
 			)
 		);
@@ -332,7 +332,7 @@ final class DST2T_Balance {
 				__( "The automatic top-up wallet balance is %1\$s, below your threshold of %2\$s.\n\nDigital orders will start failing when the wallet runs out.\n\nDashboard: %3\$s", 'delicat-shop2topup' ),
 				$this->format_amount( $wallet, $this->extract_currency( array() ) ),
 				$this->threshold(),
-				admin_url( 'admin.php?page=delicat-shop2topup' )
+				admin_url( 'admin.php?page=' . DST2T_Admin::PAGE )
 			)
 		);
 	}

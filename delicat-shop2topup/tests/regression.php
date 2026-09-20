@@ -35,7 +35,11 @@ function as_schedule_single_action($t,$h,$a,$g,$u=false){ $GLOBALS['jobs'][]=[$h
 function as_has_scheduled_action($h,$a,$g){return false;}
 function wc_get_order($id){return $GLOBALS['orders'][$id] ?? false;}
 function delete_option($k){unset($GLOBALS['options'][$k]);return true;}
-function is_admin(){return false;}
+function is_admin(){return !empty($GLOBALS['is_admin']);}
+function wp_doing_ajax(){return false;}
+function current_user_can($c){return !empty($GLOBALS['is_manager']);}
+function doing_action($a){return !empty($GLOBALS['doing_action'][$a]);}
+function get_current_user_id(){return 0;}
 function esc_html($v){return htmlspecialchars((string)$v,ENT_QUOTES);}
 function esc_attr($v){return htmlspecialchars((string)$v,ENT_QUOTES);}
 function esc_attr__($v,$d=''){return esc_attr($v);}
@@ -187,6 +191,14 @@ $visible=DST2T_Privacy::filter_item_meta($rows);
 check(!isset($visible[1]),'Internal fulfillment metadata never reaches the customer order view');
 check(!isset($visible[2]),'Supplier attribution never reaches the customer order view');
 check(isset($visible[3]) && $visible[3]->display_value==='900123','Customer still sees their own game details');
+$GLOBALS['is_admin']=true;$GLOBALS['is_manager']=true;
+check(count(DST2T_Privacy::filter_item_meta($rows))===3,'Shop managers still see the full item metadata in wp-admin');
+$GLOBALS['doing_action']=['woocommerce_email_order_details'=>true];
+check(count(DST2T_Privacy::filter_item_meta($rows))===1,'An order email rendered from wp-admin is still scrubbed');
+$GLOBALS['doing_action']=[];$GLOBALS['is_admin']=false;$GLOBALS['is_manager']=false;
+settings_with(['stealth_mode'=>'no']);
+check(count(DST2T_Privacy::filter_item_meta($rows))===3,'Metadata filtering follows the stealth setting');
+defaults_restore();
 check(DST2T_Webhook::owns_namespace('store-callbacks/v1') && DST2T_Webhook::owns_namespace('delicat-shop2topup/v1') && !DST2T_Webhook::owns_namespace('wc/v3'),'Only plugin namespaces are hidden from the REST index');
 
 // -------------------------------------------------------------- webhook edge
@@ -209,7 +221,10 @@ check(preg_match('/^[a-f0-9]{32}$/',DST2T_Webhook::token())===1,'A private callb
 $token=DST2T_Webhook::token();
 check($web->receive_private(new WP_REST_Request('{}',[],['token'=>str_repeat('0',32)]))->status===404,'The private callback rejects a wrong token');
 check(strpos(DST2T_Webhook::url(),$token)!==false && strpos(DST2T_Webhook::url(),'shop2topup')===false,'The active callback URL is unbranded');
-check(DST2T_Webhook::legacy_url()==='https://example.test/wp-json/delicat-shop2topup/v1/webhook','The original callback URL keeps working after an upgrade');
+check(DST2T_Webhook::legacy_url()==='https://example.test/wp-json/delicat-shop2topup/v1/webhook' && DST2T_Webhook::legacy_enabled(),'The original callback URL keeps working after an upgrade');
+settings_with(['legacy_webhook'=>'no']);check(DST2T_Webhook::legacy_enabled()===false,'The provider-named route can be retired once migration is confirmed');
+settings_with(['legacy_webhook'=>'no','private_webhook'=>'no']);check(DST2T_Webhook::legacy_enabled()===true,'Retiring the old route cannot leave the site with no callback at all');
+defaults_restore();
 
 // ------------------------------------------------------------------ balance
 reset_http();

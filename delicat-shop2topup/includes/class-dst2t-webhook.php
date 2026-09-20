@@ -33,18 +33,22 @@ final class DST2T_Webhook {
 	}
 
 	public function register_route() {
-		// The original endpoint stays registered so an already-configured supplier
-		// panel keeps working after an upgrade. Stealth mode hides it from the
-		// public REST index but never disables it.
-		register_rest_route(
-			self::REST_NAMESPACE,
-			self::REST_ROUTE,
-			array(
-				'methods'             => WP_REST_Server::CREATABLE,
-				'callback'            => array( $this, 'receive' ),
-				'permission_callback' => '__return_true',
-			)
-		);
+		// The original endpoint stays registered so an already-configured provider
+		// panel keeps working across the upgrade. Its path contains the provider
+		// name, so once the operator has confirmed deliveries on the private URL
+		// they can retire it in Settings; until then it is only hidden, never
+		// disabled, because dropping it would silently lose events.
+		if ( self::legacy_enabled() ) {
+			register_rest_route(
+				self::REST_NAMESPACE,
+				self::REST_ROUTE,
+				array(
+					'methods'             => WP_REST_Server::CREATABLE,
+					'callback'            => array( $this, 'receive' ),
+					'permission_callback' => '__return_true',
+				)
+			);
+		}
 
 		if ( ! self::private_enabled() ) {
 			return;
@@ -258,6 +262,18 @@ final class DST2T_Webhook {
 	public static function private_enabled() {
 		$settings = DST2T_Brand::settings();
 		return $settings ? $settings->enabled( 'private_webhook' ) : false;
+	}
+
+	/**
+	 * The original, provider-named route. It can only be retired once the private
+	 * route is serving, so the site is never left with no callback at all.
+	 */
+	public static function legacy_enabled() {
+		if ( ! self::private_enabled() ) {
+			return true;
+		}
+		$settings = DST2T_Brand::settings();
+		return $settings ? $settings->enabled( 'legacy_webhook' ) : true;
 	}
 
 	/** Per-site secret path segment for the unbranded callback URL. */

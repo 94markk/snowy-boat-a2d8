@@ -3,7 +3,9 @@
 defined( 'ABSPATH' ) || exit;
 
 final class DST2T_Admin {
-	const PAGE  = 'delicat-shop2topup';
+	// Admin menu slug. Kept free of the provider name so the URL in the address
+	// bar is safe to show in a screen share or a support screenshot.
+	const PAGE  = 'delicat-topup';
 	const TABS  = array( 'dashboard', 'catalog', 'orders', 'settings', 'tools' );
 
 	/** @var DST2T_Settings */
@@ -266,7 +268,7 @@ final class DST2T_Admin {
 			$this->redirect_with_notice( $tab, 'error', __( 'This order was cancelled or refunded. Fulfillment is intentionally not retried.', 'delicat-shop2topup' ) );
 		}
 
-		$this->repository->update( $uuid, 'unknown', array( 'next_check_at' => time(), 'last_error_code' => '' ) );
+		$this->repository->update( $uuid, 'unknown', array( 'next_check_at' => time() - MINUTE_IN_SECONDS, 'last_error_code' => '' ) );
 		$item->update_meta_data( '_dst2t_status', 'unknown' );
 		$item->save();
 
@@ -621,7 +623,8 @@ final class DST2T_Admin {
 				<?php
 				$this->checkbox_row( 'stealth_mode', __( 'Hide the provider from the storefront', 'delicat-shop2topup' ), __( 'Inline the storefront assets, scrub provider names from imported catalog copy, strip fulfillment metadata from customer order views and emails, and hide the callback route from the public REST index.', 'delicat-shop2topup' ) );
 				$this->checkbox_row( 'mask_identifiers', __( 'Mask identifiers in the dashboard', 'delicat-shop2topup' ), __( 'Fulfillment references and the callback URL are shown masked until you reveal them.', 'delicat-shop2topup' ) );
-				$this->checkbox_row( 'private_webhook', __( 'Use an unbranded private callback URL', 'delicat-shop2topup' ), __( 'Serves the callback from a neutral REST route with a secret token. The original URL keeps working so an upgrade never drops events.', 'delicat-shop2topup' ) );
+				$this->checkbox_row( 'private_webhook', __( 'Use an unbranded private callback URL', 'delicat-shop2topup' ), __( 'Serves the callback from a neutral REST route with a secret token.', 'delicat-shop2topup' ) );
+				$this->checkbox_row( 'legacy_webhook', __( 'Keep the old callback URL working', 'delicat-shop2topup' ), __( 'The original URL contains the provider name. Leave this on until the provider panel is sending to the new URL and you have seen an event arrive, then turn it off to remove that path entirely.', 'delicat-shop2topup' ) );
 				?>
 				<tr>
 					<th><label for="import_sku_prefix"><?php esc_html_e( 'Imported SKU prefix', 'delicat-shop2topup' ); ?></label></th>
@@ -854,9 +857,15 @@ final class DST2T_Admin {
 				<h2><?php esc_html_e( 'Callback endpoints', 'delicat-shop2topup' ); ?></h2>
 				<ul class="dst2t-list">
 					<li><span><?php esc_html_e( 'Active URL', 'delicat-shop2topup' ); ?></span><strong><?php echo DST2T_Brand::secret_html( DST2T_Webhook::url(), 8 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></strong></li>
-					<li><span><?php esc_html_e( 'Compatibility URL', 'delicat-shop2topup' ); ?></span><strong><?php echo DST2T_Brand::secret_html( DST2T_Webhook::legacy_url(), 8 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></strong></li>
+					<li><span><?php esc_html_e( 'Compatibility URL', 'delicat-shop2topup' ); ?></span><strong><?php echo DST2T_Webhook::legacy_enabled() ? DST2T_Brand::secret_html( DST2T_Webhook::legacy_url(), 8 ) : esc_html__( 'retired', 'delicat-shop2topup' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></strong></li>
 				</ul>
-				<p class="description"><?php esc_html_e( 'Both accept correctly signed events. Only the active URL is unbranded; the compatibility URL exists so an upgrade never drops deliveries.', 'delicat-shop2topup' ); ?></p>
+				<p class="description">
+					<?php
+					echo DST2T_Webhook::legacy_enabled()
+						? esc_html__( 'Both accept correctly signed events. Only the active URL is unbranded; the compatibility URL exists so the upgrade never drops deliveries. Retire it in Settings once the provider panel is sending to the active URL.', 'delicat-shop2topup' )
+						: esc_html__( 'Only the active URL accepts events. The original provider-named path is no longer served.', 'delicat-shop2topup' );
+					?>
+				</p>
 				<p class="dst2t-actions"><?php echo esc_html__( 'WP-CLI:', 'delicat-shop2topup' ); ?> <code>wp delicat-s2t balance</code> <code>wp delicat-s2t sync</code> <code>wp delicat-s2t reconcile</code> <code>wp delicat-s2t status</code></p>
 			</section>
 		</div>

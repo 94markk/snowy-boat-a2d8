@@ -115,6 +115,7 @@ final class DST2T_Settings {
 			'stealth_mode',
 			'mask_identifiers',
 			'private_webhook',
+			'legacy_webhook',
 			'import_force_draft',
 			'import_images',
 			'import_categories',
@@ -161,6 +162,7 @@ final class DST2T_Settings {
 			'stealth_mode'             => 'yes',
 			'mask_identifiers'         => 'yes',
 			'private_webhook'          => 'yes',
+			'legacy_webhook'           => 'yes',
 
 			// Diagnostics.
 			'debug_logging'            => 'no',
