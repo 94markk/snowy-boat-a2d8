@@ -1,9 +1,17 @@
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"],
+  "include": [
+    ".astro/types.d.ts",
+    "**/*"
+  ],
+  "exclude": [
+    "dist",
+    "delicat-identity-pro"
+  ],
   "compilerOptions": {
     "strictNullChecks": true,
-    "types": ["@cloudflare/workers-types"]
+    "types": [
+      "@cloudflare/workers-types"
+    ]
   }
 }
