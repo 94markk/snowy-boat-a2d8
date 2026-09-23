@@ -38,8 +38,7 @@ final class DIP_Passkeys {
     }
 
     private static function settings() {
-        $defaults = class_exists('DIP_Plugin') ? DIP_Plugin::defaults() : [];
-        return wp_parse_args((array) get_option(class_exists('DIP_Plugin') ? DIP_Plugin::OPTION : 'dglp_settings', []), $defaults);
+        return wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
     }
 
     public static function available() {
@@ -156,7 +155,6 @@ final class DIP_Passkeys {
     }
 
     private static function browser_binding($create = false) {
-        if (!class_exists('DIP_Native_Auth')) return '';
         $token = DIP_Native_Auth::browser_token($create);
         if ($token === '') return '';
         return substr(hash_hmac('sha256', $token, wp_salt('secure_auth')), 0, 48);
@@ -236,7 +234,7 @@ final class DIP_Passkeys {
     }
 
     private static function rate_key($scope, $identifier = '') {
-        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::client_ip() : sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? '0.0.0.0'));
+        $ip = DIP_Native_Auth::client_ip();
         $material = $ip . '|' . strtolower(trim((string) $identifier));
         return 'dip_pk_rate_' . sanitize_key($scope) . '_' . substr(hash_hmac('sha256', $material, wp_salt('auth')), 0, 38);
     }
@@ -582,7 +580,7 @@ final class DIP_Passkeys {
         $data = $att['authData'];
         $offset = 37;
         if ($offset + 18 > strlen($data)) return new WP_Error('dip_passkey_attested_data', __('Données Passkey incomplètes.', 'delicat-google-login'), ['status'=>400]);
-        $aaguid = substr($data,$offset,16); $offset += 16;
+        $offset += 16; // AAGUID
         $v = unpack('nlen', substr($data,$offset,2)); $offset += 2;
         $cred_len = (int)($v['len'] ?? 0);
         if ($cred_len < 16 || $cred_len > 1024 || $offset + $cred_len > strlen($data)) return new WP_Error('dip_passkey_credential_id', __('Identifiant Passkey invalide.', 'delicat-google-login'), ['status'=>400]);
@@ -595,7 +593,7 @@ final class DIP_Passkeys {
         return [
             'credential_id'=>self::b64u_encode($credential_id),
             'public_key'=>$converted['pem'],'alg'=>$converted['alg'],
-            'sign_count'=>$auth['sign_count'],'aaguid'=>bin2hex($aaguid),'flags'=>$auth['flags'],
+            'sign_count'=>$auth['sign_count'],
         ];
     }
 
@@ -751,14 +749,13 @@ final class DIP_Passkeys {
         wp_set_current_user($uid);
         if (class_exists('DIP_Two_Factor')) DIP_Two_Factor::authorize_cookie_once($uid);
         wp_set_auth_cookie($uid, !empty($state['remember']), is_ssl());
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::fire_wp_login($user,'passkey');
-        else do_action('wp_login',$user->user_login,$user);
+        DIP_Account_Sync::fire_wp_login($user,'passkey');
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($uid);
         do_action('dip_login_success',$uid,['provider'=>'passkey','user_verification'=>1]);
         if (class_exists('DIP_Reauth')) DIP_Reauth::mark_recent($uid);
         if (class_exists('DIP_Audit')) DIP_Audit::record('passkey_login_success','info',$uid,['credential'=>substr(hash('sha256',(string)$result['credential']['id']),0,16)]);
         $redirect = self::safe_redirect((string)($state['redirect'] ?? ''),self::default_login_redirect());
-        $redirect = add_query_arg('dip_auth_sync', '1', remove_query_arg('dip_auth_sync', $redirect));
+        $redirect = add_query_arg('dip_auth_sync', DIP_Session_Router::sync_marker(), remove_query_arg('dip_auth_sync', $redirect));
         return new WP_REST_Response(['success'=>true,'redirect'=>$redirect], 200);
     }
 
@@ -806,9 +803,7 @@ final class DIP_Passkeys {
 
     private static function security_email($user_id,$subject,$message){
         $user=get_userdata(absint($user_id)); if(!$user||!is_email($user->user_email)) return false;
-        if(class_exists('DIP_Email_Hub')) return DIP_Email_Hub::send_user_security($user->ID,$subject,$message,['label'=>__('Passkeys','delicat-google-login')]);
-        $body='<p>'.esc_html((string)$message).'</p><p>'.esc_html__('Centre de sécurité Delicat Identity','delicat-google-login').'</p>';
-        return (bool)wp_mail($user->user_email,sanitize_text_field((string)$subject),$body,['Content-Type: text/html; charset=UTF-8']);
+        return DIP_Email_Hub::send_user_security($user->ID,$subject,$message,['label'=>__('Passkeys','delicat-google-login')]);
     }
 
     public static function protect_script_tag($tag,$handle){
@@ -838,7 +833,7 @@ final class DIP_Passkeys {
         $s=self::settings(); if(($s['passkeys_available']??'yes')!=='yes') return;
         $is_account=function_exists('is_account_page') && is_account_page();
         $is_wp_login=did_action('login_enqueue_scripts') || (isset($GLOBALS['pagenow']) && $GLOBALS['pagenow']==='wp-login.php');
-        $modal_eager=!class_exists('DIP_Native_Auth') || !method_exists('DIP_Native_Auth','should_use_eager_assets') || DIP_Native_Auth::should_use_eager_assets();
+        $modal_eager=DIP_Native_Auth::should_use_eager_assets();
         $is_login_modal=!is_user_logged_in() && (($s['native_modal_enabled']??'yes')==='yes') && $modal_eager;
         if(!$is_account && !$is_wp_login && !$is_login_modal) return;
         wp_enqueue_style('dip-passkeys',DIP_URL.'assets/passkeys.css',[],DIP_VERSION);

@@ -121,16 +121,6 @@ function dipes_preview_body( $email_id, $ctx ) {
         return;
     }
 
-    if ( in_array( $email_id, array( 'identity_security_alert', 'identity_access_message', 'identity_admin_alert' ), true ) ) {
-        dipes_render_intro( $email_id, $ctx );
-        $label = 'identity_admin_alert' === $email_id ? 'Delicat Identity' : ( 'identity_access_message' === $email_id ? 'Accès sécurisé' : 'Sécurité du compte' );
-        $message = 'identity_admin_alert' === $email_id ? 'Une action administrative liée à Delicat Identity nécessite votre attention.' : ( 'identity_access_message' === $email_id ? 'Utilisez cette notification sécurisée pour poursuivre l’action demandée.' : 'Une activité importante concernant la sécurité de votre compte a été enregistrée.' );
-        echo '<div class="desp-notice"><div class="desp-notice-label">' . esc_html( $label ) . '</div><div class="desp-notice-content"><p>' . esc_html( $message ) . '</p></div></div>';
-        dipes_render_cta( $email_id, $ctx );
-        dipes_render_custom( $email_id, $ctx );
-        return;
-    }
-
     foreach ( dipes_current_block_order( $email_id ) as $block ) {
         switch ( $block ) {
             case 'intro': dipes_render_intro( $email_id, $ctx ); break;

@@ -2,10 +2,24 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.9.19
+Stable tag: 6.9.20
 License: GPLv2 or later
 
 Secure Google and Microsoft identity platform for WordPress and WooCommerce.
+
+== 6.9.20 Google Sign-in Reliability and Cleanup ==
+* Google sign-in throttles and lockouts no longer group unrelated customers behind one Cloudflare edge address: for these throttles the visitor address from CF-Connecting-IP is used when the connection really comes from Cloudflare's published ranges (IPv6 grouped by /64). Password protections keep the explicit DIP_TRUST_CLOUDFLARE_* opt-in.
+* The Google start limit applies per device with a ten times larger ceiling per address, in fixed windows. Only forged or tampered sign-ins count towards the lockout; network errors, expired sessions, cancellations and throttling no longer lock customers out.
+* A duplicate or replayed Google callback (double tap, prefetch, Android custom tab) shows the first callback's result instead of an error; a lost session is re-delivered once, to the same browser only.
+* OAuth state is stored in the database instead of the object cache, lives 30 minutes instead of 10, and uses an atomic claim.
+* One retry for Google token and key requests, with Google's last known signing keys as a fallback.
+* Sign-in started on a non-canonical host (www or apex) is moved to the site host before the flow starts.
+* Instagram, Facebook, TikTok and other in-app browsers get an "open in Chrome/Safari" page instead of Google's 403 disallowed_useragent error.
+* Fixes settings corruption: "Réactiver Google", the Providers page and backup restores turned every disabled option on (including social-login maintenance and new-user approval). Administrators are asked to review those options once after updating.
+* Fixes the "Réactiver Google" button being refused by the admin firewall.
+* Fixes the headless storefront recovery and 2FA paths, which lost their state because nested redirect URLs were not encoded.
+* Fixes "Compte Array connecté" in connected-account emails and settings checkboxes rendered outside the settings form being reset on save.
+* Removes unused code: the Foundation health module and its unused tables, the old identity-modal-v3.js engine, dead admin panels and settings, unreachable fallbacks, unused CSS, the stale integrity manifest, an unused PHPUnit placeholder scaffold and outdated release notes.
 
 == 6.9.17 Storefront Session Recovery ==
 * Preserves the safe storefront return URL and modal tracker before validating a Google callback, so expired or Android custom-tab failures return to Delicat instead of exposing wp-login.php.
@@ -286,6 +300,9 @@ Disable the old Code Snippets copy of the login modal before enabling this relea
 
 == Changelog ==
 
+= 6.9.20 =
+* Google sign-in reliability fixes and code cleanup. See FIX-6.9.20.md.
+
 = 6.9.19 =
 * Self-contained modal CSS, strict style readiness and versioned asset recovery.
 * Builder login trigger/menu handoff and removal of page-wide legacy observer.
@@ -493,7 +510,6 @@ Disable the old Code Snippets copy of the login modal before enabling this relea
 * Preserved centralized private-page protection, no-store/noindex headers and administrator-only Identity controls.
 
 
-Legacy cleanup: after migration, administrators with delete_plugins capability get a nonce-protected “Supprimer l’ancien Email Studio” action. Deletion is never performed silently.
 
 == 6.9.5 — Builder V9 synchronization + lazy public auth ==
 * Keeps Identity Pro as the only authentication/security authority for Builder V9.

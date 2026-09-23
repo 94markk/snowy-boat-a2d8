@@ -19,9 +19,6 @@ function dipes_email_types() {
             'customer_cancelled_order'  => 'Client — Commande annulée',
             'customer_new_account'      => 'Client — Nouveau compte',
             'customer_reset_password'   => 'Client — Mot de passe oublié',
-            'identity_security_alert'    => 'Client — Alerte de sécurité',
-            'identity_access_message'    => 'Client — Vérification / connexion',
-            'identity_admin_alert'       => 'Admin — Alerte Identity',
         )
     );
 }
@@ -97,21 +94,6 @@ function dipes_default_email_copy() {
             'subject' => 'Réinitialisez votre mot de passe — {site_name}', 'heading' => 'Réinitialisation du mot de passe', 'preheader' => 'Utilisez le lien sécurisé pour choisir un nouveau mot de passe.',
             'badge' => 'Sécurité', 'intro_title' => 'Réinitialisez votre mot de passe.', 'intro_text' => 'Bonjour {display_name}, une demande de réinitialisation a été faite pour votre compte <strong>{username}</strong>. Si vous n’êtes pas à l’origine de cette demande, ignorez simplement cet e-mail.',
             'cta_label' => 'Créer un nouveau mot de passe', 'cta_url' => '{reset_password_url}', 'accent' => '#7c3aed',
-        ),
-        'identity_security_alert' => array(
-            'subject' => 'Alerte de sécurité — {site_name}', 'heading' => 'Sécurité du compte', 'preheader' => 'Une activité de sécurité a été détectée sur votre compte.',
-            'badge' => 'Sécurité', 'intro_title' => 'Information de sécurité', 'intro_text' => 'Une activité importante concernant la sécurité de votre compte a été enregistrée.',
-            'cta_label' => 'Ouvrir le centre de sécurité', 'cta_url' => '{security_url}', 'accent' => '#dc2626',
-        ),
-        'identity_access_message' => array(
-            'subject' => 'Vérification de votre compte — {site_name}', 'heading' => 'Vérification sécurisée', 'preheader' => 'Finalisez cette étape sécurisée pour accéder à votre compte.',
-            'badge' => 'Vérification', 'intro_title' => 'Action requise', 'intro_text' => 'Utilisez les informations sécurisées ci-dessous pour continuer.',
-            'cta_label' => 'Continuer', 'cta_url' => '{action_url}', 'accent' => '#2563eb',
-        ),
-        'identity_admin_alert' => array(
-            'subject' => 'Alerte Identity — {site_name}', 'heading' => 'Alerte Identity', 'preheader' => 'Une action administrative liée à l’identité nécessite votre attention.',
-            'badge' => 'Admin', 'intro_title' => 'Action requise', 'intro_text' => 'Une notification Identity Pro nécessite votre attention.',
-            'cta_label' => 'Ouvrir Delicat Identity', 'cta_url' => '{admin_identity_url}', 'accent' => '#d97706',
         ),
     );
 }
@@ -336,7 +318,7 @@ function dipes_sanitize_settings( $input ) {
     $out['support_email'] = isset( $input['support_email'] ) ? sanitize_email( $input['support_email'] ) : '';
     $out['whatsapp'] = isset( $input['whatsapp'] ) ? preg_replace( '/[^0-9+]/', '', (string) $input['whatsapp'] ) : '';
 
-    $color_keys = array( 'page_bg','container_bg','header_bg','header_text','text','muted','heading','border','accent','accent_text','accent_soft','button_bg','button_text','footer_bg','footer_text_color','table_header_bg','table_header_text','card_bg','card_border' );
+    $color_keys = array( 'page_bg','container_bg','header_bg','header_text','text','muted','heading','border','accent','button_bg','button_text','footer_bg','footer_text_color','table_header_bg','table_header_text','card_bg','card_border' );
     foreach ( $color_keys as $key ) {
         $out[ $key ] = dipes_sanitize_color( isset( $input[ $key ] ) ? $input[ $key ] : '', $defaults[ $key ] );
     }

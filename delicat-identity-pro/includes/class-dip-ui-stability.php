@@ -9,8 +9,6 @@ final class DIP_UI_Stability {
         add_action('admin_menu', [__CLASS__, 'menu'], 5);
         add_action('admin_menu', [__CLASS__, 'consolidate_menus'], 999);
         add_action('admin_enqueue_scripts', [__CLASS__, 'admin_assets'], 50);
-        add_action('wp_enqueue_scripts', [__CLASS__, 'front_assets'], 50);
-        add_action('login_enqueue_scripts', [__CLASS__, 'front_assets'], 50);
         add_action('admin_post_dip_ui_repair', [__CLASS__, 'repair']);
         add_filter('admin_body_class', [__CLASS__, 'admin_body_class']);
         add_action('admin_notices', [__CLASS__, 'upgrade_notice']);
@@ -49,21 +47,19 @@ final class DIP_UI_Stability {
         add_submenu_page(self::PAGE, 'Analytics', 'Analytics', 'manage_options', 'dip-analytics', ['DIP_Analytics', 'render_page']);
         add_submenu_page(self::PAGE, 'E-mails', 'E-mails', 'manage_options', 'delicat-identity-emails', ['DIP_Email_Studio_Bridge', 'page']);
         add_submenu_page(self::PAGE, 'Authentification', 'Authentification', 'manage_options', 'dip-auth-methods', ['DIP_Passwordless_Registration', 'settings_page']);
-        add_submenu_page(self::PAGE, 'Santé système', 'Santé système', 'manage_options', 'dip-foundation-health', ['DIP_Foundation', 'render_page']);
     }
 
     public static function consolidate_menus() {
-        foreach (['delicat-identity','delicat-identity-providers','delicat-identity-builder','dip-security-center','dip-foundation-health','dip-woocommerce-pro','dip-app-sync-v2','delicat-identity-emails','dip-auth-methods'] as $slug) {
+        foreach (['delicat-identity','delicat-identity-providers','delicat-identity-builder','dip-security-center','dip-woocommerce-pro','dip-app-sync-v2','dip-auth-methods'] as $slug) {
             remove_submenu_page('options-general.php', $slug);
         }
-        remove_menu_page('dip-analytics');
     }
 
     private static function plugin_pages() {
         return [
             self::PAGE,
             'delicat-identity', 'delicat-identity-providers', 'delicat-identity-builder',
-            'dip-security-center', 'dip-foundation-health', 'dip-woocommerce-pro',
+            'dip-security-center', 'dip-woocommerce-pro',
             'dip-app-sync-v2', 'dip-analytics', 'delicat-identity-emails', 'dip-auth-methods'
         ];
     }
@@ -80,13 +76,7 @@ final class DIP_UI_Stability {
         wp_enqueue_script('dip-ui-stability', DIP_URL . 'assets/ui-stability.js', [], DIP_VERSION, true);
         wp_localize_script('dip-ui-stability', 'dipUiStability', [
             'copied' => __('Copié', 'delicat-google-login'),
-            'saving' => __('Enregistrement…', 'delicat-google-login'),
         ]);
-    }
-
-    public static function front_assets() {
-        if (is_admin()) return;
-        wp_enqueue_style('dip-ui-front', DIP_URL . 'assets/ui-front.css', [], DIP_VERSION);
     }
 
     public static function admin_body_class($classes) {
@@ -105,7 +95,6 @@ final class DIP_UI_Stability {
             ['dip-analytics', 'Analytics', 'dashicons-chart-area'],
             ['delicat-identity-emails', 'E-mails', 'dashicons-email-alt'],
             ['dip-auth-methods', 'Authentification', 'dashicons-unlock'],
-            ['dip-foundation-health', 'Santé système', 'dashicons-heart'],
         ];
     }
 
@@ -143,10 +132,7 @@ final class DIP_UI_Stability {
         $checks[] = ['HTTPS', is_ssl(), 'HTTPS est requis en production pour OAuth et les sessions.'];
         $checks[] = ['REST API', !empty(get_option('permalink_structure')), 'Des permaliens lisibles sont recommandés pour les routes API.'];
 
-        $tables = [
-            $wpdb->prefix . 'dip_audit',
-            $wpdb->prefix . 'dip_devices',
-        ];
+        $tables = [DIP_Audit::table(), DIP_Devices::table()];
         foreach ($tables as $table) {
             $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
             $checks[] = ['Table ' . str_replace($wpdb->prefix, '', $table), $exists, 'Table requise pour les journaux ou appareils.'];
@@ -165,7 +151,6 @@ final class DIP_UI_Stability {
             ['Analytics', 'admin.php?page=dip-analytics', 'dashicons-chart-area', 'Rapports et tendances de connexion'],
             ['E-mails', 'admin.php?page=delicat-identity-emails', 'dashicons-email-alt', 'Templates et notifications'],
             ['Authentification', 'admin.php?page=dip-auth-methods', 'dashicons-unlock', 'OTP, magic links et inscription'],
-            ['Santé système', 'admin.php?page=dip-foundation-health', 'dashicons-heart', 'Diagnostic et réparation'],
         ];
     }
 
@@ -237,14 +222,11 @@ final class DIP_UI_Stability {
         if (class_exists('DIP_Audit')) DIP_Audit::install();
         if (class_exists('DIP_Devices')) DIP_Devices::install();
         if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::install();
-        if (class_exists('DIP_Foundation')) DIP_Foundation::activate();
         if (class_exists('DIP_App_Sync_V2')) DIP_App_Sync_V2::install();
         if (class_exists('DIP_Customer_Dashboard')) DIP_Customer_Dashboard::activate();
         if (class_exists('DIP_Analytics')) DIP_Analytics::install();
         if (class_exists('DIP_Email_Studio_Bridge')) DIP_Email_Studio_Bridge::install();
         if (class_exists('DIP_Passwordless_Registration')) DIP_Passwordless_Registration::install();
-        delete_transient('dip_health_snapshot');
-        delete_transient('dip_analytics_summary');
         flush_rewrite_rules(false);
         if (class_exists('DIP_Audit')) DIP_Audit::record('ui_system_repaired', 'notice', get_current_user_id());
         wp_safe_redirect(add_query_arg('dip_repaired', '1', admin_url('admin.php?page=' . self::PAGE)));

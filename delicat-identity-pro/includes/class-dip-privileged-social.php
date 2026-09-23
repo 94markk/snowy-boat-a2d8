@@ -251,17 +251,13 @@ final class DIP_Privileged_Social {
         $messages = [
             'authorized'=>__('Google Secure Mode est maintenant autorisé pour ce compte Administrateur.', 'delicat-google-login'),
             'revoked'=>__('L’autorisation Google Administrateur a été retirée.', 'delicat-google-login'),
-            'two_factor_required'=>__('Activez TOTP 2FA avant d’autoriser Google pour un Administrateur.', 'delicat-google-login'),
             'reauth_required'=>__('Confirmez votre identité récemment avant cette opération.', 'delicat-google-login'),
-            'google_not_linked'=>__('Reliez d’abord votre compte Google depuis cette session Administrateur.', 'delicat-google-login'),
-            'https_required'=>__('HTTPS est obligatoire pour Google Secure Mode.', 'delicat-google-login'),
-            'mode_disabled'=>__('Google Secure Mode Administrateur est désactivé dans les réglages.', 'delicat-google-login'),
         ];
         $settings = self::settings();
         $connect_url = add_query_arg([
             'dip_action'=>'login','provider'=>'google','link'=>1,
             '_dip_nonce'=>wp_create_nonce('dip_link_' . $user_id),
-            'redirect'=>self::security_url(),
+            'redirect'=>rawurlencode(self::security_url()),
         ], home_url('/'));
         ob_start(); ?>
         <div class="dip-security-card dip-admin-google-secure">

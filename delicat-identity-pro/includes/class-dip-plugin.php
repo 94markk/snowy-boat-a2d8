@@ -7,11 +7,27 @@ final class DIP_Plugin {
     const VERSION_OPTION = 'dip_identity_installed_version';
     const RECOVERY_NOTICE = 'dip_google_maintenance_recovered';
     const RECOVERY_PURGE = 'dip_google_recovery_purge_pending';
+    const SETTINGS_REVIEW = 'dip_settings_review_pending';
     const RUNTIME_SCHEMA_OPTION = 'dip_runtime_schema_version';
     const RUNTIME_SCHEMA_VERSION = '6.2.2';
     private static $instance;
     private $failure_tracker = '';
     private $failure_return_url = '';
+    private $claimed_state = '';
+
+    /**
+     * Only failures that point to a forged or tampered sign-in count towards
+     * the address lockout. Network errors, cancellations, expired sessions,
+     * throttling and account decisions are not guessing attempts; counting
+     * them locked out every customer who shared the address.
+     */
+    const LOCKOUT_CODES = [
+        'google_signature', 'google_jwt_format', 'google_jwt_header', 'invalid_audience', 'invalid_issuer',
+        'invalid_nonce', 'invalid_subject', 'userinfo_subject_mismatch',
+        'microsoft_signature', 'microsoft_jwt_format', 'microsoft_jwt_header', 'microsoft_audience',
+        'microsoft_issuer', 'microsoft_nonce', 'microsoft_subject_invalid', 'microsoft_tenant_mismatch',
+        'privileged_social_login_blocked', 'privileged_auto_link_blocked', 'policy_risk_blocked',
+    ];
 
     public static function instance() {
         if (!self::$instance) self::$instance = new self();
@@ -40,7 +56,6 @@ final class DIP_Plugin {
             'mobile_api_enabled' => 'no', 'android_client_id' => '', 'ios_client_id' => '',
             'mobile_push_enabled' => 'no', 'mobile_biometric_enabled' => 'no',
             'mobile_access_ttl' => 900, 'mobile_refresh_ttl' => 2592000,
-            'provider_framework_enabled' => 'yes',
             'microsoft_enabled' => 'no', 'microsoft_client_id' => '', 'microsoft_client_secret' => '',
             'microsoft_tenant' => 'common', 'microsoft_button_text' => 'Continuer avec Microsoft',
             'microsoft_link_existing_email' => 'no',
@@ -52,7 +67,6 @@ final class DIP_Plugin {
             'social_login_maintenance_explicit' => 'no',
             'social_login_maintenance_changed_at' => 0,
             'social_login_maintenance_changed_by' => 0,
-            'health_email' => 'no',
             'performance_maintenance_enabled' => 'yes', 'conditional_assets' => 'yes',
             'performance_health_cache' => 'yes',
             'automatic_migration_batch_size' => 25,
@@ -142,12 +156,19 @@ final class DIP_Plugin {
             set_transient(self::RECOVERY_PURGE, 1, 30 * MINUTE_IN_SECONDS);
         }
 
+        // Before 6.9.20, "Réactiver Google", the Providers page and backup
+        // restores could silently switch every disabled option on. Ask the
+        // administrator to review the ones that change who can sign in.
+        if ($installed !== '' && version_compare($installed, '6.9.20', '<')) {
+            update_option(self::SETTINGS_REVIEW, 1, false);
+        }
+
         update_option(self::VERSION_OPTION, DIP_VERSION, false);
     }
 
     /**
      * Install only the runtime tables owned by the legacy/core Identity modules.
-     * Foundation owns dip_db_version independently; never mutate that option here.
+     * Never mutate the legacy dip_db_version option here.
      */
     public static function install_runtime_schema() {
         DIP_Audit::install();
@@ -161,6 +182,10 @@ final class DIP_Plugin {
     private function __construct() {
         self::maybe_upgrade();
         add_action('init', [$this, 'route'], 1);
+        // The callback signs the customer in: run it after page-cache plugins
+        // (LiteSpeed Cache) have registered their set_logged_in_cookie hooks,
+        // so their logged-in vary cookie gets the right lifetime.
+        add_action('init', [$this, 'route_callback'], 20);
         add_action('wp_loaded', [$this, 'maybe_purge_recovery_cache'], PHP_INT_MAX);
         add_action('admin_menu', [$this, 'admin_menu']);
         add_action('admin_enqueue_scripts', [$this, 'admin_assets']);
@@ -229,7 +254,8 @@ final class DIP_Plugin {
     }
 
     public function admin_assets($hook) {
-        if ($hook !== 'settings_page_delicat-identity') return;
+        // Reachable from Settings and from the plugin's own top-level menu.
+        if (substr((string) $hook, -strlen('page_delicat-identity')) !== 'page_delicat-identity') return;
         wp_enqueue_style('dip-admin', DIP_URL . 'assets/admin.css', [], DIP_VERSION);
         wp_enqueue_script('dip-visual-builder', DIP_URL . 'assets/visual-builder.js', [], DIP_VERSION, true);
         wp_enqueue_script('dip-admin', DIP_URL . 'assets/admin.js', [], DIP_VERSION, true);
@@ -253,16 +279,26 @@ final class DIP_Plugin {
     }
 
     public function sanitize_settings($input) {
+        $input = is_array($input) ? $input : [];
+        // Only the settings form posts checkbox markers. Internal writes
+        // (activation, "Réactiver Google", Provider Manager, backup restore)
+        // pass the stored array, where re-applying the form rules turned every
+        // stored "no" into "yes": social-login maintenance, new-user approval,
+        // risk blocking, mobile API and Microsoft were all switched on.
+        if (!$this->is_settings_form_submission()) return self::flag_cache_purge(self::sanitize_stored_settings($input));
+        delete_option(self::SETTINGS_REVIEW);
         $old = $this->settings();
         $out = wp_parse_args($old, self::defaults());
-        foreach (['enabled','allow_registration','link_existing_email','remember_login','auto_wp_login','auto_my_account','auto_checkout','use_google_avatar','security_log_enabled','lockout_enabled','show_divider','mobile_full_width','trusted_devices_enabled','new_device_email','mobile_api_enabled','mobile_push_enabled','mobile_biometric_enabled','provider_framework_enabled','microsoft_enabled','microsoft_link_existing_email','adaptive_risk_blocking','country_header_required','require_new_user_approval','block_privileged_social_login','social_login_maintenance','health_email','performance_maintenance_enabled','conditional_assets','performance_health_cache','show_native_login_link','auto_comments','auto_lost_password','bypass_cache_redirect','google_prompt_select_account','sync_profile_name','hide_social_for_logged_in','native_modal_enabled','strict_rest_firewall','two_factor_available','passkeys_available','admin_google_secure_mode'] as $key) {
-            $out[$key] = !empty($input[$key]) ? 'yes' : 'no';
+        foreach (['enabled','allow_registration','link_existing_email','remember_login','auto_wp_login','auto_my_account','auto_checkout','use_google_avatar','security_log_enabled','lockout_enabled','show_divider','mobile_full_width','trusted_devices_enabled','new_device_email','mobile_api_enabled','mobile_push_enabled','mobile_biometric_enabled','microsoft_enabled','adaptive_risk_blocking','country_header_required','require_new_user_approval','social_login_maintenance','performance_maintenance_enabled','conditional_assets','performance_health_cache','show_native_login_link','auto_comments','auto_lost_password','bypass_cache_redirect','google_prompt_select_account','sync_profile_name','hide_social_for_logged_in','native_modal_enabled','strict_rest_firewall','two_factor_available','passkeys_available','admin_google_secure_mode'] as $key) {
+            $out[$key] = in_array($input[$key] ?? null, ['1', 1, true, 'yes', 'on'], true) ? 'yes' : 'no';
         }
         // From 6.9.16 onward maintenance is an explicit administrator decision,
         // not an untracked value that can silently survive an update forever.
         $out['social_login_maintenance_explicit'] = 'yes';
-        $out['social_login_maintenance_changed_at'] = time();
-        $out['social_login_maintenance_changed_by'] = get_current_user_id();
+        if ($out['social_login_maintenance'] !== ($old['social_login_maintenance'] ?? 'no')) {
+            $out['social_login_maintenance_changed_at'] = time();
+            $out['social_login_maintenance_changed_by'] = get_current_user_id();
+        }
         // Privileged social access is a non-downgradeable policy. WordPress
         // Administrators have only the explicit Google Secure Mode exception;
         // editors/shop managers and other privileged accounts remain blocked.
@@ -379,6 +415,45 @@ final class DIP_Plugin {
         }
         $out['role_redirects'] = implode("\n", $clean_roles);
         $out['button_layout'] = in_array(($input['button_layout'] ?? 'wide'), ['wide','row','icon'], true) ? $input['button_layout'] : 'wide';
+        return self::flag_cache_purge($out);
+    }
+
+    /**
+     * Cached storefront pages embed the social buttons. When a setting that
+     * decides whether or how they render changes, purge the page cache on the
+     * next request (see maybe_purge_recovery_cache) so customers do not keep
+     * getting a stale button, or none.
+     */
+    private static function flag_cache_purge(array $out) {
+        $stored = wp_parse_args((array) get_option(self::OPTION, []), self::defaults());
+        foreach (['enabled', 'client_id', 'client_secret', 'social_login_maintenance', 'button_text', 'microsoft_enabled', 'microsoft_client_id', 'provider_order', 'native_modal_enabled'] as $key) {
+            $before = (string) ($stored[$key] ?? '');
+            $after = (string) ($out[$key] ?? '');
+            // Secrets are re-encrypted with a fresh nonce on every save.
+            if ($key === 'client_secret') { $before = DIP_Crypto::decrypt($before); $after = DIP_Crypto::decrypt($after); }
+            if ($before !== $after) {
+                set_transient(self::RECOVERY_PURGE, 1, 30 * MINUTE_IN_SECONDS);
+                break;
+            }
+        }
+        return $out;
+    }
+
+    private function is_settings_form_submission() {
+        return isset($_POST['option_page']) && is_string($_POST['option_page']) && sanitize_key(wp_unslash($_POST['option_page'])) === 'dip_group';
+    }
+
+    /** Keep an internally written settings array as is, with the non-negotiable policies and encrypted secrets. */
+    private static function sanitize_stored_settings(array $input) {
+        $out = wp_parse_args($input, self::defaults());
+        $out['block_privileged_social_login'] = 'yes';
+        $out['microsoft_link_existing_email'] = 'no';
+        foreach (['client_secret', 'microsoft_client_secret'] as $key) {
+            $value = (string) ($out[$key] ?? '');
+            if ($value === '' || strpos($value, DIP_Crypto::PREFIX) === 0 || strpos($value, 'dglp_enc_v1:') === 0) continue;
+            $encrypted = DIP_Crypto::encrypt($value);
+            if ($encrypted !== '') $out[$key] = $encrypted;
+        }
         return $out;
     }
 
@@ -435,7 +510,7 @@ final class DIP_Plugin {
             <p>Le modal sécurisé est maintenant intégré directement à Delicat Identity. E-mail/mot de passe, Google, WooCommerce, appareils, sessions et journal de sécurité utilisent un seul moteur.</p>
             <div class="dip-copy-row"><code id="dip-account-shortcode">[delicat_login_button]</code><button type="button" class="button" data-dip-copy="#dip-account-shortcode">Copier</button></div>
             <div class="dip-copy-row"><code id="dip-panel-shortcode">[delicat_login_panel]</code><button type="button" class="button" data-dip-copy="#dip-panel-shortcode">Copier</button></div>
-            <p><strong>Important :</strong> désactivez l’ancien snippet de modal dans Code Snippets pour éviter les doublons. Utilisez <code>[delicat_login_button]</code> ou un lien <code>#delicat-login</code>.</p>
+            <p>Utilisez <code>[delicat_login_button]</code> ou un lien <code>#delicat-login</code>.</p>
           </div>
           <div class="dip-oauth-actions">
             <a class="button button-primary" target="_blank" rel="noopener" href="<?php echo esc_url($this->native_account_url($s)); ?>">Tester Mon compte</a>
@@ -459,8 +534,6 @@ final class DIP_Plugin {
           <?php $this->checkbox_row('passkeys_available','Autoriser les Passkeys / WebAuthn (Face ID, Touch ID, biométrie, clés de sécurité)',$s); ?>
           <tr><th>Passkeys par compte</th><td><input type="number" min="1" max="12" name="<?php echo esc_attr(self::OPTION); ?>[passkeys_max_per_user]" value="<?php echo esc_attr($s['passkeys_max_per_user'] ?? 8); ?>"><p class="description">Chaque Passkey est liée au domaine configuré, exige la vérification utilisateur et ne stocke dans WordPress que la clé publique.</p></td></tr>
           <tr><th>Ré-authentification sensible</th><td><label>Durée de confirmation <input type="number" min="5" max="60" name="<?php echo esc_attr(self::OPTION); ?>[sensitive_reauth_minutes]" value="<?php echo esc_attr($s['sensitive_reauth_minutes'] ?? 10); ?>"> minutes</label><p class="description">Après une connexion ou une confirmation d’identité réussie, les actions sensibles restent autorisées uniquement pendant cette fenêtre et uniquement dans la session courante.</p></td></tr>
-          <tr><th>2FA administrateur</th><td><strong>Enrôlement recommandé avant obligation</strong><p class="description">La version 6.9.0 n’active pas automatiquement une obligation globale afin d’éviter le verrouillage de l’administrateur. Le Centre de sécurité signale chaque compte Administrateur sans 2FA.</p></td></tr>
-          <tr><th>Outils globaux de sécurité</th><td><strong>Administrateur WordPress uniquement</strong><p class="description">Cette restriction est imposée par le moteur d’autorisation et ne peut pas être désactivée depuis le compte client.</p></td></tr>
           <tr><th>Sécurité du mot de passe</th><td><label>Tentatives avant verrouillage <input type="number" min="3" max="20" name="<?php echo esc_attr(self::OPTION); ?>[native_max_attempts]" value="<?php echo esc_attr($s['native_max_attempts']); ?>"></label> &nbsp; <label>Verrouillage initial (min) <input type="number" min="5" max="60" name="<?php echo esc_attr(self::OPTION); ?>[native_lockout_base]" value="<?php echo esc_attr($s['native_lockout_base']); ?>"></label> &nbsp; <label>Maximum (min) <input type="number" min="5" max="1440" name="<?php echo esc_attr(self::OPTION); ?>[native_lockout_max]" value="<?php echo esc_attr($s['native_lockout_max']); ?>"></label><p class="description">Progression par défaut : 15 → 30 → 60 → 120 minutes.</p></td></tr>
           <tr><th>Inscription native</th><td><label>Maximum / IP / heure <input type="number" min="1" max="20" name="<?php echo esc_attr(self::OPTION); ?>[native_reg_max_per_hour]" value="<?php echo esc_attr($s['native_reg_max_per_hour']); ?>"></label> &nbsp; <label>Mot de passe min. <input type="number" min="8" max="64" name="<?php echo esc_attr(self::OPTION); ?>[native_password_min]" value="<?php echo esc_attr($s['native_password_min']); ?>"></label> &nbsp; <label>max. <input type="number" min="8" max="256" name="<?php echo esc_attr(self::OPTION); ?>[native_password_max]" value="<?php echo esc_attr($s['native_password_max']); ?>"></label></td></tr>
           <tr id="dip-redirects"><th colspan="2"><h2>Redirections après authentification</h2><p class="description">Ces destinations sont utilisées uniquement lorsqu’aucune page de départ sûre (par exemple le paiement WooCommerce) ne doit être restaurée. Le plugin refuse toujours wp-login.php, wp-admin, déconnexion et réinitialisation de mot de passe après une connexion réussie.</p></th></tr>
@@ -486,12 +559,11 @@ final class DIP_Plugin {
           <tr><th>Politique pays</th><td><select name="<?php echo esc_attr(self::OPTION); ?>[country_policy_mode]"><option value="off" <?php selected($s['country_policy_mode'],'off'); ?>>Désactivée</option><option value="allow" <?php selected($s['country_policy_mode'],'allow'); ?>>Autoriser seulement</option><option value="deny" <?php selected($s['country_policy_mode'],'deny'); ?>>Bloquer</option></select> <input name="<?php echo esc_attr(self::OPTION); ?>[country_codes]" value="<?php echo esc_attr($s['country_codes']); ?>" placeholder="HT,DO,US"><p class="description">Utilise CF-IPCountry uniquement si la confiance Cloudflare est explicitement activée dans wp-config.php avec <code>DIP_TRUST_CLOUDFLARE_HEADERS</code> (ou <code>DIP_TRUST_CLOUDFLARE_CONNECTING_IP</code>). L’origine doit rester inaccessible directement afin que ces en-têtes ne puissent pas être falsifiés.</p></td></tr>
           <?php $this->checkbox_row('country_header_required','Refuser si le pays ne peut pas être vérifié',$s); ?>
           <?php $this->checkbox_row('require_new_user_approval','Exiger l’approbation admin pour les nouveaux comptes sociaux',$s); ?>
-          <tr><th>Rôles privilégiés non-admin</th><td><strong>Blocage social imposé</strong><input type="hidden" name="<?php echo esc_attr(self::OPTION); ?>[block_privileged_social_login]" value="1"><p class="description">Editors, shop managers et autres rôles privilégiés ne peuvent pas désactiver cette protection depuis les réglages.</p></td></tr>
+          <tr><th>Rôles privilégiés non-admin</th><td><strong>Blocage social imposé</strong><p class="description">Editors, shop managers et autres rôles privilégiés ne peuvent pas désactiver cette protection depuis les réglages.</p></td></tr>
           <?php $this->checkbox_row('admin_google_secure_mode','Autoriser Google Secure Mode uniquement pour les Administrateurs explicitement approuvés + TOTP',$s); ?>
           <tr><th>Google Administrateur</th><td><p class="description"><strong>Politique renforcée :</strong> une correspondance d’e-mail Google ne peut jamais ouvrir un compte Administrateur. L’identité Google doit être liée depuis une session Administrateur déjà authentifiée, explicitement approuvée, puis chaque connexion Google exige TOTP avant l’émission du cookie WordPress. Microsoft et les autres connexions sociales restent bloqués pour les Administrateurs.</p></td></tr>
           <?php $this->checkbox_row('social_login_maintenance','Mode urgence des connexions sociales (masquer Google/Microsoft)',$s); ?>
           <tr><th></th><td><p class="description">Utilisez uniquement ce commutateur pour une interruption volontaire d’OAuth. La maintenance visuelle du site dans Delicat Builder ne désactive pas automatiquement Google.</p></td></tr>
-          <?php $this->checkbox_row('health_email','Alerte e-mail si la santé système devient critique',$s); ?>
           <?php $this->checkbox_row('enabled','Activer Google Login',$s); ?>
           <?php $this->checkbox_row('allow_registration','Créer les nouveaux clients',$s); ?>
           <?php $this->checkbox_row('link_existing_email','Relier automatiquement un client existant par email Google vérifié',$s); ?>
@@ -509,7 +581,6 @@ final class DIP_Plugin {
           <?php $this->checkbox_row('mobile_biometric_enabled','Activer la connexion biométrique liée à l’appareil',$s); ?>
           <tr><th>Durée jeton mobile</th><td><input type="number" min="300" max="3600" name="<?php echo esc_attr(self::OPTION); ?>[mobile_access_ttl]" value="<?php echo esc_attr($s['mobile_access_ttl']); ?>"> secondes</td></tr>
           <tr><th>Durée actualisation mobile</th><td><input type="number" min="86400" max="7776000" name="<?php echo esc_attr(self::OPTION); ?>[mobile_refresh_ttl]" value="<?php echo esc_attr($s['mobile_refresh_ttl']); ?>"> secondes</td></tr>
-          <?php $this->checkbox_row('provider_framework_enabled','Activer l’architecture modulaire des fournisseurs',$s); ?>
           <tr><th>Texte du bouton</th><td><input class="regular-text" name="<?php echo esc_attr(self::OPTION); ?>[button_text]" value="<?php echo esc_attr($s['button_text']); ?>"></td></tr>
           <tr><th>Rôle des nouveaux comptes</th><td><select name="<?php echo esc_attr(self::OPTION); ?>[default_role]"><?php foreach (wp_roles()->roles as $key=>$role) { if (class_exists('DIP_Account_Sync') && DIP_Account_Sync::safe_registration_role($key) !== sanitize_key($key)) continue; echo '<option value="'.esc_attr($key).'" '.selected($s['default_role'],$key,false).'>'.esc_html($role['name']).'</option>'; } ?></select><p class="description">Seuls les rôles client sans capacités d’administration, de publication ou de gestion sont proposés.</p></td></tr>
           <tr><th>Limitation</th><td><input type="number" min="3" max="50" name="<?php echo esc_attr(self::OPTION); ?>[rate_limit]" value="<?php echo esc_attr($s['rate_limit']); ?>"> tentatives / <input type="number" min="5" max="60" name="<?php echo esc_attr(self::OPTION); ?>[rate_window]" value="<?php echo esc_attr($s['rate_window']); ?>"> minutes</td></tr>
@@ -557,12 +628,16 @@ final class DIP_Plugin {
           </table>
           <p><strong>Shortcodes :</strong> <code>[delicat_social_login_buttons providers="google,microsoft" trackerdata="checkout"]</code> · <code>[delicat_social_login_link provider="google"]</code></p>
         </section>
+        <table class="form-table" role="presentation">
+          <?php $this->checkbox_row('performance_maintenance_enabled','Maintenance automatique quotidienne',$s); ?>
+          <?php $this->checkbox_row('conditional_assets','Charger les ressources uniquement où nécessaire',$s); ?>
+          <?php $this->checkbox_row('performance_health_cache','Mettre en cache les diagnostics pendant 5 minutes',$s); ?>
+        </table>
         <div class="dip-save-bar"><div><strong>Modifications de configuration</strong><span>Enregistrez avant de tester les fournisseurs ou les redirections.</span></div><?php submit_button('Enregistrer les réglages', 'primary', 'submit', false); ?></div></form>
         <div id="dip-tools" class="dip-section-anchor"></div><?php $this->render_performance_center($s); ?>
         <?php $this->render_sdk_center(); ?>
         <?php $this->render_assistant_center($s); ?>
         <?php $this->render_operations_dashboard($s); ?>
-        <?php $this->render_provider_center($s); ?>
         <div id="dip-security" class="dip-section-anchor"></div><?php $this->render_security_center($s); ?>
         <?php $this->render_phase6($s); ?>
         <div id="dip-migration" class="dip-section-anchor"></div><?php $this->render_migration_assistant(); ?>
@@ -573,9 +648,13 @@ final class DIP_Plugin {
         echo '<tr><th>' . esc_html($label) . '</th><td><label><input type="checkbox" name="' . esc_attr(self::OPTION) . '[' . esc_attr($key) . ']" value="1" ' . checked($s[$key], 'yes', false) . '> Oui</label></td></tr>';
     }
 
-    public function route() {
+    public function route_callback() {
+        if (isset($_GET['dip_action']) && sanitize_key(wp_unslash($_GET['dip_action'])) === 'callback') $this->route(true);
+    }
+
+    public function route($callback_phase = false) {
         $action = isset($_GET['dip_action']) ? sanitize_key(wp_unslash($_GET['dip_action'])) : '';
-        if (!$action) return;
+        if (!$action || ($action === 'callback') !== ($callback_phase === true)) return;
         $settings = $this->settings();
         if (($settings['social_login_maintenance'] ?? 'no') === 'yes' && in_array($action, ['login','callback'], true) && !current_user_can('manage_options')) {
             // A stale page cache can still contain a Google link after an
@@ -590,7 +669,14 @@ final class DIP_Plugin {
             $this->recover_failure_context(sanitize_text_field(wp_unslash($_GET['state'] ?? '')));
             $this->fail('La connexion sociale est temporairement en maintenance.', 'maintenance', false);
         }
+        // The OAuth endpoints share the home URL: make sure no page cache
+        // (LiteSpeed, a query-blind edge rule) answers them with cached HTML.
+        if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+        do_action('litespeed_control_set_nocache', 'Delicat Identity OAuth');
         nocache_headers();
+        header('X-LiteSpeed-Cache-Control: no-cache');
+        header('CDN-Cache-Control: no-store');
+        header('Cloudflare-CDN-Cache-Control: no-store');
         header('Referrer-Policy: no-referrer');
         header('X-Content-Type-Options: nosniff');
         if ($action === 'login') $this->start_login();
@@ -598,22 +684,31 @@ final class DIP_Plugin {
     }
 
     private function start_login() {
+        $this->canonicalize_login_request();
         $s = $this->settings();
         $this->failure_tracker = substr(sanitize_text_field(wp_unslash($_GET['tracker'] ?? '')), 0, 100);
         $this->failure_return_url = $this->safe_redirect($_GET['redirect'] ?? '');
         $provider_id = sanitize_key(wp_unslash($_GET['provider'] ?? 'google'));
         $provider = $this->provider($provider_id, $s);
-        if (!$provider || !$provider->is_configured($s)) $this->fail('Ce fournisseur de connexion n’est pas configuré.', 'not_configured');
+        if (!$provider || !$provider->is_configured($s)) $this->fail('Ce fournisseur de connexion n’est pas configuré.', 'not_configured', false);
         if ($s['lockout_enabled'] === 'yes' && DIP_Lockout::is_locked()) $this->fail('Connexion temporairement bloquée. Réessayez plus tard.', 'temporarily_locked', false);
-        if (!$this->rate_limit()) $this->fail('Trop de tentatives. Réessayez plus tard.', 'rate_limited');
+        // A "Connecter" link whose session has expired must not silently turn
+        // into a sign-in, which could create a second account.
+        if (!empty($_GET['link']) && !is_user_logged_in()) $this->fail('La session utilisée pour relier ce fournisseur n’est plus valide.', 'link_session_mismatch', false);
         $link = is_user_logged_in() && !empty($_GET['link']);
         if ($link) {
             $nonce = sanitize_text_field(wp_unslash($_GET['_dip_nonce'] ?? ''));
-            if (!wp_verify_nonce($nonce, 'dip_link_' . get_current_user_id())) $this->fail('Demande de liaison invalide.', 'invalid_link_nonce');
+            if (!wp_verify_nonce($nonce, 'dip_link_' . get_current_user_id())) $this->fail('Demande de liaison invalide.', 'invalid_link_nonce', false);
         } elseif (is_user_logged_in()) {
-            wp_safe_redirect($this->safe_redirect($_GET['redirect'] ?? ''));
+            // Already signed in (e.g. a stale cached page still shows the
+            // button): return without spending a throttle slot, marked so the
+            // page is rendered fresh instead of from a logged-out cache.
+            $destination = $this->post_login_redirect((string) ($_GET['redirect'] ?? ''), $this->native_account_url($s));
+            wp_safe_redirect(add_query_arg('dip_auth_sync', DIP_Session_Router::sync_marker(), remove_query_arg('dip_auth_sync', $destination)));
             exit;
         }
+        if ($provider_id === 'google' && empty($_GET['dip_webview_ok']) && self::is_embedded_browser()) $this->render_embedded_browser_notice();
+        if (!$this->rate_limit()) $this->fail('Trop de tentatives. Réessayez plus tard.', 'rate_limited', false);
         $tracker = sanitize_text_field(wp_unslash($_GET['tracker'] ?? ''));
         $flow = DIP_Flow_Store::create($this->safe_redirect($_GET['redirect'] ?? ''), $link ? get_current_user_id() : 0, $provider_id, $tracker);
         $authorization_url = $this->trusted_authorization_url($provider->authorization_url($flow), $provider_id, $provider);
@@ -639,7 +734,9 @@ final class DIP_Plugin {
         // return the customer to the Delicat modal instead of wp-login.php.
         $this->recover_failure_context($state);
         $flow = DIP_Flow_Store::consume($state);
+        if (is_wp_error($flow) && $flow->get_error_code() === 'state_already_used') $this->resume_completed_flow($state);
         if (is_wp_error($flow)) $this->fail($flow->get_error_message(), $flow->get_error_code(), false);
+        $this->claimed_state = $state;
         $this->failure_tracker = substr(sanitize_text_field((string) ($flow['tracker'] ?? '')), 0, 100);
         $this->failure_return_url = $this->safe_redirect($flow['redirect'] ?? '');
         if ($error) $this->fail('Connexion sociale annulée ou refusée.', 'access_denied', false);
@@ -688,6 +785,7 @@ final class DIP_Plugin {
             $link_destination = $this->post_login_redirect((string)($flow['redirect'] ?? ''), $this->native_account_url($s));
             $link_destination = $link_destination ?: $this->native_account_url($s);
             if ($is_admin && $provider_id === 'google') $link_destination = add_query_arg('dip_admin_google_status', 'authorized', $link_destination);
+            DIP_Flow_Store::complete($state, ['outcome' => 'redirect', 'user' => $user_id, 'destination' => $link_destination]);
             wp_safe_redirect($link_destination);
             exit;
         }
@@ -723,7 +821,7 @@ final class DIP_Plugin {
         $destination = $this->post_login_redirect($destination, $configured ?: $fallback);
         if (!$headless_google_flow) {
             $destination = remove_query_arg('dip_auth_sync', $destination);
-            $destination = add_query_arg('dip_auth_sync', '1', $destination);
+            $destination = add_query_arg('dip_auth_sync', DIP_Session_Router::sync_marker(), $destination);
         }
 
         // Accounts with TOTP enabled complete a browser-bound second-factor
@@ -736,6 +834,7 @@ final class DIP_Plugin {
                 sanitize_key($provider_id . '_social')
             );
             if ($challenge !== '') {
+                DIP_Flow_Store::complete($state, ['outcome' => 'redirect', 'user' => $user_id, 'destination' => $challenge]);
                 wp_safe_redirect($challenge);
                 exit;
             }
@@ -749,6 +848,8 @@ final class DIP_Plugin {
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::fire_wp_login($user, sanitize_key($provider_id . '_social'));
         else do_action('wp_login', $user->user_login, $user);
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user_id);
+        // Recorded before listeners run: the storefront handoff exits inside dip_login_success.
+        DIP_Flow_Store::complete($state, ['outcome' => 'session', 'user' => $user_id, 'destination' => $destination, 'remember' => $s['remember_login'] === 'yes']);
         do_action('dip_login_success', $user_id, $profile);
         $this->event('login_success', $user_id, 'info', ['provider' => sanitize_key($flow['provider'] ?? 'google')]);
         DIP_Lockout::clear_failures();
@@ -756,14 +857,119 @@ final class DIP_Plugin {
         exit;
     }
 
+    /**
+     * A second callback for an already consumed state (double tap, browser
+     * prefetch, Android custom tab replay) used to show "session expired"
+     * even though the first callback had signed the customer in. Show the
+     * first callback's result instead. A new session is only delivered to the
+     * same browser (binding cookie), once, shortly after the first completed;
+     * the provider code is never exchanged twice.
+     */
+    private function resume_completed_flow($state) {
+        if (is_user_logged_in()) {
+            $record = DIP_Flow_Store::completion($state);
+            $destination = ($record && (int) ($record['user'] ?? 0) === get_current_user_id()) ? (string) ($record['destination'] ?? '') : '';
+            wp_safe_redirect($this->post_login_redirect($destination, $this->native_account_url($this->settings())));
+            exit;
+        }
+        $record = DIP_Flow_Store::completion($state, 8);
+        if (!$record || empty($record['completed'])) return;
+        $outcome = (string) ($record['outcome'] ?? '');
+        $user_id = absint($record['user'] ?? 0);
+        // Showing the first callback's error, or sending the browser back to
+        // the 2FA challenge / link page, grants nothing by itself: those pages
+        // enforce their own cookies. Only a new session needs browser proof.
+        if ($outcome === 'failed') {
+            $this->fail('La connexion n’a pas pu être finalisée.', (string) ($record['code'] ?? 'authentication_failed'), false);
+        }
+        if ($outcome === 'redirect' && !empty($record['destination'])) {
+            wp_safe_redirect((string) $record['destination']);
+            exit;
+        }
+        if ($outcome !== 'session' || empty($record['browser_ok']) || !$user_id || time() - (int) $record['completed'] > DIP_Flow_Store::REPLAY_WINDOW) return;
+        if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id)) return;
+        $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user_id) : true;
+        if (is_wp_error($guard) || !get_userdata($user_id) || !DIP_Flow_Store::claim_redelivery($state)) return;
+        wp_set_current_user($user_id);
+        wp_set_auth_cookie($user_id, !empty($record['remember']), is_ssl());
+        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user_id);
+        $this->event('login_session_redelivered', $user_id, 'notice');
+        wp_safe_redirect((string) ($record['destination'] ?? $this->native_account_url($this->settings())));
+        exit;
+    }
+
+    /**
+     * The browser-binding cookie is written for the host that serves this
+     * request, while the provider always returns to home_url(). Start the flow
+     * on the canonical scheme and host (e.g. www vs apex) so the callback can
+     * read the cookie.
+     */
+    private function canonicalize_login_request() {
+        if (!empty($_GET['dip_canonical'])) return;
+        $home = wp_parse_url(home_url('/'));
+        $expected = strtolower(($home['host'] ?? '') . (isset($home['port']) ? ':' . $home['port'] : ''));
+        $host = strtolower(sanitize_text_field(wp_unslash($_SERVER['HTTP_HOST'] ?? '')));
+        $scheme_ok = (($home['scheme'] ?? 'https') === 'https') === is_ssl();
+        if ($host === '' || $expected === '' || ($host === $expected && $scheme_ok)) return;
+        $query = (string) ($_SERVER['QUERY_STRING'] ?? '');
+        wp_safe_redirect(add_query_arg('dip_canonical', '1', home_url('/') . ($query !== '' ? '?' . $query : '')), 302, 'Delicat Identity');
+        exit;
+    }
+
+    /**
+     * Google refuses OAuth inside embedded web views (Instagram, Facebook,
+     * TikTok, Android WebView, iOS in-app WKWebView) with "403
+     * disallowed_useragent". Detect them before sending the customer there.
+     */
+    public static function is_embedded_browser($user_agent = null) {
+        $ua = (string) ($user_agent ?? ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+        if ($ua === '') return false;
+        if (preg_match('/FBAN|FBAV|FB_IAB|FBIOS|FB4A|Instagram|MicroMessenger|\bLine\/|Snapchat|musical_ly|BytedanceWebview|TikTok/i', $ua)) return true;
+        if (stripos($ua, 'Android') !== false && strpos($ua, '; wv)') !== false) return true;
+        // iOS in-app WKWebView lacks the Safari token that Safari, Chrome,
+        // Firefox, Edge and SFSafariViewController all send.
+        return (bool) preg_match('/iPhone|iPad|iPod/i', $ua) && stripos($ua, 'AppleWebKit') !== false && stripos($ua, 'Safari/') === false;
+    }
+
+    private function render_embedded_browser_notice() {
+        $login = add_query_arg('dip_webview_ok', '1', home_url('/') . '?' . (string) ($_SERVER['QUERY_STRING'] ?? ''));
+        $android = stripos((string) ($_SERVER['HTTP_USER_AGENT'] ?? ''), 'Android') !== false;
+        $parts = wp_parse_url($login);
+        $intent = 'intent://' . ($parts['host'] ?? '') . (isset($parts['port']) ? ':' . $parts['port'] : '') . ($parts['path'] ?? '/')
+            . (isset($parts['query']) ? '?' . $parts['query'] : '')
+            . '#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=' . rawurlencode($login) . ';end';
+        $back = $this->failure_return_url ?: home_url('/');
+        if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+        status_header(200);
+        header('Content-Type: text/html; charset=UTF-8');
+        header('X-Frame-Options: DENY');
+        echo '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>' . esc_html__('Ouvrir dans votre navigateur', 'delicat-google-login') . '</title>'
+            . '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f5fc;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#171b32}main{max-width:420px;margin:24px 16px;background:#fff;border-radius:18px;padding:28px 24px;box-shadow:0 12px 40px rgba(23,27,50,.12)}h1{font-size:20px;margin:0 0 12px}p{margin:0 0 16px}.b{display:block;width:100%;box-sizing:border-box;text-align:center;padding:14px;border-radius:12px;font-weight:700;text-decoration:none;border:0;font-size:16px;margin:0 0 10px;cursor:pointer}.p{background:#1a73e8;color:#fff}.s{background:#eef1f8;color:#171b32}small{color:#5b6178}</style></head><body><main>'
+            . '<h1>' . esc_html__('Continuer avec Google dans votre navigateur', 'delicat-google-login') . '</h1>'
+            . '<p>' . esc_html__('Google n’autorise pas la connexion depuis le navigateur intégré de cette application (Instagram, Facebook, TikTok…). Ouvrez cette page dans Chrome ou Safari pour continuer.', 'delicat-google-login') . '</p>'
+            . ($android ? '<a class="b p" href="' . esc_attr($intent) . '">' . esc_html__('Ouvrir dans Chrome', 'delicat-google-login') . '</a>' : '<p><small>' . esc_html__('Touchez « ⋯ » ou « Partager », puis « Ouvrir dans Safari / le navigateur ».', 'delicat-google-login') . '</small></p>')
+            . '<button type="button" class="b s" id="dip-copy">' . esc_html__('Copier le lien', 'delicat-google-login') . '</button>'
+            . '<a class="b s" href="' . esc_url($login) . '">' . esc_html__('Essayer quand même ici', 'delicat-google-login') . '</a>'
+            . '<a class="b s" href="' . esc_url($back) . '">' . esc_html__('Retour', 'delicat-google-login') . '</a>'
+            . '</main><script>(function(){var b=document.getElementById("dip-copy"),u=' . wp_json_encode(esc_url_raw($login)) . ';b.addEventListener("click",function(){function ok(){b.textContent=' . wp_json_encode(__('Lien copié ✓', 'delicat-google-login')) . ';}if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(u).then(ok,function(){window.prompt("",u);});}else{window.prompt("",u);}});})();</script></body></html>';
+        exit;
+    }
+
+    /**
+     * Throttle sign-in starts per device (address + browser), with a ten times
+     * larger ceiling per address. Many customers can share one public address
+     * (mobile carrier NAT, offices, Wi-Fi), so the address bucket only stops
+     * floods. Windows are fixed: retrying never extends the wait.
+     */
     private function rate_limit() {
         $s = $this->settings();
-        $address = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::client_ip() : sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-        $fingerprint = substr(hash_hmac('sha256', $address, wp_salt('nonce')), 0, 32);
-        $key = 'dip_rate_' . $fingerprint;
-        $count = (int) get_transient($key) + 1;
-        set_transient($key, $count, (int) $s['rate_window'] * MINUTE_IN_SECONDS);
-        return $count <= (int) $s['rate_limit'];
+        $limit = max(1, (int) $s['rate_limit']);
+        $window = max(1, (int) $s['rate_window']) * MINUTE_IN_SECONDS;
+        $address = DIP_Native_Auth::throttle_ip();
+        $agent = substr(sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 300);
+        $device = DIP_Lockout::window_hit('dip_rate_' . substr(hash_hmac('sha256', $address . '|' . $agent, wp_salt('nonce')), 0, 32), $window);
+        $shared = DIP_Lockout::window_hit('dip_rate_ip_' . substr(hash_hmac('sha256', $address, wp_salt('nonce')), 0, 32), $window);
+        return $device <= $limit && $shared <= $limit * 10;
     }
 
     private function recover_failure_context($state) {
@@ -796,10 +1002,18 @@ final class DIP_Plugin {
         $code = sanitize_key($code) ?: 'authentication_failed';
         $severity = in_array($code, ['rate_limited','temporarily_locked','duplicate_google_identity','browser_mismatch','browser_binding_failed','admin_google_identity_mismatch','admin_google_not_authorized','admin_google_two_factor_required','provider_already_linked_elsewhere'], true) ? 'critical' : 'warning';
         $this->event('login_' . $code, 0, $severity, ['detail_hash'=>hash('sha256', wp_strip_all_tags((string) $message))]);
-        if ($count_failure && ($s['lockout_enabled'] ?? 'yes') === 'yes') DIP_Lockout::register_failure($s);
+        if ($count_failure && in_array($code, self::LOCKOUT_CODES, true) && ($s['lockout_enabled'] ?? 'yes') === 'yes') DIP_Lockout::register_failure($s);
+        if ($this->claimed_state !== '') DIP_Flow_Store::complete($this->claimed_state, ['outcome' => 'failed', 'code' => $code]);
         // Only a normalized error code crosses the redirect boundary. The
         // login page maps it to a trusted local message, preventing arbitrary
         // query text from impersonating a Delicat security notice.
+        // A callback whose flow is gone (expired, already used) has no page to
+        // return to. Show the storefront modal rather than wp-login.php, which
+        // security plugins often hide or rename.
+        if ($this->failure_tracker === '' && $this->failure_return_url === '' && ($s['native_modal_enabled'] ?? 'yes') === 'yes') {
+            $this->failure_tracker = 'native_modal';
+            $this->failure_return_url = home_url('/');
+        }
         if ($this->is_native_modal_tracker($this->failure_tracker) && $this->failure_return_url !== '') {
             $return = $this->safe_redirect($this->failure_return_url);
             if ($return !== '') {
@@ -845,6 +1059,7 @@ final class DIP_Plugin {
             'invalid_authorization_url' => __('La configuration de connexion Google est invalide. Vérifiez les réglages OAuth.', 'delicat-google-login'),
             'missing_callback_data' => __('Google a renvoyé une réponse incomplète. Recommencez la connexion.', 'delicat-google-login'),
             'invalid_state' => __('La session Google a expiré ou n’est plus valide. Recommencez depuis Delicat Store.', 'delicat-google-login'),
+            'state_already_used' => __('Cette connexion Google a déjà été traitée. Si vous n’êtes pas connecté, recommencez.', 'delicat-google-login'),
             'browser_binding_failed' => __('La session Google n’est plus liée à ce navigateur. Fermez puis relancez la connexion.', 'delicat-google-login'),
             'token_transport_error' => __('Impossible de contacter Google pour terminer la connexion. Réessayez.', 'delicat-google-login'),
             'token_error' => __('Google n’a pas validé cette tentative de connexion. Recommencez.', 'delicat-google-login'),
@@ -888,10 +1103,6 @@ final class DIP_Plugin {
             || (bool) array_intersect((array) $user->roles, $blocked);
     }
 
-    private function configured(array $s) {
-        return $s['enabled'] === 'yes' && is_ssl() && !empty($s['client_id']) && !empty($s['client_secret']);
-    }
-
     private function provider($id, array $settings = []) {
         if (!$settings) $settings = $this->settings();
         $registry = new DIP_Provider_Registry();
@@ -903,19 +1114,6 @@ final class DIP_Plugin {
          */
         do_action('dip_register_identity_providers', $registry, $settings);
         return $registry->get($id);
-    }
-
-    private function render_provider_center(array $s) {
-        $registry = new DIP_Provider_Registry();
-        $registry->register(new DIP_Google_Provider($s, $this->callback_url('google')));
-        $registry->register(new DIP_Microsoft_Provider($s, $this->callback_url('microsoft')));
-        do_action('dip_register_identity_providers', $registry, $s);
-        echo '<section class="dip-builder-card"><div class="dip-builder-head"><div><span>PHASE 9</span><h2>Fournisseurs d’identité modulaires</h2><p>Chaque fournisseur est isolé du moteur principal et doit valider ses jetons côté serveur.</p></div><strong>' . esc_html(count($registry->all())) . ' module(s)</strong></div><div class="dip-provider-grid">';
-        foreach ($registry->all() as $provider) {
-            $ok = $provider->is_configured($s);
-            echo '<div class="dip-provider-card"><h3>' . esc_html($provider->label()) . '</h3><p><strong>' . ($ok ? 'Configuré' : 'Non configuré') . '</strong></p><code>' . esc_html($provider->callback_url()) . '</code></div>';
-        }
-        echo '<div class="dip-provider-card"><h3>Apple / Discord / Steam</h3><p>Modules futurs. Ils restent désactivés jusqu’à leur validation cryptographique complète.</p></div></div></section>';
     }
 
     private function callback_url($provider = 'google') {
@@ -1064,8 +1262,34 @@ final class DIP_Plugin {
     public function google_availability_notice() {
         if (!current_user_can('manage_options')) return;
         $screen = function_exists('get_current_screen') ? get_current_screen() : null;
-        $on_settings = $screen && $screen->id === 'settings_page_delicat-identity';
+        $on_settings = $screen && substr((string) $screen->id, -strlen('page_delicat-identity')) === 'page_delicat-identity';
         if (!$on_settings && (!$screen || !in_array($screen->id, ['dashboard', 'plugins'], true))) return;
+        if (get_option(self::SETTINGS_REVIEW)) {
+            $raw = wp_parse_args((array) get_option(self::OPTION, []), self::defaults());
+            $labels = [
+                'social_login_maintenance' => __('maintenance des connexions sociales', 'delicat-google-login'),
+                'require_new_user_approval' => __('approbation des nouveaux comptes', 'delicat-google-login'),
+                'adaptive_risk_blocking' => __('blocage adaptatif', 'delicat-google-login'),
+                'country_header_required' => __('pays obligatoire', 'delicat-google-login'),
+                'mobile_api_enabled' => __('API mobile', 'delicat-google-login'),
+                'mobile_push_enabled' => __('notifications mobiles', 'delicat-google-login'),
+                'mobile_biometric_enabled' => __('biométrie mobile', 'delicat-google-login'),
+                'microsoft_enabled' => __('connexion Microsoft', 'delicat-google-login'),
+                'allow_registration' => __('inscription par Google', 'delicat-google-login'),
+                'link_existing_email' => __('liaison Google par e-mail', 'delicat-google-login'),
+                'admin_google_secure_mode' => __('Google Secure Mode Administrateur', 'delicat-google-login'),
+            ];
+            $enabled = [];
+            foreach ($labels as $key => $label) {
+                if (($raw[$key] ?? 'no') === 'yes') $enabled[] = $label;
+            }
+            // Kept until the settings form is saved (sanitize_settings clears it).
+            if ($enabled) {
+                echo '<div class="notice notice-warning"><p><strong>Delicat Identity :</strong> '
+                    . esc_html(sprintf(__('ces options sont activées : %s. Avant 6.9.20, le bouton « Réactiver Google », la page Fournisseurs ou une restauration de sauvegarde pouvaient les activer sans action de votre part. Vérifiez-les puis enregistrez les réglages.', 'delicat-google-login'), implode(', ', $enabled)))
+                    . ' <a href="' . esc_url(admin_url('options-general.php?page=delicat-identity#dip-settings')) . '">' . esc_html__('Ouvrir les réglages', 'delicat-google-login') . '</a></p></div>';
+            }
+        }
         if (get_transient(self::RECOVERY_NOTICE)) {
             delete_transient(self::RECOVERY_NOTICE);
             echo '<div class="notice notice-success is-dismissible"><p><strong>Delicat Identity — Google :</strong> '
@@ -1125,7 +1349,9 @@ final class DIP_Plugin {
         $url = add_query_arg([
             'dip_action' => 'login',
             'provider' => $provider_id,
-            'redirect' => $this->safe_redirect($args['redirect'] ?? $this->current_url()),
+            // add_query_arg() does not encode values: an unencoded URL with its own
+            // query string would leak its parameters into the login URL.
+            'redirect' => rawurlencode($this->safe_redirect($args['redirect'] ?? $this->current_url())),
             'tracker' => substr(sanitize_text_field((string) ($args['tracker'] ?? '')), 0, 100),
         ], home_url('/'));
         if (empty($args['tracker'])) $url = remove_query_arg('tracker', $url);
@@ -1283,8 +1509,8 @@ final class DIP_Plugin {
         if (!current_user_can('manage_options')) return;
         if (DIP_Migration::plugin_status() !== 'active') return;
         $screen = function_exists('get_current_screen') ? get_current_screen() : null;
-        if ($screen && $screen->id === 'settings_page_delicat-identity') return;
-        echo '<div class="notice notice-info"><p><strong>Delicat Identity Pro:</strong> Nextend is active. Keep both providers during testing, run the migration scan, then disable only Nextend Google after existing-customer validation. The secure login/register modal is now integrated into Delicat Identity; disable the old Code Snippets copy to avoid duplicate hooks, then use <code>[delicat_login_button]</code> or <code>#delicat-login</code>.</p></div>';
+        if ($screen && substr((string) $screen->id, -strlen('page_delicat-identity')) === 'page_delicat-identity') return;
+        echo '<div class="notice notice-info"><p><strong>Delicat Identity Pro:</strong> Nextend is active. Keep both providers during testing, run the migration scan, then disable only Nextend Google after existing-customer validation.</p></div>';
     }
 
     public function handle_oauth_test() {
@@ -1295,7 +1521,6 @@ final class DIP_Plugin {
             'https' => is_ssl(),
             'client_id' => !empty($s['client_id']),
             'client_secret' => !empty($s['client_secret']),
-            'callback' => $this->callback_url() === add_query_arg('dip_action', 'callback', home_url('/')),
             'google_discovery' => false,
         ];
         $error = '';
@@ -1506,7 +1731,7 @@ final class DIP_Plugin {
           </div>
           <div class="dip-final-migration-card">
             <div class="dip-section-head"><div><span class="dip-eyebrow">VÉRIFICATION FINALE</span><h3>Contrôler les liaisons avant de quitter Nextend</h3><p>Vérifie les 233 liaisons, les comptes restants et les indicateurs WooCommerce sans modifier les commandes ni les soldes.</p></div><?php if($final):?><span class="dip-pill <?php echo !empty($final['healthy'])?'is-success':'is-warning'; ?>"><?php echo !empty($final['healthy'])?'Vérification saine':'Révision nécessaire'; ?></span><?php endif;?></div>
-            <?php if($final):?><div class="dip-metric-grid"><article><small>Liaisons valides</small><strong><?php echo esc_html((string)($final['valid_links']??0));?></strong></article><article><small>Liaisons invalides</small><strong><?php echo esc_html((string)($final['invalid_links']??0));?></strong></article><article><small>Restants</small><strong><?php echo esc_html((string)($final['remaining']??0));?></strong></article><article><small>Doublons créés</small><strong><?php echo esc_html((string)($final['duplicate_users_created']??0));?></strong></article><article><small>Avec commandes</small><strong><?php echo esc_html((string)($final['users_with_orders']??0));?></strong></article><article><small>Avec adresse</small><strong><?php echo esc_html((string)($final['users_with_addresses']??0));?></strong></article></div><?php endif;?>
+            <?php if($final):?><div class="dip-metric-grid"><article><small>Liaisons valides</small><strong><?php echo esc_html((string)($final['valid_links']??0));?></strong></article><article><small>Liaisons invalides</small><strong><?php echo esc_html((string)($final['invalid_links']??0));?></strong></article><article><small>Restants</small><strong><?php echo esc_html((string)($final['remaining']??0));?></strong></article><article><small>Doublons créés</small><strong><?php echo esc_html((string)($final['duplicate_users_created']??0));?></strong></article><article><small>Avec adresse</small><strong><?php echo esc_html((string)($final['users_with_addresses']??0));?></strong></article></div><?php endif;?>
             <div class="dip-auto-actions"><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_migration_verify'),'dip_migration_verify')); ?>">Lancer la vérification finale</a>
             <?php if(!empty($final['healthy']) && empty($final['finalized_at'])):?><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Finaliser la migration et démarrer la période de surveillance ? Nextend ne sera pas supprimé.');"><?php wp_nonce_field('dip_migration_finalize');?><input type="hidden" name="action" value="dip_migration_finalize"><label><input type="checkbox" name="confirm_final" value="1" required> J’ai testé au moins un ancien client et confirmé ses commandes et son portefeuille.</label><button class="button button-primary">Finaliser et surveiller 7 jours</button></form><?php endif;?></div>
             <?php if(!empty($final['finalized_at'])):?><div class="notice notice-success inline"><p><strong>Migration finalisée.</strong> Période de surveillance active jusqu’au <?php echo esc_html(wp_date('Y-m-d H:i',(int)$final['monitor_until']));?>. Désactivez uniquement Google dans Nextend, mais gardez Nextend installé pendant cette période.</p></div><?php endif;?>
@@ -1642,11 +1867,6 @@ final class DIP_Plugin {
         ?>
         <section class="dip-builder-card" style="margin-top:20px">
           <div class="dip-builder-head"><div><span>PHASE 14</span><h2>Performance, cache et maintenance</h2><p>Optimisations limitées aux données Delicat Identity, sans purger le panier WooCommerce ni les caches globaux.</p></div><strong><?php echo !empty($health['persistent_object_cache']) ? 'Cache objet persistant' : 'Cache WordPress standard'; ?></strong></div>
-          <table class="form-table" role="presentation">
-            <?php $this->checkbox_row('performance_maintenance_enabled','Maintenance automatique quotidienne',$s); ?>
-            <?php $this->checkbox_row('conditional_assets','Charger les ressources uniquement où nécessaire',$s); ?>
-            <?php $this->checkbox_row('performance_health_cache','Mettre en cache les diagnostics pendant 5 minutes',$s); ?>
-          </table>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:12px 0">
             <div class="dip-stat"><span>Cache de page</span><strong><?php echo esc_html($health['page_cache']); ?></strong></div>
             <div class="dip-stat"><span>Lignes gérées</span><strong><?php echo esc_html(number_format_i18n($rows)); ?></strong></div>
@@ -1779,7 +1999,7 @@ final class DIP_Plugin {
     private function render_phase6(array $s) {
         $d = DIP_Devices::summary(30);
         global $wpdb;
-        $new_users = (int)$wpdb->get_var("SELECT COUNT(DISTINCT user_id) FROM " . DIP_Audit::table() . " WHERE event_type='user_created' AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)");
+        $new_users = (int)$wpdb->get_var("SELECT COUNT(DISTINCT user_id) FROM " . DIP_Audit::table() . " WHERE event_type='customer_created' AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)");
         $returning = max(0, (int)DIP_Audit::summary(30)['success'] - $new_users);
         ?>
         <section class="dip-builder-card"><div class="dip-builder-head"><div><span>PHASE 6</span><h2>Analytics, appareils et sessions</h2><p>Statistiques respectueuses de la vie privée, sans IP brute ni cookie de session enregistré.</p></div><strong>30 derniers jours</strong></div>
@@ -1855,7 +2075,7 @@ final class DIP_Plugin {
           <?php if (!empty($test['checks'])): ?><table class="widefat striped"><thead><tr><th>Contrôle</th><th>État</th><th>Détail</th></tr></thead><tbody><?php foreach ($test['checks'] as $key=>$check): ?><tr><td><code><?php echo esc_html($key); ?></code></td><td><?php echo $check['status']==='pass'?'✅':($check['status']==='warn'?'⚠️':'❌'); ?> <?php echo esc_html($check['status']); ?></td><td><?php echo esc_html($check['message']); ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
           <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_sdk_self_test'), 'dip_sdk_self_test')); ?>">Exécuter les auto-tests</a>
           <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_sdk_export'), 'dip_sdk_export')); ?>">Exporter le rapport sécurisé</a></p>
-          <p class="description">Hooks principaux : <code>dip_before_authentication</code>, <code>dip_login_success</code>, <code>dip_user_created</code>, <code>dip_account_linked</code>, <code>dip_identity_extensions</code> et <code>dip_sdk_ready</code>. Aucun secret ni jeton n’est inclus dans le rapport.</p>
+          <p class="description">Hooks principaux : <code>dip_login_success</code>, <code>dip_user_created</code>, <code>dip_account_linked</code>, <code>dip_identity_extensions</code> et <code>dip_sdk_ready</code>. Aucun secret ni jeton n’est inclus dans le rapport.</p>
         </section>
         <?php
     }

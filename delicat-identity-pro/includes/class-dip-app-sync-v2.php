@@ -263,7 +263,6 @@ final class DIP_App_Sync_V2 {
         }
         wp_set_auth_cookie($user->ID, true, is_ssl());
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::fire_wp_login($user, 'delicat_app_pairing');
-        else do_action('wp_login', $user->user_login, $user);
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user->ID);
         if (class_exists('DIP_Audit')) DIP_Audit::record('app_pairing_consumed', 'info', $user->ID);
         do_action('dip_login_success', $user->ID, ['provider' => 'delicat_app_pairing']);

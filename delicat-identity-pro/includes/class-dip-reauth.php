@@ -11,7 +11,6 @@ defined('ABSPATH') || exit;
  */
 final class DIP_Reauth {
     const NONCE_ACTION = 'dip_reauth_confirm';
-    const DEFAULT_WINDOW = 600; // 10 minutes.
 
     public static function init() {
         add_action('dip_login_success', [__CLASS__, 'login_success'], 100, 2);
@@ -49,12 +48,6 @@ final class DIP_Reauth {
         $key = self::key($user_id);
         if (!$key) return false;
         return set_transient($key, time(), self::window());
-    }
-
-    public static function clear($user_id = 0) {
-        $user_id = absint($user_id ?: get_current_user_id());
-        $key = self::key($user_id);
-        if ($key) delete_transient($key);
     }
 
     public static function is_recent($user_id = 0) {

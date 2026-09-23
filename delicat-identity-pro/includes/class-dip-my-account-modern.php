@@ -49,9 +49,6 @@ final class DIP_My_Account_Modern {
         foreach (['delicat_cs_dashboard', 'delicat_account_v22_dashboard'] as $callback) {
             if (function_exists($callback)) remove_action('woocommerce_account_dashboard', $callback, 5);
         }
-        if (class_exists('DIP_WooCommerce_Pro')) {
-            remove_action('woocommerce_account_dashboard', ['DIP_WooCommerce_Pro', 'dashboard_widget'], 5);
-        }
     }
 
     public static function body_classes($classes) {
@@ -150,12 +147,10 @@ final class DIP_My_Account_Modern {
         if (get_user_meta($uid, '_dglp_google_sub', true) || get_user_meta($uid, 'dip_google_sub', true)) $providers++;
         if (get_user_meta($uid, '_dip_microsoft_sub', true) || get_user_meta($uid, 'dip_microsoft_sub', true)) $providers++;
 
-        $devices = 0;
         $trusted = 0;
         if (class_exists('DIP_Devices')) {
             try {
                 $rows = DIP_Devices::user_devices($uid);
-                $devices = is_array($rows) ? count($rows) : 0;
                 foreach ((array) $rows as $row) if (!empty($row['trusted'])) $trusted++;
             } catch (Throwable $e) {}
         }
@@ -166,7 +161,6 @@ final class DIP_My_Account_Modern {
         $https = isset($items['https']) ? !empty($items['https']['ok']) : is_ssl();
         $password_fallback = !empty($items['password']['ok']);
         $two_factor = !empty($items['two_factor']['ok']);
-        $approved = !(class_exists('DIP_Policy') && DIP_Policy::is_pending($uid));
         $score = min(100, max(0, absint($score_data['score'] ?? 0)));
 
         if ($score >= 90) {
@@ -196,12 +190,9 @@ final class DIP_My_Account_Modern {
 
         return [
             'providers' => $providers,
-            'devices' => $devices,
             'trusted' => $trusted,
             'email_verified' => $email_verified,
-            'password_fallback' => $password_fallback,
             'two_factor' => $two_factor,
-            'approved' => $approved,
             'https' => $https,
             'score' => $score,
             'level' => $level,

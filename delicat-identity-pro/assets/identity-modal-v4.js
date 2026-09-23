@@ -64,13 +64,9 @@
       if (controller) {
         options.signal = controller.signal;
         controllers.push(controller);
-        timer = window.setTimeout(function () {
-          try { controller.abort(); } catch (e) {}
-        }, timeout || 15000);
       }
       var timedOut = false;
       var deadline = new Promise(function (_, reject) {
-        if (timer) window.clearTimeout(timer);
         timer = window.setTimeout(function () {
           timedOut = true;
           if (controller) controller.abort();
@@ -117,11 +113,6 @@
           if ('inert' in node) node.inert = true;
         } catch (e) {}
       });
-    }
-
-    function watchLegacy() {
-      // Scoped CSS hides the legacy modal without observing every page mutation.
-      suppressLegacy();
     }
 
     function styleReady() {
@@ -664,7 +655,7 @@
       }
     });
 
-    watchLegacy();
+    suppressLegacy();
     window.setTimeout(suppressLegacy, 120);
     window.setTimeout(suppressLegacy, 600);
     clearNonces();
@@ -691,6 +682,7 @@
       invalid_authorization_url: 'La configuration de connexion Google est invalide. Vérifiez les réglages OAuth.',
       missing_callback_data: 'Google a renvoyé une réponse incomplète. Recommencez la connexion.',
       invalid_state: 'La session Google a expiré ou n’est plus valide. Recommencez depuis Delicat Store.',
+      state_already_used: 'Cette connexion Google a déjà été traitée. Si vous n’êtes pas connecté, recommencez.',
       browser_binding_failed: 'La session Google n’est plus liée à ce navigateur. Fermez puis relancez la connexion.',
       token_transport_error: 'Impossible de contacter Google pour terminer la connexion. Réessayez.',
       token_error: 'Google n’a pas validé cette tentative de connexion. Recommencez.',

@@ -34,7 +34,7 @@ final class DIP_Customer_Dashboard {
 
     public static function assets() {
         if (!is_user_logged_in()) return;
-        $load = is_account_page();
+        $load = function_exists('is_account_page') && is_account_page();
         if (!$load && is_singular()) {
             global $post;
             $load = $post && has_shortcode((string) $post->post_content, 'delicat_identity_dashboard');
@@ -86,17 +86,9 @@ final class DIP_Customer_Dashboard {
         return null;
     }
 
-    private static function security_score($uid, $connected, $trusted) {
-        if (class_exists('DIP_Security_Center')) {
-            $score = DIP_Security_Center::score(absint($uid));
-            return min(100, max(0, absint($score['score'] ?? 0)));
-        }
-        $user = get_userdata($uid); $score = 25;
-        if ($user && !empty($user->user_email) && is_email($user->user_email)) $score += 15;
-        if ($connected > 0) $score += 20;
-        if ($trusted > 0) $score += 15;
-        if (is_ssl()) $score += 15;
-        return min(100, $score);
+    private static function security_score($uid) {
+        $score = DIP_Security_Center::score(absint($uid));
+        return min(100, max(0, absint($score['score'] ?? 0)));
     }
 
     public static function shortcode($atts) {
@@ -109,7 +101,7 @@ final class DIP_Customer_Dashboard {
         $uid = get_current_user_id(); $user = wp_get_current_user(); $tab = self::tab();
         $connected = self::connected_count($uid); list($devices,$trusted) = self::device_counts($uid);
         list($orders,$spent) = self::order_stats($uid); $wallet = self::wallet_balance($uid);
-        $score = self::security_score($uid,$connected,$trusted);
+        $score = self::security_score($uid);
         ob_start();
         ?>
         <section class="dip-id-dashboard<?php echo $integrated ? ' dip-id-dashboard--integrated' : ''; ?>" aria-label="<?php echo esc_attr__('Centre d’identité Delicat', 'delicat-google-login'); ?>">

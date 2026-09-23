@@ -113,7 +113,40 @@ final class DIP_Native_Auth {
 
     private static function normalize_ip($value) {
         $value = trim((string) $value);
+        // Dual-stack sockets report IPv4 peers as ::ffff:a.b.c.d.
+        if (preg_match('/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/iD', $value, $m)) $value = $m[1];
         return filter_var($value, FILTER_VALIDATE_IP) ? $value : '';
+    }
+
+    /** Cloudflare's published edge ranges (https://www.cloudflare.com/ips/). */
+    const CLOUDFLARE_RANGES = [
+        '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22',
+        '141.101.64.0/18', '108.162.192.0/18', '190.93.240.0/20', '188.114.96.0/20',
+        '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+        '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32',
+        '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+    ];
+
+    private static function ip_in_cidr($ip, $cidr) {
+        list($subnet, $bits) = explode('/', $cidr, 2);
+        $ip_bin = @inet_pton($ip);
+        $subnet_bin = @inet_pton($subnet);
+        if ($ip_bin === false || $subnet_bin === false || strlen($ip_bin) !== strlen($subnet_bin)) return false;
+        $bits = (int) $bits;
+        $bytes = intdiv($bits, 8);
+        if ($bytes && substr($ip_bin, 0, $bytes) !== substr($subnet_bin, 0, $bytes)) return false;
+        $rest = $bits % 8;
+        if (!$rest) return true;
+        $mask = (0xff << (8 - $rest)) & 0xff;
+        return (ord($ip_bin[$bytes]) & $mask) === (ord($subnet_bin[$bytes]) & $mask);
+    }
+
+    private static function is_cloudflare_edge($ip) {
+        foreach (self::CLOUDFLARE_RANGES as $cidr) {
+            if (self::ip_in_cidr($ip, $cidr)) return true;
+        }
+        return false;
     }
 
     /**
@@ -133,6 +166,32 @@ final class DIP_Native_Auth {
         /** Site-specific reverse proxies can safely override the resolved address. */
         $filtered = apply_filters('dip_native_auth_client_ip', $ip, $remote);
         return self::normalize_ip($filtered) ?: $remote;
+    }
+
+    /**
+     * Address that buckets the Google/OAuth, storefront and mobile throttles.
+     * Behind Cloudflare the connection address is a shared edge, so every
+     * customer routed through it shared one bucket and got "Trop de
+     * tentatives" or a 20-minute lockout. When the connection really comes
+     * from a Cloudflare edge, the visitor address from CF-Connecting-IP is
+     * used instead. IPv6 addresses are grouped by /64 (one subscriber), so
+     * rotating addresses inside a prefix does not create fresh buckets.
+     * Password protections keep client_ip(), which trusts the header only on
+     * explicit opt-in. Define DIP_TRUST_CLOUDFLARE_HEADERS as false to disable.
+     */
+    public static function throttle_ip() {
+        $ip = self::client_ip();
+        $remote = self::normalize_ip(wp_unslash($_SERVER['REMOTE_ADDR'] ?? '')) ?: '0.0.0.0';
+        $opted_out = defined('DIP_TRUST_CLOUDFLARE_HEADERS') && DIP_TRUST_CLOUDFLARE_HEADERS === false;
+        if ($ip === $remote && !$opted_out && !empty($_SERVER['HTTP_CF_CONNECTING_IP']) && self::is_cloudflare_edge($remote)) {
+            $cf = self::normalize_ip(wp_unslash($_SERVER['HTTP_CF_CONNECTING_IP']));
+            if ($cf) $ip = $cf;
+        }
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+            $packed = inet_pton($ip);
+            if ($packed !== false) $ip = inet_ntop(substr($packed, 0, 8) . str_repeat("\0", 8));
+        }
+        return $ip;
     }
 
     private static function account_identity($login) {
@@ -413,7 +472,7 @@ final class DIP_Native_Auth {
 
     private static function auth_transition_redirect($url) {
         $url = self::safe_redirect($url, home_url('/'));
-        return add_query_arg('dip_auth_sync', '1', remove_query_arg('dip_auth_sync', $url));
+        return add_query_arg('dip_auth_sync', DIP_Session_Router::sync_marker(), remove_query_arg('dip_auth_sync', $url));
     }
 
     public static function ajax_login() {
@@ -469,10 +528,7 @@ final class DIP_Native_Auth {
     private static function registration_allowed() {
         $s = self::settings();
         if (($s['allow_registration'] ?? 'yes') !== 'yes') return false;
-        if (class_exists('DIP_Account_Sync')) return DIP_Account_Sync::storefront_registration_enabled();
-        return (bool) get_option('users_can_register')
-            || 'yes' === get_option('woocommerce_enable_myaccount_registration')
-            || 'yes' === get_option('woocommerce_enable_signup_and_login_from_checkout');
+        return DIP_Account_Sync::storefront_registration_enabled();
     }
 
     public static function registration_rate_limited() {
@@ -557,16 +613,11 @@ final class DIP_Native_Auth {
         $names = preg_split('/\s+/', trim($name), 2);
         $role = get_role('customer') ? 'customer' : 'subscriber';
         $profile = ['provider'=>'native','email'=>$email,'name'=>$name];
-        $user_id = class_exists('DIP_Account_Sync')
-            ? DIP_Account_Sync::create_customer($email, $username, $pass, [
-                'display_name' => $name,
-                'first_name' => $names[0] ?? $name,
-                'last_name' => $names[1] ?? '',
-            ], $role)
-            : wp_insert_user([
-                'user_login'=>$username,'user_email'=>$email,'user_pass'=>$pass,'display_name'=>$name,
-                'first_name'=>$names[0] ?? $name,'last_name'=>$names[1] ?? '','role'=>$role,
-            ]);
+        $user_id = DIP_Account_Sync::create_customer($email, $username, $pass, [
+            'display_name' => $name,
+            'first_name' => $names[0] ?? $name,
+            'last_name' => $names[1] ?? '',
+        ], $role);
         if (is_wp_error($user_id)) {
             self::json_error(__('Impossible de créer le compte. Réessayez ou contactez le support.', 'delicat-google-login'), 'registration_failed');
         }
@@ -588,17 +639,15 @@ final class DIP_Native_Auth {
             ]);
         }
 
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user_id, $email);
-        else update_user_meta($user_id, 'dip_email_verified', 'yes');
+        DIP_Account_Sync::after_verified_registration($user_id, $email);
         wp_set_current_user($user_id);
         wp_set_auth_cookie($user_id, true, is_ssl());
         $user = get_user_by('id', $user_id);
         if ($user) {
-            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::fire_wp_login($user, 'native_registration');
-            else do_action('wp_login', $user->user_login, $user);
+            DIP_Account_Sync::fire_wp_login($user, 'native_registration');
             do_action('dip_login_success', $user_id, ['provider'=>'native_registration']);
         }
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user_id);
+        DIP_Account_Sync::after_login($user_id);
 
         wp_send_json_success([
             'message' => __('✅ Compte créé avec succès. Redirection…', 'delicat-google-login'),
@@ -839,8 +888,6 @@ final class DIP_Native_Auth {
                 'redirect' => $redirect_url,
                 'suppress_divider' => true,
             ]);
-        } elseif (shortcode_exists('delicat_social_login_buttons')) {
-            $google = do_shortcode('[delicat_social_login_buttons providers="google" layout="row" align="stretch" trackerdata="native_modal" google_text="Continuer avec Google"]');
         }
         ob_start();
         ?>

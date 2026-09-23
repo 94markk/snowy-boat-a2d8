@@ -10,7 +10,6 @@ final class DIP_Analytics {
     const CACHE_GROUP = 'dip_analytics_';
 
     public static function init() {
-        add_action('admin_menu', [__CLASS__, 'admin_menu'], 32);
         add_action('admin_post_dip_analytics_export', [__CLASS__, 'export_csv']);
         add_action('admin_post_dip_analytics_refresh', [__CLASS__, 'refresh_now']);
         add_action(self::CRON_HOOK, [__CLASS__, 'rollup']);
@@ -131,8 +130,7 @@ final class DIP_Analytics {
             if (!isset($series[$row['metric_date']])) $series[$row['metric_date']] = [];
             $series[$row['metric_date']][$event] = $count;
         }
-        $devices = class_exists('DIP_Devices') ? DIP_Devices::summary($days) : [];
-        $result = ['days'=>$days,'totals'=>$totals,'series'=>$series,'devices'=>$devices,'generated'=>time()];
+        $result = ['days'=>$days,'totals'=>$totals,'series'=>$series,'generated'=>time()];
         set_transient($cache_key, $result, 15 * MINUTE_IN_SECONDS);
         return $result;
     }
@@ -165,10 +163,6 @@ final class DIP_Analytics {
         if (!self::audit_table_exists()) return 0;
         $cutoff = gmdate('Y-m-d H:i:s', time() - (absint($days) * DAY_IN_SECONDS));
         return (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . DIP_Audit::table() . ' WHERE severity=%s AND created_at >= %s', sanitize_key($severity), $cutoff));
-    }
-
-    public static function admin_menu() {
-        add_menu_page('Identity Analytics', 'Identity Analytics', 'manage_options', 'dip-analytics', [__CLASS__, 'render_page'], 'dashicons-chart-area', 58);
     }
 
     private static function admin_url($days) {

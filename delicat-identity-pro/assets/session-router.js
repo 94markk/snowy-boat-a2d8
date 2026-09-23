@@ -28,7 +28,7 @@
     if (busy) return;
     busy = true; link.setAttribute('aria-busy','true');
     post('dip_session_status').then(function (state) { return state.loggedIn ? post('dip_session_logout', state.logoutNonce) : state; })
-      .then(function () { clearDocuments(); try { localStorage.setItem('dip-session-change', String(Date.now())); } catch (e) {} location.assign(new URL('?dip_auth_sync=1', cfg.home || location.origin).href); })
+      .then(function () { clearDocuments(); try { localStorage.setItem('dip-session-change', String(Date.now())); } catch (e) {} location.assign(new URL('?dip_auth_sync=' + Date.now().toString(36), cfg.home || location.origin).href); })
       .catch(function (error) { window.alert(error.message || 'Déconnexion impossible. Réessayez.'); })
       .finally(function () { busy = false; link.removeAttribute('aria-busy'); });
   }, true);

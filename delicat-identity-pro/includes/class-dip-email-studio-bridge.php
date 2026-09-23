@@ -17,8 +17,6 @@ final class DIP_Email_Studio_Bridge {
     private static $admin_loaded = false;
 
     public static function init() {
-        add_action('admin_notices', [__CLASS__, 'legacy_cleanup_notice']);
-        add_action('admin_post_dip_delete_legacy_email_studio', [__CLASS__, 'delete_legacy_email_studio']);
 
         // Plugin replacement/update does not always execute an activation hook.
         // Finish the migration on the next privileged admin request as well.
@@ -109,36 +107,6 @@ final class DIP_Email_Studio_Bridge {
     public static function standalone_notice() {
         if (!current_user_can('activate_plugins')) return;
         echo '<div class="notice notice-warning"><p><strong>Delicat Identity Pro:</strong> l’ancien plugin Delicat Email Studio Pro est encore actif pour cette requête. La migration sécurisée va le désactiver automatiquement; le module e-mail unifié prendra le relais à la prochaine requête.</p></div>';
-    }
-
-    public static function legacy_cleanup_notice() {
-        if (!current_user_can('delete_plugins')) return;
-        $legacy = self::standalone_basenames();
-        if (!$legacy || self::standalone_active()) return;
-        $url = wp_nonce_url(
-            admin_url('admin-post.php?action=dip_delete_legacy_email_studio'),
-            'dip_delete_legacy_email_studio'
-        );
-        echo '<div class="notice notice-info"><p><strong>Delicat Identity Pro:</strong> la migration Email Studio est terminée. L’ancien plugin autonome est désactivé et n’est plus utilisé. <a class="button button-secondary" href="' . esc_url($url) . '">Supprimer l’ancien Email Studio</a></p></div>';
-    }
-
-    public static function delete_legacy_email_studio() {
-        if (!current_user_can('delete_plugins')) wp_die(esc_html__('Permission insuffisante.', 'delicat-google-login'), '', ['response'=>403]);
-        check_admin_referer('dip_delete_legacy_email_studio');
-        if (!function_exists('delete_plugins')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
-        $legacy = self::standalone_basenames();
-        if ($legacy) {
-            self::deactivate_standalone();
-            $result = delete_plugins($legacy);
-            if (is_wp_error($result)) {
-                if (class_exists('DIP_Audit')) DIP_Audit::record('legacy_email_studio_delete_failed', 'warning', get_current_user_id(), ['count'=>count($legacy)]);
-                wp_safe_redirect(add_query_arg(['page'=>'delicat-identity-emails','dip_legacy_cleanup'=>'failed'], admin_url('admin.php')));
-                exit;
-            }
-            if (class_exists('DIP_Audit')) DIP_Audit::record('legacy_email_studio_deleted', 'notice', get_current_user_id(), ['count'=>count($legacy)]);
-        }
-        wp_safe_redirect(add_query_arg(['page'=>'delicat-identity-emails','dip_legacy_cleanup'=>'done'], admin_url('admin.php')));
-        exit;
     }
 
     private static function plugin_inventory() {

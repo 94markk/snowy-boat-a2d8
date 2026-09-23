@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Identity Pro
  * Description: Unified secure identity, authentication, account lifecycle, and synchronized WordPress/WooCommerce transactional email studio.
- * Version:     6.9.19
+ * Version:     6.9.20
  * Author: Delicat Store
  * Text Domain: delicat-google-login
  * Requires at least: 6.2
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('DIP_VERSION', '6.9.19');
+define('DIP_VERSION', '6.9.20');
 define('DIP_FILE', __FILE__);
 define('DIP_DIR', plugin_dir_path(__FILE__));
 define('DIP_URL', plugin_dir_url(__FILE__));
@@ -41,7 +41,7 @@ spl_autoload_register(static function ($class) {
     if (is_readable($path)) require_once $path;
 });
 
-register_activation_hook(__FILE__, function () { DIP_Plugin::activate(); DIP_WooCommerce::activate(); DIP_Foundation::activate(); DIP_App_Sync_V2::install(); DIP_Customer_Dashboard::activate(); DIP_Analytics::install(); DIP_Email_Studio_Bridge::install(); DIP_Passwordless_Registration::install(); DIP_UI_Stability::install(); DIP_Stability_Patch::install(); DIP_Headless_Google::activate(); });
+register_activation_hook(__FILE__, function () { DIP_Plugin::activate(); DIP_WooCommerce::activate(); DIP_App_Sync_V2::install(); DIP_Customer_Dashboard::activate(); DIP_Analytics::install(); DIP_Email_Studio_Bridge::install(); DIP_Passwordless_Registration::install(); DIP_UI_Stability::install(); DIP_Headless_Google::activate(); });
 add_action('before_woocommerce_init', static function () {
     if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
@@ -79,7 +79,6 @@ add_action('plugins_loaded', ['DIP_Stability_Patch', 'init'], 32);
 
 // Admin-only control-plane modules stay completely off public HTML/AJAX boots.
 if (is_admin() && !wp_doing_ajax()) {
-    add_action('plugins_loaded', ['DIP_Foundation', 'init'], 17);
     add_action('plugins_loaded', ['DIP_Provider_Manager', 'init'], 18);
     add_action('plugins_loaded', ['DIP_UI_Stability', 'init'], 31);
 }

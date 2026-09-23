@@ -70,7 +70,7 @@ final class DIP_Connected_Accounts {
                 $html .= '<button type="submit" class="dip-provider-action is-danger">Déconnecter</button></form>';
             } elseif ($enabled) {
                 $redirect = self::current_url();
-                $url = add_query_arg(['dip_action' => 'login', 'provider' => $id, 'link' => 1, '_dip_nonce' => wp_create_nonce('dip_link_' . $user_id), 'redirect' => $redirect], home_url('/'));
+                $url = add_query_arg(['dip_action' => 'login', 'provider' => $id, 'link' => 1, '_dip_nonce' => wp_create_nonce('dip_link_' . $user_id), 'redirect' => rawurlencode($redirect)], home_url('/'));
                 $html .= '<a class="dip-provider-action" href="' . esc_url($url) . '">Connecter</a>';
             }
             $html .= '</article>';

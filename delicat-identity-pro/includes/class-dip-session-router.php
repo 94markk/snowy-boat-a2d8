@@ -43,8 +43,17 @@ final class DIP_Session_Router {
         return $url;
     }
 
+    /**
+     * Value for the dip_auth_sync marker. Unique per sign-in/out so that an
+     * edge cache ignoring no-cache can never share one landing page between
+     * visitors; readers only test that the parameter is present.
+     */
+    public static function sync_marker() {
+        return wp_generate_password(10, false, false);
+    }
+
     public static function logout_destination($unused = '') {
-        return add_query_arg('dip_auth_sync', '1', home_url('/'));
+        return add_query_arg('dip_auth_sync', self::sync_marker(), home_url('/'));
     }
 
     public static function login_destination($redirect, $requested, $user) {
@@ -52,7 +61,7 @@ final class DIP_Session_Router {
         // Preserve intentional dashboard access for staff.
         if (user_can($user, 'edit_posts') || user_can($user, 'manage_woocommerce') || user_can($user, 'manage_options')) return $redirect;
         $s = wp_parse_args((array)get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
-        return add_query_arg('dip_auth_sync', '1', self::destination($redirect, $s['native_login_redirect'] ?? '/my-wallet/'));
+        return add_query_arg('dip_auth_sync', self::sync_marker(), self::destination($redirect, $s['native_login_redirect'] ?? '/my-wallet/'));
     }
     public static function wc_login_destination($redirect, $user) { return self::login_destination($redirect, '', $user); }
 

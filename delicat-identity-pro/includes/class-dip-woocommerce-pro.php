@@ -12,7 +12,6 @@ final class DIP_WooCommerce_Pro {
     public static function defaults() {
         return [
             'checkout_panel'       => 1,
-            'dashboard_widget'     => 1,
             'preserve_return_url'  => 1,
             'redirect_customer'    => '',
             'redirect_shop_manager'=> '',
@@ -32,11 +31,8 @@ final class DIP_WooCommerce_Pro {
         add_action('admin_menu', [__CLASS__, 'admin_menu'], 25);
         add_action('admin_post_dip_wc_pro_save', [__CLASS__, 'save']);
 
-        // Replace the older checkout notice with the richer panel.
-        remove_action('woocommerce_before_checkout_form', ['DIP_WooCommerce', 'checkout_notice'], 7);
         add_action('woocommerce_before_checkout_form', [__CLASS__, 'checkout_panel'], 6);
 
-        add_action('woocommerce_account_dashboard', [__CLASS__, 'dashboard_widget'], 5);
         add_filter('woocommerce_login_redirect', [__CLASS__, 'role_redirect'], 30, 2);
         add_filter('login_redirect', [__CLASS__, 'wp_role_redirect'], 30, 3);
         add_action('template_redirect', [__CLASS__, 'remember_return_url'], 1);
@@ -93,7 +89,6 @@ final class DIP_WooCommerce_Pro {
         };
         $settings = [
             'checkout_panel'        => empty($_POST['checkout_panel']) ? 0 : 1,
-            'dashboard_widget'      => 1,
             'preserve_return_url'   => empty($_POST['preserve_return_url']) ? 0 : 1,
             'redirect_customer'     => $clean_url($_POST['redirect_customer'] ?? ''),
             'redirect_shop_manager' => $clean_url($_POST['redirect_shop_manager'] ?? ''),
@@ -125,19 +120,6 @@ final class DIP_WooCommerce_Pro {
         echo DIP_Plugin::instance()->render_button(['provider' => 'microsoft', 'redirect' => wc_get_checkout_url()]);
         echo '<a class="button dip-wc-native-login" href="' . esc_url(wc_get_page_permalink('myaccount')) . '">' . esc_html__('Email ou mot de passe', 'delicat-google-login') . '</a>';
         echo '</div></section>';
-    }
-
-    public static function dashboard_widget() {
-        if (class_exists('DIP_My_Account_Modern')) return;
-        if (empty(self::settings()['dashboard_widget']) || !is_user_logged_in()) return;
-        $uid = get_current_user_id();
-        $google = (bool) get_user_meta($uid, '_dglp_google_sub', true);
-        $microsoft = (bool) get_user_meta($uid, '_dip_microsoft_sub', true);
-        $providers = (int) $google + (int) $microsoft;
-        $security_url = wc_get_account_endpoint_url(DIP_WooCommerce::ENDPOINT);
-        echo '<section class="dip-wc-dashboard-card"><div><span class="dip-wc-eyebrow">' . esc_html__('IDENTITÉ & SÉCURITÉ', 'delicat-google-login') . '</span><h2>' . esc_html__('Votre compte Delicat', 'delicat-google-login') . '</h2><p>';
-        echo esc_html(sprintf(_n('%d fournisseur connecté', '%d fournisseurs connectés', $providers, 'delicat-google-login'), $providers));
-        echo '</p></div><a class="button" href="' . esc_url($security_url) . '">' . esc_html__('Gérer mon compte', 'delicat-google-login') . '</a></section>';
     }
 
     public static function remember_return_url() {

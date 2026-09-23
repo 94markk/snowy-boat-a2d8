@@ -3,9 +3,7 @@ defined('ABSPATH') || exit;
 
 final class DIP_Lockout {
     private static function identity() {
-        $ip = class_exists('DIP_Native_Auth')
-            ? DIP_Native_Auth::client_ip()
-            : sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
+        $ip = DIP_Native_Auth::throttle_ip();
         return substr(hash_hmac('sha256', (string) $ip, wp_salt('auth')), 0, 40);
     }
 
@@ -15,10 +13,6 @@ final class DIP_Lockout {
 
     public static function is_locked() {
         return (int) get_transient(self::key()) > time();
-    }
-
-    public static function remaining() {
-        return max(0, (int) get_transient(self::key()) - time());
     }
 
     public static function register_failure(array $settings) {
@@ -35,6 +29,20 @@ final class DIP_Lockout {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Count one hit in a fixed window and return the new total. Unlike
+     * re-saving a counter with a fresh TTL on every hit, retries never extend
+     * the wait.
+     */
+    public static function window_hit($key, $window) {
+        $now = time();
+        $bucket = get_transient($key);
+        if (!is_array($bucket) || (int) ($bucket['until'] ?? 0) <= $now) $bucket = ['count' => 0, 'until' => $now + (int) $window];
+        $bucket['count'] = (int) $bucket['count'] + 1;
+        set_transient($key, $bucket, max(1, (int) $bucket['until'] - $now));
+        return $bucket['count'];
     }
 
     public static function clear_failures() {

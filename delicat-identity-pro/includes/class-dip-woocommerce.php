@@ -7,13 +7,11 @@ final class DIP_WooCommerce {
     public static function init() {
         if (!class_exists('WooCommerce')) return;
         add_action('init', [__CLASS__, 'endpoint']);
-        add_filter('woocommerce_account_menu_items', [__CLASS__, 'menu']);
         add_action('woocommerce_account_' . self::ENDPOINT . '_endpoint', [__CLASS__, 'screen']);
         add_action('admin_post_dip_unlink_google', [__CLASS__, 'unlink']);
         add_action('admin_post_dip_unlink_microsoft', [__CLASS__, 'unlink_microsoft']);
         add_action('admin_post_dip_send_password_setup', [__CLASS__, 'send_password_setup']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'assets'], 20);
-        add_action('woocommerce_before_checkout_form', [__CLASS__, 'checkout_notice'], 7);
         add_filter('woocommerce_login_redirect', [__CLASS__, 'login_redirect'], 10, 2);
         add_action('after_password_reset', [__CLASS__, 'password_confirmed'], 10, 2);
         add_action('profile_update', [__CLASS__, 'profile_updated'], 10, 2);
@@ -25,28 +23,9 @@ final class DIP_WooCommerce {
         if (class_exists('WooCommerce')) { self::endpoint(); flush_rewrite_rules(false); }
     }
 
-    public static function menu($items) {
-        if (class_exists('DIP_My_Account_Modern')) return $items;
-        if (!is_user_logged_in()) return $items;
-        $logout = $items['customer-logout'] ?? null;
-        unset($items['customer-logout']);
-        $items[self::ENDPOINT] = __('Comptes connectés', 'delicat-google-login');
-        if ($logout) $items['customer-logout'] = $logout;
-        return $items;
-    }
-
     public static function assets() {
         if (!function_exists('is_checkout') || !is_checkout() || is_order_received_page()) return;
         wp_enqueue_script('dip-checkout-restore', DIP_URL . 'assets/checkout-restore.js', [], DIP_VERSION, true);
-    }
-
-    public static function checkout_notice() {
-        if (is_user_logged_in()) return;
-        echo '<div class="woocommerce-info dip-checkout-login"><strong>' . esc_html__('Paiement rapide', 'delicat-google-login') . '</strong><br>';
-        echo esc_html__('Connectez-vous rapidement sans perdre votre panier, vos coupons ou les champs déjà remplis.', 'delicat-google-login');
-        echo DIP_Plugin::instance()->render_button(['provider' => 'google', 'redirect' => wc_get_checkout_url()]);
-        echo DIP_Plugin::instance()->render_button(['provider' => 'microsoft', 'redirect' => wc_get_checkout_url()]);
-        echo '</div>';
     }
 
     public static function login_redirect($redirect, $user) {

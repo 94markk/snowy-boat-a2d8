@@ -9,6 +9,10 @@ final class DIP_Google {
 
     const JWKS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
     const JWKS_CACHE_KEY = 'dip_google_jwks_v2';
+    // Last key set fetched from Google, used only when Google cannot be
+    // reached. Stale keys can only verify tokens Google really signed.
+    const JWKS_BACKUP_OPTION = 'dip_google_jwks_backup';
+    const JWKS_BACKUP_MAX_AGE = 7 * DAY_IN_SECONDS;
 
     public function __construct($client_id, $client_secret, $callback, $prompt_select_account = true) {
         $this->client_id = trim((string) $client_id);
@@ -32,8 +36,13 @@ final class DIP_Google {
         return add_query_arg($args, 'https://accounts.google.com/o/oauth2/v2/auth');
     }
 
+    /** A transport failure or a Google 5xx is worth one more attempt. */
+    private static function should_retry($response) {
+        return is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) >= 500;
+    }
+
     public function authenticate($code, array $flow) {
-        $response = wp_safe_remote_post('https://oauth2.googleapis.com/token', [
+        $request = [
             'timeout' => 15,
             'redirection' => 0,
             'limit_response_size' => 262144,
@@ -46,7 +55,14 @@ final class DIP_Google {
                 'grant_type' => 'authorization_code',
                 'code_verifier' => (string) $flow['verifier'],
             ],
-        ]);
+        ];
+        $response = wp_safe_remote_post('https://oauth2.googleapis.com/token', $request);
+        // Retrying cannot redeem a code twice: if Google already accepted the
+        // first attempt it answers invalid_grant, the same outcome as no retry.
+        if (self::should_retry($response)) {
+            usleep(300000);
+            $response = wp_safe_remote_post('https://oauth2.googleapis.com/token', $request);
+        }
         if (is_wp_error($response)) return new WP_Error('token_transport_error', 'Impossible de contacter Google.');
         if ((int) wp_remote_retrieve_response_code($response) !== 200) return new WP_Error('token_error', 'Google n’a pas validé la connexion.');
         $body = wp_remote_retrieve_body($response);
@@ -62,8 +78,9 @@ final class DIP_Google {
         $claims = self::verify_id_token((string) $tokens['id_token'], [$this->client_id], (string) ($flow['nonce'] ?? ''));
         if (is_wp_error($claims)) return $claims;
 
+        // Optional display data only: keep it from stretching a slow callback.
         $profile = wp_safe_remote_get('https://openidconnect.googleapis.com/v1/userinfo', [
-            'timeout' => 15,
+            'timeout' => 5,
             'redirection' => 0,
             'limit_response_size' => 131072,
             'headers' => ['Authorization' => 'Bearer ' . $tokens['access_token'], 'Accept' => 'application/json'],
@@ -115,9 +132,11 @@ final class DIP_Google {
         $keys = self::jwks(false);
         if (is_wp_error($keys)) return $keys;
         $jwk = self::find_key($keys, $kid);
-        if (!$jwk) {
+        if (!$jwk && !get_transient(self::JWKS_CACHE_KEY . '_forced')) {
             // Google rotates keys. A stale cache must not turn rotation into a
             // prolonged outage, so refresh once when the advertised kid is new.
+            // At most once a minute: junk tokens must not hammer Google.
+            set_transient(self::JWKS_CACHE_KEY . '_forced', 1, MINUTE_IN_SECONDS);
             $keys = self::jwks(true);
             if (is_wp_error($keys)) return $keys;
             $jwk = self::find_key($keys, $kid);
@@ -151,7 +170,7 @@ final class DIP_Google {
         $now = time();
         if (empty($claims['exp']) || (int) $claims['exp'] < $now - 30) return new WP_Error('invalid_token_time', 'Le jeton Google a expiré.');
         if (!empty($claims['nbf']) && (int) $claims['nbf'] > $now + 60) return new WP_Error('invalid_token_time', 'Le jeton Google n’est pas encore valide.');
-        if (!empty($claims['iat']) && (int) $claims['iat'] > $now + 120) return new WP_Error('invalid_token_time', 'Le jeton Google a une date invalide.');
+        if (!empty($claims['iat']) && (int) $claims['iat'] > $now + 300) return new WP_Error('invalid_token_time', 'Le jeton Google a une date invalide.');
         if ($expected_nonce !== '' && (empty($claims['nonce']) || !hash_equals((string) $expected_nonce, (string) $claims['nonce']))) {
             return new WP_Error('invalid_nonce', 'Nonce Google incorrect.');
         }
@@ -190,17 +209,27 @@ final class DIP_Google {
         if (!$force_refresh) {
             $cached = get_transient(self::JWKS_CACHE_KEY);
             if (is_array($cached) && !empty($cached)) return $cached;
-        } else {
-            delete_transient(self::JWKS_CACHE_KEY);
         }
 
-        $response = wp_safe_remote_get(self::JWKS_URL, [
+        $request = [
             'timeout' => 12,
             'redirection' => 0,
             'limit_response_size' => 307200,
             'headers' => ['Accept' => 'application/json'],
-        ]);
+        ];
+        $response = wp_safe_remote_get(self::JWKS_URL, $request);
+        if (self::should_retry($response)) {
+            usleep(300000);
+            $response = wp_safe_remote_get(self::JWKS_URL, $request);
+        }
         if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
+            $backup = get_option(self::JWKS_BACKUP_OPTION, []);
+            if (is_array($backup) && !empty($backup['keys']) && is_array($backup['keys']) && time() - (int) ($backup['saved'] ?? 0) <= self::JWKS_BACKUP_MAX_AGE) {
+                // Serve the last known keys briefly instead of failing every
+                // sign-in while Google's key endpoint is unreachable.
+                set_transient(self::JWKS_CACHE_KEY, $backup['keys'], 5 * MINUTE_IN_SECONDS);
+                return $backup['keys'];
+            }
             return new WP_Error('google_keys_unavailable', 'Impossible de vérifier les clés Google.');
         }
         $body = wp_remote_retrieve_body($response);
@@ -216,6 +245,7 @@ final class DIP_Google {
             $ttl = min(DAY_IN_SECONDS, max(5 * MINUTE_IN_SECONDS, absint($m[1])));
         }
         set_transient(self::JWKS_CACHE_KEY, $json['keys'], $ttl);
+        update_option(self::JWKS_BACKUP_OPTION, ['keys' => $json['keys'], 'saved' => time()], false);
         return $json['keys'];
     }
 

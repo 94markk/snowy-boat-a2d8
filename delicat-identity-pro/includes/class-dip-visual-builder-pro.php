@@ -12,7 +12,6 @@ final class DIP_Visual_Builder_Pro {
         add_action('admin_init', [__CLASS__, 'register']);
         add_action('admin_enqueue_scripts', [__CLASS__, 'admin_assets']);
         add_action('wp_enqueue_scripts', [__CLASS__, 'maybe_front_assets']);
-        add_action('login_enqueue_scripts', [__CLASS__, 'front_assets']);
         add_shortcode('delicat_auth_panel', [__CLASS__, 'shortcode']);
         add_action('admin_post_dip_builder_export', [__CLASS__, 'export']);
         add_action('admin_post_dip_builder_import', [__CLASS__, 'import']);
@@ -248,10 +247,7 @@ final class DIP_Visual_Builder_Pro {
     private static function registration_available() {
         $identity = (array) get_option(DIP_Plugin::OPTION, []);
         if (($identity['allow_registration'] ?? 'yes') !== 'yes') return false;
-        if (class_exists('DIP_Account_Sync')) return DIP_Account_Sync::storefront_registration_enabled();
-        return (bool) get_option('users_can_register')
-            || 'yes' === get_option('woocommerce_enable_myaccount_registration')
-            || 'yes' === get_option('woocommerce_enable_signup_and_login_from_checkout');
+        return DIP_Account_Sync::storefront_registration_enabled();
     }
 
     private static function registration_destination() {

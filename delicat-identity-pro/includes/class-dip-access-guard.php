@@ -21,7 +21,6 @@ final class DIP_Access_Guard {
         add_action('send_headers', [__CLASS__, 'security_headers'], 20);
         add_filter('wp_headers', [__CLASS__, 'filter_headers'], 20);
         add_filter('option_page_capability_dip_group', [__CLASS__, 'settings_capability']);
-        add_filter('option_page_capability_dip_email_group', [__CLASS__, 'settings_capability']);
         add_filter('option_page_capability_dip_builder_group', [__CLASS__, 'settings_capability']);
         add_filter('option_page_capability_dip_auth_methods_group', [__CLASS__, 'settings_capability']);
         add_action('add_meta_boxes_page', [__CLASS__, 'add_private_page_meta_box']);
@@ -114,12 +113,12 @@ final class DIP_Access_Guard {
             'dip_migration_dry_run','dip_migration_test','dip_migration_batch',
             'dip_migration_rollback','dip_migration_auto_start','dip_migration_auto_pause',
             'dip_migration_auto_resume','dip_migration_verify','dip_migration_finalize',
-            'dip_oauth_test','dip_export_security_csv','dip_repair_schedules',
+            'dip_oauth_test','dip_reenable_google','dip_export_security_csv','dip_repair_schedules',
             'dip_assistant_analyze','dip_assistant_bundle','dip_performance_run',
             'dip_performance_analyze','dip_performance_purge','dip_sdk_self_test',
             'dip_sdk_export','dip_builder_export','dip_builder_import','dip_builder_reset',
             'dip_provider_save','dip_provider_test','dipes_email_preview','dipes_email_test','dipes_export_settings','dip_wc_pro_save',
-            'dip_app_sync_v2_save','dip_app_sync_v2_cleanup','dip_foundation_repair',
+            'dip_app_sync_v2_save','dip_app_sync_v2_cleanup',
             'dip_ui_repair','dip_analytics_export','dip_analytics_refresh',
             'dip_admin_google_revoke',
         ]);
@@ -206,7 +205,7 @@ final class DIP_Access_Guard {
         return apply_filters('dip_admin_page_slugs', [
             'delicat-identity','delicat-identity-providers','delicat-identity-builder',
             'dip-security-center','dip-woocommerce-pro','dip-app-sync-v2','dip-analytics',
-            'delicat-identity-emails','dip-auth-methods','dip-foundation-health',
+            'delicat-identity-emails','dip-auth-methods',
             'delicat-identity-hub',
         ]);
     }

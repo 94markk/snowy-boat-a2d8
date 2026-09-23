@@ -3,8 +3,6 @@ defined('ABSPATH') || exit;
 
 /** Security recommendations derived from current Identity configuration/state. */
 final class DIP_Security_Recommendations {
-    public static function init() {}
-
     private static function settings() {
         $defaults = class_exists('DIP_Plugin') ? DIP_Plugin::defaults() : [];
         return wp_parse_args((array)get_option(class_exists('DIP_Plugin') ? DIP_Plugin::OPTION : 'dglp_settings', []), $defaults);

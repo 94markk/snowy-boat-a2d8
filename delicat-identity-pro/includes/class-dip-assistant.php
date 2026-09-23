@@ -44,9 +44,6 @@ final class DIP_Assistant {
         if (($settings['link_existing_email'] ?? 'yes') === 'yes') {
             $recommendations[] = self::issue('email_linking', 'notice', 'Liaison Google par email activée', 'Cette option facilite la migration Nextend pour les clients existants.', 'Gardez la protection des comptes privilégiés activée et vérifiez les groupes d’emails dupliqués avant la bascule finale.');
         }
-        if (($settings['block_privileged_social_login'] ?? 'yes') !== 'yes') {
-            $recommendations[] = self::issue('privileged_social_legacy_flag', 'notice', 'Ancien indicateur de blocage à normaliser', 'La valeur enregistrée est ancienne, mais 6.9.0 impose désormais le blocage des rôles privilégiés non-admin directement dans le moteur.', 'Enregistrez les réglages une fois pour normaliser la valeur stockée.');
-        }
         if (($settings['admin_google_secure_mode'] ?? 'yes') !== 'yes') {
             $score -= 20;
             $issues[] = self::issue('admin_google_secure_mode', 'critical', 'Google Secure Mode Administrateur désactivé', 'Une politique dédiée est requise pour empêcher une simple correspondance d’e-mail Google de devenir une session Administrateur.', 'Activez Google Secure Mode Administrateur et approuvez l’identité Google depuis une session Administrateur avec TOTP actif.');

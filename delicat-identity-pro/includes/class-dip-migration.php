@@ -353,10 +353,6 @@ final class DIP_Migration {
             if (!$user) continue;
             $email_key = strtolower(trim($user->user_email));
             if ($email_key !== '') { $email_seen[$email_key] = ($email_seen[$email_key] ?? 0) + 1; }
-            if (class_exists('wc_get_orders')) {
-                $orders = wc_get_orders(['customer_id' => $user_id, 'limit' => 1, 'return' => 'ids']);
-                if (!empty($orders)) $users_with_orders++;
-            }
             $wallet_keys = ['_current_woo_wallet_balance', 'woo_wallet_balance', 'tera_wallet_balance'];
             foreach ($wallet_keys as $wallet_key) { if (metadata_exists('user', $user_id, $wallet_key)) { $users_with_wallet_meta++; break; } }
             if (get_user_meta($user_id, 'billing_address_1', true) || get_user_meta($user_id, 'shipping_address_1', true)) $users_with_addresses++;

@@ -99,16 +99,24 @@ final class DIP_Mobile_API {
         return $response;
     }
 
-    private static function throttle($bucket, $limit, $window) {
-        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::client_ip() : sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-        $key = 'dip_mob_' . sanitize_key($bucket) . '_' . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 32);
-        $count = (int) get_transient($key);
-        if ($count >= $limit) {
-            if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_rate_limited', 'critical', 0, ['bucket' => $bucket]);
-            return false;
+    /**
+     * Fixed-window throttle. When the app sends its installation identifier,
+     * the limit applies per installation and the shared address gets a ten
+     * times larger ceiling, so customers behind one mobile carrier address do
+     * not block each other.
+     */
+    private static function throttle($bucket, $limit, $window, $request = null) {
+        $ip = DIP_Native_Auth::throttle_ip();
+        $prefix = 'dip_mob_' . sanitize_key($bucket) . '_';
+        $installation = $request instanceof WP_REST_Request ? trim((string) ($request->get_header('X-Installation-ID') ?: $request->get_param('installation_id'))) : '';
+        if (strlen($installation) >= 16 && strlen($installation) <= 255) {
+            $allowed = DIP_Lockout::window_hit($prefix . substr(hash_hmac('sha256', $ip . '|' . $installation, wp_salt('nonce')), 0, 32), $window) <= $limit
+                && DIP_Lockout::window_hit($prefix . 'ip_' . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 32), $window) <= $limit * 10;
+        } else {
+            $allowed = DIP_Lockout::window_hit($prefix . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 32), $window) <= $limit;
         }
-        set_transient($key, $count + 1, $window);
-        return true;
+        if (!$allowed && class_exists('DIP_Audit')) DIP_Audit::record('mobile_rate_limited', 'critical', 0, ['bucket' => $bucket]);
+        return $allowed;
     }
 
     private static function valid_device_request(WP_REST_Request $r) {
@@ -221,32 +229,17 @@ final class DIP_Mobile_API {
         ],200);
     }
 
-    private static function social_role_blocked($user_id, array $settings) {
-        $user = get_userdata(absint($user_id));
-        if (!$user) return true;
-        $configured = preg_split('/[\s,]+/', (string) ($settings['blocked_social_roles'] ?? 'administrator,editor,shop_manager'));
-        $blocked = array_values(array_filter(array_map('sanitize_key', (array) $configured)));
-        return user_can($user, 'manage_options')
-            || user_can($user, 'manage_woocommerce')
-            || (bool) array_intersect((array) $user->roles, $blocked);
-    }
-
     private static function mobile_user_allowed($user_id) {
         $user_id = absint($user_id);
         if (!$user_id || !get_userdata($user_id)) return false;
-        if (class_exists('DIP_Account_Sync')) {
-            if (DIP_Account_Sync::privileged_mobile_blocked($user_id)) return false;
-            if (is_wp_error(DIP_Account_Sync::login_guard($user_id))) return false;
-        } else {
-            if (self::social_role_blocked($user_id, self::settings())) return false;
-            if (class_exists('DIP_Policy') && DIP_Policy::is_pending($user_id)) return false;
-            if (get_user_meta($user_id, 'dip_email_verified', true) === 'no') return false;
-        }
+        if (!class_exists('DIP_Account_Sync')) return false;
+        if (DIP_Account_Sync::privileged_mobile_blocked($user_id)) return false;
+        if (is_wp_error(DIP_Account_Sync::login_guard($user_id))) return false;
         return true;
     }
 
     public static function google_login(WP_REST_Request $request) {
-        if (!self::throttle('google_login', 10, 10 * MINUTE_IN_SECONDS)) return new WP_Error('rate_limited','Too many requests.',['status'=>429]);
+        if (!self::throttle('google_login', 10, 10 * MINUTE_IN_SECONDS, $request)) return new WP_Error('rate_limited','Too many requests.',['status'=>429]);
         if (!self::enabled()) return new WP_Error('mobile_api_disabled','Mobile authentication is disabled.',['status'=>403]);
         if (!is_ssl()) return new WP_Error('https_required','HTTPS is required.',['status'=>403]);
         if (!self::valid_device_request($request)) return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]);
@@ -357,7 +350,7 @@ final class DIP_Mobile_API {
     }
 
     public static function refresh(WP_REST_Request $request) {
-        if (!self::throttle('refresh', 20, 10 * MINUTE_IN_SECONDS)) return new WP_Error('rate_limited','Too many requests.',['status'=>429]);
+        if (!self::throttle('refresh', 20, 10 * MINUTE_IN_SECONDS, $request)) return new WP_Error('rate_limited','Too many requests.',['status'=>429]);
         if (!self::valid_device_request($request)) return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]);
         if(!self::enabled()||!is_ssl())return new WP_Error('forbidden','Request denied.',['status'=>403]);
         $token=trim((string)$request->get_param('refresh_token'));
@@ -421,8 +414,6 @@ final class DIP_Mobile_API {
         ));
         return absint($found) === $session_id;
     }
-
-    private static function current_session() { return self::current_session_for_request(null, false); }
 
     public static function logout(WP_REST_Request $request) { $row=self::current_session_for_request($request); if($row){global $wpdb;$wpdb->update(self::table(),['revoked_at'=>current_time('mysql',true)],['id'=>(int)$row->id]);} return new WP_REST_Response(['logged_out'=>true],200); }
 

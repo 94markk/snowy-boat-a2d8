@@ -115,7 +115,7 @@ function dipes_admin_page() {
                             <?php dipes_color_field( 'header_bg', 'Fond en-tête' ); dipes_color_field( 'header_text', 'Texte en-tête' ); ?>
                             <?php dipes_color_field( 'heading', 'Titres' ); dipes_color_field( 'text', 'Texte principal' ); ?>
                             <?php dipes_color_field( 'muted', 'Texte secondaire' ); dipes_color_field( 'border', 'Bordures' ); ?>
-                            <?php dipes_color_field( 'accent', 'Accent global' ); dipes_color_field( 'accent_soft', 'Accent léger' ); ?>
+                            <?php dipes_color_field( 'accent', 'Accent global' ); ?>
                             <?php dipes_color_field( 'button_bg', 'Boutons' ); dipes_color_field( 'button_text', 'Texte bouton' ); ?>
                             <?php dipes_color_field( 'card_bg', 'Fond des cartes' ); dipes_color_field( 'card_border', 'Bordure des cartes' ); ?>
                             <?php dipes_color_field( 'table_header_bg', 'En-tête tableau' ); dipes_color_field( 'table_header_text', 'Texte tableau' ); ?>

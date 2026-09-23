@@ -688,7 +688,6 @@ final class DIP_Two_Factor {
         else do_action('wp_login', $user->user_login, $user);
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user_id);
         do_action('dip_login_success', $user_id, ['provider'=>$method,'two_factor'=>1]);
-        if (class_exists('DIP_Reauth')) DIP_Reauth::mark_recent($user_id);
         if (class_exists('DIP_Audit')) DIP_Audit::record('two_factor_challenge_success', 'info', $user_id, ['method'=>$method]);
         $redirect = wp_validate_redirect((string)($state['redirect'] ?? ''), home_url('/my-account/'));
         wp_safe_redirect($redirect);

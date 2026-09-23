@@ -57,7 +57,6 @@ final class DIP_Performance {
     public static function purge_cache() {
         wp_cache_delete(self::HEALTH_KEY, self::CACHE_GROUP);
         delete_transient('dip_' . self::HEALTH_KEY);
-        delete_transient('dip_provider_usage_30');
         do_action('dip_identity_cache_purged');
     }
 

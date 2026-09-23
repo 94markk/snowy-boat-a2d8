@@ -179,6 +179,8 @@ final class DIP_Email_Hub {
     }
 
     public static function provider_connected($user_id, $provider = '') {
+        // dip_account_linked passes the provider profile array; migrations pass the provider id.
+        if (is_array($provider)) $provider = $provider['provider'] ?? 'google';
         $provider = ucfirst(sanitize_text_field((string)$provider));
         self::send_user_security($user_id, 'Compte ' . ($provider ?: 'social') . ' connecté', ($provider ?: 'Un compte social') . ' est maintenant connecté à votre compte Delicat.', [
             'title'=>'Nouveau compte connecté', 'accent'=>'#2563eb', 'badge'=>'Compte lié', 'label'=>'Comptes connectés',

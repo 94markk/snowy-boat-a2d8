@@ -8,7 +8,9 @@ defined('ABSPATH') || exit;
  * Identity Pro remains the only Google/OIDC account and security authority.
  */
 final class DIP_Headless_Google {
-    const FLOW_TTL = 600;
+    // Matches DIP_Flow_Store::TTL: the storefront flow wraps the Google flow.
+    const FLOW_TTL = 1800;
+    const RATE_WINDOW = 600;
     const TICKET_TTL = 120;
     const PROVIDER = 'google_headless';
     const COOKIE_PREFIX = 'dip_hg_';
@@ -176,15 +178,13 @@ final class DIP_Headless_Google {
         return $next;
     }
 
+    /** 12 starts per device (address + browser), 120 per shared address, fixed window. */
     private static function rate_limited() {
-        $address = class_exists('DIP_Native_Auth')
-            ? (string) DIP_Native_Auth::client_ip()
-            : sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
-        $key = 'dip_hg_rate_' . substr(hash_hmac('sha256', $address, wp_salt('nonce')), 0, 32);
-        $count = (int) get_transient($key);
-        if ($count >= 12) return true;
-        set_transient($key, $count + 1, self::FLOW_TTL);
-        return false;
+        $address = DIP_Native_Auth::throttle_ip();
+        $agent = substr(sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 300);
+        $device = DIP_Lockout::window_hit('dip_hg_rate_' . substr(hash_hmac('sha256', $address . '|' . $agent, wp_salt('nonce')), 0, 32), self::RATE_WINDOW);
+        $shared = DIP_Lockout::window_hit('dip_hg_rate_ip_' . substr(hash_hmac('sha256', $address, wp_salt('nonce')), 0, 32), self::RATE_WINDOW);
+        return $device > 12 || $shared > 120;
     }
 
     public static function route() {
@@ -222,6 +222,8 @@ final class DIP_Headless_Google {
         if (self::rate_limited()) {
             wp_die(esc_html__('Trop de tentatives Google. Réessayez plus tard.', 'delicat-google-login'), '', ['response' => 429]);
         }
+        // Updates that replace the ZIP never run the activation hook.
+        self::activate();
 
         $browser = self::random_hex();
         $resume = self::random_hex();
@@ -244,12 +246,15 @@ final class DIP_Headless_Google {
             'delicat_headless_auth' => 'complete',
             'state' => $state,
             'resume' => $resume,
-            'return_to' => $callback,
+            'return_to' => rawurlencode($callback),
         ], home_url('/'));
         $login_args = [
             'dip_action' => 'login',
             'provider' => 'google',
-            'redirect' => $complete,
+            // Encoded: unencoded, the completion URL's own state/resume/return_to
+            // parameters leaked into the login URL, so the cookie-less and 2FA
+            // recovery paths lost the flow and ended in "session expired".
+            'redirect' => rawurlencode($complete),
             'tracker' => 'headless_' . $state,
         ];
         if (is_user_logged_in()) {
@@ -369,6 +374,9 @@ final class DIP_Headless_Google {
             wp_safe_redirect(add_query_arg('dip_auth_error', 'headless_session_expired', home_url('/')) . '#delicat-login');
             exit;
         }
+        // The Google step failed or was cancelled: never fall back to a
+        // WordPress session that existed before this flow.
+        if (isset($_GET['dip_auth_error'])) self::failure($flow, 'authentication_failed');
         if (!is_user_logged_in()) self::failure($flow, 'authentication_failed');
         self::finish($flow, get_current_user_id(), '');
     }
@@ -396,7 +404,7 @@ final class DIP_Headless_Google {
         $target = add_query_arg([
             'state' => (string) $flow['state'],
             'credential' => $credential,
-            'next' => self::safe_next((string) $flow['next']),
+            'next' => rawurlencode(self::safe_next((string) $flow['next'])),
         ], (string) $flow['callback']);
         wp_redirect($target, 302, 'Delicat Identity Pro'); // Strict exact-origin HTTPS allowlist validated above.
         exit;

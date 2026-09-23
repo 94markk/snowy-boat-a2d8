@@ -11,7 +11,6 @@ final class DIP_Provider_Manager {
 
     public static function init() {
         add_action('admin_menu', [__CLASS__, 'menu'], 30);
-        add_action('admin_enqueue_scripts', [__CLASS__, 'assets']);
         add_action('admin_post_dip_provider_save', [__CLASS__, 'save']);
         add_action('admin_post_dip_provider_test', [__CLASS__, 'test']);
     }
@@ -24,11 +23,6 @@ final class DIP_Provider_Manager {
             self::PAGE,
             [__CLASS__, 'render']
         );
-    }
-
-    public static function assets($hook) {
-        if ($hook !== 'settings_page_' . self::PAGE) return;
-        wp_enqueue_style('dip-admin', DIP_URL . 'assets/admin.css', [], DIP_VERSION);
     }
 
     public static function providers(array $settings) {
@@ -64,7 +58,7 @@ final class DIP_Provider_Manager {
     public static function save() {
         if (!current_user_can('manage_options')) wp_die(esc_html__('Permission refusée.', 'delicat-google-login'), 403);
         check_admin_referer('dip_provider_save');
-        $raw = (array) get_option(DIP_Plugin::OPTION, []);
+        $raw = wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
         $raw['enabled'] = !empty($_POST['google_enabled']) ? 'yes' : 'no';
         $raw['microsoft_enabled'] = !empty($_POST['microsoft_enabled']) ? 'yes' : 'no';
         $order = array_values(array_unique(array_intersect(
