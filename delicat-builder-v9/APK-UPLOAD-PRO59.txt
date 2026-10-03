@@ -1,0 +1,20 @@
+Delicat Builder 9.2.0-pro.59 — Application mobile : mise à jour dans l'app
+
+INSTALLATION
+Remplacez le Builder par ce ZIP (Extensions → Ajouter → Téléverser), puis installez delicat-app-api 2.24.0. Purgez LiteSpeed/CDN.
+
+CE QUI CHANGE (complète pro.58)
+- Le téléversement lit le paquet, la version et le numéro de build dans l'APK lui-même (manifeste Android binaire). Rien à taper. Un APK d'une autre application, ou plus ancien que le build déjà publié, est refusé ; aucun fichier n'est écrit dans ce cas.
+- Application mobile gagne : Numéro de build, Empreinte SHA-256 (calculée au téléversement), Build minimum (mise à jour obligatoire en dessous) et Nouveautés (texte affiché dans l'app).
+- La version publiée ici est celle que l'application Délicat Store propose à ses clients : les téléphones qui ont installé l'APK depuis le site voient « Mise à jour disponible », téléchargent le fichier depuis ce site uniquement, vérifient l'empreinte, puis Android installe. Les téléphones installés depuis Google Play sont renvoyés vers Play. Delicat App → Réglages affiche cette version en lecture seule (« Géré par Delicat Builder »).
+- Pour un fichier APK, le lien doit être sur ce site : l'application n'installe rien depuis un autre hôte. Un lien Google Play reste libre.
+- L'action WordPress `delicat_android_release_updated` est déclenchée à chaque enregistrement avec la version publiée.
+- La page /application/ affiche l'empreinte SHA-256 sous le bouton.
+
+PUBLIER UNE NOUVELLE VERSION
+1. Construire l'APK (flavor web) avec un build plus grand (pubspec 5.0.1+60).
+2. Delicat Builder → Application mobile → Téléverser votre application Android → choisir l'APK → Téléverser et publier le lien.
+3. Vérifier version/build affichés, écrire les Nouveautés, Enregistrer. Les clients reçoivent la mise à jour à l'ouverture suivante.
+
+VALIDATION
+tests/apk_manifest_smoke.php (lecteur de manifeste sur une archive synthétique et sur l'APK 5.0.0 livré, règles de refus, release()). Aucun site WordPress en ligne n'était disponible : vérifier un téléversement réel après installation.

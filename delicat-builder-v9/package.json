@@ -1,0 +1,18 @@
+{
+  "name": "delicat-builder-v9",
+  "version": "9.3.0",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "description": "Delicat Builder V9 — native storefront engine build pipeline (JS bundle + CSS route bundles).",
+  "type": "module",
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "build:watch": "node tools/build.mjs --watch",
+    "zip": "node tools/build.mjs && node tools/zip.mjs",
+    "check": "node tools/build.mjs --check"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "lightningcss": "^1.30.0"
+  }
+}

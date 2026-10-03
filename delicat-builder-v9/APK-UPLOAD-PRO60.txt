@@ -1,0 +1,20 @@
+Delicat Builder 9.2.0-pro.60 — Correction du sélecteur APK
+
+INSTALLATION
+WordPress → Extensions → Ajouter → Téléverser cette archive → Remplacer la version actuelle.
+Ouvrez Delicat Builder → Application mobile → Fichier APK.
+
+CORRECTION
+Le filtre accept du sélecteur a été retiré : il pouvait masquer les fichiers APK selon le navigateur et le gestionnaire de fichiers. Tous les fichiers sont visibles, mais seuls les APK valides peuvent être publiés.
+Le nom et la taille du fichier sélectionné sont maintenant affichés. Les extensions incorrectes, les fichiers vides/incomplets et les fichiers dépassant la limite sont signalés avant envoi. Aucun contrôle du type MIME navigateur, souvent vide ou ZIP pour un APK.
+Un statut confirme le transfert/validation, bloque les doubles envois et rétablit le bouton après retour navigateur. Le formulaire standard fonctionne aussi sans JavaScript.
+Les contrôles serveur existants restent actifs : administrateur, nonce, HTTPS, taille, archive/manifeste Android, paquet, versionCode, SHA-256 et stockage protégé.
+Les recommandations en français sont accessibles dans le panneau de téléversement : fichier local, production signée, APK universel, même clé et paquet pour les mises à jour, limites PHP et test sur Android.
+
+SI VOUS UTILISEZ UN IPHONE/IPAD
+Enregistrez l’APK dans l’app Fichiers avant de le sélectionner. L’iPhone peut envoyer le fichier au site, mais ne peut pas installer une application Android.
+Un fichier ZIP/AAB renommé .apk reste refusé par le serveur.
+
+VALIDATION
+Tests JavaScript locaux : quatre variantes MIME, extension invalide, fichier vide, taille excessive, nom affiché, soumission, double soumission, retour navigateur. Syntaxe JavaScript vérifiée.
+Pas de PHP ou navigateur local installé dans cet environnement ; pas de test réel sur WordPress/Hostinger. Après installation, téléversez votre APK signé, vérifiez le lien généré et testez le téléchargement et la mise à jour sur Android.

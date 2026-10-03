@@ -1,0 +1,22 @@
+Delicat Builder 9.2.0-pro.58 — Administrator APK upload
+
+INSTALL / USE
+Replace the Builder plugin using this ZIP. Open Delicat Builder > Application mobile. In “Téléverser votre application Android”, select your production APK, optionally provide its version and an independently calculated SHA-256, then click “Téléverser et publier le lien”. The HTTPS download URL and file size are saved automatically. The existing public download page and App menu icon use that link. The generated URL and calculated fingerprint appear in the admin panel for copying. Clear any external CDN cache after publication if needed.
+
+The limit shown is the smaller of WordPress/PHP's upload limit and 200 MiB. PHP ZIP must be installed. Large APKs may require adjusting upload_max_filesize and post_max_size in Hostinger; the plugin does not change php.ini. On a network site, only the network super administrator may use this uploader. A request interrupted after obtaining the upload lock can be reset by an administrator after 15 minutes.
+
+SECURITY BOUNDARIES
+- Upload route: authenticated administrator with both manage_options and upload_files, POST only, verified WordPress nonce, recognized HTTPS. No anonymous upload route and no global APK MIME exception.
+- Behind a reverse proxy, fix HTTPS detection at the host. Only if the origin accepts traffic solely from your trusted proxy and the proxy overwrites forwarded headers, DELICAT_APP_TRUST_PROXY_HEADERS=true may enable forwarded HTTPS recognition.
+- Checks extension, actual size, ZIP header and structure, compiled Android manifest, expected Android payload, duplicate entries, encrypted entries and unsafe paths. Contents are never extracted, included, executed or repackaged.
+- SHA-256 is calculated before storage and checked after moving. The optional expected hash rejects a mismatch. This detects byte changes; it is not APK signer identity verification and is not an antivirus scan. Publish only your own signed release APK. Android signing remains the app build's responsibility; no signing keys are requested or stored by this uploader.
+- Files are stored as random fixed-pattern .apk filenames under wp-content/uploads/delicat-android-releases (or your configured upload base). No PHP endpoints stream the APK. Apache/LiteSpeed rules disable directory listing/CGI, deny other filenames, force static APK handling, and add download/nosniff headers. The WordPress site's root .htaccess is untouched. Nginx ignores .htaccess and needs equivalent server configuration from its administrator.
+- HTTPS encrypts transfers. Published APKs are public downloadable files, not encrypted-at-rest archives or confidential files. No system can promise to be hacker-proof. Host TLS, server patches and administrator account security still matter.
+- Invalid files and validation failures preserve the prior link. Old successful release files remain available at their previous URLs to avoid interrupting downloads; review/delete obsolete releases through your host file manager when no longer needed. Plugin updates do not delete releases stored in uploads.
+
+VALIDATION
+PHP 8.3 WebAssembly runtime: APK validator accepted an APK-shaped fixture and calculated its hash; rejected renamed PHP, ordinary ZIP, wrong extension, oversize input, traversal/backslash entries and invalid compiled manifest. Tested native/trusted/untrusted proxy detection and method/capability/nonce gates. A real multipart request exercised PHP is_uploaded_file/move_uploaded_file, generated URL/settings/metadata and lock release with WordPress functions mocked. A mismatched expected hash preserved the old link and stored no new file. Synthetic fixtures were not signed apps or malware scans. PHP syntax-tree checks and final ZIP/manifest checks also passed. No live WordPress, Hostinger webserver-rule or Android installation test was available.
+
+References:
+https://developer.wordpress.org/reference/functions/wp_max_upload_size/
+https://developer.android.com/tools/apksigner

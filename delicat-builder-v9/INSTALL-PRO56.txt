@@ -1,0 +1,7 @@
+Delicat Builder 9.2.0-pro.56
+Install the ZIP via WordPress > Plugins > Add New > Upload Plugin, replace the existing version, then activate. Purge LiteSpeed and any CDN page cache.
+Manual installation: wp-content/plugins/delicat-builder-v9/delicat-builder-v9.php. Keep assets, includes, pro and templates inside that same folder. Do not put the ZIP itself in the plugins folder or move its PHP file away from its assets. Directories are packaged as 0755, files as 0644; never use 0777.
+Changes: parse Cloudflare visitor JSON rather than matching whitespace-sensitive text (false HTTPS 403); anchor header asset paths to the main plugin; constrain the fallback theme logo and replace the automatic list of every page with compact navigation when the native header is unavailable; regenerate the stale integrity manifest.
+Safe Mode remains enabled if a real error triggers it. These changes do not restore a quarantined optional renderer. Inspect the recorded Builder error before re-enabling it.
+403 diagnosis: record the exact failing URL and response. A 403 for an assets/*.css or *.js file may be Hostinger permissions/WAF/CDN rules and occurs before this plugin executes. A 403 for login/checkout/AJAX may be a nonce/session/security rejection. This package does not disable those protections or change the server configuration.
+Validation: package layout, explicit permissions, referenced local assets and manifest hashes checked locally. No live WordPress/Hostinger login was available; installation and checkout must be verified on the target site.

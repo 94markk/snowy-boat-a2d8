@@ -1,0 +1,53 @@
+/* RC61 "Programme Bon Kliyan" — dark loyalty panel. Every colour, size and text comes from the section fields via custom properties; the card float is CSS keyframes on static markup. */
+.delicat-bk,.delicat-bk *,.delicat-bk *::before,.delicat-bk *::after{box-sizing:border-box}
+.delicat-bk{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:26px;overflow:hidden;isolation:isolate;width:100%;padding:44px 26px 30px;border:1px solid var(--dbv9-bk-border,#2a2b45);border-radius:var(--dbv9-bk-radius,30px);background:var(--dbv9-bk-bg,#12131f);color:var(--dbv9-bk-title,#fff);box-shadow:0 22px 50px rgba(6,8,28,.28);contain:layout paint style}
+.delicat-bk::before{content:"";position:absolute;z-index:-2;inset:-20%;pointer-events:none;background:radial-gradient(circle at 78% 26%,var(--dbv9-bk-glow,#6a4dff),transparent 34%);opacity:var(--dbv9-bk-glow-a,.6)}
+.delicat-bk.has-pattern::after{content:"";position:absolute;z-index:-1;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.11) 1px,transparent 1.5px) 0 0/22px 22px;opacity:.9;-webkit-mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 92%);mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 92%)}
+.delicat-bk__copy{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;min-width:0;text-align:center}
+.delicat-bk--left .delicat-bk__copy{align-items:flex-start;text-align:left}
+.delicat-bk__eyebrow{display:inline-flex;align-items:center;gap:9px;margin:0 0 16px;color:var(--dbv9-bk-eyebrow,#d6ff3f);font-size:13px;font-weight:800;letter-spacing:.2em;line-height:1.2;text-transform:uppercase}
+.delicat-bk__eyebrow .delicat-inline-icon{width:20px;height:20px;flex:0 0 20px}
+.delicat-bk__title{margin:0;max-width:16ch;color:var(--dbv9-bk-title,#fff);font-size:var(--dbv9-bk-title-d,46px);font-weight:var(--dbv9-bk-title-weight,600);letter-spacing:-.035em;line-height:1.06;text-wrap:balance}
+.delicat-bk__subtitle{max-width:560px;margin:14px 0 0;color:var(--dbv9-bk-subtitle,#a9adc4);font-size:17px;line-height:1.55}
+.delicat-bk__actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:12px;margin-top:24px}
+.delicat-bk--left .delicat-bk__actions{justify-content:flex-start}
+.delicat-bk__button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:54px;padding:14px 26px;border:1px solid transparent;border-radius:999px;background:var(--dbv9-bk-btn-bg,#d6ff3f);color:var(--dbv9-bk-btn-text,#12131f)!important;font-size:17px;font-weight:800;line-height:1.1;text-decoration:none!important;box-shadow:0 12px 30px rgba(214,255,63,.18);transition:transform .16s ease,box-shadow .16s ease}
+.delicat-bk__button:hover{transform:translateY(-1px);box-shadow:0 16px 34px rgba(214,255,63,.24)}
+.delicat-bk__button-arrow{font-size:19px;line-height:1}
+.delicat-bk__button--ghost{background:transparent;border-color:rgba(255,255,255,.18);color:var(--dbv9-bk-title,#fff)!important;box-shadow:none}
+.delicat-bk__button--ghost:hover{border-color:rgba(255,255,255,.34);box-shadow:none}
+.delicat-bk__perks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;width:100%;max-width:760px;margin:24px 0 0;padding:0;list-style:none}
+.delicat-bk__perk{display:flex;align-items:center;gap:12px;min-width:0;padding:12px 14px;border:1px solid rgba(255,255,255,.10);border-radius:16px;background:rgba(255,255,255,.05);text-align:left}
+.delicat-bk__perk-icon{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.08);color:var(--dbv9-bk-eyebrow,#d6ff3f);font-size:19px;line-height:1}
+.delicat-bk__perk-icon .delicat-inline-icon{width:19px;height:19px}
+.delicat-bk__perk-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.delicat-bk__perk-body strong{color:var(--dbv9-bk-title,#fff);font-size:14px;font-weight:700;line-height:1.25}
+.delicat-bk__perk-body span{color:var(--dbv9-bk-subtitle,#a9adc4);font-size:12.5px;line-height:1.4}
+.delicat-bk__visual{position:relative;z-index:1;min-width:0}
+.delicat-bk__visual--image .delicat-bk__image{display:block;width:100%;height:auto;border-radius:calc(var(--dbv9-bk-radius,30px) - 10px)}
+.delicat-bk__stage{--dbv9-bk-card-w:min(100%,300px);--dbv9-bk-card-h:176px;position:relative;width:100%;max-width:420px;height:320px;margin:0 auto}
+.delicat-bk__ring{position:absolute;top:50%;left:50%;border:1px solid var(--dbv9-bk-card-accent,#d6ff3f);border-radius:50%;transform:translate(-50%,-50%);opacity:.16;pointer-events:none}
+.delicat-bk__ring--1{width:300px;height:300px}
+.delicat-bk__ring--2{width:210px;height:210px;opacity:.10}
+.delicat-bk__card{--dbv9-bk-rot:0deg;position:absolute;top:50%;left:50%;display:flex;flex-direction:column;width:var(--dbv9-bk-card-w);height:var(--dbv9-bk-card-h);margin:calc(var(--dbv9-bk-card-h) / -2) 0 0 calc(min(300px,100%) / -2);padding:22px 24px;border-radius:22px;transform:translate3d(0,0,0) rotate(var(--dbv9-bk-rot));backface-visibility:hidden}
+.delicat-bk__card--back{--dbv9-bk-rot:-13deg;justify-content:flex-start;margin-top:calc(var(--dbv9-bk-card-h) / -2 - 26px);margin-left:calc(min(300px,100%) / -2 - 34px);background:var(--dbv9-bk-card-back,#6f5cff);box-shadow:0 22px 44px rgba(0,0,0,.35)}
+.delicat-bk__card-brand{color:rgba(255,255,255,.34);font-size:15px;font-weight:800;letter-spacing:.34em;text-transform:uppercase}
+.delicat-bk__card--front{--dbv9-bk-rot:6deg;margin-top:calc(var(--dbv9-bk-card-h) / -2 + 20px);margin-left:calc(min(300px,100%) / -2 + 22px);border:1px solid rgba(255,255,255,.09);background:var(--dbv9-bk-card-bg,#1b1c2e);color:var(--dbv9-bk-card-text,#fff);box-shadow:0 30px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
+.delicat-bk__card-sheen{position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.09),transparent 42%,transparent 70%,rgba(255,255,255,.04));pointer-events:none}
+.delicat-bk__card-eyebrow{display:block;color:var(--dbv9-bk-card-accent,#d6ff3f);font-size:11px;font-weight:800;letter-spacing:.22em;text-transform:uppercase}
+.delicat-bk__card-title{display:block;margin-top:8px;color:var(--dbv9-bk-card-text,#fff);font-size:30px;font-weight:800;letter-spacing:.01em;line-height:1;text-transform:uppercase}
+.delicat-bk__card-icon{position:absolute;right:22px;bottom:18px;display:grid;place-items:center;width:34px;height:34px;color:var(--dbv9-bk-card-accent,#d6ff3f);font-size:30px;line-height:1}
+.delicat-bk__card-icon .delicat-inline-icon{width:30px;height:30px}
+.delicat-bk__badge{position:absolute;top:12%;right:4%;display:grid;place-items:center;width:52px;height:52px;border:1px solid rgba(255,255,255,.12);border-radius:50%;background:rgba(255,255,255,.06);color:var(--dbv9-bk-card-accent,#d6ff3f);font-size:22px;line-height:1;box-shadow:0 14px 30px rgba(0,0,0,.3);transform:translate3d(0,0,0);backface-visibility:hidden}
+.delicat-bk__badge .delicat-inline-icon{width:22px;height:22px}
+.delicat-bk.has-motion .delicat-bk__card--front{animation:dbv9-bk-float 7s ease-in-out infinite}
+.delicat-bk.has-motion .delicat-bk__card--back{animation:dbv9-bk-float 8.5s ease-in-out -3.4s infinite;--dbv9-bk-lift:-8px}
+.delicat-bk.has-motion .delicat-bk__badge{animation:dbv9-bk-badge 5.5s ease-in-out -1.2s infinite}
+@keyframes dbv9-bk-float{0%,100%{transform:translate3d(0,0,0) rotate(var(--dbv9-bk-rot))}50%{transform:translate3d(0,var(--dbv9-bk-lift,-11px),0) rotate(var(--dbv9-bk-rot))}}
+@keyframes dbv9-bk-badge{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(0,-9px,0)}}
+.delicat-bk--visual-none .delicat-bk__copy,.delicat-bk--visual-image .delicat-bk__copy{padding-bottom:8px}
+@media(min-width:961px){.delicat-bk--auto{grid-template-columns:minmax(0,1.12fr) minmax(360px,.88fr);align-items:center;gap:40px;min-height:460px;padding:52px 56px}.delicat-bk--auto .delicat-bk__copy{align-items:flex-start;text-align:left}.delicat-bk--auto .delicat-bk__actions{justify-content:flex-start}.delicat-bk--auto .delicat-bk__title{max-width:14ch}.delicat-bk--auto .delicat-bk__stage{--dbv9-bk-card-w:min(100%,330px);--dbv9-bk-card-h:196px;max-width:460px;height:360px}.delicat-bk--auto .delicat-bk__card{margin-left:calc(min(330px,100%) / -2)}.delicat-bk--auto .delicat-bk__card--back{margin-top:calc(var(--dbv9-bk-card-h) / -2 - 30px);margin-left:calc(min(330px,100%) / -2 - 46px)}.delicat-bk--auto .delicat-bk__card--front{margin-left:calc(min(330px,100%) / -2 + 26px)}.delicat-bk--auto .delicat-bk__ring--1{width:340px;height:340px}.delicat-bk--auto .delicat-bk__ring--2{width:240px;height:240px}.delicat-bk--auto.delicat-bk--visual-none{grid-template-columns:minmax(0,1fr)}.delicat-bk--stack{padding:56px 40px 40px}.delicat-bk--stack .delicat-bk__stage{height:360px}.delicat-bk__title{font-size:var(--dbv9-bk-title-d,46px)}}
+@media(min-width:641px) and (max-width:960px){.delicat-bk{padding:48px 34px 34px}.delicat-bk__title{font-size:var(--dbv9-bk-title-t,40px)}.delicat-bk__stage{height:340px}}
+@media(max-width:640px){.delicat-bk{gap:18px;padding:40px 22px 24px;border-radius:min(var(--dbv9-bk-radius,30px),26px)}.delicat-bk__eyebrow{margin-bottom:14px;font-size:12px;letter-spacing:.18em}.delicat-bk__title{max-width:100%;font-size:var(--dbv9-bk-title-m,34px);line-height:1.08}.delicat-bk__subtitle{margin-top:12px;font-size:15px;line-height:1.5;text-wrap:balance}.delicat-bk__actions{width:100%;margin-top:20px}.delicat-bk__button{width:100%;min-height:50px;font-size:16px}.delicat-bk__perks{grid-template-columns:1fr;margin-top:18px}.delicat-bk__stage{--dbv9-bk-card-w:min(100%,262px);--dbv9-bk-card-h:156px;height:290px}.delicat-bk__card{margin-left:calc(min(262px,100%) / -2);padding:18px 20px}.delicat-bk__card--back{--dbv9-bk-rot:-11deg;margin-top:calc(var(--dbv9-bk-card-h) / -2 - 22px);margin-left:calc(min(262px,100%) / -2 - 20px)}.delicat-bk__card--front{margin-top:calc(var(--dbv9-bk-card-h) / -2 + 16px);margin-left:calc(min(262px,100%) / -2 + 14px)}.delicat-bk__card-title{font-size:26px}.delicat-bk__card-icon{right:18px;bottom:16px}.delicat-bk__ring--1{width:270px;height:270px}.delicat-bk__ring--2{width:190px;height:190px}.delicat-bk__badge{top:10%;right:2%;width:46px;height:46px}}
+@media(prefers-reduced-motion:reduce){.delicat-bk__card,.delicat-bk__badge,.delicat-bk__button{animation:none!important;transition:none!important}.delicat-bk__button{transform:none!important}}
+@media(min-width:900px){@supports(content-visibility:auto){body.delicat-builder-homepage-managed .delicat-section--bon_kliyan{content-visibility:auto;contain:layout paint style;contain-intrinsic-size:auto 640px}}}

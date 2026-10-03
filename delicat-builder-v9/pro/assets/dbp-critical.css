@@ -1,0 +1,178 @@
+/* Delicat Builder V9 Pro — critical shell CSS (inlined in <head>).
+ *
+ * HARD CONSTRAINT: no calc() and no clamp() anywhere in this file.
+ * LiteSpeed's CSS combiner strips the whitespace around `+`, which makes any
+ * calc()/clamp() expression invalid at parse time. The declaration is then
+ * discarded silently and the element falls back to an inherited size. Fixed
+ * pixel steps per breakpoint are used instead.
+ *
+ * No backdrop-filter: it costs a frame budget the low-end Android handsets
+ * this store serves do not have.
+ */
+
+:root {
+  --dbp-navy: #0d1b4d;
+  --dbp-royal: #284696;
+  --dbp-sky: #5b7ccc;
+  --dbp-orange: #ff5a1f;
+  --dbp-ink: #10162e;
+  --dbp-muted: #6b7280;
+  --dbp-line: rgba(13, 27, 77, 0.10);
+  --dbp-surface: #ffffff;
+  --dbp-shell: #f6f7fb;
+  --dbp-radius: 14px;
+  --dbp-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* ---------------------------------------------------------------- progress */
+
+.dbp-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 99999;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 160ms linear;
+}
+
+.dbp-progress i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--dbp-royal), var(--dbp-orange));
+  transform-origin: 0 50%;
+}
+
+.dbp-progress.is-active {
+  opacity: 1;
+}
+
+.dbp-progress.is-active i {
+  width: 100%;
+  animation: dbp-progress-run 1400ms var(--dbp-ease) forwards;
+}
+
+.dbp-progress.is-done {
+  opacity: 1;
+}
+
+.dbp-progress.is-done i {
+  width: 100%;
+  animation: none;
+  transition: opacity 200ms linear;
+  opacity: 0;
+}
+
+@keyframes dbp-progress-run {
+  0%   { transform: scaleX(0.02); }
+  40%  { transform: scaleX(0.55); }
+  75%  { transform: scaleX(0.82); }
+  100% { transform: scaleX(0.94); }
+}
+
+/* ------------------------------------------------------------- transitions */
+
+/* Cross-page transition. The header, drawer and app dock stay mounted, so only
+   the content root animates: that is what makes a switch read as a screen
+   change rather than a page load. */
+
+html[data-dbp-fade] main {
+  animation: dbp-enter 180ms var(--dbp-ease) both;
+}
+
+@keyframes dbp-enter {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-dbp-fade] main { animation: none; }
+  .dbp-progress.is-active i { animation: none; width: 60%; }
+  ::view-transition-group(*),
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none !important; }
+}
+
+/* --------------------------------------------------------------- skeletons */
+
+html[data-dbp-loading] main {
+  opacity: 0.55;
+  transition: opacity 120ms linear;
+}
+
+html[data-dbp-loading] main a,
+html[data-dbp-loading] main button {
+  pointer-events: none;
+}
+
+.dbp-skeleton {
+  background: linear-gradient(90deg, #eef0f6 25%, #e3e7f1 37%, #eef0f6 63%);
+  background-size: 400% 100%;
+  animation: dbp-shimmer 1200ms ease-in-out infinite;
+  border-radius: 10px;
+}
+
+@keyframes dbp-shimmer {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* ------------------------------------------------------------ layout guard */
+
+/* Reserving the chrome's height before its stylesheet arrives is what removes
+   the late jump described in the RC90 notes. Fixed steps, no calc. */
+
+body.dbp-app {
+  background: var(--dbp-shell);
+  overflow-x: hidden;
+}
+
+body.dbp-app main {
+  min-height: 60vh;
+  display: block;
+}
+
+@media (max-width: 782px) {
+  body.dbp-app {
+    padding-bottom: 64px;
+  }
+  body.dbp-app.dbp-locked {
+    padding-bottom: 0;
+  }
+}
+
+/* Touch targets. 44px is the floor; the RC90 audit found 42 of 94 below it. */
+body.dbp-app a[class*="cta"],
+body.dbp-app button:not([class*="qty"]),
+body.dbp-app .dsb8-header__action {
+  min-height: 44px;
+}
+
+/* ---------------------------------------------------------- accessibility */
+
+.dbp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body.dbp-app :focus-visible {
+  outline: 2px solid var(--dbp-orange);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------- image guard */
+
+body.dbp-app img {
+  max-width: 100%;
+  height: auto;
+}

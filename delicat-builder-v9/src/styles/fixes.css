@@ -1,0 +1,73 @@
+/* Delicat Builder V9 — cascade fixes (9.3).
+ *
+ * Appended after dbp-type in the polish bundle, so these rules are the last
+ * stylesheet rules of every page. Each one repairs a dark-mode defect that
+ * the audit found in the layered cascade; none changes the light design. */
+
+/* 1. Calculator in dark mode: the field and card backgrounds are driven by
+      --dmc-* custom properties that the product settings print inline as
+      light values; override the tokens (important beats the inline style). */
+html[data-delicat-theme="dark"] body .dmc-calc,
+html.dlc-theme-dark body .dmc-calc {
+	--dmc-card-bg: #0f1328 !important;
+	--dmc-field-bg: #11162a !important;
+	--dmc-help-bg: #141a33 !important;
+	--dmc-total-bg: #141a33 !important;
+	--dmc-border: rgba(255, 255, 255, .12) !important;
+	--dmc-text: #f7f8fc !important;
+	color: #f7f8fc;
+}
+html[data-delicat-theme="dark"] body .dmc-calc .dmc-input:not([type=radio]):not([type=checkbox]),
+html[data-delicat-theme="dark"] body .dmc-calc select.dmc-input,
+html[data-delicat-theme="dark"] body .dmc-calc textarea.dmc-input,
+html.dlc-theme-dark body .dmc-calc .dmc-input:not([type=radio]):not([type=checkbox]),
+html.dlc-theme-dark body .dmc-calc select.dmc-input,
+html.dlc-theme-dark body .dmc-calc textarea.dmc-input {
+	background: var(--dmc-field-bg, #11162a) !important;
+	color: #f7f8fc !important;
+	border-color: rgba(255, 255, 255, .14) !important;
+}
+
+/* 2. Legal pages in dark mode: the --lg-* tokens were light only. */
+html[data-delicat-theme="dark"] .delicat-legal,
+html.dlc-theme-dark .delicat-legal {
+	--lg-ink: #f3f4f7;
+	--lg-brand: #d6d1ff;
+	--lg-mute: #a6aab6;
+	--lg-accent: #a89bff;
+	--lg-line: rgba(255, 255, 255, .12);
+	color: var(--lg-ink);
+}
+html[data-delicat-theme="dark"] .delicat-legal__toc,
+html[data-delicat-theme="dark"] .delicat-legal__body th,
+html[data-delicat-theme="dark"] .delicat-legal__body thead td,
+html.dlc-theme-dark .delicat-legal__toc,
+html.dlc-theme-dark .delicat-legal__body th,
+html.dlc-theme-dark .delicat-legal__body thead td {
+	background: #141a33;
+	color: var(--lg-ink);
+}
+
+/* 3. Checkout: the reference layer forces white cards and a white dock with
+      !important, while the dark theme swapped the --dpn-* tokens to light
+      text, which left white text on white. The checkout stays the light
+      reference design in dark mode, with readable text. */
+html[data-delicat-theme="dark"] body.dpn-checkout,
+html.dlc-theme-dark body.dpn-checkout {
+	--dpn-bg: #eef0f4;
+	--dpn-card: #fff;
+	--dpn-text: #171922;
+	--dpn-muted: #737887;
+	--dpn-line: #e5e7ed;
+	--dpn-soft: #f7f8fa;
+	--dpn-shadow: 0 12px 34px rgba(26, 29, 42, .07);
+	color: var(--dpn-text);
+}
+html[data-delicat-theme="dark"] body.dpn-checkout.dpn-checkout-dock-ready .dpn-checkout-dock-total > strong,
+html.dlc-theme-dark body.dpn-checkout.dpn-checkout-dock-ready .dpn-checkout-dock-total > strong {
+	color: var(--dpn-text, #101828);
+}
+html[data-delicat-theme="dark"] body.dpn-checkout .dpn-checkout-dock,
+html.dlc-theme-dark body.dpn-checkout .dpn-checkout-dock {
+	border-top-color: var(--dpn-line) !important;
+}

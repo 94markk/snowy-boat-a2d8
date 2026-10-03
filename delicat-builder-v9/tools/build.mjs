@@ -1,0 +1,191 @@
+#!/usr/bin/env node
+/**
+ * Delicat Builder V9 — asset build.
+ *
+ *   node tools/build.mjs            build JS bundle + CSS route bundles into assets/dist/
+ *   node tools/build.mjs --watch    rebuild on change
+ *   node tools/build.mjs --check    build to a temp dir and report sizes (no write to assets/dist)
+ *
+ * Output
+ *   assets/dist/engine.<hash>.js          the storefront runtime (ES module, code-split)
+ *   assets/dist/chunks/<name>.<hash>.js   lazy chunks (product fields, express checkout, …)
+ *   assets/dist/<bundle>.<hash>.css       one stylesheet per route bundle (see src/styles/bundles.mjs)
+ *   assets/dist/manifest.json             logical name → file, size, sha256 (read by PHP)
+ *
+ * The PHP side (includes/class-delicat-builder-engine.php) reads the manifest, so
+ * hashed file names never need to be referenced by hand. Old hashed files are
+ * removed on every build so the directory only ever holds the current set.
+ */
+import { build, context } from 'esbuild';
+import { transform as transformCss, browserslistToTargets } from 'lightningcss';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { pluginVersion, writeAssetMaps } from './manifest.mjs';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const root = resolve(here, '..');
+const args = new Set(process.argv.slice(2));
+const watch = args.has('--watch');
+const check = args.has('--check');
+const distDir = check ? join(root, '.build-check') : join(root, 'assets', 'dist');
+const chunkDir = join(distDir, 'chunks');
+
+const BROWSERS = ['chrome >= 80', 'safari >= 13.1', 'ios_saf >= 13.4', 'firefox >= 78', 'edge >= 80', 'samsung >= 12', 'android >= 80'];
+const ESBUILD_TARGET = ['es2019', 'chrome80', 'safari13.1', 'firefox78', 'edge80'];
+
+const { bundles: CSS_BUNDLES } = await import('../src/styles/bundles.mjs');
+
+const sha = (buf) => createHash('sha256').update(buf).digest('hex');
+const short = (hash) => hash.slice(0, 12);
+const kb = (n) => (n / 1024).toFixed(1) + ' KB';
+
+function cleanDist() {
+	if (existsSync(distDir)) rmSync(distDir, { recursive: true, force: true });
+	mkdirSync(chunkDir, { recursive: true });
+}
+
+async function buildJs() {
+	const result = await build({
+		entryPoints: { engine: join(root, 'src', 'engine', 'index.js') },
+		bundle: true,
+		format: 'esm',
+		splitting: true,
+		outdir: distDir,
+		entryNames: '[name].[hash]',
+		chunkNames: 'chunks/[name].[hash]',
+		assetNames: 'chunks/[name].[hash]',
+		minify: true,
+		sourcemap: false,
+		target: ESBUILD_TARGET,
+		legalComments: 'none',
+		treeShaking: true,
+		metafile: true,
+		logLevel: 'warning',
+		define: { 'process.env.NODE_ENV': '"production"' },
+		charset: 'utf8',
+	});
+	const outputs = {};
+	for (const [file, meta] of Object.entries(result.metafile.outputs)) {
+		if (!file.endsWith('.js')) continue;
+		const abs = resolve(root, file);
+		const buf = readFileSync(abs);
+		const rel = abs.slice(distDir.length + 1).replace(/\\/g, '/');
+		/* esbuild marks dynamically imported files as entry points too; the
+		   engine is the one whose entryPoint is src/engine/index.js. Other
+		   entry outputs keep their logical name (routes/product.js → product)
+		   so PHP can modulepreload the chunk a route is about to need. */
+		const entryPoint = String(meta.entryPoint || '').replace(/\\/g, '/');
+		let logical = null;
+		if (entryPoint) logical = /src\/engine\/index\.js$/.test(entryPoint) ? 'engine' : entryPoint.replace(/^.*\//, '').replace(/\.js$/, '');
+		const imports = (meta.imports || []).filter((i) => i.kind === 'import-statement' && /\.js$/.test(i.path)).map((i) => resolve(root, i.path).slice(distDir.length + 1).replace(/\\/g, '/'));
+		outputs[rel] = { bytes: buf.length, sha256: sha(buf), entry: logical === 'engine' ? 'engine' : null, name: logical && logical !== 'engine' ? logical : null, imports };
+	}
+	return outputs;
+}
+
+function readCssSource(file) {
+	const abs = join(root, file);
+	if (!existsSync(abs)) throw new Error(`CSS source missing: ${file}`);
+	return readFileSync(abs, 'utf8');
+}
+
+function buildCss() {
+	const targets = browserslistToTargets(BROWSERS);
+	const outputs = {};
+	for (const [name, files] of Object.entries(CSS_BUNDLES)) {
+		const source = files.map((file) => `/* ---- ${file} ---- */\n${readCssSource(file)}`).join('\n');
+		const { code, warnings } = transformCss({
+			filename: `${name}.css`,
+			code: Buffer.from(source),
+			minify: true,
+			targets,
+			errorRecovery: true,
+			include: 0,
+			exclude: 0,
+		});
+		for (const warning of warnings) {
+			if (/unknown|unexpected|invalid/i.test(warning.message) && !/-webkit-|-moz-|-ms-/.test(warning.message)) {
+				console.warn(`[css:${name}] ${warning.message} (${warning.loc?.line ?? '?'})`);
+			}
+		}
+		const hash = short(sha(code));
+		const file = `${name}.${hash}.css`;
+		writeFileSync(join(distDir, file), code);
+		outputs[file] = { bytes: code.length, sha256: sha(code), bundle: name, sources: files };
+	}
+	return outputs;
+}
+
+function writeManifest(js, css) {
+	const manifest = { version: 2, builtAt: new Date().toISOString(), js: {}, chunks: {}, css: {} };
+	for (const [file, meta] of Object.entries(js)) {
+		if (meta.entry) manifest.js[meta.entry] = { file, bytes: meta.bytes, sha256: meta.sha256, imports: meta.imports };
+		else manifest.chunks[file] = { bytes: meta.bytes, sha256: meta.sha256, name: meta.name };
+	}
+	for (const [file, meta] of Object.entries(css)) {
+		manifest.css[meta.bundle] = { file, bytes: meta.bytes, sha256: meta.sha256, sources: meta.sources };
+	}
+	writeFileSync(join(distDir, 'manifest.json'), JSON.stringify(manifest, null, '\t') + '\n');
+	return manifest;
+}
+
+function report(manifest) {
+	const rows = [];
+	for (const [name, meta] of Object.entries(manifest.js)) rows.push(['js', name, meta.file, meta.bytes]);
+	let chunkBytes = 0;
+	for (const [file, meta] of Object.entries(manifest.chunks)) { chunkBytes += meta.bytes; rows.push(['chunk', meta.name || '', file, meta.bytes]); }
+	for (const [name, meta] of Object.entries(manifest.css)) rows.push(['css', name, meta.file, meta.bytes]);
+	for (const [kind, name, file, bytes] of rows) console.log(`${kind.padEnd(6)} ${name.padEnd(10)} ${file.padEnd(40)} ${kb(bytes).padStart(10)}`);
+	console.log(`lazy chunks total: ${kb(chunkBytes)}`);
+}
+
+async function run() {
+	const started = Date.now();
+	cleanDist();
+	const [js, css] = await Promise.all([buildJs(), Promise.resolve().then(buildCss)]);
+	const manifest = writeManifest(js, css);
+	report(manifest);
+	if (!check) {
+		const maps = writeAssetMaps(root, pluginVersion(root));
+		console.log(`asset maps: ${maps.assets} versioned assets, integrity manifest ${maps.files} files / ${kb(maps.bytes)}`);
+	}
+	console.log(`built in ${Date.now() - started} ms → ${distDir.replace(root + '/', '')}`);
+	if (check) rmSync(distDir, { recursive: true, force: true });
+}
+
+if (watch) {
+	await run();
+	const ctx = await context({
+		entryPoints: { engine: join(root, 'src', 'engine', 'index.js') },
+		bundle: true, format: 'esm', splitting: true, outdir: distDir, write: false, logLevel: 'silent',
+	});
+	// Simple polling watcher: rebuild everything when any source file changes.
+	const dirs = [join(root, 'src'), join(root, 'assets', 'css'), join(root, 'assets', 'components'), join(root, 'pro', 'assets'), join(root, 'modules')];
+	const stamp = () => {
+		let latest = 0;
+		const walk = (dir) => {
+			if (!existsSync(dir)) return;
+			for (const entry of readdirSync(dir)) {
+				const path = join(dir, entry);
+				const stat = statSync(path);
+				if (stat.isDirectory()) { if (entry !== 'dist' && entry !== 'node_modules') walk(path); }
+				else latest = Math.max(latest, stat.mtimeMs);
+			}
+		};
+		dirs.forEach(walk);
+		return latest;
+	};
+	let last = stamp();
+	console.log('watching…');
+	setInterval(async () => {
+		const now = stamp();
+		if (now === last) return;
+		last = now;
+		try { await run(); } catch (error) { console.error(error.message); }
+	}, 700);
+	await ctx.dispose();
+} else {
+	await run();
+}

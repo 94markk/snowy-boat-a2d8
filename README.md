@@ -1,60 +1,100 @@
-# Astro Starter Kit: Blog
+# Delicat Builder V9 — App-Speed Kernel (9.3)
 
-![Astro Template Preview](https://github.com/withastro/astro/assets/2244813/ff10799f-a816-4703-b967-c78997e8323d)
+WordPress / WooCommerce storefront plugin for Delicat Top Up. Version 9.3 keeps every
+design (carousels, header, drawer, bottom bar, product, cart, checkout, documents) and every
+PHP feature, and rebuilds the front-end engine that delivers them.
 
-<!-- dash-content-start -->
-
-Create a blog with Astro and deploy it on Cloudflare Workers as a [static website](https://developers.cloudflare.com/workers/static-assets/).
-
-Features:
-
-- ✅ Minimal styling (make it your own!)
-- ✅ 100/100 Lighthouse performance
-- ✅ SEO-friendly with canonical URLs and OpenGraph data
-- ✅ Sitemap support
-- ✅ RSS Feed support
-- ✅ Markdown & MDX support
-
-<!-- dash-content-end -->
-
-## Getting Started
-
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/snowy-boat-a2d8
+```
+delicat-builder-v9/            the plugin (upload this folder, or the zip tools/zip.mjs builds)
+├── delicat-builder-v9.php     bootstrap, profiles, circuit breaker
+├── includes/                  PHP modules (one class per feature), templates in templates/
+├── pro/                       Pro kernel (routes, security headers, type layer)
+├── modules/product-fields/    calculator module
+├── assets/                    stylesheets, images, legacy per-file scripts (fallback only)
+│   └── dist/                  BUILT: engine.<hash>.js, chunks/, <bundle>.<hash>.css, manifest.json
+├── src/engine/                engine source (ES modules) → assets/dist/engine.*.js
+│   ├── core/                  runtime (module registry), nav, state, net, overlay, dom
+│   ├── modules/               one file per storefront feature
+│   └── routes/                lazy chunks (product, purchase, widgets)
+├── src/styles/                bundles.mjs (route bundle map), engine.css, fixes.css
+└── tools/                     build.mjs, manifest.mjs, zip.mjs
 ```
 
-A live public deployment of this template is available at [https://snowy-boat-a2d8.templates.workers.dev](https://snowy-boat-a2d8.templates.workers.dev)
+## The engine (what changed in 9.3)
 
-## 🚀 Project Structure
+* **One runtime.** `assets/dist/engine.<hash>.js` (76 KB, ~25 KB gzipped) replaces the
+  fourteen scripts a page used to load (core, carousel, islands, heart, hero-search, theme,
+  motion, header, drawer, session, dbp-nav, dbp-state, shell-nav, prefetch, reviews, …).
+  Route-specific code is a lazy chunk: product pages, cart/checkout, opt-in widgets, the
+  notifications panel (fetched on the first tap of the bell), the legacy shell header.
+* **Soft navigation everywhere.** Home, shop, categories, search, products and documents swap
+  `<main>` in place with a View Transition (the tapped product image travels into the product
+  page). Cart, checkout and account stay full loads. Stylesheets keep their cascade order on
+  every swap; the previous route's sheet is switched off, not left applying.
+* **One session store.** `?wc-ajax=delicat_session` now also carries the unread count, cart
+  total and fresh nonces (cart, add-to-cart, REST, push, wallet, header cart, shell, express,
+  reviews, favourites); the store patches every consumer so cached pages act with live tokens.
+  The `?dbp_state=1` poller and the bottom-bar inline corrector no longer run.
+* **Three stylesheets per page**, built by `tools/build.mjs` from the existing CSS files
+  concatenated in the exact order WordPress printed them: `chrome` (theme, header, drawer,
+  bottom bar, always-on widgets), one route bundle (`home`, `builder`, `product`, `shop`,
+  `page`, `purchase`, `woo`, with `-design` and `-lite` variants) and `polish` (app-polish,
+  app-tuning, storefront-polish, dbp-app, dbp-type, fixes). No rule was rewritten; the look
+  is unchanged. Inline PHP CSS (critical, swatches, authoritative sizing) prints as before.
+* **PHP delivery** lives in `includes/class-delicat-builder-engine.php`: it reads
+  `assets/dist/manifest.json`, picks the bundles for the request, dequeues every legacy
+  stylesheet whose file is inside them (re-printing their inline additions), absorbs the
+  legacy scripts' configuration objects into one inline block, prints the module with
+  modulepreload hints, and leaves anything it does not know about untouched. The legacy
+  per-file delivery is still complete and is the fallback: `add_filter(
+  'delicat_builder_v9_engine_active', '__return_false' )` or `?dbv9_engine=0` as an
+  administrator. An HTML comment `<!-- delicat-engine 9.3.0 route=… -->` in `<head>` shows
+  what was folded on a page.
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+Overlapping layers retired when the engine is on: dbp-nav.js, dbp-state.js, shell-nav.js,
+prefetch.js, islands.js, TurboNav speculation rules and its view-transition block, the
+notifications click-loader, the Front Slim script dequeue passes (already quieted by Pro).
+All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty by design.
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+## Bug fixes in 9.3
 
-The `src/content/` directory contains "collections" of related Markdown and MDX documents. Use `getCollection()` to retrieve posts from `src/content/blog/`, and type-check your frontmatter using an optional schema. See [Astro's Content Collections docs](https://docs.astro.build/en/guides/content-collections/) to learn more.
+* Fatal `ArgumentCountError` on `[delicat_native_terms]` / `[delicat_native_privacy]`.
+* Server engine called an undefined product renderer; HPOS compatibility declared from the
+  wrong file at the wrong time (WooCommerce notice on every request).
+* Bottom-bar and session cart counts painted WooCommerce's `woocommerce_items_in_cart` flag
+  ("1") as a count.
+* Calculator: a negative or non-finite total priced the product at 0.00; a cart line whose
+  fields failed validation (Store API / app) reached checkout at the catalogue price.
+* Compiled page stylesheets could not be rebuilt from ordinary wp-admin screens after an
+  update (missing classes); undefined counters in "compile all".
+* Checkout dock fallback polled forever; Self-Test expected schema 6 and a class that does
+  not exist; PHP requirement shown as 8.5 (the plugin needs 8.3).
+* PHP warnings: `theme_default`, `attachment_id`, `$hook`, `effect`, `page_transition`,
+  `max_width`; deprecated `wp_targeted_link_rel`.
+* Dark mode: dbp-type forced light text tokens on every non-homepage body; calculator inputs
+  stayed white; legal pages had no dark tokens; checkout dock total was white on white.
+* Currency switch now drops the service-worker document cache before reloading.
+* LiteSpeed exclusion lists named globals that do not exist (`DelicaBuilderV9Config`,
+  `DelicatShell`).
 
-Any static assets, like images, can be placed in the `public/` directory.
+## Build
 
-## 🧞 Commands
+```
+cd delicat-builder-v9
+npm install
+npm run build        # → assets/dist/*, manifest.json, asset-versions.php, integrity-manifest.json
+npm run build:watch
+npm run zip          # → ../build/delicat-builder-v9.zip (excludes src/, tools/, node_modules/)
+```
 
-All commands are run from the root of the project, from a terminal:
+`assets/dist/` is committed so the plugin folder is installable without Node. Rebuild after
+touching anything under `src/` or any stylesheet listed in `src/styles/bundles.mjs`.
 
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-| `npm run deploy`          | Deploy your production site to Cloudflare        |
+## Verification done for this release
 
-## 👀 Want to learn more?
-
-Check out [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
-
-## Credit
-
-This theme is based off of the lovely [Bear Blog](https://github.com/HermanMartinus/bearblog/).
+Local WordPress 6.8 + WooCommerce 10.1 (PHP 8.3, SQLite), Playwright on a 390×844 phone and a
+1366×900 desktop: home, shop, category, two products, cart, checkout, account, search, 404 and
+an info page load with zero console errors and zero PHP notices; interaction flows cover the
+carousel, drawer, theme toggle, soft navigation home → product → back (scroll restored), bottom
+bar, swatch selection, add to cart, cart, checkout and search suggestions. Every admin screen of
+the plugin opens without notices. All 111 PHP files pass `php -l`.

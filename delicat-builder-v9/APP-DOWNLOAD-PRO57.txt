@@ -1,0 +1,15 @@
+Historical pro.57 notes: pro.58 adds direct admin APK uploads. See APK-UPLOAD-PRO58.txt for current instructions.
+
+Delicat Builder 9.2.0-pro.57 — Application mobile
+
+1. Upload this ZIP through WordPress > Plugins > Add New > Upload Plugin and replace the existing Builder. Visit the WordPress dashboard once after updating.
+2. Open Delicat Builder > Application mobile. A published page is created automatically at /application/ (WordPress chooses a unique slug if that name is already occupied). Existing pages are never overwritten. Use the “Voir la page de téléchargement” button to find the actual URL.
+3. Select APK or Google Play and enter your real HTTPS download URL. Optional: version and file size. Save, then purge LiteSpeed/CDN cache.
+4. Existing menu App tiles using #install-app and existing install buttons open the new page. Custom menu links pointing elsewhere are preserved. Enable the App quick action in menu settings if it was disabled.
+5. The page works for logged-out visitors. Its download button links directly to the supplied file/listing, without account login, PHP streaming or a new REST endpoint. Until a URL is configured it honestly shows “Le téléchargement sera bientôt disponible.”
+
+APK: upload your signed release APK to a public HTTPS download folder via Hostinger, or use a trusted HTTPS file host, then paste that exact file URL. This plugin does not include or build an APK and does not enable arbitrary file uploads in WordPress. Preserve the Android signing key to support upgrades. Android controls installation confirmation; a website cannot silently install a native app. Do not ask clients to bypass Play Protect warnings.
+
+The page supports light/dark themes, compact mobile layouts and keyboard focus. It uses local CSS/JS and a decorative HTML phone illustration, not a fabricated app screenshot. You can also embed [delicat_android_app] in page content.
+
+Validation: ZIP structure/permissions/integrity, JavaScript syntax and navigation event tests. No live WordPress or Android device was available; verify actual file downloads after configuring the real URL. PHP runtime lint was unavailable locally.

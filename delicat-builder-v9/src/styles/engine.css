@@ -1,0 +1,50 @@
+/* Delicat Builder V9 — engine layer.
+ *
+ * Shipped inside the chrome bundle (priority 8 position). Only what the new
+ * runtime needs and no legacy file provides: the fallback progress bar, the
+ * scroll lock, soft-navigation and view-transition motion, the pressed state
+ * of the bottom bar. Every rule uses :where() or a class no legacy sheet
+ * styles, so the existing cascade is never changed. */
+
+/* Progress bar (fallback when the Pro critical block is not inlined). */
+:where(.dlc-progress) { position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 99999; pointer-events: none; opacity: 0; transition: opacity 160ms linear; }
+:where(.dlc-progress) > i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--dbp-royal, #284696), var(--dbp-orange, #ff5a1f)); transform-origin: 0 50%; }
+:where(.dlc-progress.is-active) { opacity: 1; }
+:where(.dlc-progress.is-active) > i { width: 100%; animation: dlc-progress-run 1400ms cubic-bezier(.2, .8, .2, 1) forwards; }
+:where(.dlc-progress.is-done) { opacity: 1; }
+:where(.dlc-progress.is-done) > i { width: 100%; animation: none; transition: opacity 200ms linear; opacity: 0; }
+@keyframes dlc-progress-run { 0% { transform: scaleX(.02); } 40% { transform: scaleX(.55); } 75% { transform: scaleX(.82); } 100% { transform: scaleX(.94); } }
+
+/* One scroll lock for every overlay (drawer, sheets, modals). The body keeps
+   its visual offset through the inline top the engine sets. */
+html.delicat-scroll-locked { overflow: hidden; }
+html.delicat-scroll-locked body { position: fixed; left: 0; right: 0; width: 100%; overflow: hidden; overscroll-behavior: none; }
+
+/* While a soft navigation takes longer than 150 ms the current content dims
+   slightly and stops taking taps, so a second tap cannot start a second
+   navigation. */
+html.delicat-navigating-slow main[data-delicat-server-render],
+html.delicat-navigating-slow main[data-delicat-native-document] { opacity: .62; transition: opacity 180ms linear; pointer-events: none; }
+html.delicat-navigating a, html.delicat-navigating button { cursor: progress; }
+
+/* Screen-reader only text (route announcements). */
+.dlc-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* Bottom bar press feedback: immediate, before the navigation starts. */
+:where(.delicat-bottom-nav .dbn-item.is-pressed) { transform: scale(.92); transition: transform 120ms cubic-bezier(.2, .8, .2, 1); }
+:where(.delicat-bottom-nav .dbn-item) { transition: transform 160ms cubic-bezier(.2, .8, .2, 1); }
+
+/* View transitions: same-document swaps and, where supported, full loads to
+   cart / checkout / account. The tapped product image travels into the
+   product page as a shared element. */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: 140ms cubic-bezier(.2, .8, .2, 1) both dlc-vt-out; }
+::view-transition-new(root) { animation: 200ms cubic-bezier(.2, .8, .2, 1) both dlc-vt-in; }
+::view-transition-group(delicat-product-image) { animation-duration: 280ms; animation-timing-function: cubic-bezier(.2, .8, .2, 1); z-index: 2; }
+::view-transition-old(delicat-product-image), ::view-transition-new(delicat-product-image) { animation: none; mix-blend-mode: normal; height: 100%; width: 100%; object-fit: cover; overflow: clip; border-radius: inherit; }
+@keyframes dlc-vt-out { to { opacity: 0; } }
+@keyframes dlc-vt-in { from { opacity: 0; transform: translate3d(0, 8px, 0); } }
+@media (prefers-reduced-motion: reduce) {
+	::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+	html.delicat-navigating-slow main[data-delicat-server-render], html.delicat-navigating-slow main[data-delicat-native-document] { transition: none; }
+}
