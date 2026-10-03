@@ -169,11 +169,20 @@ final class Delicat_Builder_V9_Compiler {
 	}
 
 	public static function source_signature( array $css_assets ): string {
+		static $versions = null;
+		if ( null === $versions ) {
+			$map      = is_file( DELICAT_BUILDER_V9_DIR . 'asset-versions.php' ) ? require DELICAT_BUILDER_V9_DIR . 'asset-versions.php' : array();
+			$versions = is_array( $map ) ? $map : array();
+		}
 		$parts = array( DELICAT_BUILDER_V9_VERSION );
 		foreach ( $css_assets as $asset ) {
 			$path = self::component_css_path( $asset );
 			if ( $path && is_file( $path ) ) {
-				$parts[] = $asset . ':' . (string) filemtime( $path ) . ':' . (string) filesize( $path );
+				/* 9.3: content hashes from the build's version map; a deploy that only
+				 * rewrites modification times no longer invalidates every bundle. */
+				$relative = 'assets/components/' . $asset . '.css';
+				$stamp    = isset( $versions[ $relative ] ) ? (string) $versions[ $relative ] : (string) filesize( $path ) . ':' . substr( (string) md5_file( $path ), 0, 12 );
+				$parts[]  = $asset . ':' . $stamp;
 			}
 		}
 		return substr( hash( 'sha256', implode( '|', $parts ) ), 0, 24 );

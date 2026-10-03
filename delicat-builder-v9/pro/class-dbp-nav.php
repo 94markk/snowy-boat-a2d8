@@ -513,7 +513,7 @@ final class DBP_Nav {
 		$config = array(
 			'route'       => DBP_Kernel::route(),
 			'nativeProducts' => true,
-			'productWarm' => array_map( static function ( $path ) { return Delicat_Builder_V9_Audit_Fixes::asset_url( DBP_Kernel::asset_url( $path ) ); }, array(
+			'productWarm' => array_map( static function ( $path ) { $url = DBP_Kernel::asset_url( $path ); return is_callable( array( 'Delicat_Builder_V9_Audit_Fixes', 'asset_url' ) ) ? Delicat_Builder_V9_Audit_Fixes::asset_url( $url ) : $url; }, array(
 				'assets/css/native-product.css',
 				'assets/js/native-product.js', 'assets/css/express-checkout.css', 'assets/js/express-checkout.js',
 			) ),

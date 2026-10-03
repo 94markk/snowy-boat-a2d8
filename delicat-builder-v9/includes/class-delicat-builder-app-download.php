@@ -100,6 +100,9 @@ final class Delicat_Builder_V9_App_Download {
         return is_page( absint( get_option( self::PAGE_OPTION, 0 ) ) ) && absint( get_option( self::PAGE_OPTION, 0 ) ) > 0;
     }
     public static function template( $template ) {
+        if ( class_exists( 'Delicat_Builder_V9_Core', false ) && is_callable( array( 'Delicat_Builder_V9_Core', 'is_enabled' ) ) && ! Delicat_Builder_V9_Core::is_enabled() ) {
+            return $template;
+        }
         if ( self::is_page() && class_exists( 'Delicat_Builder_V9_Header_Studio_8', false ) ) {
             return DELICAT_BUILDER_V9_DIR . 'templates/native-content-page.php';
         }

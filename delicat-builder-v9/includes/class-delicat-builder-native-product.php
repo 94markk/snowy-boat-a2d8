@@ -550,6 +550,11 @@ final class Delicat_Builder_V9_Native_Product {
 		// Native document does not render Elementor, a Woo gallery slider, zoom or Photoswipe.
 		foreach(array('elementor-frontend','elementor-pro','elementor-icons','eicons','photoswipe','photoswipe-default-skin','woocommerce_prettyPhoto_css','flexslider') as $h)wp_dequeue_style($h);
 		foreach(array('elementor-frontend','elementor-pro','imagesloaded','zoom','flexslider','photoswipe','photoswipe-ui-default','wc-single-product') as $h)wp_dequeue_script($h);
+		/* 9.3: with PhotoSwipe's stylesheet gone, WooCommerce's lightbox markup
+		 * rendered as a row of empty grey boxes under the footer. The native
+		 * gallery has no lightbox, so the markup is not printed at all. */
+		remove_action( 'wp_footer', 'woocommerce_photoswipe' );
+		remove_action( 'wp_footer', 'woocommerce_photoswipe', 15 );
 		// The native header/cart drawer has its own lightweight refresh path; avoid Woo's eager fragments poll on this document.
 		if ( ! is_user_logged_in() && empty($_COOKIE['woocommerce_items_in_cart']) && empty($_COOKIE['wp_woocommerce_session_'.COOKIEHASH]) ) wp_dequeue_script('wc-cart-fragments');
 	}

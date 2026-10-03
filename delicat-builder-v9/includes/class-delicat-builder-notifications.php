@@ -394,7 +394,22 @@ final class Delicat_Builder_V9_Notifications {
 		if ( current_user_can( 'manage_woocommerce' ) ) { return true; }
 		$given = (string) $request->get_header( 'x-delicat-token' );
 		$key   = self::app_key();
-		return '' !== $given && '' !== $key && hash_equals( $key, $given );
+		/* 9.3: twenty wrong tokens from one address lock that address out for ten
+		 * minutes, right token or not, so the shared app key cannot be guessed by
+		 * trying. A right token never touches the counter. */
+		$ip   = class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ? Delicat_Builder_V9_Security::client_ip() : (string) ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$lock = 'dbv9_apptoken_' . substr( hash_hmac( 'sha256', $ip, wp_salt( 'nonce' ) ), 0, 24 );
+		$fail = get_transient( $lock );
+		$fail = is_array( $fail ) ? $fail : array( 'count' => 0, 'since' => time() );
+		if ( (int) $fail['count'] >= 20 ) {
+			return false;
+		}
+		if ( '' !== $given && '' !== $key && hash_equals( $key, $given ) ) {
+			return true;
+		}
+		$fail['count'] = (int) $fail['count'] + 1;
+		set_transient( $lock, $fail, 10 * MINUTE_IN_SECONDS );
+		return false;
 	}
 
 	public static function devices(): array {

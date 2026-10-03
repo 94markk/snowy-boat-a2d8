@@ -147,7 +147,32 @@ function dropStaleGlobals() {
 	pageGlobals = next;
 }
 
+/* A failure anywhere in the runtime is reported once per message, never
+   thrown across the page: the server-rendered document stays usable. */
+function captureErrors() {
+	const seen = new Set();
+	const report = (message, source) => {
+		const key = String(message).slice(0, 160);
+		if (seen.has(key) || seen.size > 20) return;
+		seen.add(key);
+		if (config.debug) console.error('[delicat-engine]', source, message);
+		emit('delicat:engine:error', { module: source, phase: 'runtime', message: key });
+	};
+	on(win, 'error', (event) => {
+		const file = String((event && event.filename) || '');
+		if (file && !/\/assets\/dist\//.test(file)) return;
+		report((event && event.message) || 'error', 'window');
+	});
+	on(win, 'unhandledrejection', (event) => {
+		const reason = event && event.reason;
+		const stack = String((reason && reason.stack) || '');
+		if (stack && !/\/assets\/dist\//.test(stack)) return;
+		report((reason && reason.message) || String(reason || 'rejection'), 'promise');
+	});
+}
+
 function boot() {
+	captureErrors();
 	bindSessionEvents();
 	bindNavigation();
 	nav.on('swapped', (detail) => { dropStaleGlobals(); mountContent(detail.main, 'navigate'); });

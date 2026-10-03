@@ -137,8 +137,27 @@ final class Delicat_Builder_V9_Audit_Fixes {
   return $attrs;
  }
  public static function empty_cart_assets(): void {
-  if ( function_exists( 'is_cart' ) && is_cart() && WC()->cart && WC()->cart->is_empty() ) {
-   foreach ( array( 'wc-checkout', 'wc-country-select', 'wc-address-i18n' ) as $handle ) { wp_dequeue_script( $handle ); }
+  if ( ! function_exists( 'is_cart' ) || ! is_cart() || ! WC()->cart ) { return; }
+  /* wc-cart lists the country and address scripts as dependencies, so
+   * dequeuing them alone keeps them on the page; cart.js only reaches them
+   * through the shipping calculator's country select. */
+  $drop_tables = static function (): void {
+   foreach ( array( 'wc-country-select', 'wc-address-i18n' ) as $handle ) { wp_dequeue_script( $handle ); }
+   $cart = wp_scripts()->registered['wc-cart'] ?? null;
+   if ( $cart && ! empty( $cart->deps ) ) { $cart->deps = array_values( array_diff( (array) $cart->deps, array( 'wc-country-select', 'wc-address-i18n' ) ) ); }
+  };
+  if ( WC()->cart->is_empty() ) {
+   wp_dequeue_script( 'wc-checkout' );
+   $drop_tables();
+   return;
+  }
+  /* 9.3: the country and address tables (63 KB of inline JSON on every cart
+   * view) only feed the shipping calculator; a cart of digital products that
+   * needs no shipping, or a store with the calculator off, never shows it. */
+  $calculator = 'yes' === get_option( 'woocommerce_enable_shipping_calc', 'yes' );
+  $needs_shipping = is_callable( array( WC()->cart, 'needs_shipping' ) ) ? (bool) WC()->cart->needs_shipping() : true;
+  if ( ! $calculator || ! $needs_shipping ) {
+   $drop_tables();
   }
  }
  public static function result_count_template( $template, $name, $path ) {
@@ -163,6 +182,24 @@ final class Delicat_Builder_V9_Audit_Fixes {
    $html = preg_replace( '~(<main\b[^>]*\bid=["\']delicat-native-page-main["\'][^>]*>)\s*<h1\b[^>]*>[^<]*</h1>~i', '$1', $html, 1 ) ?? $html;
   }
   if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) { return $html; }
+  $litespeed = defined( 'LSCWP_V' ) || class_exists( 'LiteSpeed\\Core', false );
+  if ( ! $litespeed && class_exists( 'Delicat_Builder_V9_Engine', false ) && is_callable( array( 'Delicat_Builder_V9_Engine', 'active' ) ) && Delicat_Builder_V9_Engine::active() ) {
+   /* 9.3: no LiteSpeed means no combined artefact, no delayed boot script and
+    * no lazy-loader to correct, and the engine's own files are content
+    * addressed. Walking 900 tags for nothing cost ~7 ms per page; the head is
+    * the only place a plugin URL can still be printed outside the enqueue
+    * system (preloads), so that part alone is rewritten. */
+   $head_end = stripos( $html, '</head>' );
+   if ( false === $head_end ) { return $html; }
+   $head = new WP_HTML_Tag_Processor( substr( $html, 0, $head_end ) );
+   while ( $head->next_tag() ) {
+    $tag = $head->get_tag();
+    if ( 'SCRIPT' !== $tag && 'LINK' !== $tag ) { continue; }
+    $attr = 'SCRIPT' === $tag ? 'src' : 'href'; $src = $head->get_attribute( $attr );
+    if ( is_string( $src ) ) { $head->set_attribute( $attr, self::asset_url( $src ) ); }
+   }
+   return $head->get_updated_html() . substr( $html, $head_end );
+  }
   $p = new WP_HTML_Tag_Processor( $html );
   $boots = array( 'delicat-builder-v9-session-js-before', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dip-identity-modal-v4-js-extra', 'dbp-nav-js-before', 'dbp-state-js-before', 'delicat-engine-js-before', 'delicat-engine-footer-js-before', 'delicat-engine-js' );
   while ( $p->next_tag() ) {

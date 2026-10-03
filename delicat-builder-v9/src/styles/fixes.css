@@ -71,3 +71,44 @@ html[data-delicat-theme="dark"] body.dpn-checkout .dpn-checkout-dock,
 html.dlc-theme-dark body.dpn-checkout .dpn-checkout-dock {
 	border-top-color: var(--dpn-line) !important;
 }
+
+/* 4. Bottom clearance on phones: the content root, the footer and the body
+      each reserved a band for the bottom bar, stacking ~320px of empty space
+      at the end of every page. The body keeps the one band
+      (--dbv9-nav-band, from the authoritative block); content and footer go
+      back to ordinary spacing. */
+@media (max-width: 820px) {
+	html body.delicat-shell-mobile-nav-active .delicat-page-layout[data-delicat-page-layout],
+	html body.delicat-builder-homepage-managed .delicat-page-layout[data-delicat-page-layout],
+	html body.delicat-shell-mobile-nav-active main[data-delicat-server-render],
+	html body.delicat-shell-mobile-nav-active main[data-delicat-native-document],
+	html body.delicat-bottom-nav-active main[data-delicat-server-render],
+	html body.delicat-bottom-nav-active main[data-delicat-native-document] {
+		padding-bottom: 24px !important;
+	}
+	html body.delicat-shell-mobile-nav-active .dbv9-footer[data-delicat-universal-footer],
+	html body.delicat-bottom-nav-active .dbv9-footer[data-delicat-universal-footer] {
+		padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
+	}
+}
+
+/* 5. WooCommerce prints its PhotoSwipe lightbox markup under the footer of
+      native product pages, where its stylesheet is not loaded: a row of empty
+      grey buttons. The native gallery has no lightbox. */
+body.delicat-native-product-document .pswp,
+body.single-product .delicat-native-product ~ .pswp,
+body.single-product .pswp[aria-hidden="true"] {
+	display: none !important;
+}
+
+/* 6. Archive toolbar sort control: the critical rule sized it for 10.5px text
+      while the type layer sets 16px, so "Tri par défaut" was clipped. */
+.delicat-archive-toolbar select,
+.delicat-archive-toolbar .woocommerce-ordering select {
+	width: auto !important;
+	min-width: 200px !important;
+	max-width: 100% !important;
+	height: auto !important;
+	min-height: 38px !important;
+	line-height: 1.2 !important;
+}

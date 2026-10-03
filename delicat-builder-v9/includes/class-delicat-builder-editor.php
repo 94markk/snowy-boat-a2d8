@@ -212,6 +212,10 @@ final class Delicat_Builder_V9_Editor {
 
 		$page_id = self::current_page_id();
 		$view = isset( $_GET['view'] ) ? sanitize_key( wp_unslash( $_GET['view'] ) ) : '';
+		$hook = isset( $GLOBALS['hook_suffix'] ) ? (string) $GLOBALS['hook_suffix'] : '';
+		if ( '' === $hook && function_exists( 'get_current_screen' ) && get_current_screen() ) {
+			$hook = (string) get_current_screen()->id;
+		}
 		if ( 'delicat-builder_page_delicat-builder-v9-native-product' === $hook ) {
 			return; // Native Product Builder owns its admin interactions natively; shared CSS is already loaded above.
 		} elseif ( 'delicat-builder_page_delicat-builder-v9-product-archives' === $hook ) {

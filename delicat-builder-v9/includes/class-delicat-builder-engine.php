@@ -99,6 +99,7 @@ final class Delicat_Builder_V9_Engine {
 		add_action( 'wp_head', array( __CLASS__, 'print_head' ), 2 );
 		add_action( 'wp_body_open', array( __CLASS__, 'progress_bar' ), 1 );
 		add_action( 'wp_print_footer_scripts', array( __CLASS__, 'absorb_late' ), 1 );
+		add_action( 'template_redirect', array( __CLASS__, 'link_header' ), 5 );
 		foreach ( array( 'litespeed_optimize_js_excludes', 'litespeed_optm_js_defer_exc', 'litespeed_optm_gm_js_exc', 'litespeed_optimize_css_excludes', 'litespeed_optm_css_async_exc', 'litespeed_optm_ucss_exc' ) as $hook ) {
 			add_filter( $hook, array( __CLASS__, 'litespeed_exclusions' ), PHP_INT_MAX );
 		}
@@ -180,6 +181,18 @@ final class Delicat_Builder_V9_Engine {
 		wp_enqueue_style( self::HANDLE_CHROME );
 	}
 
+	/**
+	 * Is this archive the native one? The Woo UI module registers native-archive.css
+	 * and woo-ui.css under the same handle, so the handle name alone cannot tell.
+	 */
+	private static function native_archive_active(): bool {
+		if ( class_exists( 'Delicat_Builder_V9_Woo_UI', false ) && is_callable( array( 'Delicat_Builder_V9_Woo_UI', 'archive_active' ) ) && Delicat_Builder_V9_Woo_UI::archive_active() ) {
+			return true;
+		}
+		$obj = wp_styles()->registered['delicat-builder-v9-woo-ui'] ?? null;
+		return $obj && is_string( $obj->src ) && false !== strpos( $obj->src, 'native-archive' );
+	}
+
 	/** Route family of the request: decides the route bundle. */
 	private static function detect_route(): string {
 		$route = 'page';
@@ -190,7 +203,7 @@ final class Delicat_Builder_V9_Engine {
 		} elseif ( ( function_exists( 'is_cart' ) && is_cart() ) || ( function_exists( 'is_checkout' ) && is_checkout() ) ) {
 			$route = 'purchase';
 		} elseif ( ( function_exists( 'is_shop' ) && is_shop() ) || ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() ) ) {
-			$route = ( wp_style_is( 'delicat-builder-v9-woo-ui', 'enqueued' ) && ! wp_style_is( 'delicat-builder-v9-native-archive', 'enqueued' ) ) ? 'woo' : 'shop';
+			$route = self::native_archive_active() ? 'shop' : ( wp_style_is( 'delicat-builder-v9-woo-ui', 'enqueued' ) ? 'woo' : 'shop' );
 		} elseif ( is_singular( 'page' ) && function_exists( 'delicat_builder_v9_is_managed_page' ) && delicat_builder_v9_is_managed_page( (int) get_queried_object_id() ) ) {
 			$route = 'home';
 		} elseif ( self::builder_page() ) {
@@ -605,6 +618,27 @@ final class Delicat_Builder_V9_Engine {
 		}
 		echo '<script type="module" src="' . esc_url( $engine ) . '" id="delicat-engine-js" data-no-optimize="1" data-no-delay="1" data-no-defer="1" data-cfasync="false"></script>' . "\n";
 		echo '<!-- delicat-engine ' . esc_html( self::VERSION . ' route=' . self::$route . ' css=' . self::$route_bundle . '+' . self::$polish_bundle . ' folded=' . implode( ',', array_keys( self::$absorbed_styles ) ) . ' scripts=' . implode( ',', array_keys( self::$absorbed ) ) ) . ' -->' . "\n";
+	}
+
+	/**
+	 * `Link: rel=preload` for the shell stylesheet and the module. Browsers use
+	 * it the moment the response headers arrive, before any HTML is parsed, and
+	 * Cloudflare / LiteSpeed turn it into a 103 Early Hints response, which
+	 * starts the downloads during the server's own think time.
+	 */
+	public static function link_header(): void {
+		if ( headers_sent() || ! self::active() || is_feed() || is_embed() || is_404() ) {
+			return;
+		}
+		$manifest = self::manifest();
+		if ( null === $manifest ) {
+			return;
+		}
+		$links = array(
+			'<' . esc_url_raw( self::url( (string) $manifest['css']['chrome']['file'] ) ) . '>; rel=preload; as=style',
+			'<' . esc_url_raw( self::url( (string) $manifest['js']['engine']['file'] ) ) . '>; rel=modulepreload',
+		);
+		header( 'Link: ' . implode( ', ', $links ), false );
 	}
 
 	/** The thin progress bar, unless the Pro navigation layer already prints it. */

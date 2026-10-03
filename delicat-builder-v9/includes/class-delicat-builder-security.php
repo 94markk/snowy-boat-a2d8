@@ -23,17 +23,91 @@ final class Delicat_Builder_V9_Security {
 	 * must not depend on that plugin, so REMOTE_ADDR is the fallback.
 	 */
 	private static function login_client_ip(): string {
+		return self::client_ip();
+	}
+
+	/**
+	 * Cloudflare's published edge ranges. A CF-Connecting-IP header is believed
+	 * only when the socket peer is one of these, so a request that reaches the
+	 * origin directly cannot pick its own bucket. Filterable for other proxies.
+	 */
+	private const CLOUDFLARE_RANGES = array(
+		'173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
+		'190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+		'104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+		'2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+	);
+
+	/**
+	 * The visitor's address for throttles and rate limits.
+	 *
+	 * 9.3: behind Cloudflare the socket peer is Cloudflare, so every visitor
+	 * shared one rate-limit bucket and one abuser could lock the whole store
+	 * out of the session endpoint. The App API's trusted-proxy rule wins when
+	 * that plugin is present; otherwise CF-Connecting-IP is honoured only from
+	 * a Cloudflare edge, and REMOTE_ADDR is the answer everywhere else.
+	 */
+	public static function client_ip(): string {
+		static $resolved = null;
+		if ( null !== $resolved ) {
+			return $resolved;
+		}
+		$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- validated below.
+		$peer   = filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '';
 		if ( class_exists( 'Delicat_App_Helpers', false ) && is_callable( array( 'Delicat_App_Helpers', 'client_ip' ) ) ) {
 			try {
-				$ip = (string) Delicat_App_Helpers::client_ip();
-				if ( '' !== $ip ) {
-					return $ip;
+				$candidate = (string) Delicat_App_Helpers::client_ip();
+				if ( filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+					$resolved = $candidate;
+					return $resolved;
 				}
 			} catch ( Throwable $error ) {
 				unset( $error );
 			}
 		}
-		return isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$forwarded = isset( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ? trim( (string) wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- validated below.
+		if ( '' !== $forwarded && filter_var( $forwarded, FILTER_VALIDATE_IP ) && self::peer_is_trusted_proxy( $peer ) ) {
+			$resolved = $forwarded;
+			return $resolved;
+		}
+		$resolved = '' !== $peer ? $peer : 'unknown';
+		return $resolved;
+	}
+
+	private static function peer_is_trusted_proxy( string $ip ): bool {
+		if ( '' === $ip ) {
+			return false;
+		}
+		$ranges = (array) apply_filters( 'delicat_builder_v9_trusted_proxy_ranges', self::CLOUDFLARE_RANGES );
+		foreach ( $ranges as $cidr ) {
+			if ( self::ip_in_cidr( $ip, (string) $cidr ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static function ip_in_cidr( string $ip, string $cidr ): bool {
+		if ( false === strpos( $cidr, '/' ) ) {
+			return $ip === $cidr;
+		}
+		list( $subnet, $bits ) = explode( '/', $cidr, 2 );
+		$ip_bin     = @inet_pton( $ip ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- malformed input is a false answer, not a warning.
+		$subnet_bin = @inet_pton( $subnet ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( false === $ip_bin || false === $subnet_bin || strlen( $ip_bin ) !== strlen( $subnet_bin ) ) {
+			return false;
+		}
+		$bits  = max( 0, min( strlen( $ip_bin ) * 8, (int) $bits ) );
+		$bytes = intdiv( $bits, 8 );
+		$rest  = $bits % 8;
+		if ( $bytes > 0 && substr( $ip_bin, 0, $bytes ) !== substr( $subnet_bin, 0, $bytes ) ) {
+			return false;
+		}
+		if ( 0 === $rest ) {
+			return true;
+		}
+		$mask = ( 0xFF << ( 8 - $rest ) ) & 0xFF;
+		return ( ord( $ip_bin[ $bytes ] ) & $mask ) === ( ord( $subnet_bin[ $bytes ] ) & $mask );
 	}
 
 	private static function login_bucket( string $username ): string {
@@ -556,8 +630,7 @@ final class Delicat_Builder_V9_Security {
 
 		// Guest cookies are attacker-controlled; never use them as rate-limit identity.
 		if ( '' === $actor ) {
-			$remote = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
-			$actor = 'ip:' . $remote;
+			$actor = 'ip:' . self::client_ip();
 		}
 
 		$key = 'dbv9rl_' . substr( hash_hmac( 'sha256', $bucket . '|' . $actor, wp_salt( 'nonce' ) ), 0, 32 );

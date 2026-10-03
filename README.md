@@ -77,6 +77,29 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
 * LiteSpeed exclusion lists named globals that do not exist (`DelicaBuilderV9Config`,
   `DelicatShell`).
 
+## Second pass: stability, layout, security, launch
+
+* **Layout**: content root, footer and body each reserved a band for the bottom bar on phones
+  (≈320px of empty space at the end of every page); one band remains. WooCommerce's PhotoSwipe
+  markup no longer renders as grey boxes under product footers. The shop sort control is sized
+  for its 16px text. The native shop and category archive received the `woo` bundle (woo-ui and
+  site styles, 62KB) instead of its own 30KB `shop` bundle because both sheets share one handle;
+  the engine now tells them apart by the file registered. Fixes live in `src/styles/fixes.css`,
+  last in the cascade.
+* **Stability**: stable section ids (no UUID churn on save), compiled-CSS signatures by content
+  hash, service-worker document cache keyed by currency, engine precache under the URLs pages
+  request, third-party script delay off in Safe Mode, guarded cross-module calls, runtime error
+  capture in the engine (`delicat:engine:error`), and the Page Builder's archives view no longer
+  reads an undefined hook variable.
+* **Security**: rate limiter and login throttle keyed on the real client address behind
+  Cloudflare (published edge ranges; `delicat_builder_v9_trusted_proxy_ranges` filter for other
+  proxies), ten-minute lockout after twenty wrong app tokens, security headers reviewed.
+* **Launch**: `Link: rel=preload` for the shell stylesheet and `modulepreload` for the engine
+  (103 Early Hints where the edge supports it), one-year immutable caching for `assets/dist`
+  via a generated `.htaccess`, a head-only output-buffer pass without LiteSpeed (~7ms per
+  page), and WooCommerce's 63KB country/address tables dropped from carts that need no shipping or
+  have the calculator off (they are dependencies of `wc-cart`, so that list is rewritten too).
+
 ## Build
 
 ```

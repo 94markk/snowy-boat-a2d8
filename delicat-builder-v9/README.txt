@@ -28,7 +28,20 @@ theme_default, attachment_id, $hook, effect, page_transition, max_width ; wp_tar
 mode sombre (jetons dbp-type forcés en clair, champs du calculateur blancs, pages légales sans jetons
 sombres, total du dock de commande blanc sur blanc) ; purge du cache de documents du service worker
 au changement de devise ; noms de globales erronés dans les exclusions LiteSpeed.
-(7) Les 52 jumeaux .min ont été retirés ; asset-min-map.php est vide par conception. Construction :
+(7) Stabilité, mise en page et sécurité (9.3, deuxième passe) : bande vide empilée en bas de chaque
+page sur téléphone (contenu, pied de page et body réservaient chacun la hauteur du menu bas : une seule
+réserve désormais) ; boutons gris de la lightbox PhotoSwipe sous le pied de page des fiches produit ;
+sélecteur de tri de la boutique tronqué ; boutique native servie avec le paquet woo-ui au lieu de
+native-archive ; variable $hook indéfinie dans la vue archives du Page Builder ; identifiants de sections stables ; signature des feuilles
+compilées par contenu et non par date ; cache documents du service worker distinct par devise ; précache
+du moteur sous les bonnes adresses ; délai des scripts tiers inactif en Safe Mode ; appels inter-modules
+gardés. Sécurité : adresse client réelle derrière Cloudflare pour le limiteur et le frein de connexion
+(plages Cloudflare publiées, filtre delicat_builder_v9_trusted_proxy_ranges), verrou après 20 jetons
+d'application erronés, journal d'erreurs du moteur côté client. Lancement : en-tête Link (preload) pour
+le shell, cache immuable d'un an sur assets/dist (.htaccess), passe de sortie allégée sans LiteSpeed
+(~7 ms par page), tables pays/adresses WooCommerce (63 Ko, dépendances de wc-cart) retirées du panier
+sans livraison ou sans calculateur.
+(8) Les 52 jumeaux .min ont été retirés ; asset-min-map.php est vide par conception. Construction :
 cd delicat-builder-v9 && npm install && npm run build (npm run zip pour l'archive installable).
 Purgez LiteSpeed et le CDN après la mise à jour.
 

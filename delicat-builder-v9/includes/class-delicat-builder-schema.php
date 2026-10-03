@@ -517,9 +517,13 @@ final class Delicat_Builder_V9_Schema {
 	}
 
 	private static function sanitize_id( string $id ): string {
-		$id = preg_replace( '/[^A-Za-z0-9_-]/', '', $id );
+		$raw = $id;
+		$id  = preg_replace( '/[^A-Za-z0-9_-]/', '', $id );
 		if ( strlen( $id ) < 8 || strlen( $id ) > 64 ) {
-			return wp_generate_uuid4();
+			/* 9.3: an id outside the accepted shape used to be replaced by a fresh
+			 * UUID on every save, so layout hashes and compiled manifests changed
+			 * without an edit. A derived id is stable; only an empty id is new. */
+			return '' === trim( $raw ) ? wp_generate_uuid4() : 'sec-' . substr( hash( 'sha256', $raw ), 0, 16 );
 		}
 		return $id;
 	}

@@ -194,6 +194,12 @@ final class Delicat_Builder_V9_PWA {
 			if ( ! is_file( DELICAT_BUILDER_V9_DIR . $rel ) ) {
 				continue;
 			}
+			if ( 0 === strpos( $rel, 'assets/dist/' ) ) {
+				/* 9.3: built files carry their hash in the name and the page requests
+				 * them without a query string; the precache entry must match that URL. */
+				$precache[] = DELICAT_BUILDER_V9_URL . $rel;
+				continue;
+			}
 			$url = add_query_arg( 'ver', DELICAT_BUILDER_V9_VERSION, DELICAT_BUILDER_V9_URL . $rel );
 			if ( is_callable( array( 'Delicat_Builder_V9_Audit_Fixes', 'asset_url' ) ) ) {
 				$url = (string) Delicat_Builder_V9_Audit_Fixes::asset_url( $url );
@@ -253,9 +259,12 @@ function dbv9DocFetch(e,r,c,key,keyUrl){
   p.then(()=>dbv9DocInflight.delete(keyUrl),()=>dbv9DocInflight.delete(keyUrl));
   return p;
 }
+async function dbv9Currency(){try{if(self.cookieStore&&self.cookieStore.get){const c=await self.cookieStore.get('dmc_currency');return c&&c.value?String(c.value).replace(/[^A-Z]/g,'').slice(0,3):'';}}catch(_){}return '';}
 async function dbv9Document(e,r,u){
   const c=await caches.open(DBV9_DOCS);
-  const keyUrl=u.origin+u.pathname+u.search;
+  /* 9.3: prices on a cached copy belong to one display currency; the copy is keyed by it. */
+  const cur=await dbv9Currency();
+  const keyUrl=u.origin+u.pathname+u.search+(cur?(u.search?'&':'?')+'__dbv9cur='+cur:'');
   const key=new Request(keyUrl,{headers:{'Accept':'text/html'}});
   const hit=await c.match(key);
   if(hit&&dbv9Fresh(hit)){if(!dbv9DocInflight.has(keyUrl))e.waitUntil(dbv9DocFetch(e,r,c,key,keyUrl).catch(()=>{}));return hit;}

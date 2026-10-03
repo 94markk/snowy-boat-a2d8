@@ -307,6 +307,9 @@ final class Delicat_Builder_V9_Script_Delay {
 		if ( ! is_string( $tag ) || ! is_string( $src ) || '' === $src || isset( $_GET['nodelay'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return $tag;
 		}
+		if ( class_exists( 'Delicat_Builder_V9_Core', false ) && ( ! Delicat_Builder_V9_Core::is_enabled() || Delicat_Builder_V9_Core::is_safe_mode() ) ) {
+			return $tag; /* 9.3: off with the master switch and in Safe Mode, like every other layer */
+		}
 		foreach ( self::patterns() as $needle ) {
 			if ( '' !== $needle && false !== strpos( $src, $needle ) ) {
 				self::$printed = true;
