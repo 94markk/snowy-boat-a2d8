@@ -29,8 +29,9 @@ import currency from './modules/currency.js';
 import pwa from './modules/pwa.js';
 import walletLive from './modules/wallet-live.js';
 import marquee from './modules/marquee.js';
+import banner from './modules/banner.js';
 
-const VERSION = '9.3.2';
+const VERSION = '9.3.3';
 const hasClass = (name) => !!(doc.body && doc.body.classList.contains(name));
 const productRoute = () => import('./routes/product.js');
 const purchaseRoute = () => import('./routes/purchase.js');
@@ -59,6 +60,7 @@ define({ name: 'heart', when: '[data-delicat-like],[data-delicat-carousel],.deli
 define({ name: 'hero-search', when: '[data-delicat-hero-search]', mount: heroSearch });
 define({ name: 'motion', when: '.delicat-page-layout[data-delicat-page-layout],.dbv9-reveal', mount: motion });
 define({ name: 'marquee', when: '[data-dbv9-marquee-clone]', mount: marquee });
+define({ name: 'banner', when: '[data-dbv9-banner-rail]', mount: banner });
 define({ name: 'currency', always: true, when: '[data-dbv9-currency]', mount: currency });
 define({ name: 'wallet-live', always: true, when: '[data-dsb-wallet]', mount: walletLive });
 define({ name: 'purchase', always: true, when: () => !!(win.DelicaPurchaseV9 || config.purchase), load: pick(purchaseRoute, 'purchase') });

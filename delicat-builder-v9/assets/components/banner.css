@@ -1,1 +1,42 @@
-.delicat-builder-banner{display:grid;grid-template-columns:minmax(220px,.8fr) minmax(0,1.2fr);gap:clamp(18px,3vw,38px);align-items:center;padding:clamp(18px,3vw,34px);border:1px solid var(--delicat-border);border-radius:clamp(18px,2vw,28px);background:var(--delicat-surface);box-shadow:var(--delicat-shadow)}.delicat-builder-banner:not(.has-media){grid-template-columns:1fr}.delicat-builder-banner__media{overflow:hidden;border-radius:clamp(16px,2vw,26px);background:rgba(128,128,128,.07)}.delicat-builder-banner__image{display:block;width:100%;height:auto;object-fit:cover}.delicat-builder-banner h2{margin:0 0 10px;font-size:clamp(1.4rem,3vw,2.35rem)}.delicat-builder-banner p{color:var(--delicat-muted);line-height:1.65}@media(max-width:960px){.delicat-builder-banner{grid-template-columns:1fr}}@media(max-width:640px){.delicat-builder-banner{padding:16px}}
+/* 9.3.3 — the banner is a swipeable rail of cards (a heading, then cards with a title, a line of text, an optional picture and an optional button), the next card peeking on phones, three to a row on wide screens. Scrolling is the browser's own snap scrolling; the engine only moves the dots. */
+.delicat-banner-rail{--dbc-gap:12px;--dbc-edge:0px;position:relative}
+/* the type layer makes every h2 bold (!important); the rail's heading is light with bold words */
+.delicat-banner-rail h2.delicat-banner-rail__heading{margin:0 0 14px;font-size:clamp(1.15rem,2.4vw,1.5rem);font-weight:500!important;letter-spacing:-.01em;line-height:1.25}
+.delicat-banner-rail h2.delicat-banner-rail__heading strong{font-weight:800!important}
+.delicat-banner-rail__track{display:flex;gap:var(--dbc-gap);margin:0 calc(-1 * var(--dbc-edge));padding:4px var(--dbc-edge) 6px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-inline:var(--dbc-edge);-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.delicat-banner-rail__track::-webkit-scrollbar{display:none}
+.delicat-banner-card{position:relative;display:flex;flex:0 0 min(82vw,340px);flex-direction:column;min-height:200px;padding:22px 20px 20px;border:1px solid var(--delicat-border);border-radius:22px;background:var(--delicat-surface);color:var(--delicat-text);box-shadow:var(--delicat-shadow);scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden}
+.delicat-banner-rail.is-single .delicat-banner-card{flex-basis:100%;min-height:0}
+.delicat-banner-card__media{margin:-22px -20px 16px;aspect-ratio:16/9;overflow:hidden;background:rgba(128,128,128,.07)}
+.delicat-banner-card__image{display:block;width:100%;height:100%;object-fit:cover}
+.delicat-banner-card__copy{display:flex;flex:1;flex-direction:column;gap:8px;min-width:0}
+.delicat-banner-card__title{margin:0;font-size:clamp(1.2rem,2.2vw,1.45rem);font-weight:800;letter-spacing:-.015em;line-height:1.2}
+.delicat-banner-card__text{margin:0 0 10px;color:var(--delicat-muted);font-size:.98rem;line-height:1.55}
+.delicat-banner-card__text p{margin:0 0 .6em}.delicat-banner-card__text p:last-child{margin-bottom:0}
+/* a.… : native documents colour every link in main (body.delicat-native-document main a) */
+.delicat-banner-rail a.delicat-banner-card__button{display:inline-flex;align-items:center;justify-content:center;gap:8px;align-self:flex-start;margin-top:auto;min-height:44px;padding:0 20px;border-radius:999px;background:var(--dbc-accent,#111318);color:#fff;font-weight:800;text-decoration:none;transition:transform .16s ease,filter .16s ease}
+.delicat-banner-rail a.delicat-banner-card__button::after{content:"→";font-size:1.05em}
+.delicat-banner-rail a.delicat-banner-card__button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.delicat-banner-card__link{position:absolute;inset:0;z-index:1;border-radius:inherit}
+.delicat-banner-rail__dots{display:flex;justify-content:center;gap:6px;margin-top:8px}
+.delicat-banner-rail__dots i{display:block;width:6px;height:6px;border-radius:999px;background:rgba(20,22,28,.16);transition:width .22s ease,background .22s ease}
+.delicat-banner-rail__dots i.is-active{width:18px;background:var(--dbc-accent,#6d5dfc)}
+/* card styles */
+.delicat-banner-rail--dark .delicat-banner-card{border-color:transparent;background:#111318;color:#fff;box-shadow:0 10px 30px rgba(10,12,20,.18)}
+.delicat-banner-rail--dark .delicat-banner-card__text{color:rgba(255,255,255,.72)}
+.delicat-banner-rail--dark a.delicat-banner-card__button{background:#fff;color:#111318}
+.delicat-banner-rail--tint .delicat-banner-card{border-color:transparent;background:#eef0ff;box-shadow:none}
+@supports(background:color-mix(in srgb,red 10%,#fff)){.delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,#6d5dfc) 12%,#fff)}}
+.delicat-banner-rail--tint a.delicat-banner-card__button{background:var(--dbc-accent,#6d5dfc)}
+/* dark theme */
+html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card{border-color:rgba(255,255,255,.08);background:#121a2c;color:#f3f4fa;box-shadow:none}
+html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card__text{color:rgba(243,244,250,.7)}
+html.dlc-theme-dark .delicat-banner-rail--light a.delicat-banner-card__button{background:var(--dbc-accent,#6d5dfc)}
+html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:#121a2c;color:#f3f4fa}
+@supports(background:color-mix(in srgb,red 10%,#fff)){html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,#6d5dfc) 22%,#121a2c)}}
+html.dlc-theme-dark .delicat-banner-rail__dots i{background:rgba(255,255,255,.18)}
+/* phones: the rail runs edge to edge, the section's own side padding becomes the rail's */
+@media(max-width:640px){.delicat-banner-rail{--dbc-edge:var(--dbv9-space-m,16px)}.delicat-banner-rail__heading{margin-bottom:12px}}
+/* wide screens: three cards to a row; fewer cards share the row, more keep scrolling */
+@media(min-width:960px){.delicat-banner-card{flex:1 0 calc((100% - 2 * var(--dbc-gap)) / 3);min-height:220px}.delicat-banner-rail.has-many .delicat-banner-rail__track{padding-bottom:10px}}
+@media(prefers-reduced-motion:reduce){.delicat-banner-rail__track{scroll-behavior:auto}.delicat-banner-rail__dots i,.delicat-banner-rail a.delicat-banner-card__button{transition:none}}

@@ -6,8 +6,9 @@ if ( ! defined( 'ABSPATH' ) ) { exit; }
  *
  * Floating pill with five destinations (Accueil, Wallet, Boutique as the raised
  * centre action, Panier with its live count, Compte). Phones and tablets only
- * (≤820px); never on the cart/checkout/thank-you flow where the checkout dock
- * owns the bottom edge. Body carries `delicat-shell-mobile-nav-active` so the
+ * (≤820px), on the cart page too (9.3.3: shoppers kept losing the bar there);
+ * never on checkout and the thank-you page, where the checkout dock owns the
+ * bottom edge. Body carries `delicat-shell-mobile-nav-active` so the
  * product dock, the sheets and the chat launcher keep their existing offsets.
  */
 final class Delicat_Builder_V9_Bottom_Nav {
@@ -31,7 +32,7 @@ final class Delicat_Builder_V9_Bottom_Nav {
 		if ( class_exists( 'Delicat_Builder_V9_Core', false ) && is_callable( array( 'Delicat_Builder_V9_Core', 'is_enabled' ) ) && ! Delicat_Builder_V9_Core::is_enabled() ) {
 			return false;
 		}
-		if ( function_exists( 'is_cart' ) && ( is_cart() || is_checkout() ) ) {
+		if ( function_exists( 'is_checkout' ) && is_checkout() ) {
 			return false;
 		}
 		if ( function_exists( 'is_wc_endpoint_url' ) && ( is_wc_endpoint_url( 'order-received' ) || is_wc_endpoint_url( 'order-pay' ) ) ) {

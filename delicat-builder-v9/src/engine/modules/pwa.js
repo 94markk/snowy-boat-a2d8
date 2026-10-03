@@ -4,7 +4,8 @@
  * Android app link (never offered on an iPhone), and what an installed app
  * needs to feel installed: the standalone class for CSS, a clean address on
  * launch, a refreshed session when the app comes back to the front, and a
- * one-time invitation to add the store to the home screen.
+ * standing invitation to add the store to the home screen (never once the
+ * store runs installed).
  */
 import { device, doc, html, idle, on, win } from '../core/dom.js';
 import { registerOverlay, releaseOverlay } from '../core/overlay.js';
@@ -13,9 +14,10 @@ import { session } from '../core/state.js';
 const SHARE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="20" height="20"><path d="M12 3v12M8 7l4-4 4 4M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const PLUS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" width="20" height="20"><rect x="3.5" y="3.5" width="17" height="17" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 
-const store = {
-	get(key) { try { return win.localStorage.getItem(key); } catch (_) { return null; } },
-	set(key, value) { try { win.localStorage.setItem(key, value); } catch (_) {} },
+/* Once per visit: a closed invitation stays closed until the next visit. */
+const seen = {
+	get() { try { return win.sessionStorage.getItem('dbv9-install-seen'); } catch (_) { return null; } },
+	set() { try { win.sessionStorage.setItem('dbv9-install-seen', '1'); } catch (_) {} },
 };
 
 export default function mount({ signal, config }) {
@@ -31,6 +33,9 @@ export default function mount({ signal, config }) {
 	if (standalone) html.classList.add('delicat-standalone');
 	if (device.ios) html.classList.add('delicat-ios');
 	if (standalone) {
+		/* The app identifies itself to the server (its own cookie jar on iOS),
+		   which then prints no WordPress toolbar for signed-in staff. */
+		try { doc.cookie = 'dbv9_app=1; path=/; max-age=31536000; SameSite=Lax' + (location.protocol === 'https:' ? '; Secure' : ''); } catch (_) {}
 		/* iOS launches at start_url (…?utm_source=pwa): the tag has done its job
 		   once the page is open, and a clean address keeps caches and shared
 		   links tidy. */
@@ -103,18 +108,18 @@ export default function mount({ signal, config }) {
 	on(doc, 'delicat:install-app', (event) => { if (!goAndroid(event)) open(); }, { capture: true, signal });
 	on(doc, 'keydown', (event) => { if (event.key === 'Escape') { const m = doc.getElementById('dbv9-pwa-modal'); if (m && m.classList.contains('is-open')) { m.classList.remove('is-open'); releaseOverlay('pwa'); } } }, { signal });
 
-	/* ---- the invitation: iPhone and iPad only, second visit, once a month ----
+	/* ---- the invitation: iPhone and iPad, every visit, never inside the app ----
 	   Android shoppers have the store's own app (the APK page) and Chrome's
 	   own install prompt; the invitation exists for Safari, which never
 	   offers to install anything by itself. It drops in from the top of the
-	   screen, where a system banner would. */
+	   screen, where a system banner would, and stays until the shopper closes
+	   it or opens the steps; either quiets it for the rest of the visit, and
+	   the next visit asks again, until the store runs installed, where nothing
+	   about installing is ever shown (9.3.3: it used to wait for a second
+	   visit, leave by itself after 18 s and then keep quiet for a month). */
 	const invite = () => {
 		if (!UI || standalone || doc.hidden) return;
-		if (!device.ios) return;
-		const until = Number(store.get('dbv9-install-quiet') || 0);
-		if (until && Date.now() < until) return;
-		const visits = Number(store.get('dbv9-visits') || 0);
-		if (visits < 2) return;
+		if (!device.ios || seen.get()) return;
 		if (doc.getElementById('dbv9-install-bar') || doc.querySelector('.dlx-drawer.is-open, .dbv9-pwa-modal.is-open')) return;
 		const bar = doc.createElement('div');
 		bar.id = 'dbv9-install-bar';
@@ -122,16 +127,11 @@ export default function mount({ signal, config }) {
 		bar.setAttribute('role', 'status');
 		bar.innerHTML = '<span class="dbv9-install-bar__icon">' + PLUS_ICON + '</span><span class="dbv9-install-bar__copy"><strong>Delicat en application</strong><small>Ajoutez-la à l’écran d’accueil.</small></span><button type="button" class="dbv9-install-bar__go" data-dbv9-pwa-open>Voir</button><button type="button" class="dbv9-install-bar__close" aria-label="Fermer">×</button>';
 		doc.body.appendChild(bar);
-		const quiet = (days) => { store.set('dbv9-install-quiet', String(Date.now() + days * 86400000)); bar.remove(); };
-		on(bar, 'click', (event) => {
-			if (event.target.closest('.dbv9-install-bar__close')) { quiet(30); return; }
-			if (event.target.closest('[data-dbv9-pwa-open]')) { quiet(14); }
-		}, { signal });
+		const dismiss = () => { seen.set(); bar.classList.remove('is-in'); win.setTimeout(() => bar.remove(), 260); };
+		on(bar, 'click', (event) => { if (event.target.closest('.dbv9-install-bar__close, [data-dbv9-pwa-open]')) dismiss(); }, { signal });
 		win.setTimeout(() => bar.classList.add('is-in'), 30);
-		win.setTimeout(() => { if (bar.isConnected) bar.remove(); }, 18000);
 	};
-	store.set('dbv9-visits', String(Number(store.get('dbv9-visits') || 0) + 1));
-	if (!standalone) idle(() => win.setTimeout(invite, 6000), 5000);
+	if (!standalone && device.ios) idle(() => win.setTimeout(invite, 2500), 4000);
 
 	win.DelicatPWA = { open };
 	if (androidPage && !device.ios) win.DelicatAndroidLinkBound = true;

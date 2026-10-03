@@ -221,6 +221,54 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
   1623 → 1450ms, the card tap 1512 → 968ms, the bar's tabs 620–740 → 196–598ms. Any class change
   on a root element now costs 0ms where it cost 15ms (desktop speed) before.
 
+## Sixth pass: the bar on every page, the installed app, the banner rail
+
+* **The bottom bar vanished after each update, mostly in the installed app.** A document rendered
+  before an update still names the previous build's hashed bundles (`chrome.<hash>.css`, the
+  engine), and those files leave with the old plugin folder. A copy kept for a few minutes by Safari,
+  by the app's service worker (documents are served stale-while-revalidate for up to ten minutes) or
+  by Cloudflare came up with its inline critical CSS only: a styled header and chat launcher, no bar
+  (its styles live in the chrome bundle), no drawer styles, no engine. The web server hands a missing
+  file to WordPress, and `Delicat_Builder_V9_Engine::rescue_missing_asset()` now answers a request
+  for a missing hashed bundle with the current build of the same bundle (only names listed in the
+  build manifest; chunks and anything else stay 404). A stale page degrades to "current stylesheet
+  and engine" instead of "no chrome". Probe: `stale-asset.mjs` (four old names rescued, five
+  refused).
+* **Bar on the cart page.** `Delicat_Builder_V9_Bottom_Nav::expected()` no longer excludes the cart;
+  checkout and the thank-you page keep the dock. The checkout dock's hide rule is scoped to checkout
+  (`body.dpn-checkout.dpn-checkout-dock-ready`). The cart page clears the bar (its padding comes from
+  the `--dbv9-nav-band` rules) and the "Panier" tab lights up there.
+* **Stale overlay classes.** The classes that hide the bar while something is open (`dnp-express-open`,
+  `dpn-wallet-modal-open`, `dpn-checkout-dock-ready`, `dlx-open`, `dsb-menu-open`) survive swaps on
+  purpose; the bottom-nav module re-checks each against its element 400 ms after a navigation, a
+  `pageshow` and a return to the foreground, and clears the ones with nothing open.
+* **Keyboard.** iOS lays fixed elements out under the keyboard; left as the system does (native apps
+  hide their tab bar behind the keyboard as well).
+* **Installed app, signed-in staff.** The WordPress toolbar sat under the status bar and pushed the
+  header down. In standalone the toolbar is hidden and the html offset reset (`pwa-runtime.css`), the
+  `delicat-standalone` class is set by an inline check in the head before the first paint, and the
+  server stops printing the toolbar once the app has identified itself with its `dbv9_app` cookie
+  (set by the engine in standalone; the launch address `?utm_source=pwa` counts too).
+* **Install invitation.** iPhone and iPad only, as before, but now on every visit, about 2.5 s after
+  the page is idle, and it stays until closed or opened; closing keeps it quiet for that visit only
+  (`sessionStorage`). Never inside the installed app (standalone), where nothing about installing is
+  shown. The second-visit threshold, the 18 s auto-dismiss and the monthly quiet period are gone.
+* **Banner section → card rail.** The banner is a swipeable rail: a heading whose bold words are
+  marked with `*stars*`, cards with a title, a line of text, an optional picture and an optional
+  pill button, the next card peeking on phones (`min(82vw, 340px)`, edge to edge), three to a row
+  on wide screens, browser snap scrolling, position dots moved by a 1 KB engine module
+  (`src/engine/modules/banner.js`). The original fields are card 1, so existing banners keep their
+  content; more cards are typed one per line as `Titre|Texte|Bouton|URL|#couleur|image id`; three
+  looks (light, dark, tinted by each card's colour) and dark mode. Type-layer rules that made every
+  `h2` bold and every link in `main` coloured are overridden with the needed specificity.
+
+Verification (local site, iPhone 13 emulation unless noted): `stale-asset.mjs` 4 rescued / 5 refused;
+`bar-probe.mjs` bar present at the top and scrolled on home, product, cart and shop, browser and app
+emulation; `cart-probe.mjs` cart with an item, tab lit, bar unobstructed, no bar on checkout;
+`app-admin.mjs` signed-in staff in standalone: no toolbar markup, html offset 0, header at 0;
+`pass4-visual.mjs` invitation at the top on iPhone, none on Android; `banner-probe.mjs` five cards,
+peek 44 px, dots following the scroll and a dot tap; `flows.mjs` 17/17 steps, no console errors.
+
 ## Build
 
 ```

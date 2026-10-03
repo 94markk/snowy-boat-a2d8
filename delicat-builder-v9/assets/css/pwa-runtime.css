@@ -26,5 +26,9 @@ html.delicat-standalone body{overscroll-behavior-y:none}
 html.delicat-standalone .dsb8-header{padding-top:env(safe-area-inset-top,0px)}
 html.delicat-standalone .dsb8-header.is-sticky{top:0}
 html.delicat-standalone .dbv9-install-bar,html.delicat-standalone [data-dlx-install],html.delicat-standalone .delicat-builder-v9-install-app{display:none!important}
+/* 9.3.3: the installed app never shows the WordPress toolbar. Staff opening the app signed in saw it wedged under the status bar, the header pushed down behind it and the page offset by the toolbar's own 46px (the server withholds it as well once the app has identified itself with its cookie). */
+html.delicat-standalone{margin-top:0!important}
+html.delicat-standalone #wpadminbar{display:none!important}
+html.delicat-standalone body.admin-bar{--dbv9-assistant-panel-top:0px}
 html.delicat-standalone a,html.delicat-standalone button,html.delicat-standalone .dbn-item,html.delicat-standalone .dlx-item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 html.delicat-standalone input,html.delicat-standalone textarea,html.delicat-standalone [contenteditable]{-webkit-user-select:text;user-select:text}

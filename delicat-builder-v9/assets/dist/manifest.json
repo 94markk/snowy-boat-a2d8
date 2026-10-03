@@ -1,11 +1,11 @@
 {
 	"version": 2,
-	"builtAt": "2026-10-03T12:46:56.575Z",
+	"builtAt": "2026-10-03T14:29:37.833Z",
 	"js": {
 		"engine": {
-			"file": "engine.7FBVLXG6.js",
-			"bytes": 92140,
-			"sha256": "a479ea2a11ce5f01f792f3296d74180761b2978aea64b269fbe62df7f9c202f4",
+			"file": "engine.GZLWDALV.js",
+			"bytes": 93918,
+			"sha256": "91768aac8cbaff82972456d859a3326804e678b16d3b65149e0ddac6f37e5de1",
 			"imports": [
 				"chunks/chunk.QLA2WW63.js",
 				"chunks/chunk.XDXNIN6Z.js",
@@ -78,9 +78,9 @@
 	},
 	"css": {
 		"chrome": {
-			"file": "chrome.4f2a547bf33d.css",
-			"bytes": 115289,
-			"sha256": "4f2a547bf33d40e98e5e8529634fd785ca9ab0fc428cfd96d540c27288cb300a",
+			"file": "chrome.706f771ddee0.css",
+			"bytes": 115491,
+			"sha256": "706f771ddee095b840b07d1a629f2f8cfabe174485129873740177f4f1aa07a7",
 			"sources": [
 				"assets/css/theme-system.css",
 				"assets/dsb8-beta2-header.css",
@@ -118,9 +118,9 @@
 			]
 		},
 		"builder": {
-			"file": "builder.e19676980cbb.css",
-			"bytes": 195139,
-			"sha256": "e19676980cbbd7786788f6fb376b6ac933c48d8da5e2823fc5ef442bfd87b124",
+			"file": "builder.848554a3e02a.css",
+			"bytes": 198822,
+			"sha256": "848554a3e02a57d7b26b1b5f19c0b93c6152c206b5b59eebe11d74cb3a7b429f",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/testimonials.css",
@@ -143,9 +143,9 @@
 			]
 		},
 		"builder-design": {
-			"file": "builder-design.1ce450b2c08f.css",
-			"bytes": 210818,
-			"sha256": "1ce450b2c08ff969a918137a3eb0709e4f49bc05d5440495720224015cf4a7c8",
+			"file": "builder-design.52b894d3822a.css",
+			"bytes": 214501,
+			"sha256": "52b894d3822a7fc2f668aa779100043dc4ab90c2152d4ee9f2aa83b604500789",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/testimonials.css",

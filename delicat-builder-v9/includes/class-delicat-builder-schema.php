@@ -156,11 +156,15 @@ final class Delicat_Builder_V9_Schema {
 
 			case 'banner':
 				$base['content'] = array(
+					'heading'     => '',
 					'title'       => __( 'Promotion', 'delicat-builder-v9' ),
 					'text'        => '',
 					'button_text' => '',
 					'button_url'  => '',
 					'image_id'    => 0,
+					'items'       => '',
+					'card_style'  => 'light',
+					'show_dots'   => 1,
 				);
 				break;
 
@@ -623,12 +627,17 @@ final class Delicat_Builder_V9_Schema {
 				);
 
 			case 'banner':
+				$card_style = sanitize_key( (string) ( $content['card_style'] ?? 'light' ) );
 				return array(
+					'heading'     => self::plain( $content['heading'] ?? '', 160 ),
 					'title'       => self::plain( $content['title'] ?? '', 180 ),
 					'text'        => self::rich( $content['text'] ?? '' ),
 					'button_text' => self::plain( $content['button_text'] ?? '', 80 ),
 					'button_url'  => self::url( $content['button_url'] ?? '' ),
 					'image_id'    => absint( $content['image_id'] ?? 0 ),
+					'items'       => self::multiline( $content['items'] ?? '', 6000 ),
+					'card_style'  => in_array( $card_style, array( 'light', 'dark', 'tint' ), true ) ? $card_style : 'light',
+					'show_dots'   => ( isset( $content['show_dots'] ) && ( false === $content['show_dots'] || 0 === $content['show_dots'] || '0' === $content['show_dots'] || '' === $content['show_dots'] ) ) ? 0 : 1,
 				);
 
 			case 'products':

@@ -7,7 +7,7 @@
  * the address, so a cached document, a route the server does not recognise
  * or a stale copy can never leave the wrong tab lit.
  */
-import { doc, on, parseUrl, qsa, win } from '../core/dom.js';
+import { doc, html, on, parseUrl, qsa, win } from '../core/dom.js';
 import { paintCartCount, wooCookieCount } from '../core/state.js';
 
 const trim = (path) => String(path || '/').replace(/\/+$/, '') || '/';
@@ -66,4 +66,26 @@ export default function mount({ signal }) {
 	on(doc, 'delicat:navigated', syncActive, { signal });
 	on(doc, 'delicat:placeholder', syncActive, { signal });
 	on(win, 'popstate', () => win.setTimeout(syncActive, 0), { signal });
+
+	/* 9.3.3: the bar hides while an overlay owns the screen (drawer, express
+	   sheet, wallet modal, checkout dock). Those classes survive a swap on
+	   purpose, so a sheet closed by the navigation itself, a page restored from
+	   the back-forward cache or a cancelled transition could leave one behind
+	   with nothing open, and the bar stayed hidden until the next full load.
+	   Each class is checked against the element it stands for once things
+	   have settled. */
+	const heal = () => {
+		const body = doc.body;
+		if (body.classList.contains('dnp-express-open') && !doc.querySelector('[data-dnp-express].is-open')) body.classList.remove('dnp-express-open', 'dnp-express-busy');
+		if (body.classList.contains('dpn-wallet-modal-open') && !doc.querySelector('[data-dpn-wallet-modal]:not([hidden])')) body.classList.remove('dpn-wallet-modal-open');
+		if (body.classList.contains('dpn-checkout-dock-ready') && !body.classList.contains('dpn-checkout')) body.classList.remove('dpn-checkout-dock-ready');
+		if (html.classList.contains('dlx-open') && !doc.querySelector('.dlx-drawer.is-open,.dlx-drawer.is-entering')) { html.classList.remove('dlx-open'); body.style.top = ''; }
+		if (html.classList.contains('dsb-menu-open') && !doc.querySelector('.dlx-drawer.is-open')) html.classList.remove('dsb-menu-open');
+		body.classList.remove('dbn-hidden');
+	};
+	let healTimer = 0;
+	const healSoon = () => { win.clearTimeout(healTimer); healTimer = win.setTimeout(heal, 400); };
+	on(doc, 'delicat:navigated', healSoon, { signal });
+	on(win, 'pageshow', healSoon, { passive: true, signal });
+	on(doc, 'visibilitychange', () => { if (!doc.hidden) healSoon(); }, { signal });
 }

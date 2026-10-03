@@ -460,24 +460,99 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 		return $out;
 	}
 
+	/**
+	 * 9.3.3: the banner is a swipeable rail of cards (a heading, then cards
+	 * with a title, a line of text, an optional picture and an optional
+	 * button), the pattern of the finance apps shoppers already know. The
+	 * original single banner is the first card, so existing layouts keep
+	 * their content; more cards come from the "items" lines.
+	 */
 	private static function banner( array $content ): string {
-		$image = Delicat_Builder_V9_Media::image( absint( $content['image_id'] ), 'large', 'delicat-builder-banner__image', false, '(max-width:960px) 100vw, 40vw' );
-		$out   = '<div class="delicat-builder-banner' . ( $image ? ' has-media' : '' ) . '">';
-		if ( $image ) {
-			$out .= '<div class="delicat-builder-banner__media">' . $image . '</div>';
+		$cards = self::banner_cards( $content );
+		if ( ! $cards ) {
+			return '';
 		}
-		$out .= '<div class="delicat-builder-banner__copy">';
-		if ( '' !== $content['title'] ) {
-			$out .= '<h2>' . apply_filters( 'delicat_builder_v9_section_text', esc_html( $content['title'] ) ) . '</h2>';
+		$style = sanitize_key( (string) ( $content['card_style'] ?? 'light' ) );
+		if ( ! in_array( $style, array( 'light', 'dark', 'tint' ), true ) ) {
+			$style = 'light';
 		}
-		if ( '' !== $content['text'] ) {
-			$out .= '<div>' . wp_kses_post( wpautop( $content['text'] ) ) . '</div>';
+		$many    = count( $cards ) > 1;
+		$heading = (string) ( $content['heading'] ?? '' );
+		$out     = '<div class="delicat-banner-rail delicat-banner-rail--' . esc_attr( $style ) . ( $many ? ' has-many' : ' is-single' ) . '" data-dbv9-banner-rail>';
+		if ( '' !== $heading ) {
+			/* *stars* mark the bold words: "Avec Delicat *vous pouvez !*". */
+			$out .= '<h2 class="delicat-banner-rail__heading">' . apply_filters( 'delicat_builder_v9_section_text', preg_replace( '/\*([^*]+)\*/', '<strong>$1</strong>', esc_html( $heading ) ) ) . '</h2>';
 		}
-		if ( '' !== $content['button_text'] && '' !== $content['button_url'] ) {
-			$out .= '<a class="delicat-builder-button" href="' . esc_url( $content['button_url'] ) . '" data-delicat-prefetch>' . esc_html( $content['button_text'] ) . '</a>';
+		$out .= '<div class="delicat-banner-rail__track" role="list" data-dbv9-banner-track>';
+		foreach ( $cards as $card ) {
+			$image = $card['image_id'] ? Delicat_Builder_V9_Media::image( $card['image_id'], 'large', 'delicat-banner-card__image', false, '(max-width:640px) 82vw, 340px' ) : '';
+			$out  .= '<article class="delicat-banner-card' . ( $image ? ' has-media' : '' ) . '" role="listitem"' . ( '' !== $card['color'] ? ' style="--dbc-accent:' . esc_attr( $card['color'] ) . '"' : '' ) . '>';
+			if ( $image ) {
+				$out .= '<div class="delicat-banner-card__media">' . $image . '</div>';
+			}
+			$out .= '<div class="delicat-banner-card__copy">';
+			if ( '' !== $card['title'] ) {
+				$out .= '<h3 class="delicat-banner-card__title">' . apply_filters( 'delicat_builder_v9_section_text', esc_html( $card['title'] ) ) . '</h3>';
+			}
+			if ( '' !== $card['text'] ) {
+				$out .= $card['rich']
+					? '<div class="delicat-banner-card__text">' . wp_kses_post( wpautop( $card['text'] ) ) . '</div>'
+					: '<p class="delicat-banner-card__text">' . esc_html( $card['text'] ) . '</p>';
+			}
+			if ( '' !== $card['url'] ) {
+				$out .= '' !== $card['button']
+					? '<a class="delicat-banner-card__button" href="' . esc_url( $card['url'] ) . '" data-delicat-prefetch>' . esc_html( $card['button'] ) . '</a>'
+					: '<a class="delicat-banner-card__link" href="' . esc_url( $card['url'] ) . '" aria-label="' . esc_attr( $card['title'] ) . '" data-delicat-prefetch></a>';
+			}
+			$out .= '</div></article>';
 		}
-		$out .= '</div></div>';
-		return $out;
+		$out .= '</div>';
+		if ( $many && ! empty( $content['show_dots'] ) ) {
+			$out .= '<div class="delicat-banner-rail__dots" aria-hidden="true">' . str_repeat( '<i></i>', count( $cards ) ) . '</div>';
+		}
+		return $out . '</div>';
+	}
+
+	/** The cards of a banner: the original fields first, then one "Titre|Texte|Bouton|URL|#couleur|image id" line per card, eight at most. */
+	private static function banner_cards( array $content ): array {
+		$cards = array();
+		$title = (string) ( $content['title'] ?? '' );
+		$text  = (string) ( $content['text'] ?? '' );
+		if ( '' !== $title || '' !== $text ) {
+			$cards[] = array(
+				'title'    => $title,
+				'text'     => $text,
+				'rich'     => true,
+				'button'   => (string) ( $content['button_text'] ?? '' ),
+				'url'      => (string) ( $content['button_url'] ?? '' ),
+				'color'    => '',
+				'image_id' => absint( $content['image_id'] ?? 0 ),
+			);
+		}
+		foreach ( (array) preg_split( '/\r\n|\r|\n/', (string) ( $content['items'] ?? '' ) ) as $line ) {
+			$line = trim( (string) $line );
+			if ( '' === $line ) {
+				continue;
+			}
+			$parts = array_map( 'trim', explode( '|', $line ) );
+			$card  = array(
+				'title'    => (string) ( $parts[0] ?? '' ),
+				'text'     => (string) ( $parts[1] ?? '' ),
+				'rich'     => false,
+				'button'   => (string) ( $parts[2] ?? '' ),
+				'url'      => '' !== (string) ( $parts[3] ?? '' ) ? (string) esc_url_raw( (string) $parts[3], array( 'http', 'https' ) ) : '',
+				'color'    => preg_match( '/^#[0-9a-fA-F]{3,8}$/', (string) ( $parts[4] ?? '' ) ) ? (string) $parts[4] : '',
+				'image_id' => absint( $parts[5] ?? 0 ),
+			);
+			if ( '' === $card['title'] && '' === $card['text'] ) {
+				continue;
+			}
+			$cards[] = $card;
+			if ( count( $cards ) >= 8 ) {
+				break;
+			}
+		}
+		return $cards;
 	}
 
 	private static function products( array $content ): string {

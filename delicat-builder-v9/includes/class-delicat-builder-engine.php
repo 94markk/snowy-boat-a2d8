@@ -37,7 +37,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class Delicat_Builder_V9_Engine {
 
-	const VERSION       = '9.3.2';
+	const VERSION       = '9.3.3';
 	const DIST          = 'assets/dist/';
 	const HANDLE_CHROME = 'delicat-engine-chrome';
 	const HANDLE_ROUTE  = 'delicat-engine-route';
@@ -102,10 +102,63 @@ final class Delicat_Builder_V9_Engine {
 		add_action( 'wp_body_open', array( __CLASS__, 'progress_bar' ), 1 );
 		add_action( 'wp_print_footer_scripts', array( __CLASS__, 'absorb_late' ), 1 );
 		add_action( 'template_redirect', array( __CLASS__, 'link_header' ), 5 );
+		add_action( 'init', array( __CLASS__, 'rescue_missing_asset' ), 0 );
+		add_filter( 'show_admin_bar', array( __CLASS__, 'show_admin_bar' ), 100 );
 		foreach ( array( 'litespeed_optimize_js_excludes', 'litespeed_optm_js_defer_exc', 'litespeed_optm_gm_js_exc', 'litespeed_optimize_css_excludes', 'litespeed_optm_css_async_exc', 'litespeed_optm_ucss_exc' ) as $hook ) {
 			add_filter( $hook, array( __CLASS__, 'litespeed_exclusions' ), PHP_INT_MAX );
 		}
 		add_filter( 'delicat_builder_v9_session_payload', array( __CLASS__, 'session_payload' ), 5 );
+	}
+
+	/**
+	 * 9.3.3: a document rendered before an update still names the previous
+	 * build's hashed bundles. Those files leave with the old plugin folder, so
+	 * a copy kept for a few minutes by a browser, by the installed app's
+	 * service worker or by a CDN came up without its chrome: no bottom bar,
+	 * no drawer styles, no engine. The web server hands a missing file to
+	 * WordPress; this answers with the current build of the same bundle
+	 * instead of a 404. Only bundles named in the manifest are served, never
+	 * an arbitrary path.
+	 */
+	public static function rescue_missing_asset(): void {
+		$uri = (string) ( $_SERVER['REQUEST_URI'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- compared against the manifest only
+		if ( '' === $uri || false === strpos( $uri, '/' . self::DIST ) ) {
+			return;
+		}
+		$path   = (string) wp_parse_url( $uri, PHP_URL_PATH );
+		$prefix = trailingslashit( (string) wp_parse_url( DELICAT_BUILDER_V9_URL, PHP_URL_PATH ) ) . self::DIST;
+		if ( '' === $path || 0 !== strpos( $path, $prefix ) ) {
+			return;
+		}
+		$rel = substr( $path, strlen( $prefix ) );
+		if ( ! preg_match( '#^([a-z0-9-]+)\.[A-Za-z0-9]{6,16}\.(css|js)$#', $rel, $m ) || is_file( DELICAT_BUILDER_V9_DIR . self::DIST . $rel ) ) {
+			return;
+		}
+		$manifest = self::manifest();
+		if ( ! $manifest ) {
+			return;
+		}
+		$file = 'css' === $m[2] ? (string) ( $manifest['css'][ $m[1] ]['file'] ?? '' ) : (string) ( $manifest['js'][ $m[1] ]['file'] ?? '' );
+		if ( '' === $file || ! preg_match( '#^[a-z0-9-]+\.[A-Za-z0-9]+\.(css|js)$#', $file ) || ! is_file( DELICAT_BUILDER_V9_DIR . self::DIST . $file ) ) {
+			return;
+		}
+		status_header( 200 );
+		header( 'Content-Type: ' . ( 'css' === $m[2] ? 'text/css' : 'text/javascript' ) . '; charset=UTF-8' );
+		header( 'Cache-Control: public, max-age=300, must-revalidate', true );
+		header( 'X-Delicat-Asset: rescued ' . $file );
+		readfile( DELICAT_BUILDER_V9_DIR . self::DIST . $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile -- local build output
+		exit;
+	}
+
+	/**
+	 * The installed app (its own cookie, or the launch address) is a native
+	 * surface: no WordPress toolbar for signed-in staff.
+	 */
+	public static function show_admin_bar( $show ) {
+		if ( ! empty( $_COOKIE['dbv9_app'] ) || ( isset( $_GET['utm_source'] ) && 'pwa' === $_GET['utm_source'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presentation only
+			return false;
+		}
+		return $show;
 	}
 
 	/**
@@ -733,7 +786,11 @@ final class Delicat_Builder_V9_Engine {
 			self::shape();
 		}
 		$manifest = self::manifest();
-		$code     = 'window.DelicatEngine=' . wp_json_encode( self::config() ) . ';';
+		/* 9.3.3: the installed app is recognised before the first paint (the
+		 * stylesheets key the status-bar inset and the hidden toolbar on it),
+		 * not a frame later when the module starts. */
+		$code     = "try{if((window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true)document.documentElement.classList.add('delicat-standalone');}catch(e){}\n";
+		$code    .= 'window.DelicatEngine=' . wp_json_encode( self::config() ) . ';';
 		if ( self::$code ) {
 			$code .= "\n" . implode( "\n", self::$code );
 		}

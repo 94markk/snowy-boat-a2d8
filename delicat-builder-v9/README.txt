@@ -1,3 +1,28 @@
+9.3.3 : barre sur toutes les pages, application installée, bannière en carrousel.
+(1) Barre flottante disparue après une mise à jour (surtout dans l'application installée) : une page
+rendue avant la mise à jour désigne encore les fichiers hachés de l'ancienne version (chrome.<hash>.css,
+moteur), supprimés avec l'ancien dossier du plugin. Une copie gardée quelques minutes par Safari, par le
+service worker de l'application ou par Cloudflare arrivait sans la feuille du chrome : en-tête et bulle
+d'assistance stylés (CSS critique en ligne) mais pas de barre, pas de styles du menu, pas de moteur. Le
+serveur répond désormais à un fichier haché manquant par la version courante du même paquet (uniquement
+les noms listés dans le manifest de build ; tout le reste reste en 404).
+(2) Barre sur la page Panier ; Commande et la page de remerciement gardent leur dock. La page Panier
+laisse la place à la barre et l'onglet « Panier » s'y allume.
+(3) Classes d'overlay résiduelles (feuille express, modale wallet, dock de commande, menu) vérifiées
+contre leur élément après chaque navigation, retour arrière ou retour au premier plan, et retirées
+quand rien n'est ouvert.
+(4) Application installée : plus de barre d'administration WordPress (masquée avant le premier rendu,
+et plus imprimée côté serveur dès que l'application s'est identifiée par son cookie) ; l'en-tête reste
+sous la barre d'état.
+(5) Invitation à installer : iPhone et iPad, à chaque visite, dès l'arrivée, jusqu'à fermeture ou
+ouverture des étapes (silence pour la visite seulement) ; jamais dans l'application installée.
+(6) Bannière : rail de cartes glissable façon application bancaire — titre de section avec les mots en
+gras entre *étoiles*, cartes titre / texte / image / bouton, carte suivante visible sur téléphone,
+trois par rangée sur grand écran, points de position. Les anciens champs forment la carte 1 ; les
+cartes suivantes se saisissent une par ligne « Titre|Texte|Bouton|URL|#couleur|id image » ; trois
+styles (clair, sombre, teinté) et mode sombre.
+(7) Clavier iPhone : la barre reste derrière le clavier, comme dans les applications natives.
+
 9.3.2 : corrections iPhone, barre flottante, téléphones lents.
 (1) Barre de recherche du hero cassée sur le site (un libellé « Reche… » dans la ligne, la flèche
 rejetée à la ligne) : le formulaire imprime un libellé pour lecteurs d'écran et comptait sur le thème
