@@ -279,6 +279,12 @@ peek 44 px, dots following the scroll and a dot tap; `flows.mjs` 17/17 steps, no
   visible` everywhere (theme-system, storefront-polish, native-product, the pro critical sheet), the
   only arrangement every engine keeps a sticky header pinned under. `sticky-visual.mjs` captures the
   scrolled header at the top on home and product; the `body{overflow-x:hidden}` variant breaks it.
+  As a safety net the header module watches the first scroll past the header: if the header has
+  left the viewport anyway, it is pinned as a fixed bar and the page padded by its height
+  (`html.dsb8-header-pinned`), so no browser quirk can take it away; in the installed app the header
+  is sticky whatever the header setting says. `pin-probe.mjs` breaks sticky on purpose and shows the
+  pin taking over at the same scroll position. The header's cart badge no longer shows a red "0" on
+  an empty cart (its `display: grid` beat the `hidden` attribute).
 * **Cart page in the installed app.** The page head's own back chevron is hidden where the header
   already carries one; the page's bottom padding no longer stacks on the bar's band (an empty cart
   showed a screen of blank space); short pages keep a 40vh minimum on phones instead of 64vh; the

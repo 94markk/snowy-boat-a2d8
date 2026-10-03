@@ -3,7 +3,11 @@
 coupaient tous deux le débordement latéral avec overflow-x: clip. Chrome garde l'en-tête collant
 épinglé ainsi, WebKit non (un élément collant dans une boîte overflow-x: clip tremble ou lâche, bogue
 WebKit 247130). Seule la racine coupe désormais (html{overflow-x:hidden}, transmis à la fenêtre) et
-<body> reste overflow: visible partout : le seul arrangement que tous les moteurs respectent.
+<body> reste overflow: visible partout : le seul arrangement que tous les moteurs respectent. Filet de
+sécurité : au premier défilement, si l'en-tête a tout de même quitté l'écran, le moteur l'épingle en
+barre fixe et décale la page de sa hauteur ; dans l'application installée l'en-tête est toujours
+collant, quel que soit le réglage. Le badge du panier dans l'en-tête n'affiche plus un « 0 » rouge
+quand le panier est vide.
 (2) Page Panier dans l'application : plus de double chevron de retour (l'en-tête en porte déjà un),
 plus d'écran vide sous un panier vide (le rembourrage de la page ne s'empile plus sur la bande de la
 barre, hauteur minimale réduite sur téléphone), logo du pied de page fixé à 48 px quoi que dise le

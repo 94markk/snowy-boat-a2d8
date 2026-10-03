@@ -1,11 +1,11 @@
 {
 	"version": 2,
-	"builtAt": "2026-10-03T21:21:13.343Z",
+	"builtAt": "2026-10-03T22:43:59.330Z",
 	"js": {
 		"engine": {
-			"file": "engine.CKLYG3LH.js",
-			"bytes": 66279,
-			"sha256": "36812f690c63a18f939abc268aa58743b574a397cb5b9d16788bca93d430be82",
+			"file": "engine.YX6VEC4O.js",
+			"bytes": 66784,
+			"sha256": "d8e0b83e6dda157f73ff9ac3147ff118ac55a0c359d5814158f6e1dced54b7ab",
 			"imports": [
 				"chunks/chunk.U77UH2TX.js",
 				"chunks/chunk.QLA2WW63.js",
@@ -84,9 +84,9 @@
 	},
 	"css": {
 		"chrome": {
-			"file": "chrome.65b7c1d5b590.css",
-			"bytes": 115616,
-			"sha256": "65b7c1d5b590aa877f7bacbc3e02485f9ccd0e3a1c25b82727abe988217e16b1",
+			"file": "chrome.b6948dbca446.css",
+			"bytes": 115949,
+			"sha256": "b6948dbca4462138d36c2d18aece82f2e16687678e03bd92472403205e5ccdeb",
 			"sources": [
 				"assets/css/theme-system.css",
 				"assets/dsb8-beta2-header.css",

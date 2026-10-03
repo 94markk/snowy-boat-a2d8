@@ -35,3 +35,7 @@ html.delicat-standalone .dpn-head .dpn-back{display:none}
 html.delicat-standalone .dpn-head{gap:0}
 html.delicat-standalone a,html.delicat-standalone button,html.delicat-standalone .dbn-item,html.delicat-standalone .dlx-item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 html.delicat-standalone input,html.delicat-standalone textarea,html.delicat-standalone [contenteditable]{-webkit-user-select:text;user-select:text}
+/* 9.3.4: the installed app's header is pinned whatever the header setting says, and, should a browser let a sticky header scroll away, the engine pins it as a fixed bar with the page padded by its height (html.dsb8-header-pinned). */
+html.delicat-standalone .dsb8-header{position:sticky;top:0;z-index:1000}
+html.dsb8-header-pinned .dsb8-header{position:fixed!important;top:0!important;left:0;right:0;width:100%}
+html.dsb8-header-pinned body{padding-top:var(--dsb8-header-h,72px)!important}

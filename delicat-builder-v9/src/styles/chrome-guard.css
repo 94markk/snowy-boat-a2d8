@@ -138,6 +138,8 @@ html .dsb8-header .dsb8-header__back[hidden] { display: none !important; }
 html .delicat-bottom-nav .dbn-item { text-decoration: none !important; font-family: inherit; text-transform: none; }
 html .delicat-bottom-nav .dbn-center, html .delicat-bottom-nav .dbn-badge { color: #fff !important; }
 html .delicat-bottom-nav .dbn-badge { font-style: normal; }
+/* 9.3.4: an empty cart shows no badge in the header (the badge's display:grid used to beat the hidden attribute, so a red 0 showed). */
+html .dsb8-header__badge[hidden], html .dbn-badge[hidden] { display: none !important; }
 html .delicat-bottom-nav .dbn-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
 /* 9.3.2: the shelf that used to sit behind the pill (the page background

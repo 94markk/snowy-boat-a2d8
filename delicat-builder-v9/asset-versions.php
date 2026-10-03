@@ -53,7 +53,7 @@ return array(
  'assets/css/product-switcher.css' => 'e6a8191d9cd1',
  'assets/css/purchase-native.css' => '3cf45a4e5eb6',
  'assets/css/purchase-ui.css' => '9a42d41687bd',
- 'assets/css/pwa-runtime.css' => '3a225487580c',
+ 'assets/css/pwa-runtime.css' => '3460aa4babfc',
  'assets/css/reviews.css' => '4923a6974a24',
  'assets/css/shell-admin.css' => '4d53af4f5c83',
  'assets/css/shell.css' => '89dcdba014ac',

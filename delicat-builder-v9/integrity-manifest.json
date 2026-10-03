@@ -1,8 +1,8 @@
 {
     "algorithm": "sha256",
-    "built": "2026-10-03T21:21:13.369+00:00",
+    "built": "2026-10-03T22:43:59.368+00:00",
     "version": "9.3.4",
-    "bytes": 6101768,
+    "bytes": 6103097,
     "count": 278,
     "files": {
         "APK-UPLOAD-PRO58.txt": {
@@ -35,7 +35,7 @@
         },
         "asset-versions.php": {
             "bytes": 6076,
-            "sha256": "c359c189234c9ded68a82a542db5d61122e525f35559c7ff984be44546e9eb21"
+            "sha256": "c4f9b9f618db7f34c1c50bebbe7760a804619b33fc465ae22f09ef84e8677c08"
         },
         "assets/components/all-components.min.css": {
             "bytes": 173954,
@@ -246,8 +246,8 @@
             "sha256": "9a42d41687bd6d7648b9a27f0b6a8b7bdf8ae36e04aaa55ef884c008d50775fe"
         },
         "assets/css/pwa-runtime.css": {
-            "bytes": 5592,
-            "sha256": "3a225487580cb7497b02191633b482e4e1b43dd73bde4dd3cd7a50a1132ee2eb"
+            "bytes": 6083,
+            "sha256": "3460aa4babfc24147ba82c99f1310ac4e06618a28c2d7e69f856081094967bfc"
         },
         "assets/css/reviews.css": {
             "bytes": 4226,
@@ -313,9 +313,9 @@
             "bytes": 199701,
             "sha256": "1f4550a7addcf24506f8304503ca14c9c1bf506533a5148e185f1111e69f4fba"
         },
-        "assets/dist/chrome.65b7c1d5b590.css": {
-            "bytes": 115616,
-            "sha256": "65b7c1d5b590aa877f7bacbc3e02485f9ccd0e3a1c25b82727abe988217e16b1"
+        "assets/dist/chrome.b6948dbca446.css": {
+            "bytes": 115949,
+            "sha256": "b6948dbca4462138d36c2d18aece82f2e16687678e03bd92472403205e5ccdeb"
         },
         "assets/dist/chunks/chunk.A53HRFLU.js": {
             "bytes": 4347,
@@ -369,9 +369,9 @@
             "bytes": 11577,
             "sha256": "42e3ca3dc8554f1c44ecc2d6ee7b8902d7e05e438815091d63658ecf293f45e8"
         },
-        "assets/dist/engine.CKLYG3LH.js": {
-            "bytes": 66279,
-            "sha256": "36812f690c63a18f939abc268aa58743b574a397cb5b9d16788bca93d430be82"
+        "assets/dist/engine.YX6VEC4O.js": {
+            "bytes": 66784,
+            "sha256": "d8e0b83e6dda157f73ff9ac3147ff118ac55a0c359d5814158f6e1dced54b7ab"
         },
         "assets/dist/home-lite.6a992158e516.css": {
             "bytes": 25839,
@@ -383,7 +383,7 @@
         },
         "assets/dist/manifest.json": {
             "bytes": 9404,
-            "sha256": "1103a9e69ec5fe6532681133789c96b86182d458fea36713341f725a6b05385d"
+            "sha256": "e04a14eca7b63802e6b3c452f6681b09f50e2544cfc9869357eb0438988fe719"
         },
         "assets/dist/page.553d97478fb7.css": {
             "bytes": 37933,

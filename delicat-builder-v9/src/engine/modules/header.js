@@ -31,6 +31,26 @@ export default function mount({ signal }) {
 		emit('dsb8:overlay:open', { id: 'modern-menu', trigger: button });
 	}, { signal });
 
+	/* ---- a header that stays put ----
+	   9.3.4 keeps <body> free of overflow so the sticky header pins in every
+	   engine. Should a browser still let it scroll away (iOS WebKit has had
+	   its quirks with sticky), the first scroll past the header notices and
+	   pins it as a fixed bar, the page padded by the bar's height so nothing
+	   moves. Checked once per scroll frame while unpinned, never once pinned. */
+	const stickyHeader = doc.querySelector('.dsb8-header.is-sticky, html.delicat-standalone .dsb8-header');
+	if (stickyHeader) {
+		let pinned = html.classList.contains('dsb8-header-pinned');
+		let frame = 0;
+		const measure = () => { html.style.setProperty('--dsb8-header-h', stickyHeader.offsetHeight + 'px'); };
+		const pin = () => { pinned = true; measure(); html.classList.add('dsb8-header-pinned'); on(win, 'resize', measure, { passive: true, signal }); on(doc, 'delicat:navigated', () => win.setTimeout(measure, 50), { signal }); };
+		const check = () => {
+			frame = 0;
+			if (pinned || (win.pageYOffset || 0) < 160) return;
+			if (stickyHeader.getBoundingClientRect().top < -8) pin();
+		};
+		on(win, 'scroll', () => { if (!pinned && !frame) frame = raf(check); }, { passive: true, signal });
+	}
+
 	/* ---- installed app: a way back ---- */
 	if (device.standalone) {
 		const row = doc.querySelector('.dsb8-header__row');
