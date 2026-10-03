@@ -184,7 +184,7 @@ final class Delicat_Builder_V9_Server_Engine {
 				'locale'   => determine_locale(),
 				'currency' => $currency,
 				'version'  => defined( 'DELICAT_BUILDER_V9_VERSION' ) ? DELICAT_BUILDER_V9_VERSION : '',
-			);
+			) + self::fragment_vary();
 			$key = class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'key' ) )
 				? Delicat_Builder_V9_Cache::key( 'server_product', $payload )
 				: 'dbv9_srvp_' . substr( hash( 'sha256', (string) wp_json_encode( $payload ) ), 0, 40 );
@@ -214,8 +214,7 @@ final class Delicat_Builder_V9_Server_Engine {
 			return '';
 		}
 
-		$has_token = false !== stripos( $html, 'nonce' ) || false !== stripos( $html, '_wpnonce' );
-		if ( $cacheable && '' !== $key && ! $has_token ) {
+		if ( $cacheable && '' !== $key && self::fragment_is_shareable( $html ) ) {
 			$ttl = self::fragment_ttl();
 			wp_cache_set( $key, $html, 'delicat_builder_v9_server', $ttl );
 			if ( ! function_exists( 'wp_using_ext_object_cache' ) || ! wp_using_ext_object_cache() ) {
@@ -268,7 +267,7 @@ final class Delicat_Builder_V9_Server_Engine {
 			return '';
 		}
 
-		if ( $cacheable && '' !== $key ) {
+		if ( $cacheable && '' !== $key && self::fragment_is_shareable( $html ) ) {
 			$ttl = self::fragment_ttl();
 			wp_cache_set( $key, $html, 'delicat_builder_v9_server', $ttl );
 			/* RC51.35: with Redis/Memcached active, WP already routes transients
@@ -313,26 +312,96 @@ final class Delicat_Builder_V9_Server_Engine {
 
 	private static function fragment_cache_allowed(): bool {
 		$s = self::settings();
-		if ( empty( $s['server_fragment_cache'] ) || is_user_logged_in() || self::sensitive_request() ) {
+		if ( empty( $s['server_fragment_cache'] ) || self::sensitive_request() ) {
 			return false;
 		}
-		if ( defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+		/* 9.3: a signed-in customer used to rebuild the homepage on every view
+		 * (112 ms and 150 queries on the reference store, against 1 ms from the
+		 * fragment) because the fragment cache was reserved for guests. The
+		 * fragment is the Builder body only: no header, drawer, cart, wallet,
+		 * nonce or admin bar. It is now kept for signed-in visitors too, under a
+		 * key that includes their signed-in state, roles, currency cookie and
+		 * country, and a render is only stored after fragment_is_shareable()
+		 * has found nothing personal in it. */
+		if ( is_user_logged_in() && ! (bool) apply_filters( 'delicat_builder_v9_server_fragment_cache_signed_in', true ) ) {
 			return false;
+		}
+		$personal = is_user_logged_in() || self::has_private_cookie();
+		/* DONOTCACHEPAGE is a page-level verdict. On a personal document it is
+		 * raised by the cache tiers, the drawer and the navigation layer for the
+		 * document as a whole, which says nothing about the Builder body; the
+		 * reasons that do (maintenance, an identity flow, a sensitive action)
+		 * are asked directly. A guest document keeps the plain rule. */
+		if ( ! $personal && defined( 'DONOTCACHEPAGE' ) && DONOTCACHEPAGE ) {
+			return false;
+		}
+		if ( $personal ) {
+			if ( class_exists( 'Delicat_Builder_V9_Maintenance', false ) && is_callable( array( 'Delicat_Builder_V9_Maintenance', 'is_enabled' ) ) && Delicat_Builder_V9_Maintenance::is_enabled() ) {
+				return false;
+			}
+			if ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'navigation_request_allowed' ) ) && ! Delicat_Builder_V9_Security::navigation_request_allowed() ) {
+				return false;
+			}
 		}
 		if ( ! self::query_is_cache_safe() ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache bypass only.
 			return false;
 		}
 		if (
-			class_exists( 'Delicat_Builder_V9_Security', false )
+			! $personal
+			&& class_exists( 'Delicat_Builder_V9_Security', false )
 			&& is_callable( array( 'Delicat_Builder_V9_Security', 'public_cache_allowed' ) )
 			&& ! Delicat_Builder_V9_Security::public_cache_allowed()
 		) {
 			return false;
 		}
 
-		// Any Woo session/cart/currency cookie can make product prices or actions
-		// visitor-specific. Bypass rather than trying to guess every plugin's vary.
-		return ! self::has_private_cookie();
+		/* A Woo session, cart or currency cookie used to bypass the cache
+		 * outright. The things those cookies change (the active currency, the
+		 * customer's country, the signed-in state) are part of the key, and
+		 * fragment_is_shareable() refuses any render that carries a nonce or
+		 * the visitor's own name. */
+		return true;
+	}
+
+	/** The cookies that may change what a fragment shows, as part of its key. */
+	private static function fragment_vary(): array {
+		$currency_cookie = isset( $_COOKIE['dmc_currency'] ) ? sanitize_key( (string) wp_unslash( $_COOKIE['dmc_currency'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- cache key only.
+		$roles = array();
+		if ( is_user_logged_in() ) {
+			$user  = wp_get_current_user();
+			$roles = is_array( $user->roles ) ? array_values( array_map( 'sanitize_key', $user->roles ) ) : array();
+			sort( $roles );
+		}
+		return array(
+			'signed'   => is_user_logged_in() ? 1 : 0,
+			'roles'    => implode( ',', $roles ),
+			'cur_ck'   => $currency_cookie,
+		);
+	}
+
+	/**
+	 * May this render be served to another visitor? Nothing in a Builder body
+	 * should be personal, but a custom component or a filter could print a
+	 * nonce, the customer's name or e-mail, or a wallet figure; such a render
+	 * is used once and never stored.
+	 */
+	private static function fragment_is_shareable( string $html ): bool {
+		if ( false !== stripos( $html, 'nonce' ) ) {
+			return false;
+		}
+		if ( preg_match( '/data-(?:user|customer)-id=|data-balance|wallet-balance|data-dsb-wallet/i', $html ) ) {
+			return false;
+		}
+		if ( is_user_logged_in() ) {
+			$user = wp_get_current_user();
+			$needles = array( (string) $user->user_email, (string) $user->user_login, (string) $user->display_name, trim( (string) $user->first_name . ' ' . (string) $user->last_name ) );
+			foreach ( $needles as $needle ) {
+				if ( strlen( $needle ) >= 3 && false !== stripos( $html, $needle ) ) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	private static function has_private_cookie(): bool {
@@ -420,7 +489,7 @@ final class Delicat_Builder_V9_Server_Engine {
 			'currency' => $currency,
 			'country'  => strtoupper( sanitize_text_field( $country ) ),
 			'version'  => defined( 'DELICAT_BUILDER_V9_VERSION' ) ? DELICAT_BUILDER_V9_VERSION : '',
-		);
+		) + self::fragment_vary();
 		if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'key' ) ) ) {
 			return Delicat_Builder_V9_Cache::key( 'server_fragment', $payload );
 		}

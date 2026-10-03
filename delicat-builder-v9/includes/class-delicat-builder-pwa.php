@@ -77,6 +77,120 @@ final class Delicat_Builder_V9_PWA {
 		$file = strtolower( ltrim( (string) strrchr( '/' . ltrim( $path, '/' ), '/' ), '/' ) );
 		if ( 'delicat-v9-sw.js' === $file ) { self::service_worker_response(); }
 		if ( 'delicat-v9-manifest.webmanifest' === $file ) { self::manifest_response(); }
+		if ( preg_match( '/^delicat-v9-splash-(\d{3,4})x(\d{3,4})\.png$/', $file, $m ) ) { self::splash_response( (int) $m[1], (int) $m[2] ); }
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* iPhone launch screens                                               */
+	/* ------------------------------------------------------------------ */
+
+	/** Portrait launch screens iOS asks for, as [css width, css height, pixel ratio]. */
+	private const SPLASH_DEVICES = array(
+		array( 375, 667, 2 ), array( 414, 736, 3 ), array( 375, 812, 3 ), array( 414, 896, 2 ), array( 414, 896, 3 ),
+		array( 390, 844, 3 ), array( 428, 926, 3 ), array( 393, 852, 3 ), array( 430, 932, 3 ), array( 402, 874, 3 ),
+		array( 440, 956, 3 ), array( 810, 1080, 2 ), array( 820, 1180, 2 ), array( 834, 1194, 2 ), array( 1024, 1366, 2 ),
+	);
+
+	/** The icon the launch screen is built from: the site icon, else the drawer's logo. */
+	private static function splash_icon_path(): string {
+		$id = (int) get_option( 'site_icon' );
+		if ( $id > 0 ) {
+			$file = (string) get_attached_file( $id );
+			if ( '' !== $file && is_file( $file ) ) { return $file; }
+		}
+		if ( function_exists( 'delicat_builder_v9_menu_get_menu_builder_settings' ) ) {
+			$menu = delicat_builder_v9_menu_get_menu_builder_settings();
+			$url  = is_array( $menu ) ? (string) ( $menu['custom_header_image'] ?? '' ) : '';
+			if ( '' !== $url && function_exists( 'attachment_url_to_postid' ) ) {
+				$att = (int) attachment_url_to_postid( $url );
+				$file = $att > 0 ? (string) get_attached_file( $att ) : '';
+				if ( '' !== $file && is_file( $file ) ) { return $file; }
+			}
+		}
+		return '';
+	}
+
+	private static function splash_dir(): array {
+		$uploads = wp_upload_dir();
+		if ( ! empty( $uploads['error'] ) ) { return array( '', '' ); }
+		return array( trailingslashit( $uploads['basedir'] ) . 'delicat-builder-v9/splash', trailingslashit( $uploads['baseurl'] ) . 'delicat-builder-v9/splash' );
+	}
+
+	/** A short signature of what the images are built from; a change renames them. */
+	private static function splash_stamp(): string {
+		$s = self::settings();
+		$icon = self::splash_icon_path();
+		return substr( hash( 'sha256', ( $icon ? $icon . ':' . (string) filemtime( $icon ) : 'none' ) . '|' . (string) ( $s['background'] ?? '' ) ), 0, 10 );
+	}
+
+	/** True when launch screens can be produced on this server. */
+	private static function splash_supported(): bool {
+		return function_exists( 'imagecreatetruecolor' ) && function_exists( 'imagepng' ) && function_exists( 'imagecreatefromstring' ) && '' !== self::splash_icon_path();
+	}
+
+	/**
+	 * Draw one launch screen: the background colour with the icon centred,
+	 * which is how the app's own icon fills the screen while iOS starts it.
+	 * Written once into uploads/delicat-builder-v9/splash and served from there.
+	 */
+	private static function splash_build( int $w, int $h ): string {
+		list( $dir, ) = self::splash_dir();
+		if ( '' === $dir || ! self::splash_supported() ) { return ''; }
+		$path = $dir . '/' . $w . 'x' . $h . '-' . self::splash_stamp() . '.png';
+		if ( is_file( $path ) ) { return $path; }
+		if ( ! wp_mkdir_p( $dir ) ) { return ''; }
+		$s = self::settings();
+		$bg = sanitize_hex_color( (string) ( $s['background'] ?? '' ) ) ?: '#ffffff';
+		$rgb = sscanf( $bg, '#%02x%02x%02x' );
+		$canvas = imagecreatetruecolor( $w, $h );
+		if ( ! $canvas ) { return ''; }
+		imagefill( $canvas, 0, 0, imagecolorallocate( $canvas, (int) $rgb[0], (int) $rgb[1], (int) $rgb[2] ) );
+		$blob = file_get_contents( self::splash_icon_path() ); // phpcs:ignore WordPressVIPMinimum.Performance.FetchingRemoteData.FileGetContentsUnknown -- local file.
+		$icon = $blob ? @imagecreatefromstring( $blob ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+		if ( $icon ) {
+			$size = (int) round( min( $w, $h ) * 0.27 );
+			$iw = imagesx( $icon ); $ih = imagesy( $icon );
+			$scaled = imagecreatetruecolor( $size, $size );
+			imagealphablending( $scaled, false ); imagesavealpha( $scaled, true );
+			imagefill( $scaled, 0, 0, imagecolorallocatealpha( $scaled, 0, 0, 0, 127 ) );
+			imagecopyresampled( $scaled, $icon, 0, 0, 0, 0, $size, $size, $iw, $ih );
+			imagealphablending( $canvas, true );
+			imagecopy( $canvas, $scaled, (int) ( ( $w - $size ) / 2 ), (int) ( ( $h - $size ) / 2 ) - (int) round( $h * 0.03 ), 0, 0, $size, $size );
+			imagedestroy( $scaled ); imagedestroy( $icon );
+		}
+		$ok = imagepng( $canvas, $path, 6 );
+		imagedestroy( $canvas );
+		return $ok ? $path : '';
+	}
+
+	/** Serve (building on first request) one launch screen. */
+	private static function splash_response( int $w, int $h ): void {
+		$known = false;
+		foreach ( self::SPLASH_DEVICES as $d ) { if ( $d[0] * $d[2] === $w && $d[1] * $d[2] === $h ) { $known = true; break; } }
+		if ( ! $known ) { return; }
+		$path = self::splash_build( $w, $h );
+		if ( '' === $path ) { status_header( 404 ); exit; }
+		header( 'Content-Type: image/png' );
+		header( 'Cache-Control: public, max-age=604800' );
+		header( 'Content-Length: ' . (string) filesize( $path ) );
+		readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+		exit;
+	}
+
+	/** The <link rel="apple-touch-startup-image"> set, built files served directly. */
+	private static function splash_links(): string {
+		if ( ! self::splash_supported() ) { return ''; }
+		list( $dir, $url ) = self::splash_dir();
+		if ( '' === $dir ) { return ''; }
+		$stamp = self::splash_stamp();
+		$out = '';
+		foreach ( self::SPLASH_DEVICES as $d ) {
+			$w = $d[0] * $d[2]; $h = $d[1] * $d[2];
+			$file = $w . 'x' . $h . '-' . $stamp . '.png';
+			$href = is_file( $dir . '/' . $file ) ? $url . '/' . $file : home_url( '/delicat-v9-splash-' . $w . 'x' . $h . '.png' );
+			$out .= '<link rel="apple-touch-startup-image" media="screen and (device-width: ' . (int) $d[0] . 'px) and (device-height: ' . (int) $d[1] . 'px) and (-webkit-device-pixel-ratio: ' . (int) $d[2] . ') and (orientation: portrait)" href="' . esc_url( $href ) . '">' . "\n";
+		}
+		return $out;
 	}
 
 
@@ -112,26 +226,38 @@ final class Delicat_Builder_V9_PWA {
 		foreach ( array( 192, 512 ) as $size ) {
 			$url = self::icon_url( $size );
 			if ( $url ) {
-				$icons[] = array(
-					'src'     => $url,
-					'sizes'   => $size . 'x' . $size,
-					'type'    => 'image/png',
-					'purpose' => 'any maskable',
-				);
+				/* One entry per purpose: a combined "any maskable" makes Android
+				 * crop the plain icon into the maskable shape. */
+				$icons[] = array( 'src' => $url, 'sizes' => $size . 'x' . $size, 'type' => 'image/png', 'purpose' => 'any' );
+				$icons[] = array( 'src' => $url, 'sizes' => $size . 'x' . $size, 'type' => 'image/png', 'purpose' => 'maskable' );
+			}
+		}
+		$shortcuts = array();
+		$shop = function_exists( 'wc_get_page_permalink' ) ? (string) wc_get_page_permalink( 'shop' ) : '';
+		$cart = function_exists( 'wc_get_cart_url' ) ? (string) wc_get_cart_url() : '';
+		$account = function_exists( 'wc_get_page_permalink' ) ? (string) wc_get_page_permalink( 'myaccount' ) : '';
+		foreach ( array( array( 'Boutique', $shop ), array( 'Panier', $cart ), array( 'Mon compte', $account ) ) as $entry ) {
+			if ( '' !== $entry[1] ) {
+				$shortcuts[] = array( 'name' => $entry[0], 'url' => $entry[1] );
 			}
 		}
 		$payload = array(
 			'name'             => get_bloginfo( 'name' ) ?: 'Delicat Store Haiti',
 			'short_name'       => substr( sanitize_text_field( $s['short_name'] ), 0, 32 ) ?: 'Delicat',
 			'description'      => 'Delicat Store Haiti — top up, gift cards et services numériques.',
+			'id'               => wp_parse_url( home_url( '/' ), PHP_URL_PATH ) ?: '/',
 			'start_url'        => home_url( '/?utm_source=pwa' ),
 			'scope'            => home_url( '/' ),
 			'display'          => 'standalone',
+			'display_override' => array( 'standalone', 'minimal-ui' ),
 			'background_color' => sanitize_hex_color( $s['background'] ) ?: '#ffffff',
 			'theme_color'      => sanitize_hex_color( $s['theme_color'] ) ?: '#11104a',
 			'orientation'      => 'portrait-primary',
 			'lang'             => 'fr',
+			'dir'              => 'ltr',
 			'icons'            => $icons,
+			'shortcuts'        => $shortcuts,
+			'prefer_related_applications' => false,
 			'categories'       => array( 'shopping', 'games', 'finance' ),
 		);
 		echo wp_json_encode( $payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
@@ -320,9 +446,16 @@ self.addEventListener('fetch',e=>{
 		echo '<meta name="theme-color" content="' . esc_attr( $theme ) . '">' . "\n";
 		echo '<meta name="mobile-web-app-capable" content="yes">' . "\n";
 		echo '<meta name="apple-mobile-web-app-capable" content="yes">' . "\n";
-		echo '<meta name="apple-mobile-web-app-title" content="Delicat Store">' . "\n";
+		/* `default`: the status bar keeps its system look above the white
+		 * header, the way a light native app reads; the page starts below it. */
+		echo '<meta name="apple-mobile-web-app-status-bar-style" content="default">' . "\n";
+		echo '<meta name="apple-mobile-web-app-title" content="' . esc_attr( substr( sanitize_text_field( (string) ( $s['short_name'] ?? 'Delicat' ) ), 0, 32 ) ?: 'Delicat' ) . '">' . "\n";
+		echo '<meta name="application-name" content="' . esc_attr( get_bloginfo( 'name' ) ?: 'Delicat Store' ) . '">' . "\n";
 		$icon = self::icon_url( 192 );
-		if ( $icon ) { echo '<link rel="apple-touch-icon" href="' . esc_url( $icon ) . '">' . "\n"; }
+		if ( $icon ) {
+			echo '<link rel="apple-touch-icon" sizes="180x180" href="' . esc_url( self::icon_url( 180 ) ?: $icon ) . '">' . "\n";
+		}
+		echo self::splash_links(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts.
 	}
 
 	public static function enqueue_runtime(): void {

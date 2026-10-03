@@ -33,8 +33,8 @@ const cfg = Object.assign({
 	prefetch: true,
 	budget: 10,
 	viewportBudget: 2,
-	cacheTtl: 60000,
-	cacheMax: 14,
+	cacheTtl: 300000,
+	cacheMax: 20,
 	maxBytes: 600 * 1024,
 	timeout: 8000,
 	main: 'main[data-delicat-server-render],main[data-delicat-native-document],main',
@@ -46,6 +46,8 @@ const cfg = Object.assign({
 	productPaths: legacy.productPaths || ['/product/', '/produit/'],
 	generation: legacy.generation || '',
 	forms: true,
+	placeholder: true,
+	tabWarm: true,
 }, config.nav || {});
 
 const MAIN = cfg.main;
@@ -68,11 +70,22 @@ const state = {
 	progressEl: null,
 	liveEl: null,
 	lastCardImage: null,
+	placeholder: null,
 };
 
 const listeners = {};
 export function onNav(event, fn) { (listeners[event] = listeners[event] || []).push(fn); return () => { listeners[event] = (listeners[event] || []).filter((item) => item !== fn); }; }
 const fire = (event, payload) => { for (const fn of listeners[event] || []) { try { fn(payload); } catch (_) {} } };
+
+/* A stylesheet's `scroll-behavior: smooth` turns every programmatic scroll
+   into a half-second glide; a swap, a restore and a placeholder must land at
+   once. */
+function jumpTo(y) {
+	const previous = html.style.scrollBehavior;
+	html.style.scrollBehavior = 'auto';
+	try { win.scrollTo({ top: y, left: 0, behavior: 'instant' }); } catch (_) { win.scrollTo(0, y); }
+	html.style.scrollBehavior = previous;
+}
 
 /* ------------------------------------------------------------ eligibility */
 
@@ -154,7 +167,7 @@ function progressStart() {
 
 function progressDone() {
 	win.clearTimeout(state.progressTimer);
-	html.classList.remove('delicat-navigating', 'delicat-navigating-slow');
+	html.classList.remove('delicat-navigating', 'delicat-navigating-slow', 'delicat-placeholder');
 	const bar = state.progressEl;
 	if (!bar) return;
 	bar.classList.remove('is-active');
@@ -308,22 +321,24 @@ const styleNode = (href) => { const norm = normalise(href); return qsa('link[rel
  * Load a stylesheet the next page needs. The cascade is decided by document
  * order, so a new sheet is inserted right after the previous sheet of the
  * incoming document (`after`), never appended after the late polish layers.
- * A sheet that was switched off by an earlier swap is switched back on.
+ * A sheet that was switched off by an earlier swap is switched back on. The
+ * link is created and placed at once, so a page that needs several new
+ * sheets downloads them in parallel instead of one round trip after another.
  */
 function ensureStyle(item, after) {
 	const norm = normalise(item.href);
 	if (state.loadedStyles.has(norm)) {
 		const existing = styleNode(item.href);
-		if (existing) { existing.disabled = false; existing.removeAttribute('data-delicat-inactive'); return Promise.resolve(existing); }
+		if (existing) { existing.disabled = false; existing.removeAttribute('data-delicat-inactive'); return { node: existing, promise: Promise.resolve(existing) }; }
 		state.loadedStyles.delete(norm);
 	}
 	if (stylePromises.has(norm)) return stylePromises.get(norm);
+	const link = doc.createElement('link');
+	link.rel = 'stylesheet';
+	link.href = item.href;
+	link.media = item.media || 'all';
+	if (item.id && !doc.getElementById(item.id)) link.id = item.id;
 	const promise = new Promise((resolve, reject) => {
-		const link = doc.createElement('link');
-		link.rel = 'stylesheet';
-		link.href = item.href;
-		link.media = item.media || 'all';
-		if (item.id && !doc.getElementById(item.id)) link.id = item.id;
 		let done = false;
 		const finish = (ok) => {
 			if (done) return;
@@ -335,22 +350,24 @@ function ensureStyle(item, after) {
 		const timer = win.setTimeout(() => finish(true), 4000);
 		link.onload = () => finish(true);
 		link.onerror = () => finish(false);
-		if (after && after.parentNode === doc.head) after.insertAdjacentElement('afterend', link);
-		else doc.head.appendChild(link);
 	});
-	stylePromises.set(norm, promise);
-	return promise;
+	if (after && after.parentNode === doc.head) after.insertAdjacentElement('afterend', link);
+	else doc.head.appendChild(link);
+	const entry = { node: link, promise };
+	stylePromises.set(norm, entry);
+	return entry;
 }
 
 /** Bring the document's stylesheets to the incoming page's set and order. */
 async function syncStyles(styles) {
 	const wanted = new Set();
+	const loads = [];
 	let anchor = null;
 	for (const item of styles) {
 		if (!item.href) continue;
 		wanted.add(normalise(item.href));
-		const node = await ensureStyle(item, anchor);
-		if (node) anchor = node;
+		const entry = ensureStyle(item, anchor);
+		if (entry) { anchor = entry.node; loads.push(entry.promise.catch(() => null)); }
 	}
 	/* Sheets only the previous page used stay cached but stop applying, the
 	   way a direct load of this page would never have had them. */
@@ -360,6 +377,7 @@ async function syncStyles(styles) {
 		link.disabled = true;
 		link.setAttribute('data-delicat-inactive', '1');
 	}
+	await Promise.all(loads);
 }
 
 const isPluginAsset = (href) => /\/(?:plugins|mu-plugins)\/delicat-builder-v9\//.test(href) || /\/uploads\/delicat-builder-v9\//.test(href);
@@ -513,10 +531,10 @@ function applySwap(payload, url, { restoreTo, push }) {
 	syncBottomNav(payload.bottomNav);
 	syncCurrentLinks(url);
 	state.renderedKey = key(url);
-	if (typeof restoreTo === 'number') win.scrollTo(0, restoreTo);
-	else if (!url.hash) win.scrollTo(0, 0);
+	if (typeof restoreTo === 'number') jumpTo(restoreTo);
+	else if (!url.hash) jumpTo(0);
 	fresh.setAttribute('tabindex', '-1');
-	tryFocus(fresh);
+	raf(() => { if (fresh.isConnected) tryFocus(fresh); });
 	state.swapped = true;
 	return fresh;
 }
@@ -526,12 +544,13 @@ function scrollToHash(url) {
 	let name;
 	try { name = decodeURIComponent(url.hash.slice(1)); } catch (_) { return; }
 	const target = doc.getElementById(name) || (doc.getElementsByName ? doc.getElementsByName(name)[0] : null);
-	if (target && target.scrollIntoView) target.scrollIntoView();
+	if (target && target.scrollIntoView) { try { target.scrollIntoView({ behavior: 'instant', block: 'start' }); } catch (_) { target.scrollIntoView(); } }
 }
 
 function transitionsAllowed() {
 	if (!cfg.transitions || !doc.startViewTransition) return false;
 	if (device.reducedMotion || device.veryLowPower) return false;
+	if (device.memory > 0 && device.memory <= 3) return false;
 	return true;
 }
 
@@ -551,7 +570,7 @@ async function commit(payload, url, options, token) {
 	if (transitionsAllowed()) {
 		html.setAttribute('data-dbp-transition', '1');
 		html.setAttribute('data-delicat-transition', isProductUrl(url) ? 'product' : (options.push === false ? 'back' : 'forward'));
-		const source = state.lastCardImage;
+		const source = (options.placeholder ? doc.querySelector('[data-delicat-placeholder] .dph__hero img') : null) || state.lastCardImage;
 		if (source && source.isConnected) source.style.viewTransitionName = 'delicat-product-image';
 		let failure = null;
 		const transition = doc.startViewTransition(() => { try { run(); } catch (error) { failure = error; } });
@@ -595,6 +614,79 @@ async function commit(payload, url, options, token) {
 	if (typeof win.gtag === 'function') { try { win.gtag('event', 'page_view', { page_location: url.href, page_title: doc.title }); } catch (_) {} }
 }
 
+/* ------------------------------------------------------------ placeholder */
+
+/* What a native app does on a tap: it opens the next screen at once with what
+   it already knows (the card's image, title and price) and fills it in when
+   the data arrives. The placeholder is a <main> of the route's shape, so the
+   chrome, the bar and the scroll position already behave as on the real page.
+   It is only shown when nothing is cached and no prefetch is about to land. */
+const esc = (value) => String(value || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function placeholderRoute(url) {
+	if (isProductUrl(url)) return 'product';
+	if (/\/(?:product-category|categorie-produit|product-tag|etiquette-produit|shop|boutique)(?:\/|$)/i.test(url.pathname) || url.searchParams.has('s')) return 'shop';
+	if (url.pathname === '/' || /^\/index\.php\/?$/.test(url.pathname)) return 'home';
+	return 'page';
+}
+
+function placeholderFor(url, link) {
+	const route = placeholderRoute(url);
+	const main = doc.createElement('main');
+	main.className = 'delicat-placeholder-main delicat-placeholder-main--' + route;
+	main.setAttribute('data-delicat-native-document', '');
+	main.setAttribute('data-delicat-placeholder', route);
+	main.setAttribute('aria-busy', 'true');
+	const card = link ? link.closest('[data-delicat-card],.delicat-product-card,.delicat-woo-product-card,li.product,.dpsr-switcher-option') : null;
+	const text = (selector) => { const el = card ? card.querySelector(selector) : null; return el ? el.textContent.trim() : ''; };
+	const img = card ? card.querySelector('img') : null;
+	const src = img ? (img.currentSrc || img.src || '') : '';
+	const cardStub = '<div class="dph__card"><span class="dph__thumb"></span><span class="dph__bar dph__bar--w80"></span><span class="dph__bar dph__bar--w40"></span></div>';
+	let inner = '';
+	if (route === 'product') {
+		const title = text('.delicat-product-card__title, .delicat-product-card__name, .delicat-product-card__poster-title, .woocommerce-loop-product__title, h2, h3') || (img && img.alt ? img.alt : '') || (link ? link.getAttribute('aria-label') || '' : '');
+		const price = text('.delicat-product-card__price, .price');
+		inner = '<div class="dph__hero">' + (src ? '<img src="' + esc(src) + '" alt="" decoding="async">' : '') + '</div>'
+			+ '<div class="dph__body"><h1 class="dph__title">' + (title ? esc(title) : '<span class="dph__bar dph__bar--w60 dph__bar--title"></span>') + '</h1>'
+			+ (price ? '<p class="dph__price">' + esc(price) + '</p>' : '<span class="dph__bar dph__bar--w30"></span>')
+			+ '<div class="dph__chips"><span class="dph__chip"></span><span class="dph__chip"></span><span class="dph__chip"></span><span class="dph__chip"></span></div>'
+			+ '<span class="dph__bar dph__bar--btn"></span><span class="dph__bar"></span><span class="dph__bar dph__bar--w80"></span><span class="dph__bar dph__bar--w60"></span></div>';
+	} else if (route === 'shop') {
+		inner = '<div class="dph__body"><span class="dph__bar dph__bar--w40 dph__bar--title"></span><div class="dph__chips"><span class="dph__chip"></span><span class="dph__chip"></span><span class="dph__chip"></span></div><div class="dph__grid">' + cardStub.repeat(6) + '</div></div>';
+	} else if (route === 'home') {
+		inner = '<div class="dph__body"><span class="dph__hero dph__hero--home"></span><span class="dph__bar dph__bar--w40 dph__bar--title"></span><div class="dph__rail">' + cardStub.repeat(3) + '</div><span class="dph__bar dph__bar--w40 dph__bar--title"></span><div class="dph__rail">' + cardStub.repeat(3) + '</div></div>';
+	} else {
+		inner = '<div class="dph__body"><span class="dph__bar dph__bar--w60 dph__bar--title"></span><span class="dph__bar"></span><span class="dph__bar dph__bar--w80"></span><span class="dph__bar"></span><span class="dph__bar dph__bar--w40"></span></div>';
+	}
+	main.innerHTML = '<div class="dph dph--' + route + '">' + inner + '</div>';
+	return { main, route };
+}
+
+function showPlaceholder(url, link) {
+	const current = currentMain();
+	if (!current) return false;
+	let built;
+	try { built = placeholderFor(url, link); } catch (_) { return false; }
+	const { main, route } = built;
+	try {
+		if (history.scrollRestoration) history.scrollRestoration = 'manual';
+		history.pushState({ delicat: 1, dbv9: 1, dbp: 1, key: key(url), scroll: 0 }, '', url.href);
+	} catch (_) { return false; }
+	current.replaceWith(main);
+	const classes = Array.from(doc.body.classList).filter((name) => !/^dbp-route-/.test(name));
+	classes.push('dbp-route-' + route, 'delicat-placeholder-active');
+	doc.body.className = classes.join(' ');
+	html.classList.add('delicat-placeholder');
+	syncCurrentLinks(url);
+	state.renderedKey = key(url);
+	state.swapped = true;
+	state.placeholder = { url: url.href, route };
+	jumpTo(0);
+	raf(() => { if (state.placeholder && (win.pageYOffset || 0) > 0) jumpTo(0); });
+	emit('delicat:placeholder', { url: url.href, route });
+	return true;
+}
+
 /* --------------------------------------------------------------- navigate */
 
 function hardNavigate(url, replace) {
@@ -627,14 +719,19 @@ export async function navigate(url, options = {}) {
 	const controller = new AbortController();
 	state.inflight = controller;
 	let finalUrl = url;
+	let placeholder = false;
 	try {
 		let entry = recall(url);
-		if (!entry) {
-			const pendingKey = url.href;
-			const pending = state.pending.get(pendingKey);
-			if (pending && pending.promise) {
-				try { entry = await pending.promise; } catch (_) { entry = null; }
-			}
+		const pending = entry ? null : state.pending.get(url.href);
+		if (!entry && pending && pending.promise) {
+			/* A prefetch that is about to land is worth a short wait; a slow one is not. */
+			entry = await Promise.race([pending.promise.catch(() => null), new Promise((resolve) => win.setTimeout(() => resolve(null), 90))]);
+			if (token !== state.token) return;
+		}
+		if (!entry && cfg.placeholder !== false && options.push !== false) placeholder = showPlaceholder(url, options.link || null);
+		if (!entry && pending && pending.promise) {
+			try { entry = await pending.promise; } catch (_) { entry = null; }
+			if (token !== state.token) return;
 		}
 		if (!entry) {
 			entry = await fetchDocument(url, { signal: controller.signal });
@@ -646,13 +743,13 @@ export async function navigate(url, options = {}) {
 		const incoming = new DOMParser().parseFromString(entry.html, 'text/html');
 		const payload = analyse(incoming);
 		state.committing = true;
-		await commit(payload, finalUrl, options, token);
+		await commit(payload, finalUrl, placeholder ? Object.assign({}, options, { push: false, placeholder: true }) : options, token);
 	} catch (error) {
 		if (error && error.name === 'AbortError') return;
 		if (token !== state.token) return;
 		if (config.debug) console.warn('[delicat-engine] navigation fell back to a full load:', error && error.message);
 		const target = error && error.redirect ? error.redirect : finalUrl;
-		hardNavigate(target, options.push === false || key(parseUrl(location.href)) === key(finalUrl));
+		hardNavigate(target, placeholder || options.push === false || key(parseUrl(location.href)) === key(finalUrl));
 	} finally {
 		if (token === state.token) {
 			state.inflight = null;
@@ -767,7 +864,7 @@ function restoreArrivalScroll() {
 		const y = win.pageYOffset || 0;
 		const expected = landed >= 0 ? landed : 0;
 		if (Math.abs(y - expected) > 2 && Math.abs(y - arrival) > 2) { userScrolled = true; return; }
-		win.scrollTo(0, arrival);
+		jumpTo(arrival);
 		landed = win.pageYOffset || 0;
 		if (++attempts < 4 && Math.abs(landed - arrival) > 2) win.setTimeout(restore, 120 * attempts);
 	};
@@ -796,7 +893,7 @@ export function bindNavigation() {
 		event.preventDefault();
 		const card = link.closest('[data-delicat-card],.delicat-product-card,.delicat-woo-product-card,li.product,.dpsr-switcher-option');
 		state.lastCardImage = card ? card.querySelector('img') : null;
-		navigate(url, { push: true });
+		navigate(url, { push: true, link });
 	});
 
 	if (cfg.forms) {
@@ -845,6 +942,20 @@ export function bindNavigation() {
 		const warm = () => idle(warmVisibleProducts, 2500);
 		if (doc.readyState === 'complete') win.setTimeout(warm, 1200); else win.addEventListener('load', () => win.setTimeout(warm, 1200), { once: true });
 		onNav('swapped', () => { state.prefetched = 0; win.setTimeout(warm, 600); });
+		/* The bar's own destinations are the most tapped links on the site:
+		   fetch the ones the engine may swap (home, shop) while the page is
+		   idle, so a tab switch is answered from memory. */
+		if (cfg.tabWarm !== false) {
+			const warmTabs = () => idle(() => {
+				if (device.slowNetwork || device.saveData || doc.hidden) return;
+				for (const item of qsa('.delicat-bottom-nav .dbn-item[href]')) {
+					const url = eligible(item.href);
+					if (url && !sameDocument(url)) prefetch(url.href, { force: true });
+				}
+			}, 4000);
+			if (doc.readyState === 'complete') win.setTimeout(warmTabs, 3500); else win.addEventListener('load', () => win.setTimeout(warmTabs, 3500), { once: true });
+			onNav('swapped', () => win.setTimeout(warmTabs, 2500));
+		}
 	}
 
 	html.classList.add('delicat-shell-nav', 'delicat-engine-nav');

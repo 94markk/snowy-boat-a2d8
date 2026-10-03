@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
+		"build:dev": "node tools/build.mjs --dev",
     "build:watch": "node tools/build.mjs --watch",
     "zip": "node tools/build.mjs && node tools/zip.mjs",
     "check": "node tools/build.mjs --check"

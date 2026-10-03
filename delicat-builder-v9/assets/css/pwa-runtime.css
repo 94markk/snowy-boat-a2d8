@@ -1,1 +1,25 @@
 .dbv9-pwa-modal{position:fixed;inset:0;z-index:100010;display:grid;place-items:center;padding:18px;opacity:0;visibility:hidden;pointer-events:none}.dbv9-pwa-modal.is-open{opacity:1;visibility:visible;pointer-events:auto}.dbv9-pwa-backdrop{position:absolute;inset:0;background:rgba(7,10,35,.62)}.dbv9-pwa-card{position:relative;width:min(92vw,390px);padding:26px 20px 20px;border:1px solid rgba(122,112,235,.24);border-radius:24px;background:#fff;color:#101326;text-align:center;box-shadow:0 24px 70px rgba(6,10,40,.28)}.dbv9-pwa-card h3{margin:10px 0 6px;font-size:22px}.dbv9-pwa-card p{margin:0 0 18px;color:#687084;line-height:1.5}.dbv9-pwa-icon{display:grid;place-items:center;width:52px;height:52px;margin:auto;border-radius:17px;background:linear-gradient(135deg,#5964ff,#e63da9);color:#fff;font-size:26px}.dbv9-pwa-action{width:100%;min-height:48px;border:0;border-radius:14px;background:linear-gradient(100deg,#5964ff,#e63da9);color:#fff;font-weight:900}.dbv9-pwa-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border:0;border-radius:50%;background:#eef1f7;color:#111827;font-size:24px}@media(prefers-reduced-motion:no-preference){.dbv9-pwa-modal{transition:opacity .16s ease,visibility .16s ease}}
+
+/* 9.3 — iPhone install sheet, the invitation bar and the installed app. */
+.dbv9-pwa-steps{margin:0 0 6px;padding:0;list-style:none;text-align:left}
+.dbv9-pwa-steps li{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #eef1f7;color:#101326;font-size:14.5px;line-height:1.4}
+.dbv9-pwa-steps li:first-child{border-top:0}
+.dbv9-pwa-step-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:#eef0ff;color:#5964ff}
+.dbv9-pwa-step-text{flex:1;min-width:0}
+.dbv9-install-bar{position:fixed;left:12px;right:12px;bottom:calc(var(--dbv9-nav-band,0px) + 10px);z-index:2147481950;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border:1px solid rgba(20,24,40,.08);border-radius:18px;background:#fff;color:#101326;box-shadow:0 14px 34px rgba(16,24,40,.16);transform:translateY(16px);opacity:0;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .2s ease}
+.dbv9-install-bar.is-in{transform:none;opacity:1}
+.dbv9-install-bar__icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,#5964ff,#e63da9);color:#fff}
+.dbv9-install-bar__copy{display:flex;flex:1;min-width:0;flex-direction:column;line-height:1.25}
+.dbv9-install-bar__copy strong{font-size:14px;font-weight:800}
+.dbv9-install-bar__copy small{font-size:12px;color:#687084;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbv9-install-bar__go{flex:0 0 auto;min-height:38px;padding:0 14px;border:0;border-radius:999px;background:linear-gradient(100deg,#5964ff,#e63da9);color:#fff;font:inherit;font-size:13px;font-weight:800}
+.dbv9-install-bar__close{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:#eef1f7;color:#111827;font-size:22px;line-height:1}
+html[data-delicat-theme="dark"] .dbv9-install-bar,html.dlc-theme-dark .dbv9-install-bar{background:#171a2b;color:#f3f4fa;border-color:rgba(255,255,255,.08)}
+html[data-delicat-theme="dark"] .dbv9-install-bar__close,html.dlc-theme-dark .dbv9-install-bar__close{background:#262a3d;color:#f3f4fa}
+html[data-delicat-theme="dark"] .dbv9-pwa-steps li,html.dlc-theme-dark .dbv9-pwa-steps li{border-top-color:#262a3d;color:#f3f4fa}
+@media(min-width:560px){.dbv9-install-bar{left:50%;right:auto;width:min(calc(100% - 24px),460px);transform:translate(-50%,16px)}.dbv9-install-bar.is-in{transform:translate(-50%,0)}}
+/* The installed app: no browser bar below, so the bar stands on the home indicator; the status bar keeps its own strip. */
+html.delicat-standalone body{overscroll-behavior-y:none}
+html.delicat-standalone .dbv9-install-bar,html.delicat-standalone [data-dlx-install],html.delicat-standalone .delicat-builder-v9-install-app{display:none!important}
+html.delicat-standalone a,html.delicat-standalone button,html.delicat-standalone .dbn-item,html.delicat-standalone .dlx-item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+html.delicat-standalone input,html.delicat-standalone textarea,html.delicat-standalone [contenteditable]{-webkit-user-select:text;user-select:text}

@@ -29,6 +29,7 @@ const root = resolve(here, '..');
 const args = new Set(process.argv.slice(2));
 const watch = args.has('--watch');
 const check = args.has('--check');
+const dev = args.has('--dev') || !!process.env.DBV9_DEV; /* readable names for profiling */
 const distDir = check ? join(root, '.build-check') : join(root, 'assets', 'dist');
 const chunkDir = join(distDir, 'chunks');
 
@@ -75,7 +76,7 @@ async function buildJs() {
 		entryNames: '[name].[hash]',
 		chunkNames: 'chunks/[name].[hash]',
 		assetNames: 'chunks/[name].[hash]',
-		minify: true,
+		minify: !dev,
 		sourcemap: false,
 		target: ESBUILD_TARGET,
 		legalComments: 'none',

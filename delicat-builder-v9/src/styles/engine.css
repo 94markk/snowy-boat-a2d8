@@ -23,8 +23,8 @@ html.delicat-scroll-locked body { position: fixed; left: 0; right: 0; width: 100
 /* While a soft navigation takes longer than 150 ms the current content dims
    slightly and stops taking taps, so a second tap cannot start a second
    navigation. */
-html.delicat-navigating-slow main[data-delicat-server-render],
-html.delicat-navigating-slow main[data-delicat-native-document] { opacity: .62; transition: opacity 180ms linear; pointer-events: none; }
+html.delicat-navigating-slow main[data-delicat-server-render]:not([data-delicat-placeholder]),
+html.delicat-navigating-slow main[data-delicat-native-document]:not([data-delicat-placeholder]) { opacity: .62; transition: opacity 180ms linear; pointer-events: none; }
 html.delicat-navigating a, html.delicat-navigating button { cursor: progress; }
 
 /* Screen-reader only text (route announcements). */
@@ -48,3 +48,49 @@ html.delicat-navigating a, html.delicat-navigating button { cursor: progress; }
 	::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 	html.delicat-navigating-slow main[data-delicat-server-render], html.delicat-navigating-slow main[data-delicat-native-document] { transition: none; }
 }
+
+/* Placeholder screens: shown the moment a link is tapped, replaced when the
+   document arrives. Shapes follow the routes they stand in for. */
+.delicat-placeholder-main { min-height: 100vh; min-height: 100dvh; animation: dph-in 160ms ease-out both; color: var(--dn-text, #171923); overflow-anchor: none; }
+html.delicat-placeholder { overflow-anchor: none; }
+.dph__body { display: flex; flex-direction: column; gap: 12px; max-width: 1200px; margin: 0 auto; padding: 14px 14px 140px; }
+.dph__hero { position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; overflow: hidden; border-radius: 0 0 24px 24px; background: rgba(120, 126, 150, .14); }
+.dph__hero img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.dph__hero--home { aspect-ratio: 39 / 40; border-radius: 22px; }
+.dph__title { margin: 4px 0 0; font-size: 22px; font-weight: 800; line-height: 1.2; letter-spacing: -.01em; }
+.dph__price { margin: 0; font-size: 18px; font-weight: 800; color: var(--dn-primary, #6755f5); }
+.dph__bar, .dph__chip, .dph__thumb { display: block; border-radius: 10px; background: linear-gradient(90deg, rgba(120, 126, 150, .14) 25%, rgba(120, 126, 150, .26) 37%, rgba(120, 126, 150, .14) 63%); background-size: 400% 100%; animation: dph-shimmer 1.4s ease infinite; }
+.dph__bar { width: 100%; height: 14px; }
+.dph__bar--w80 { width: 80%; } .dph__bar--w60 { width: 60%; } .dph__bar--w40 { width: 40%; } .dph__bar--w30 { width: 30%; }
+.dph__bar--title { height: 24px; } .dph__bar--btn { height: 48px; border-radius: 14px; }
+.dph__chips { display: flex; gap: 8px; overflow: hidden; }
+.dph__chip { flex: 0 0 76px; width: 76px; height: 34px; border-radius: 999px; }
+.dph__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.dph__rail { display: grid; grid-auto-flow: column; grid-auto-columns: 46%; gap: 10px; overflow: hidden; }
+.dph__card { display: flex; flex-direction: column; gap: 8px; padding: 8px; border: 1px solid rgba(20, 24, 40, .06); border-radius: 14px; background: var(--dlc-bg-elevated, #fff); }
+.dph__thumb { width: 100%; aspect-ratio: 16 / 10; border-radius: 10px; }
+@media (min-width: 640px) { .dph__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } .dph__rail { grid-auto-columns: 23%; } .dph__hero { aspect-ratio: 21 / 9; } }
+@keyframes dph-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+@keyframes dph-in { from { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .dph__bar, .dph__chip, .dph__thumb { animation: none; } }
+html.delicat-low-power .dph__bar, html.delicat-low-power .dph__chip, html.delicat-low-power .dph__thumb { animation: none; }
+
+/* Low-power devices (theme.js sets the class from device memory / cores /
+   Save-Data): the decorations that cost paint time on every scrolled frame
+   are dropped; nothing is hidden. */
+html.delicat-low-power .delicat-product-card,
+html.delicat-low-power .delicat-category-tile,
+html.delicat-low-power .dlx-account,
+html.delicat-low-power .dlx-wallet,
+html.delicat-low-power .dlx-section,
+html.delicat-low-power .dlx-item__icon,
+html.delicat-low-power .delicat-bottom-nav,
+html.delicat-low-power .dbn-item--center .dbn-center { box-shadow: none !important; }
+html.delicat-low-power .dbv9-reveal { transition-duration: 160ms !important; }
+html.delicat-low-power .delicat-product-card__image, html.delicat-low-power .delicat-category-tile img { transition: none !important; }
+html.delicat-low-power *::before, html.delicat-low-power *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* Scrolling feels native when the browser never fights the finger. */
+html { -webkit-text-size-adjust: 100%; }
+body { -webkit-tap-highlight-color: transparent; }
+.dlx-drawer__scroll, .dsb8-cart-list, [data-delicat-track] { -webkit-overflow-scrolling: touch; }

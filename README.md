@@ -100,6 +100,42 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
   page), and WooCommerce's 63KB country/address tables dropped from carts that need no shipping or
   have the calculator off (they are dependencies of `wc-cart`, so that list is rewritten too).
 
+## Third pass: menu and bar on every page, instant switching, iPhone app
+
+* **Drawer and bottom bar on every page**: on the home and info pages every link in the menu
+  turned purple, the brand title could vanish, and on the shop and product pages the wallet card
+  and menu rows were taller: page stylesheets reached the chrome with element selectors
+  (`body.delicat-native-document a`, `section`, the page's box-sizing reset). The native
+  document rule is scoped to its content root and a guard sheet, last in the chrome bundle
+  (`src/styles/chrome-guard.css`), restates every colour, box and icon size of the drawer, the
+  bar and the header brand at a specificity no page rule reaches. Verified identical on home,
+  shop, product and account.
+* **Bottom bar**: the page no longer shows through the gap under the floating pill (a shelf fades
+  the content into the page background), the lit tab is re-derived from the address on every
+  navigation, and the bar stands above the home indicator in the installed app.
+* **Instant switching**: a tap opens the next screen immediately with what the app already knows
+  (the card's image, title and price for a product; a grid or rails for the shop and home) and
+  fills it in when the document arrives; stylesheets a page needs load in parallel instead of one
+  round trip each; the bar's destinations are prefetched while the page is idle; visited pages
+  stay in memory for five minutes so Back is instant; two forced layouts at start-up (header and
+  reveal set-up) are gone; the crossfade is skipped on phones that report 3GB or less.
+* **Fewer bytes**: WooCommerce's catalog skin, theme-compat sheet and generic front-end script
+  (16KB compressed, five requests) leave the native documents; the route and polish sheets are
+  preloaded from the top of the head and precached by the service worker.
+* **Server**: a signed-in customer used to rebuild the homepage on every view (112ms, 151
+  queries here) because the fragment cache was reserved for guests; the body fragment is now
+  shared under a key that includes the signed-in state, roles, currency and country, and a
+  render is only stored when it carries no nonce, name or wallet figure.
+* **iPhone app**: launch screens are generated for every iPhone and iPad size from the site icon
+  (`uploads/delicat-builder-v9/splash`), the manifest carries an id, display override, split icon
+  purposes and shortcuts, the status bar keeps its system look above the white header, the
+  installed app gets a back control on every screen but the first, refreshes the session when it
+  returns to the front, and an iPhone is offered the "Add to Home Screen" steps instead of the
+  Android package, with a one-time invitation on the second visit.
+* **Low-end phones**: decorations that cost paint time (card and panel shadows, image
+  transitions) are dropped on devices that report four cores or 4GB or less; scrolling was
+  measured smooth (no frame over 32ms on home and shop at 4× CPU throttling).
+
 ## Build
 
 ```
@@ -107,6 +143,7 @@ cd delicat-builder-v9
 npm install
 npm run build        # → assets/dist/*, manifest.json, asset-versions.php, integrity-manifest.json
 npm run build:watch
+npm run build:dev    # unminified engine with readable names, for profiling
 npm run zip          # → ../build/delicat-builder-v9.zip (excludes src/, tools/, node_modules/)
 ```
 

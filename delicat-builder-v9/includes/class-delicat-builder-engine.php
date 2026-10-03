@@ -341,6 +341,9 @@ final class Delicat_Builder_V9_Engine {
 		self::$route_bundle  = $bundle;
 		self::$polish_bundle = ( wp_style_is( 'delicat-builder-v9-storefront-polish', 'enqueued' ) && isset( $css['polish-storefront'] ) ) ? 'polish-storefront' : 'polish';
 
+		self::trim_woo_styles();
+		self::trim_woo_scripts();
+
 		self::$covered = array();
 		foreach ( array( 'chrome', $bundle, self::$polish_bundle ) as $name ) {
 			foreach ( (array) ( $css[ $name ]['sources'] ?? array() ) as $file ) {
@@ -361,6 +364,75 @@ final class Delicat_Builder_V9_Engine {
 		$absorbed      = self::absorb_scripts();
 		self::$code    = $absorbed['code'];
 		self::$globals = $absorbed['names'];
+	}
+
+	/**
+	 * WooCommerce's classic catalog skin (woocommerce-layout, -smallscreen,
+	 * -general), its theme-compat sheet (twenty-*.css, 56 KB on this store) and
+	 * select2/photoswipe skins style markup the native documents never print.
+	 * They cost 16 KB compressed and three requests on every page; the cart,
+	 * checkout and account documents keep them.
+	 */
+	private static function trim_woo_styles(): void {
+		if ( ! in_array( self::$route, array( 'home', 'builder', 'page', 'product', 'shop' ), true ) ) {
+			return;
+		}
+		if ( ! (bool) apply_filters( 'delicat_builder_v9_engine_trim_woo_styles', true ) ) {
+			return;
+		}
+		$styles = wp_styles();
+		foreach ( (array) $styles->queue as $handle ) {
+			$obj = $styles->registered[ $handle ] ?? null;
+			if ( ! $obj || ! is_string( $obj->src ) || false === strpos( $obj->src, '/woocommerce/assets/css/' ) ) {
+				continue;
+			}
+			$base = strtolower( basename( (string) wp_parse_url( $obj->src, PHP_URL_PATH ) ) );
+			if ( preg_match( '/^(?:woocommerce(?:-layout|-smallscreen|-blocktheme)?|twenty-[a-z-]+|storefront[a-z-]*|select2|photoswipe(?:-default-skin)?)\.css$/', $base ) ) {
+				wp_dequeue_style( $handle );
+				self::$absorbed_styles[ $handle ] = true;
+			}
+		}
+	}
+
+	/**
+	 * WooCommerce's generic front-end script (notices, password meter, the
+	 * blockUI overlay and its cookie helper) does nothing on the native home,
+	 * page and archive documents; it is kept wherever another queued script
+	 * still lists it as a dependency (product, cart, checkout, account).
+	 */
+	private static function trim_woo_scripts(): void {
+		if ( ! in_array( self::$route, array( 'home', 'builder', 'page', 'shop' ), true ) ) {
+			return;
+		}
+		if ( ! (bool) apply_filters( 'delicat_builder_v9_engine_trim_woo_scripts', true ) ) {
+			return;
+		}
+		$scripts = wp_scripts();
+		$needed  = array();
+		$walk    = static function ( string $handle ) use ( &$walk, &$needed, $scripts ): void {
+			$obj = $scripts->registered[ $handle ] ?? null;
+			if ( ! $obj ) {
+				return;
+			}
+			foreach ( (array) $obj->deps as $dep ) {
+				if ( isset( $needed[ $dep ] ) ) {
+					continue;
+				}
+				$needed[ $dep ] = true;
+				$walk( (string) $dep );
+			}
+		};
+		$candidates = array( 'woocommerce', 'jquery-blockui', 'js-cookie', 'wc-add-to-cart', 'wc-single-product', 'zoom', 'flexslider', 'photoswipe', 'photoswipe-ui-default', 'selectWoo', 'select2' );
+		foreach ( (array) $scripts->queue as $handle ) {
+			if ( ! in_array( $handle, $candidates, true ) ) {
+				$walk( (string) $handle );
+			}
+		}
+		foreach ( $candidates as $handle ) {
+			if ( in_array( $handle, (array) $scripts->queue, true ) && ! isset( $needed[ $handle ] ) ) {
+				wp_dequeue_script( $handle );
+			}
+		}
 	}
 
 	/**
@@ -616,6 +688,14 @@ final class Delicat_Builder_V9_Engine {
 		foreach ( self::preload_chunks() as $chunk ) {
 			echo '<link rel="modulepreload" href="' . esc_url( $chunk ) . '">' . "\n";
 		}
+		/* The route and polish sheets are printed with the other stylesheets,
+		 * 10–20 KB of inline configuration further down the head; a preload at
+		 * the top lets the browser request them with the first bytes it reads. */
+		foreach ( array( self::$route_bundle, self::$polish_bundle ) as $bundle ) {
+			if ( isset( $manifest['css'][ $bundle ]['file'] ) ) {
+				echo '<link rel="preload" as="style" href="' . esc_url( self::url( (string) $manifest['css'][ $bundle ]['file'] ) ) . '">' . "\n";
+			}
+		}
 		echo '<script type="module" src="' . esc_url( $engine ) . '" id="delicat-engine-js" data-no-optimize="1" data-no-delay="1" data-no-defer="1" data-cfasync="false"></script>' . "\n";
 		echo '<!-- delicat-engine ' . esc_html( self::VERSION . ' route=' . self::$route . ' css=' . self::$route_bundle . '+' . self::$polish_bundle . ' folded=' . implode( ',', array_keys( self::$absorbed_styles ) ) . ' scripts=' . implode( ',', array_keys( self::$absorbed ) ) ) . ' -->' . "\n";
 	}
@@ -743,7 +823,18 @@ final class Delicat_Builder_V9_Engine {
 			return array();
 		}
 		$files = array( self::DIST . $manifest['js']['engine']['file'], self::DIST . $manifest['css']['chrome']['file'], self::DIST . $manifest['css']['polish']['file'] );
-		return array_values( array_filter( $files, static function ( $file ) { return is_file( DELICAT_BUILDER_V9_DIR . $file ); } ) );
+		/* The route sheets of the screens a shopper moves between (home, shop,
+		 * product, page): one download at install, then every switch has its
+		 * stylesheet on the device. ~60 KB compressed in all. */
+		foreach ( array( 'home-lite', 'home', 'shop', 'product', 'page' ) as $bundle ) {
+			if ( isset( $manifest['css'][ $bundle ]['file'] ) ) {
+				$files[] = self::DIST . $manifest['css'][ $bundle ]['file'];
+			}
+		}
+		foreach ( (array) ( $manifest['js']['engine']['imports'] ?? array() ) as $import ) {
+			$files[] = self::DIST . $import;
+		}
+		return array_values( array_unique( array_filter( $files, static function ( $file ) { return is_file( DELICAT_BUILDER_V9_DIR . $file ); } ) ) );
 	}
 
 	/* -------------------------------------------------------- litespeed */

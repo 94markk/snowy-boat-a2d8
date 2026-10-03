@@ -1,0 +1,163 @@
+/* Delicat Builder V9 — chrome guard.
+ *
+ * Last file of the chrome bundle. The header, the menu drawer and the bottom
+ * bar are the same on every page, but each page brings its own stylesheet and
+ * some of those reach the chrome with element selectors: the native document
+ * sheet colours every link (`body.delicat-native-document a`), the product
+ * sheet types every section, a theme resets buttons, lists and code. That is
+ * why the menu turned purple on the home page and why the wallet card was a
+ * different height on the shop page.
+ *
+ * Everything that decides how the chrome looks is restated here with `html`
+ * plus two classes of specificity, which no page rule written against an
+ * element can outrank, and the colours carry !important because the type
+ * system's own page rules do too. Values mirror drawer.css and bottom-nav.css;
+ * change them there and here together.
+ */
+
+/* ------------------------------------------------------------- box model */
+
+html .dlx-drawer, html .dlx-drawer *, html .dlx-drawer *::before, html .dlx-drawer *::after,
+html .delicat-bottom-nav, html .delicat-bottom-nav *, html .delicat-bottom-nav *::before, html .delicat-bottom-nav *::after { box-sizing: border-box; }
+
+/* Spacing of the drawer's blocks: a page reset on section, ul, li, h3, p or
+   code must not move them. */
+html .dlx-drawer .dlx-account { margin: 0; padding: 0; }
+html .dlx-drawer .dlx-account.is-guest { padding: 14px; }
+html .dlx-drawer .dlx-wallet { margin: 0; padding: 12px; }
+html .dlx-drawer .dlx-section { margin: 0; padding: 0; }
+html .dlx-drawer .dlx-list { margin: 0; padding: 0 8px 8px; list-style: none; }
+html .dlx-drawer .dlx-list > li { margin: 0; padding: 0; list-style: none; border: 0; background: none; }
+html .dlx-drawer .dlx-section__title { margin: 0; padding: 12px 16px 6px; border: 0; background: transparent; }
+html .dlx-drawer .dlx-section__toggle { margin: 0; padding: 12px 16px 10px; }
+html .dlx-drawer .dlx-empty { margin: 0; }
+html .dlx-drawer .dlx-social { margin: 0; padding: 4px 0; list-style: none; }
+html .dlx-drawer .dlx-foot { margin: 0; padding: 0; }
+html .dlx-drawer .dlx-foot__links { margin: 0; padding: 0; }
+html .dlx-drawer .dlx-account__code code { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; font-size: inherit; color: inherit; }
+html .dlx-drawer .dlx-drawer__top { margin: 0; }
+@media (max-width: 480px) {
+	html .dlx-drawer .dlx-account.is-guest { padding: 10px; }
+}
+
+/* Elements a theme usually resets. */
+html .dlx-drawer button, html .dlx-drawer a { font-family: inherit; text-transform: none; text-shadow: none; }
+html .dlx-drawer a { text-decoration: none !important; }
+html .dlx-drawer button { box-shadow: none; }
+html .dlx-drawer .dlx-account.is-guest .dlx-account__login { box-shadow: 0 10px 22px rgba(139, 92, 246, .28); }
+html .dlx-drawer svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+html .dlx-drawer .dlx-account__code svg { width: 15px; height: 15px; }
+html .dlx-drawer .dlx-account__logout svg { width: 16px; height: 16px; }
+html .dlx-drawer .dlx-section__toggle svg { width: 16px; height: 16px; }
+html .dlx-drawer .dlx-item__icon svg { width: 22px; height: 22px; stroke-width: 1.9; }
+html .dlx-drawer .dlx-item__chevron svg { width: 16px; height: 16px; }
+html .dlx-drawer .dlx-wallet__points svg { width: 13px; height: 13px; }
+html .dlx-drawer .dlx-search__icon svg { width: 18px; height: 18px; }
+html .dlx-drawer .dlx-social__link svg { width: 21px; height: 21px; }
+html .dlx-drawer img { max-width: none; height: auto; border: 0; box-shadow: none; }
+html .dlx-drawer .dlx-brand__logo { width: 40px; height: 40px; }
+html .dlx-drawer .dlx-quick__icon img { width: 24px; height: 24px; }
+html .dlx-drawer .dlx-item__icon img { width: 26px; height: 26px; }
+@media (max-width: 480px) {
+	html .dlx-drawer svg, html .dlx-drawer .dlx-item__icon svg { width: 17px; height: 17px; }
+}
+
+/* ---------------------------------------------------------------- colour */
+
+/* The drawer's own text colour, on every element that a page's link rule
+   could reach. */
+html .dlx-drawer, html .dlx-drawer *, html .delicat-bottom-nav, html .delicat-bottom-nav *, html .dsb8-header, html .dsb8-header * { -webkit-text-fill-color: currentColor !important; }
+html .dlx-drawer,
+html .dlx-drawer .dlx-brand,
+html .dlx-drawer .dlx-brand__copy strong,
+html .dlx-drawer .dlx-account__row,
+html .dlx-drawer .dlx-account__copy strong,
+html .dlx-drawer .dlx-wallet__main,
+html .dlx-drawer .dlx-wallet__copy strong,
+html .dlx-drawer .dlx-quick__tile,
+html .dlx-drawer .dlx-item,
+html .dlx-drawer .dlx-item__copy strong,
+html .dlx-drawer .dlx-account__code,
+html .dlx-drawer .dlx-theme,
+html .dlx-drawer .dlx-search input,
+html .dlx-drawer .dlx-drawer__close { color: var(--dlx-text) !important; }
+
+/* Secondary text: inherits the line above it and fades (what the type system
+   does today), so it reads the same on every page. */
+html .dlx-drawer .dlx-brand__copy small,
+html .dlx-drawer .dlx-account__copy small,
+html .dlx-drawer .dlx-wallet__copy small,
+html .dlx-drawer .dlx-item__copy small,
+html .dlx-drawer .dlx-wallet__points { color: inherit !important; opacity: .66; }
+html .dlx-drawer .dlx-section__title,
+html .dlx-drawer .dlx-section__toggle { color: inherit !important; opacity: .62; }
+html .dlx-drawer .dlx-account__chevron,
+html .dlx-drawer .dlx-item__chevron,
+html .dlx-drawer .dlx-account__logout,
+html .dlx-drawer .dlx-search__icon,
+html .dlx-drawer .dlx-empty,
+html .dlx-drawer .dlx-foot__links a { color: var(--dlx-muted) !important; }
+
+/* Accents. */
+html .dlx-drawer .dlx-brand__mark,
+html .dlx-drawer .dlx-account__avatar,
+html .dlx-drawer .dlx-account__copy strong em,
+html .dlx-drawer .dlx-item__icon,
+html .dlx-drawer .dlx-wallet__cta,
+html .dlx-drawer .dlx-account.is-guest .dlx-account__login { color: #fff !important; }
+html .dlx-drawer .dlx-account__avatar.is-guest,
+html .dlx-drawer .dlx-account__code svg,
+html .dlx-drawer .dlx-wallet__icon,
+html .dlx-drawer .dlx-quick__icon,
+html .dlx-drawer .dlx-item.is-current .dlx-item__copy strong,
+html .dlx-drawer .dlx-item__badge,
+html .dlx-drawer .dlx-social__link,
+html .dlx-drawer .dlx-wallet__copy strong.is-fresh { color: var(--dlx-primary) !important; }
+html .dlx-drawer .dlx-wallet__points svg { color: #f59e0b !important; }
+html .dlx-drawer .dlx-account__code.is-done { color: #1fb36b !important; }
+html .dlx-drawer .dlx-social__link.is-whatsapp { color: #25d366 !important; }
+html .dlx-drawer .dlx-social__link.is-telegram { color: #2aabee !important; }
+html .dlx-drawer .dlx-social__link.is-instagram { color: #e1306c !important; }
+html .dlx-drawer .dlx-social__link.is-facebook { color: #1877f2 !important; }
+html .dlx-drawer .dlx-social__link.is-tiktok { color: #111 !important; }
+html .dlx-drawer .dlx-social__link.is-youtube { color: #ff0000 !important; }
+html[data-delicat-theme="dark"] .dlx-drawer .dlx-social__link.is-tiktok, html.dlc-theme-dark .dlx-drawer .dlx-social__link.is-tiktok { color: #fff !important; }
+
+/* Header: the text logo keeps the header's own ink. */
+html .dsb8-header .dsb8-header__brand { color: inherit !important; }
+/* The installed app's back control (header.js adds it off the home screen). */
+html .dsb8-header .dsb8-header__back svg { width: 26px; height: 26px; }
+html .dsb8-header .dsb8-header__back[hidden] { display: none !important; }
+
+/* ------------------------------------------------------------ bottom bar */
+
+html .delicat-bottom-nav .dbn-item { color: var(--dbn-text) !important; text-decoration: none !important; font-family: inherit; text-transform: none; }
+html .delicat-bottom-nav .dbn-item.is-active { color: var(--dbn-active) !important; }
+html .delicat-bottom-nav .dbn-label { color: inherit !important; }
+html .delicat-bottom-nav .dbn-center, html .delicat-bottom-nav .dbn-badge { color: #fff !important; }
+html .delicat-bottom-nav .dbn-badge { font-style: normal; }
+html .delicat-bottom-nav .dbn-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+
+/* The bar stands on a shelf: under and around the floating pill the page
+   fades into its own background instead of showing through the gap. */
+html .delicat-bottom-nav { --dbn-shelf: var(--dlc-bg, #f7f8fb); }
+html[data-delicat-theme="dark"] .delicat-bottom-nav, html.dlc-theme-dark .delicat-bottom-nav { --dbn-shelf: var(--dlc-bg, #0f1220); }
+html .delicat-bottom-nav::before {
+	content: "";
+	position: absolute;
+	z-index: -1;
+	left: -12px;
+	right: -12px;
+	top: -34px;
+	bottom: calc(-10px - env(safe-area-inset-bottom, 0px));
+	pointer-events: none;
+	background: var(--dbn-shelf);
+	-webkit-mask-image: linear-gradient(to top, #000 calc(100% - 34px), rgba(0, 0, 0, 0));
+	mask-image: linear-gradient(to top, #000 calc(100% - 34px), rgba(0, 0, 0, 0));
+}
+@media (max-width: 820px) {
+	html .delicat-bottom-nav::before { bottom: calc(-7px - env(safe-area-inset-bottom, 0px)); }
+}
+@media (min-width: 560px) {
+	html .delicat-bottom-nav::before { left: 50%; right: auto; width: 100vw; transform: translateX(-50%); }
+}

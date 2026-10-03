@@ -50,21 +50,31 @@ export default function mount({ root, signal, config }) {
 		html.style.setProperty('--dbv9-motion-scale-out', String(Math.min(1.045, 1 + 0.006 + (intensity / 100) * 0.022)));
 		const layouts = qsa('.delicat-page-layout[data-delicat-page-layout]', scope);
 		if (!layouts.length) { setStatus('no-builder-layout', p.label); return; }
-		const viewportH = Math.max(320, Number(win.innerHeight || html.clientHeight || 800));
-		const candidates = [];
+		const sections = [];
 		for (const layout of layouts) {
 			for (const section of Array.from(layout.children)) {
 				if (!section.classList || !section.classList.contains('delicat-section') || section.classList.contains('dbv9-reveal--in')) continue;
-				const rect = section.getBoundingClientRect();
-				if (rect.top < viewportH * 0.88 || rect.height < 2) continue;
-				candidates.push(section);
+				sections.push(section);
 			}
 		}
-		if (!candidates.length) return;
-		for (const section of candidates) section.classList.add('dbv9-reveal', 'dbv9-motion--' + p.effect);
+		if (!sections.length) return;
+		/* No synchronous measurement: reading every section's box here forced
+		   the whole page to lay out before first paint. The observer's first
+		   report says which sections are already on screen (left as they are)
+		   and which sit below the fold (those get the reveal state). */
+		let first = true;
 		observer = new IntersectionObserver((entries) => {
 			if (run !== generation) return;
-			const incoming = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+			if (first) {
+				first = false;
+				const viewportH = Math.max(320, Number(win.innerHeight || html.clientHeight || 800));
+				for (const entry of entries) {
+					const box = entry.boundingClientRect;
+					if (box.top < viewportH * 0.88 || box.height < 2) { if (observer) observer.unobserve(entry.target); continue; }
+					entry.target.classList.add('dbv9-reveal', 'dbv9-motion--' + p.effect);
+				}
+			}
+			const incoming = entries.filter((entry) => entry.isIntersecting && entry.target.classList.contains('dbv9-reveal') && !entry.target.classList.contains('dbv9-reveal--in')).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
 			incoming.forEach((entry, index) => {
 				const el = entry.target;
 				el.style.setProperty('--dbv9-reveal-delay', (Math.max(0, Math.min(300, Number(cfg.baseDelay || 0))) + Math.min(index, 4) * p.stagger) + 'ms');
@@ -72,7 +82,7 @@ export default function mount({ root, signal, config }) {
 				if (observer) observer.unobserve(el);
 			});
 		}, { root: null, rootMargin: '0px 0px -3% 0px', threshold: Math.max(0.01, Math.min(0.3, Number(cfg.threshold || 0.04))) });
-		for (const section of candidates) observer.observe(section);
+		for (const section of sections) observer.observe(section);
 		failsafe = win.setTimeout(() => revealAll(scope), 5500);
 	};
 

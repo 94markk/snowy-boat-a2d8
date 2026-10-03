@@ -41,7 +41,25 @@ d'application erronés, journal d'erreurs du moteur côté client. Lancement : e
 le shell, cache immuable d'un an sur assets/dist (.htaccess), passe de sortie allégée sans LiteSpeed
 (~7 ms par page), tables pays/adresses WooCommerce (63 Ko, dépendances de wc-cart) retirées du panier
 sans livraison ou sans calculateur.
-(8) Les 52 jumeaux .min ont été retirés ; asset-min-map.php est vide par conception. Construction :
+(8) Menu et barre identiques sur toutes les pages (9.3, troisième passe) : sur l'accueil et les pages
+d'information tous les liens du menu passaient en violet, le titre de la marque pouvait disparaître,
+et sur la boutique et les fiches la carte wallet et les lignes du menu étaient plus hautes : les
+feuilles de page atteignaient le chrome avec des sélecteurs d'élément. La règle du document natif est
+limitée à son contenu et une feuille de garde (chrome-guard.css) fixe chaque couleur et chaque boîte
+du tiroir, de la barre et de la marque. Barre : étagère sous la pilule (le contenu ne transparaît
+plus), onglet actif recalculé depuis l'adresse, barre au-dessus de l'indicateur d'accueil dans
+l'application installée. Navigation instantanée : l'écran suivant s'ouvre au toucher avec ce que
+l'application sait déjà (image, titre et prix de la carte) et se remplit à l'arrivée du document ;
+feuilles chargées en parallèle ; destinations de la barre préchargées ; pages visitées gardées cinq
+minutes en mémoire ; deux mises en page forcées au démarrage supprimées. Octets : habillage
+WooCommerce et feuille de compatibilité thème retirés des documents natifs (16 Ko, cinq requêtes).
+Serveur : le fragment d'accueil est partagé avec les clients connectés (112 ms et 151 requêtes par
+vue auparavant), sous une clé incluant connexion, rôles, devise et pays, et seulement s'il ne
+contient ni nonce, ni nom, ni solde. iPhone : écrans de lancement générés depuis l'icône du site,
+manifeste complété (id, display_override, raccourcis), barre d'état système, bouton retour dans
+l'application installée, étapes « Sur l'écran d'accueil » au lieu de l'APK Android, invitation à la
+deuxième visite. Téléphones modestes : ombres et transitions coûteuses retirées.
+(9) Les 52 jumeaux .min ont été retirés ; asset-min-map.php est vide par conception. Construction :
 cd delicat-builder-v9 && npm install && npm run build (npm run zip pour l'archive installable).
 Purgez LiteSpeed et le CDN après la mise à jour.
 

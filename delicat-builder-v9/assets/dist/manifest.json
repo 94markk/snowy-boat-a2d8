@@ -1,11 +1,11 @@
 {
 	"version": 2,
-	"builtAt": "2026-10-03T06:42:38.902Z",
+	"builtAt": "2026-10-03T09:33:08.205Z",
 	"js": {
 		"engine": {
-			"file": "engine.RQ7WYX26.js",
-			"bytes": 78872,
-			"sha256": "1ed172127c33abdc500c9c2da8b327a4287b2cfe871bd3340fc392a9c2949704",
+			"file": "engine.CKUZ3D2Z.js",
+			"bytes": 88468,
+			"sha256": "79ec56fcffc535b8965e3460667cba4526824ec7cc3d4885b42f633ea51c289d",
 			"imports": [
 				"chunks/chunk.44PLANXT.js",
 				"chunks/chunk.C5PXRQUH.js",
@@ -78,9 +78,9 @@
 	},
 	"css": {
 		"chrome": {
-			"file": "chrome.1761d8ba0ac7.css",
-			"bytes": 102163,
-			"sha256": "1761d8ba0ac78ac148168064a1547f02068c4c4514c39c45e9ef85b66dd66b1e",
+			"file": "chrome.1851a0978832.css",
+			"bytes": 114414,
+			"sha256": "1851a0978832c8f6bc670dd93144d5f599aaf0085ee6e9326fdbce46c787f9e0",
 			"sources": [
 				"assets/css/theme-system.css",
 				"assets/dsb8-beta2-header.css",
@@ -89,13 +89,14 @@
 				"assets/css/pwa-runtime.css",
 				"assets/css/notifications.css",
 				"assets/css/currency.css",
-				"src/styles/engine.css"
+				"src/styles/engine.css",
+				"src/styles/chrome-guard.css"
 			]
 		},
 		"home": {
-			"file": "home.0f45071f0042.css",
-			"bytes": 135187,
-			"sha256": "0f45071f004218b9393927a59e1d7e82143aa0dc3de78adeea21ab51fe0bbaaa",
+			"file": "home.d51ae38d6a3b.css",
+			"bytes": 135202,
+			"sha256": "d51ae38d6a3be8c7801e44c81a2cccd13d15bfd733c2b30471500866acc88158",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/products.css",
@@ -107,9 +108,9 @@
 			]
 		},
 		"home-lite": {
-			"file": "home-lite.b9729accfbe2.css",
-			"bytes": 24945,
-			"sha256": "b9729accfbe26f85aa010b9c572f835ab8e91c3a2e344f492832f80dc0bc692b",
+			"file": "home-lite.863c60f270c7.css",
+			"bytes": 24960,
+			"sha256": "863c60f270c7bf9c82a351bb0bfceb853fe309c097c12c79094abb66d0598e5a",
 			"sources": [
 				"assets/css/reviews.css",
 				"assets/css/native-document.css",
@@ -117,9 +118,9 @@
 			]
 		},
 		"builder": {
-			"file": "builder.cc4a1dee5ccf.css",
-			"bytes": 194907,
-			"sha256": "cc4a1dee5ccf3592c23b5f07dfb6127bbe257afb396eeaac8bffb597565f6110",
+			"file": "builder.f444658f9e71.css",
+			"bytes": 194922,
+			"sha256": "f444658f9e71d55378a6b5c952c76ad0dda93cad3bb7e892c057b6bdf13b314a",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/testimonials.css",
@@ -142,9 +143,9 @@
 			]
 		},
 		"builder-design": {
-			"file": "builder-design.a9ba27e1857c.css",
-			"bytes": 210586,
-			"sha256": "a9ba27e1857cf2d340ff06da1665a8f06fbd80a99a22f5ea17e3808bdface94f",
+			"file": "builder-design.c4a66f90c896.css",
+			"bytes": 210601,
+			"sha256": "c4a66f90c8969fa9e5bcd64c1d8e95614b3bb7d7bb2baa734d5f4b9cf07de61b",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/testimonials.css",
@@ -168,9 +169,9 @@
 			]
 		},
 		"builder-lite": {
-			"file": "builder-lite.b9729accfbe2.css",
-			"bytes": 24945,
-			"sha256": "b9729accfbe26f85aa010b9c572f835ab8e91c3a2e344f492832f80dc0bc692b",
+			"file": "builder-lite.863c60f270c7.css",
+			"bytes": 24960,
+			"sha256": "863c60f270c7bf9c82a351bb0bfceb853fe309c097c12c79094abb66d0598e5a",
 			"sources": [
 				"assets/css/reviews.css",
 				"assets/css/native-document.css",
@@ -178,9 +179,9 @@
 			]
 		},
 		"builder-lite-design": {
-			"file": "builder-lite-design.bcb2fc0694c1.css",
-			"bytes": 40624,
-			"sha256": "bcb2fc0694c11a98e8a36c4bbe3d058e7031421fddd7e8b3a3f6deeace8dca5c",
+			"file": "builder-lite-design.780f6e4ddbb8.css",
+			"bytes": 40639,
+			"sha256": "780f6e4ddbb8e00667d882769b16669049041ce88f988559b4cf0561a28c89d7",
 			"sources": [
 				"assets/css/reviews.css",
 				"assets/css/native-document.css",
@@ -233,9 +234,9 @@
 			]
 		},
 		"page": {
-			"file": "page.9a685e38586d.css",
-			"bytes": 36235,
-			"sha256": "9a685e38586d6c226b9d9e3baf25bcb7ef36c40387655f6ad30c25cf095bfb59",
+			"file": "page.e69a224d5399.css",
+			"bytes": 36250,
+			"sha256": "e69a224d539914087258f7cd89ce2672b727c9c20d0a2c0991999ea6f01d6339",
 			"sources": [
 				"assets/css/reviews.css",
 				"assets/css/native-document.css",
@@ -244,9 +245,9 @@
 			]
 		},
 		"purchase": {
-			"file": "purchase.7851902389d8.css",
-			"bytes": 97685,
-			"sha256": "7851902389d8cbe933f7544797578fb4c3420765b1303e13d8ec80900bb4428a",
+			"file": "purchase.a78d1fe58ee9.css",
+			"bytes": 97700,
+			"sha256": "a78d1fe58ee99c75de51b2a8652133888d9a01466f76d07e96dd04d8ed36bdd0",
 			"sources": [
 				"assets/css/reviews.css",
 				"assets/css/native-document.css",

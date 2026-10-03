@@ -28,6 +28,7 @@ const CHROME = [
 	'assets/css/notifications.css',
 	'assets/css/currency.css',
 	'src/styles/engine.css',
+	'src/styles/chrome-guard.css',
 ];
 
 /* Priority 32: present on every storefront route, after the route owner (30). */

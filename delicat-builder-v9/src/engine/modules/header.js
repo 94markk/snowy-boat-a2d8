@@ -4,7 +4,7 @@
  * swipe-to-remove rows, and overlay coordination. Port of dsb8-beta2-header.js
  * with the session store as the single source of the badge.
  */
-import { closest, doc, emit, html, jq, on, onWoo, qsa, raf, win } from '../core/dom.js';
+import { closest, device, doc, emit, html, jq, on, onWoo, qsa, raf, win } from '../core/dom.js';
 import { paintCartCount, wooCookieCount } from '../core/state.js';
 import { ajax } from '../core/net.js';
 
@@ -31,6 +31,33 @@ export default function mount({ signal }) {
 		emit('dsb8:overlay:open', { id: 'modern-menu', trigger: button });
 	}, { signal });
 
+	/* ---- installed app: a way back ---- */
+	if (device.standalone) {
+		const row = doc.querySelector('.dsb8-header__row');
+		const homeHref = (doc.querySelector('.delicat-bottom-nav .dbn-item[data-dbn-key="home"]') || doc.querySelector('.dsb8-header__brand') || {}).href || '/';
+		let homePath = '/';
+		try { homePath = new URL(homeHref, location.href).pathname.replace(/\/+$/, '') || '/'; } catch (_) {}
+		let button = null;
+		const syncBack = () => {
+			const here = location.pathname.replace(/\/+$/, '') || '/';
+			const show = here !== homePath;
+			if (show && !button && row) {
+				button = doc.createElement('button');
+				button.type = 'button';
+				button.className = 'dsb8-header__action dsb8-header__back';
+				button.setAttribute('aria-label', 'Retour');
+				button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+				on(button, 'click', () => { if (history.length > 1) history.back(); else location.assign(homeHref); }, { signal });
+				row.insertBefore(button, row.firstChild);
+			}
+			if (button) button.hidden = !show;
+		};
+		syncBack();
+		on(doc, 'delicat:navigated', syncBack, { signal });
+		on(doc, 'delicat:placeholder', syncBack, { signal });
+		on(win, 'popstate', () => win.setTimeout(syncBack, 0), { signal });
+	}
+
 	/* ---- cart badge ---- */
 	syncFromFragment();
 	on(win, 'pageshow', (event) => { syncFromFragment(); if (event.persisted) { const $ = jq(); if ($) $(doc.body).trigger('wc_fragment_refresh'); } }, { signal });
@@ -47,7 +74,7 @@ export default function mount({ signal }) {
 
 	/* ---- cart panel ---- */
 	let wasOpen = false;
-	let lastPageY = win.pageYOffset || 0;
+	let lastPageY = 0, vvTop = 0; /* read when the panel opens, never at mount: a layout read here forced the whole page to lay out before first paint */
 	let refreshTimer = 0;
 	const roots = () => qsa('[data-dsb8-cart-root]');
 	const anyOpen = () => !!doc.querySelector('[data-dsb8-cart-root].is-open');
@@ -61,7 +88,7 @@ export default function mount({ signal }) {
 		const btn = root.querySelector('[data-dsb8-cart-trigger]');
 		if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 		wasOpen = !!open;
-		if (open) lastPageY = win.pageYOffset || 0;
+		if (open) { lastPageY = win.pageYOffset || 0; vvTop = win.visualViewport ? (win.visualViewport.pageTop || 0) : 0; }
 		unlockScroll();
 	};
 	const closeAll = (except) => {
@@ -225,7 +252,6 @@ export default function mount({ signal }) {
 	on(doc, 'touchcancel', () => { pageTouchY = null; }, { passive: true, capture: true, signal });
 	on(win, 'wheel', (event) => { if (wasOpen && Math.abs(event.deltaY) > 2 && !closest(event.target, '.dsb8-cart-list')) closeAll(); }, { passive: true, capture: true, signal });
 	if (win.visualViewport) {
-		let vvTop = win.visualViewport.pageTop || 0;
 		on(win.visualViewport, 'scroll', () => { const next = win.visualViewport.pageTop || 0; if (wasOpen && Math.abs(next - vvTop) > 6) closeAll(); vvTop = next; }, { passive: true, signal });
 	}
 
