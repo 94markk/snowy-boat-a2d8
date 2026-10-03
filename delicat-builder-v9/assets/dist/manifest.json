@@ -1,6 +1,6 @@
 {
 	"version": 2,
-	"builtAt": "2026-10-03T12:33:43.656Z",
+	"builtAt": "2026-10-03T12:40:35.926Z",
 	"js": {
 		"engine": {
 			"file": "engine.7FBVLXG6.js",
@@ -78,9 +78,9 @@
 	},
 	"css": {
 		"chrome": {
-			"file": "chrome.88e33b50fe15.css",
+			"file": "chrome.ff57ed253559.css",
 			"bytes": 115158,
-			"sha256": "88e33b50fe15727a0a73a72d14b8f9f45cdf6fa46333879dba2b9c3748b6dcba",
+			"sha256": "ff57ed25355984ffab387202c6496013745bc1968a344bb82c78847b711800dd",
 			"sources": [
 				"assets/css/theme-system.css",
 				"assets/dsb8-beta2-header.css",

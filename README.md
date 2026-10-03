@@ -177,8 +177,9 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
   now carries the rule on every page (legacy bundle included).
 * **Floating bar**: the shelf added in the third pass (the page background fading up around the
   pill) read as an edge-to-edge strip with a line above it on the phone. The pill floats free
-  again with its own shadow, kept on low-power phones too, and the colour pins that turned every
-  idle tab grey are gone, so the theme's or Design Studio's bar colours apply.
+  again with its own shadow, kept on low-power phones too, the colour pins that turned every
+  idle tab grey are gone, and every tab wears the store's purple as on the owner's reference
+  screen (the current tab keeps its bolder label).
 * **Install invitation**: iPhone and iPad only (Safari never offers to install anything by
   itself; Android has the APK link and Chrome's own prompt), and it drops in from the top of the
   screen where a system banner would, above the WordPress bar for signed-in staff.

@@ -7,8 +7,8 @@ désormais avec le chrome sur chaque page (livraison classique comprise).
 (2) Barre flottante : l'« étagère » ajoutée à la troisième passe (le fond de page remontant autour de
 la pilule) se lisait sur téléphone comme une bande bord à bord surmontée d'un trait. La pilule flotte à
 nouveau librement avec sa propre ombre, conservée aussi sur les téléphones modestes ; les couleurs
-forcées qui grisaient tous les onglets inactifs sont retirées, les couleurs du thème ou du Design
-Studio s'appliquent.
+forcées qui grisaient tous les onglets inactifs sont retirées et chaque onglet porte le violet de la
+boutique comme sur l'écran de référence (l'onglet courant garde son libellé plus gras).
 (3) Invitation à installer l'application : iPhone et iPad seulement (Safari ne propose jamais rien de
 lui-même ; Android a l'APK et l'invite de Chrome), et elle descend depuis le haut de l'écran, sous la
 barre WordPress pour l'équipe connectée.

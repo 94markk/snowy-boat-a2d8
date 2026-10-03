@@ -8,13 +8,14 @@
    prices sat under it. Every consumer now reads this property; nothing else
    hard-codes the number. It is 0 by default, so a page with no bar reserves
    nothing, and it collapses again above 820px where the bar is display:none. */
+/* 9.3.2: every tab wears the store's purple, as on the owner's reference screen; the current tab is told apart by its bolder label. */
 /* 9.3.2: non-inherited. The band used to be an inherited variable on <body>; showing the product dock changed it and restyled the whole page. Its two readers are the body's own padding and the layout's scroll padding (below). */@property --dbv9-nav-band{syntax:'<length>';inherits:false;initial-value:0px}body{--dbv9-nav-band:0px}
 body.delicat-bottom-nav-active{--dbv9-nav-band:calc(106px + env(safe-area-inset-bottom,0px))}
 /* With the product purchase dock revealed: the dock sits at 108px and is 66px
    tall, so its top edge is at 174px; 8px of breathing room above it. */
 body.delicat-bottom-nav-active.dnp-dock-visible{--dbv9-nav-band:calc(182px + env(safe-area-inset-bottom,0px))}
 @media(min-width:821px){body.delicat-bottom-nav-active,body.delicat-bottom-nav-active.dnp-dock-visible{--dbv9-nav-band:0px}}
-.delicat-bottom-nav{--dbn-bg:rgba(255,255,255,.97);--dbn-line:rgba(20,24,40,.08);--dbn-text:#5b6172;--dbn-active:#6d5dfc;--dbn-start:#6d5dfc;--dbn-end:#ec4899;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:2147482000;box-sizing:border-box;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;height:68px;padding:0 4px;border-radius:26px;background:var(--dbn-bg);border:1px solid var(--dbn-line);box-shadow:0 14px 34px rgba(16,24,40,.16),0 2px 6px rgba(16,24,40,.06);font-family:var(--delicat-font,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif);-webkit-font-smoothing:antialiased;transition:transform .25s ease,opacity .2s ease}
+.delicat-bottom-nav{--dbn-bg:rgba(255,255,255,.97);--dbn-line:rgba(20,24,40,.08);--dbn-text:#6d5dfc;--dbn-active:#6d5dfc;--dbn-start:#6d5dfc;--dbn-end:#ec4899;position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:2147482000;box-sizing:border-box;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;height:68px;padding:0 4px;border-radius:26px;background:var(--dbn-bg);border:1px solid var(--dbn-line);box-shadow:0 14px 34px rgba(16,24,40,.16),0 2px 6px rgba(16,24,40,.06);font-family:var(--delicat-font,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif);-webkit-font-smoothing:antialiased;transition:transform .25s ease,opacity .2s ease}
 .dbn-item{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;height:68px;color:var(--dbn-text);font-size:11.5px;font-weight:750;letter-spacing:-.005em;text-decoration:none!important;-webkit-tap-highlight-color:transparent;transition:color .15s ease}
 .dbn-item:active .dbn-icon{transform:scale(.92)}
 .dbn-icon{position:relative;display:grid;place-items:center;width:28px;height:28px;transition:transform .12s ease}
@@ -37,7 +38,7 @@ body.delicat-bottom-nav-active.dnp-dock-visible{padding-bottom:var(--dbv9-nav-ba
 @media(max-width:820px){html body.delicat-bottom-nav-active .dap-launcher{position:fixed!important;right:max(12px,env(safe-area-inset-right,0px))!important;left:auto!important;top:auto!important;bottom:calc(96px + env(safe-area-inset-bottom,0px))!important;margin:0!important;z-index:2147481900!important}html body.delicat-bottom-nav-active .dap-launcher-copy,html body.delicat-bottom-nav-active .dap-launcher .dap-launcher-copy,html body.delicat-bottom-nav-active .dap-launcher-orb .dap-launcher-copy{display:none!important}body.delicat-bottom-nav-active .delicat-page-layout{scroll-padding-bottom:calc(106px + env(safe-area-inset-bottom,0px))}body.delicat-bottom-nav-active.dnp-dock-visible .delicat-page-layout{scroll-padding-bottom:calc(182px + env(safe-area-inset-bottom,0px))}}
 body.dpn-checkout-dock-ready .delicat-bottom-nav,body.dnp-express-open .delicat-bottom-nav,body.dpn-wallet-modal-open .delicat-bottom-nav,html.dlx-open .delicat-bottom-nav,html.dsb-menu-open .delicat-bottom-nav,.dbn-hidden .delicat-bottom-nav{opacity:0;pointer-events:none;transform:translateY(20px)}
 /* dark */
-html[data-delicat-theme="dark"] .delicat-bottom-nav,html.dlc-theme-dark .delicat-bottom-nav{--dbn-bg:rgba(23,26,43,.97);--dbn-line:rgba(255,255,255,.08);--dbn-text:#a4abbd}
+html[data-delicat-theme="dark"] .delicat-bottom-nav,html.dlc-theme-dark .delicat-bottom-nav{--dbn-bg:rgba(23,26,43,.97);--dbn-line:rgba(255,255,255,.08);--dbn-text:#b3a9ff}
 /* pro.17: on a tablet the bar stretched the full width (left:12px;right:12px),
    so at 768px it was a 744px-wide pill with its five items marooned at the far
    edges. Cap it and centre it from 560px up, which is where that starts to look

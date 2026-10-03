@@ -1,8 +1,8 @@
 {
     "algorithm": "sha256",
-    "built": "2026-10-03T12:33:43.684+00:00",
+    "built": "2026-10-03T12:40:35.959+00:00",
     "version": "9.3.2",
-    "bytes": 6049288,
+    "bytes": 6051747,
     "count": 277,
     "files": {
         "APK-UPLOAD-PRO58.txt": {
@@ -26,8 +26,8 @@
             "sha256": "d0fb531cb82eead6d8b129915fad572b4ae63aa31a24d50fc6721c72bd1ac1e6"
         },
         "README.txt": {
-            "bytes": 32747,
-            "sha256": "c797fa3b89c7d074b40661fb26c6fde408f5cebba598972ef0fa873ef6c4d94e"
+            "bytes": 33380,
+            "sha256": "7a4d7f1efc69167e06a3188710807d897ad483424cd380e5d147aa06d78a3327"
         },
         "asset-min-map.php": {
             "bytes": 217,
@@ -35,7 +35,7 @@
         },
         "asset-versions.php": {
             "bytes": 6076,
-            "sha256": "2e469bbdac2aa01bfa750faf31d5c737827ec40c234ebf775fccd2bd2ec043cb"
+            "sha256": "0e79438560b81d0614e392646a457b48d42eb571aa1038dbfd192c8dff1c5cfa"
         },
         "assets/components/all-components.min.css": {
             "bytes": 170271,
@@ -166,8 +166,8 @@
             "sha256": "ff09561d6a98b466269e198070a23df58c6a74fe66bb6a2908c1dc18b594443d"
         },
         "assets/css/bottom-nav.css": {
-            "bytes": 8277,
-            "sha256": "5a1071787102e75aaf3fbf312ca6a1fef90273f4e9c1e545c3dcc597259ce8c2"
+            "bytes": 8413,
+            "sha256": "142ef2794575ad40a2f84a79b044087e7431acb6d7cfcdeb4a3047a4ba3b8659"
         },
         "assets/css/currency.css": {
             "bytes": 1272,
@@ -267,7 +267,7 @@
         },
         "assets/css/storefront-chrome.min.css": {
             "bytes": 88247,
-            "sha256": "51e291b5ef712335c487ce805607c7038eec5b4e1889da93706d619934c846f0"
+            "sha256": "c82fe4dd0ab589e48c6b3409ba5e2ce7d782cc3c0056766b4b867562cba297c1"
         },
         "assets/css/storefront-polish.css": {
             "bytes": 23269,
@@ -313,9 +313,9 @@
             "bytes": 195139,
             "sha256": "e19676980cbbd7786788f6fb376b6ac933c48d8da5e2823fc5ef442bfd87b124"
         },
-        "assets/dist/chrome.88e33b50fe15.css": {
+        "assets/dist/chrome.ff57ed253559.css": {
             "bytes": 115158,
-            "sha256": "88e33b50fe15727a0a73a72d14b8f9f45cdf6fa46333879dba2b9c3748b6dcba"
+            "sha256": "ff57ed25355984ffab387202c6496013745bc1968a344bb82c78847b711800dd"
         },
         "assets/dist/chunks/chunk.A53HRFLU.js": {
             "bytes": 4347,
@@ -379,7 +379,7 @@
         },
         "assets/dist/manifest.json": {
             "bytes": 9219,
-            "sha256": "8bced484c60bec22fa785a6d80d6cfe991876e5b329214aa7f8afa204b17b14a"
+            "sha256": "96873a2ae4a7c02c029a569a6d0fd19ce7356f01be0d00592a75ad4ee645413c"
         },
         "assets/dist/page.e69a224d5399.css": {
             "bytes": 36250,
@@ -694,8 +694,8 @@
             "sha256": "eba8144e2b8bacad7c20d13ef840b57f9381d5db72ffb5243e2eb2d39236ba73"
         },
         "includes/class-delicat-builder-engine.php": {
-            "bytes": 40966,
-            "sha256": "1703dd9834b6c35cd5a1b0081c11f33df4c35f0d9c9a6c83139812ff808e1f8d"
+            "bytes": 42656,
+            "sha256": "a1bcfbba429548b60922ab3b06681daa696b45b0c0e089c1275e0081ee6110a4"
         },
         "includes/class-delicat-builder-express-checkout.php": {
             "bytes": 10270,
