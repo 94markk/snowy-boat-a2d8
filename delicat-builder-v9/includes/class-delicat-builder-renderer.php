@@ -905,7 +905,10 @@ private static function testimonials( array $content ): string {
 		$html .= '</span><svg class="delicat-testimonials__mcheck" width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10.4l2.6 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></footer></article>';
 		return $html;
 	};
-	$out .= '<div class="delicat-testimonials__marquees" role="list" aria-label="' . esc_attr__( 'Customer testimonials', 'delicat-builder-v9' ) . '">';
+	/* 9.3.1: the rows loop on phones too; `false` here brings back the manual
+	 * snap-scrolling rows of RC90 on screens up to 640px. */
+	$mobile_marquee = (bool) apply_filters( 'delicat_builder_v9_testimonials_mobile_marquee', true );
+	$out .= '<div class="delicat-testimonials__marquees" role="list" aria-label="' . esc_attr__( 'Customer testimonials', 'delicat-builder-v9' ) . '"' . ( $mobile_marquee ? '' : ' data-dbv9-marquee-mobile="manual"' ) . '>';
 	foreach ( array( 'right' => $rows[0], 'left' => $rows[1] ) as $mdir => $row_items ) {
 		$out .= '<div class="delicat-testimonials__marquee delicat-testimonials__marquee--' . $mdir . '"><div class="delicat-testimonials__mtrack" data-dbv9-marquee-clone>';
 		foreach ( $row_items as $item ) {

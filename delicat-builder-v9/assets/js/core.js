@@ -71,8 +71,12 @@
 	const prepareMarqueeTrack = (track) => {
 		if (!track || track.dataset.dbv9LoopReady === '1') return;
 		track.dataset.dbv9LoopReady = '1';
-		if (reducedMotion || compactTouchViewport) {
+		/* 9.3.1: the loop runs on phones too; manual rows only for reduced motion
+		   or when the section asks for them (data-dbv9-marquee-mobile="manual"). */
+		const manualHere = compactTouchViewport && !!track.closest('[data-dbv9-marquee-mobile="manual"]');
+		if (reducedMotion || manualHere) {
 			track.classList.add('is-loop-ready', 'is-manual');
+			if (track.parentElement) track.parentElement.classList.add('is-manual');
 			return;
 		}
 		const originals = Array.from(track.children);
@@ -96,7 +100,7 @@
 		if (marqueeObserver) { marqueeObserver.disconnect(); marqueeObserver = null; }
 		const tracks = Array.from(document.querySelectorAll('[data-dbv9-marquee-clone]:not([data-dbv9-loop-ready="1"])'));
 		if (!tracks.length) return;
-		if (reducedMotion || compactTouchViewport) {
+		if (reducedMotion) {
 			tracks.forEach(prepareMarqueeTrack);
 			return;
 		}

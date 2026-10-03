@@ -49,13 +49,27 @@ html.dlc-theme-dark .delicat-testimonials__mproduct,body.delicat-home-mode-dark 
 .delicat-testimonials__review-cta>.delicat-testimonials__google{margin-top:10px;background:#fff;color:#1f2544;border:1px solid rgba(20,28,70,.14);box-shadow:0 8px 20px rgba(10,14,50,.08)}
 .delicat-testimonials__review-cta>.delicat-testimonials__google .delicat-inline-icon{color:#f5b301}
 
-/* RC90 — mobile reviews: stop the two infinite marquee transforms. Manual snap scrolling prevents clipped copy and saves continuous GPU work. */
+/* 9.3.1 — a row that is off screen, or held under a finger, stands still. */
+.delicat-testimonials__mtrack.is-offscreen,.delicat-testimonials__mtrack.is-held{animation-play-state:paused}
+/* Manual rows (reduced motion, or the owner's choice on phones): a snap-scrolling list, no transform. */
+.delicat-testimonials__marquee.is-manual{overflow-x:auto;overflow-y:hidden;-webkit-mask-image:none!important;mask-image:none!important;scroll-snap-type:x proximity;scroll-padding-inline:12px;scrollbar-width:none;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
+.delicat-testimonials__marquee.is-manual::-webkit-scrollbar{display:none}
+.delicat-testimonials__mtrack.is-manual{animation:none!important;transform:none!important;will-change:auto!important}
+.delicat-testimonials__marquee.is-manual .delicat-testimonials__mcard{scroll-snap-align:start}
+/* The Pro app sheet makes every "marquee" scrollable on phones (for the manual rows); a looping row must not scroll under the finger. */
+body.dbp-app .delicat-testimonials__marquee:not(.is-manual){overflow:hidden}
+
+/* RC90 stopped the two marquee transforms on phones (manual snap rows).
+   9.3.1: the moving rows are the store's own motion and the owner wants them
+   on phones as well, so the loop is the default on every screen; it pauses out
+   of view and under a finger, and the manual rows above remain for reduced
+   motion, for `delicat_builder_v9_testimonials_mobile_marquee` (false) and
+   for a page without JavaScript (the row never gets .is-loop-ready). */
 @media(max-width:640px){
 .delicat-testimonials__marquees{gap:10px;margin-top:4px;overflow:hidden}
-.delicat-testimonials__marquee{margin-inline:-12px;padding:2px 12px 6px;overflow-x:auto;overflow-y:hidden;-webkit-mask-image:none!important;mask-image:none!important;scroll-snap-type:x proximity;scroll-padding-inline:12px;scrollbar-width:none;overscroll-behavior-inline:contain;-webkit-overflow-scrolling:touch}
-.delicat-testimonials__marquee::-webkit-scrollbar{display:none}
-.delicat-testimonials__mtrack,.delicat-testimonials__mtrack.is-manual{gap:10px;padding-inline:0;animation:none!important;transform:none!important;will-change:auto!important}
-.delicat-testimonials__mcard{width:min(78vw,292px);min-width:min(78vw,292px);padding:14px 15px;border-radius:17px;scroll-snap-align:start;contain:layout paint style}
+.delicat-testimonials__marquee{margin-inline:-12px;padding:2px 12px 6px}
+.delicat-testimonials__mtrack{gap:10px;padding-inline:0}
+.delicat-testimonials__mcard{width:min(78vw,292px);min-width:min(78vw,292px);padding:14px 15px;border-radius:17px;contain:layout paint style}
 .delicat-testimonials__mquote{font-size:13px;line-height:1.5;-webkit-line-clamp:3}
 .delicat-testimonials__mavatar{width:34px;height:34px;font-size:12px}
 .delicat-testimonials__mid>strong{font-size:13px}.delicat-testimonials__mid>span,.delicat-testimonials__mproduct{font-size:11px}

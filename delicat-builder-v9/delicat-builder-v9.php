@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.3.0
+ * Version: 9.3.1
 
  * Requires at least: 6.4
  * Requires PHP: 8.3
@@ -104,13 +104,22 @@ register_shutdown_function(
 		$message = (string) ( $error['message'] ?? '' );
 		$this_dir = wp_normalize_path( dirname( $delicat_builder_v9_this_file ) );
 
-		$builder_related = (
-			'' !== $file
+		$in_builder_file = '' !== $file
 			&& (
 				0 === strpos( $file, $this_dir . '/' )
 				|| false !== stripos( $file, '/delicat-builder-v9' )
-			)
-		) || false !== stripos( $message, 'Delicat_Builder_V9_' );
+			);
+		/* 9.3.1: foreign code (a theme snippet, another plugin, a CLI script)
+		 * that fails with `Class "Delicat_Builder_V9_…" not found` names a
+		 * Builder class without running Builder code. That failure is the
+		 * caller's, and Safe Mode would not cure it (the class would still be
+		 * missing) — it would only switch the storefront off. Only a fatal in a
+		 * Builder file, or one raised while running Builder code (an undefined
+		 * method or a type error on a Builder class), is Builder-related. */
+		$foreign_missing_class = ! $in_builder_file
+			&& (bool) preg_match( '/class\s+"?delicat_builder_v9_[a-z0-9_]+"?\s+not\s+found/i', $message );
+		$builder_related = $in_builder_file
+			|| ( ! $foreign_missing_class && false !== stripos( $message, 'Delicat_Builder_V9_' ) );
 
 		if ( ! $builder_related || ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 			return;
@@ -218,7 +227,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.3.0' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.3.1' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {

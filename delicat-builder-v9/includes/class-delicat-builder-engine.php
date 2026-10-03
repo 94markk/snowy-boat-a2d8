@@ -37,7 +37,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class Delicat_Builder_V9_Engine {
 
-	const VERSION       = '9.3.0';
+	const VERSION       = '9.3.1';
 	const DIST          = 'assets/dist/';
 	const HANDLE_CHROME = 'delicat-engine-chrome';
 	const HANDLE_ROUTE  = 'delicat-engine-route';
@@ -589,10 +589,32 @@ final class Delicat_Builder_V9_Engine {
 			'nav'         => $nav,
 			'session'     => $session,
 			'pullRefresh' => (bool) apply_filters( 'delicat_builder_v9_app_polish_pull_refresh', false ),
+			'reviews'     => self::reviews_config(),
 			'globals'     => self::$globals,
 			'chunks'      => self::chunk_map(),
 		);
 		return (array) apply_filters( 'delicat_builder_v9_engine_config', $config );
+	}
+
+	/**
+	 * The review sheet ("Laisser un avis") can open on any page: the product
+	 * reviews block, the testimonials call-to-action on any Builder page, and
+	 * after a soft navigation from a page that never printed the reviews
+	 * module's own config (shop, cart). This small config travels with every
+	 * page so the sheet always knows where to post and whether the shopper is
+	 * signed in; the per-page DelicatReviewsConfig (product id, thank-you
+	 * page) still wins when it is printed.
+	 */
+	private static function reviews_config(): array {
+		$account_url = function_exists( 'wc_get_page_permalink' ) ? (string) wc_get_page_permalink( 'myaccount' ) : '';
+		if ( '' === $account_url ) {
+			$account_url = wp_login_url( home_url( '/' ) );
+		}
+		return array(
+			'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
+			'loggedIn'   => is_user_logged_in(),
+			'accountUrl' => esc_url_raw( $account_url ),
+		);
 	}
 
 	private static function generation(): string {

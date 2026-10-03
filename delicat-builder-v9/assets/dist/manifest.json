@@ -1,11 +1,11 @@
 {
 	"version": 2,
-	"builtAt": "2026-10-03T09:41:52.022Z",
+	"builtAt": "2026-10-03T10:12:35.221Z",
 	"js": {
 		"engine": {
-			"file": "engine.ZESLTM25.js",
-			"bytes": 88550,
-			"sha256": "0c978cd9f7f79f6e3f0a67a2dcbeef017f8525d9c067c06427731459d329480c",
+			"file": "engine.C3XCEIOY.js",
+			"bytes": 90168,
+			"sha256": "7af79a873dd3525b453a1e3c1b83fb5c3217b690414b73b863af6217c00c023e",
 			"imports": [
 				"chunks/chunk.44PLANXT.js",
 				"chunks/chunk.C5PXRQUH.js",
@@ -35,9 +35,9 @@
 			"sha256": "96c505000e17606917b1590ae06c53adcc7e2dfd6882a5a6e999dd207fbba3f9",
 			"name": "widgets"
 		},
-		"chunks/reviews.OWSN7S36.js": {
-			"bytes": 9521,
-			"sha256": "1583d175e4957fdd48c0cf74a423959cd433c362985a17e51212f3d319582ae4",
+		"chunks/reviews.EPY5ENY6.js": {
+			"bytes": 10158,
+			"sha256": "2da6a71ac9e526d59c7b72ecf9422769f22e0d1b6ad5ad0f5ccfa391cbf8ed12",
 			"name": "reviews"
 		},
 		"chunks/shell-header.WALQSBHA.js": {
@@ -118,9 +118,9 @@
 			]
 		},
 		"builder": {
-			"file": "builder.f444658f9e71.css",
-			"bytes": 194922,
-			"sha256": "f444658f9e71d55378a6b5c952c76ad0dda93cad3bb7e892c057b6bdf13b314a",
+			"file": "builder.4abecc6e30cb.css",
+			"bytes": 195228,
+			"sha256": "4abecc6e30cb2aed90daed2aaa5d68f95043749ca6a7ce455961406d2a9f68d1",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/testimonials.css",
@@ -143,9 +143,9 @@
 			]
 		},
 		"builder-design": {
-			"file": "builder-design.c4a66f90c896.css",
-			"bytes": 210601,
-			"sha256": "c4a66f90c8969fa9e5bcd64c1d8e95614b3bb7d7bb2baa734d5f4b9cf07de61b",
+			"file": "builder-design.36a6339bfdaf.css",
+			"bytes": 210907,
+			"sha256": "36a6339bfdafef279adfcd7157449c3ed0c36b9b05b32c24ed1704d0ee3ea6ec",
 			"sources": [
 				"assets/components/base.css",
 				"assets/components/testimonials.css",
@@ -280,9 +280,9 @@
 			]
 		},
 		"polish": {
-			"file": "polish.b3487149d3c5.css",
-			"bytes": 38838,
-			"sha256": "b3487149d3c586856c16da1a600d334abc9c804d0fa2e866c7eaad72b3964d41",
+			"file": "polish.1540d7546752.css",
+			"bytes": 38786,
+			"sha256": "1540d754675290a4a4554bf01e3224c98b40ecaccc2aac62a7d5d7f29e5003ee",
 			"sources": [
 				"assets/css/app-polish.css",
 				"assets/css/app-tuning.css",
@@ -292,9 +292,9 @@
 			]
 		},
 		"polish-storefront": {
-			"file": "polish-storefront.80c7e2afddea.css",
-			"bytes": 61876,
-			"sha256": "80c7e2afddea10775a761f473bc5d08466cb4c7639afd4b0c43fb4d0dd50d2ec",
+			"file": "polish-storefront.88a9ffc16522.css",
+			"bytes": 61824,
+			"sha256": "88a9ffc165225d54493f6c7c6ed77cb9f5b552242e031b53f889647555fc9477",
 			"sources": [
 				"assets/css/app-polish.css",
 				"assets/css/app-tuning.css",

@@ -28,8 +28,9 @@ import motion from './modules/motion.js';
 import currency from './modules/currency.js';
 import pwa from './modules/pwa.js';
 import walletLive from './modules/wallet-live.js';
+import marquee from './modules/marquee.js';
 
-const VERSION = '9.3.0';
+const VERSION = '9.3.1';
 const hasClass = (name) => !!(doc.body && doc.body.classList.contains(name));
 const productRoute = () => import('./routes/product.js');
 const purchaseRoute = () => import('./routes/purchase.js');
@@ -45,7 +46,7 @@ define({ name: 'drawer', scope: 'document', when: '[data-dlx-drawer]', mount: dr
 define({ name: 'bottom-nav', scope: 'document', when: '[data-delicat-bottom-nav],[data-delicat-mobile-dock]', mount: bottomNav });
 define({ name: 'shell-header', scope: 'document', when: '[data-delicat-shell-header]', load: () => import('./modules/shell-header.js') });
 define({ name: 'pwa', scope: 'document', when: () => !!(win.DelicaPWARuntime || config.pwa || win.DelicatAndroidPage || config.androidPage), mount: pwa });
-define({ name: 'reviews', scope: 'document', when: () => !!(win.DelicatReviewsConfig || config.reviews), mount: reviewsGate });
+define({ name: 'reviews', scope: 'document', mount: reviewsGate });
 define({ name: 'announcement', scope: 'document', when: '[data-dbv9-announcement]', load: pick(widgetsRoute, 'announcement') });
 define({ name: 'live-selling', scope: 'document', when: () => !!(win.DelicatLiveSelling || config.liveSelling), load: pick(widgetsRoute, 'liveSelling') });
 define({ name: 'pull-refresh', scope: 'document', when: () => !!config.pullRefresh, load: pick(widgetsRoute, 'pullRefresh') });
@@ -57,6 +58,7 @@ define({ name: 'carousel', when: '[data-delicat-carousel]', mount: carousel });
 define({ name: 'heart', when: '[data-delicat-like],[data-delicat-carousel],.delicat-product-card', mount: heart });
 define({ name: 'hero-search', when: '[data-delicat-hero-search]', mount: heroSearch });
 define({ name: 'motion', when: '.delicat-page-layout[data-delicat-page-layout],.dbv9-reveal', mount: motion });
+define({ name: 'marquee', when: '[data-dbv9-marquee-clone]', mount: marquee });
 define({ name: 'currency', always: true, when: '[data-dbv9-currency]', mount: currency });
 define({ name: 'wallet-live', always: true, when: '[data-dsb-wallet]', mount: walletLive });
 define({ name: 'purchase', always: true, when: () => !!(win.DelicaPurchaseV9 || config.purchase), load: pick(purchaseRoute, 'purchase') });
@@ -104,22 +106,32 @@ function notificationsGate({ signal }) {
  * The review flow (invite after an order, "laisser un avis" buttons) is a
  * chunk: a guest only needs it on a tap, a signed-in shopper gets it at idle
  * so the post-order invite still appears on its own.
+ *
+ * The gate is installed on every page, whatever the landing page printed: a
+ * shopper who opens the app on the shop or the cart and then taps a product
+ * still gets the sheet (the config travels in the engine config). A chunk
+ * that failed to load is tried again on the next tap, and the sheet opens
+ * through the module's API rather than a replayed click, so the tap that
+ * loaded the module is the tap that opens it.
  */
 function reviewsGate({ signal }) {
-	const cfg = win.DelicatReviewsConfig || config.reviews || {};
-	let mounting = null;
-	const mountReviews = () => mounting || (mounting = reviewsModule().then((m) => m.default({ root: doc, signal, config, engine, reason: 'lazy' })).catch(() => null));
+	const live = () => win.DelicatReviewsConfig || config.reviews || null;
 	const gate = new AbortController();
 	signal.addEventListener('abort', () => gate.abort(), { once: true });
+	let mounting = null;
+	const mountReviews = () => mounting || (mounting = reviewsModule()
+		.then((m) => m.default({ root: doc, signal, config, engine, reason: 'lazy' }))
+		.then((api) => { if (api) { gate.abort(); return api; } mounting = null; return null; })
+		.catch(() => { mounting = null; return null; }));
 	on(doc, 'click', (event) => {
 		const trigger = closest(event.target, '[data-dlc-review-open]');
 		if (!trigger) return;
 		event.preventDefault();
 		event.stopPropagation();
-		gate.abort();
-		mountReviews().then(() => { /* the module owns the button now: replay the tap */ trigger.click(); });
+		mountReviews().then((api) => { if (api) api.open(trigger); });
 	}, { capture: true, signal: gate.signal });
-	if (cfg.loggedIn) idle(() => { if (!gate.signal.aborted) { gate.abort(); mountReviews(); } }, 3000);
+	const cfg = live();
+	if (cfg && cfg.loggedIn) idle(() => { if (!gate.signal.aborted) mountReviews(); }, 3000);
 }
 
 /* ------------------------------------------------------------------ boot */

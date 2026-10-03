@@ -9,7 +9,11 @@ import { registerOverlay, releaseOverlay } from '../core/overlay.js';
 
 export default function mount({ signal, config }) {
 	const cfg = win.DelicatReviewsConfig || config.reviews;
-	if (!cfg || !cfg.ajaxUrl || !win.fetch) return;
+	if (!cfg || !cfg.ajaxUrl || !win.fetch) return null;
+	/* The page's own config when it printed one (product id, thank-you page),
+	   else the engine config that travels with every page. Read again at each
+	   tap: a soft navigation may have replaced it. */
+	const live = () => win.DelicatReviewsConfig || config.reviews || cfg;
 	const state = { nonce: '', max: 280, rating: 5, overlay: null, lastFocus: null, sending: false, done: false, due: false, name: '', promise: null, products: [], reviewed: [], product: 0, productName: '', productsPromise: null, dueProduct: null };
 	const reduced = device.reducedMotion;
 
@@ -167,7 +171,7 @@ export default function mount({ signal, config }) {
 		dialog.append(closeButton(), icon('lock'), el('h2', 'dlc-review-title', 'Connecte-toi pour laisser ton avis'), el('p', 'dlc-review-text', 'Ton avis vérifié aide toute la communauté Delicat Store. Connecte-toi à ton compte pour continuer.'));
 		const actions = el('div', 'dlc-review-actions');
 		const login = el('a', 'dlc-review-btn dlc-review-btn--primary', 'Se connecter');
-		login.href = cfg.accountUrl || '#';
+		login.href = live().accountUrl || cfg.accountUrl || '#';
 		actions.append(login, button('dlc-review-btn--ghost', 'Plus tard', () => close(false)));
 		dialog.append(actions);
 		login.focus();
@@ -195,6 +199,13 @@ export default function mount({ signal, config }) {
 		return state.promise;
 	}
 	function openWith(render) {
+		if (state.overlay && !state.overlay.isConnected) {
+			/* Removed behind our back (another script, a page reset): forget it, or no sheet could ever open again. */
+			state.overlay = null;
+			doc.removeEventListener('keydown', onKey, true);
+			doc.body.classList.remove('dlc-review-modal-open');
+			releaseOverlay('reviews');
+		}
 		if (state.overlay) return;
 		state.lastFocus = doc.activeElement;
 		const overlay = el('div', 'dlc-review-overlay');
@@ -215,27 +226,45 @@ export default function mount({ signal, config }) {
 		state.productName = state.dueProduct ? state.dueProduct.name : '';
 		openWith((dialog) => { if (directToForm) { if (state.done) alreadyStep(dialog); else formStep(dialog, firstName); } else inviteStep(dialog, firstName); });
 	}
+	/* A signed-in shopper whose prompt request failed (network, a security
+	   layer refusing the call) is not a guest: offer to try again rather than
+	   a login link they cannot use. A prompt answered without a nonce is a
+	   session the server no longer recognises: that one is the login step. */
+	function retryStep(dialog, again) {
+		dialog.textContent = '';
+		dialog.append(closeButton(), icon('clock'), el('h2', 'dlc-review-title', 'Connexion impossible pour le moment'), el('p', 'dlc-review-text', 'Vérifie ta connexion puis réessaie.'));
+		const actions = el('div', 'dlc-review-actions');
+		actions.append(button('dlc-review-btn--primary', 'Réessayer', again), button('dlc-review-btn--ghost', 'Plus tard', () => close(false)));
+		dialog.append(actions);
+	}
+	function signedInFlow(dialog) {
+		loadingStep(dialog);
+		(state.nonce ? Promise.resolve() : fetchPrompt()).then(() => {
+			if (!state.overlay) return;
+			if (!state.nonce) { loginStep(dialog); return; }
+			return ensureProducts().then(() => { if (!state.overlay) return; if (alreadyDone()) alreadyStep(dialog); else formStep(dialog, state.name); });
+		}).catch(() => { state.promise = null; if (state.overlay) retryStep(dialog, () => signedInFlow(dialog)); });
+	}
+	/** Open the sheet for a "Laisser un avis" control: the product block's button, the testimonials call-to-action. */
+	function openFromTrigger(trigger) {
+		let pid = trigger ? parseInt(trigger.getAttribute('data-dlc-review-product') || '0', 10) || 0 : 0;
+		let pname = trigger ? trigger.getAttribute('data-dlc-review-product-name') || '' : '';
+		const now = live();
+		if (!pid && now.productId) { pid = parseInt(now.productId, 10) || 0; pname = now.productName || ''; }
+		state.product = pid; state.productName = pname;
+		if (!now.loggedIn) { openWith(loginStep); return; }
+		openWith(signedInFlow);
+	}
 	on(doc, 'click', (event) => {
 		const trigger = event.target instanceof Element ? event.target.closest('[data-dlc-review-open]') : null;
 		if (!trigger) return;
 		event.preventDefault();
-		let pid = parseInt(trigger.getAttribute('data-dlc-review-product') || '0', 10) || 0;
-		let pname = trigger.getAttribute('data-dlc-review-product-name') || '';
-		const live = win.DelicatReviewsConfig || cfg;
-		if (!pid && live.productId) { pid = parseInt(live.productId, 10) || 0; pname = live.productName || ''; }
-		state.product = pid; state.productName = pname;
-		if (!live.loggedIn) { openWith(loginStep); return; }
-		openWith((dialog) => {
-			loadingStep(dialog);
-			(state.nonce ? Promise.resolve() : fetchPrompt()).then(() => {
-				if (!state.overlay) return;
-				if (!state.nonce) { loginStep(dialog); return; }
-				return ensureProducts().then(() => { if (!state.overlay) return; if (alreadyDone()) alreadyStep(dialog); else formStep(dialog, state.name); });
-			}).catch(() => { if (state.overlay) loginStep(dialog); });
-		});
+		openFromTrigger(trigger);
 	}, { signal });
 	signal.addEventListener('abort', () => close(false), { once: true });
-	if (!cfg.loggedIn) return;
+	const api = { open: openFromTrigger, close: () => close(false) };
+	if (!cfg.loggedIn) return api;
 	const probe = () => fetchPrompt().then(() => { if (state.due) win.setTimeout(() => open(state.name, false), 2200); }).catch(() => {});
 	if (doc.prerendering) doc.addEventListener('prerenderingchange', probe, { once: true }); else probe();
+	return api;
 }

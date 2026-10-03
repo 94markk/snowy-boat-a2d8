@@ -204,10 +204,10 @@ html.delicat-slow-net .delicat-builder-hero--style-neo_glass_pro.is-mesh {
   box-shadow: none !important;
 }
 
-/* Animation. The review marquee runs a transform on a max-content track for
-   as long as the page is open; that is a permanent main-thread and battery
-   cost on a phone that has neither to spare. */
-html.delicat-slow-net .delicat-testimonials__mtrack,
+/* Animation. Decorative loops stand still on a slow connection. 9.3.1: the
+   review marquee is no longer among them: it is a composited transform that
+   costs no network, pauses out of view, and is the store's own motion (the
+   owner asked for it on every phone); reduced motion still stops it. */
 html.delicat-slow-net .delicat-builder-hero__float-item,
 html.delicat-slow-net .delicat-bk__card,
 html.delicat-slow-net .delicat-bk__badge {

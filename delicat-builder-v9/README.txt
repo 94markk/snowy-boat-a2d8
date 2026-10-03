@@ -1,3 +1,29 @@
+9.3.1 : correctifs demandés par la boutique sur les avis et les animations.
+(1) « Laisser un avis » (bloc Avis de la fiche produit, bouton de la section Témoignages) restait sans
+effet dès que l'application avait été ouverte sur une page qui n'imprime pas la configuration des avis
+(boutique, panier, catégorie) : la garde du module n'était posée que sur ces pages-là, et toute fiche
+produit ouverte ensuite en navigation douce avait un bouton mort. La garde est posée sur toutes les
+pages, une configuration minimale voyage avec le moteur (config.reviews), la fenêtre s'ouvre par l'API
+du module au toucher qui l'a chargé, un fragment qui n'a pas pu être chargé est retenté au toucher
+suivant, et une fenêtre retirée par un autre script ne bloque plus les ouvertures suivantes. Un client
+connecté dont la requête échoue voit « Réessayer », pas un lien de connexion.
+(2) Les deux rangées de témoignages ne défilaient plus : le défilement est lancé par JavaScript (les
+cartes sont imprimées une fois, clonées quand la section approche, puis is-loop-ready démarre la boucle
+CSS) ; ce code vivait dans l'ancien script core absorbé par le moteur et n'avait pas été porté. C'est
+désormais un module du moteur (src/engine/modules/marquee.js), remonté à chaque navigation douce. La
+boucle tourne aussi sur téléphone (la RC90 l'avait remplacée par des rangées à faire glisser sous 640 px) ;
+elle se met en pause hors écran ou sous le doigt, laisse place aux rangées manuelles en mouvement réduit,
+et le filtre delicat_builder_v9_testimonials_mobile_marquee (false) rétablit les rangées manuelles sur
+téléphone. Le mode connexion lente ne fige plus ce défilement. Les feuilles de l'ancienne livraison
+(all-components.min.css, storefront-chrome.min.css) sont régénérées par tools/build.mjs depuis les
+sources : les deux livraisons sont identiques.
+(3) Mode sans échec : une erreur fatale levée hors du plugin qui ne faisait que nommer une classe du
+Builder (Class "Delicat_Builder_V9_…" not found depuis un extrait de thème, une autre extension ou un
+script en ligne de commande) basculait toute la boutique en WordPress nu, ce qui ne corrige rien. Seule
+une erreur dans un fichier du Builder, ou levée en exécutant son code, la déclenche désormais.
+Les feuilles compilées des pages et tous les fragments en cache sont rafraîchis par le changement de
+version. Purgez LiteSpeed et le CDN après la mise à jour.
+
 9.3.0 : nouveau moteur de livraison du storefront (« App-Speed Kernel »). Tous les designs et toutes
 les fonctions sont conservés ; ce qui change est la façon dont la boutique est servie et pilotée.
 (1) Un seul module JavaScript (assets/dist/engine.<hash>.js, 76 Ko, ~25 Ko compressé) remplace les
