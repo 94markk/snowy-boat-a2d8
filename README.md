@@ -132,6 +132,11 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
   installed app gets a back control on every screen but the first, refreshes the session when it
   returns to the front, and an iPhone is offered the "Add to Home Screen" steps instead of the
   Android package, with a one-time invitation on the second visit.
+* **Express checkout sheet**: the "Vos coordonnées" block showed the e-mail twice and no way to
+  reach the customer. Each contact detail is shown once (a duplicate field from an extension is
+  posted the same value), and the WhatsApp number is a required field right after the e-mail,
+  with the phone keyboard, on the sheet and on the checkout page; it is saved as the order's
+  billing phone. The `delicat_builder_v9_whatsapp_required` filter can relax it.
 * **Low-end phones**: decorations that cost paint time (card and panel shadows, image
   transitions) are dropped on devices that report four cores or 4GB or less; scrolling was
   measured smooth (no frame over 32ms on home and shop at 4× CPU throttling).

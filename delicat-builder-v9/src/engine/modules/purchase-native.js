@@ -120,7 +120,7 @@ export default function mount({ signal, config }) {
 		};
 		const normalizeMinimalFields = (scope) => {
 			if (!body.classList.contains('dpn-checkout-minimal')) return;
-			const specs = [['billing_email', cfg.emailLabel || 'Adresse e-mail', cfg.emailHelp || '', true], ['billing_first_name', cfg.nameLabel || 'Nom complet', '', true], ['billing_phone', cfg.phoneLabel || 'Numéro WhatsApp', cfg.phoneHelp || '', false]];
+			const specs = [['billing_email', cfg.emailLabel || 'Adresse e-mail', cfg.emailHelp || '', true], ['billing_first_name', cfg.nameLabel || 'Nom complet', '', true], ['billing_phone', cfg.phoneLabel || 'Numéro WhatsApp', cfg.phoneHelp || '', true]];
 			for (const [id, text, help, required] of specs) {
 				const field = scope.querySelector('#' + id + '_field') || doc.querySelector('#' + id + '_field');
 				if (!field) continue;

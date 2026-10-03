@@ -51,6 +51,7 @@ final class Delicat_Builder_V9_Purchase_Native {
 		add_filter( 'render_block_woocommerce/cart', array( __CLASS__, 'render_cart_block' ), 20, 2 );
 		add_filter( 'render_block_woocommerce/checkout', array( __CLASS__, 'render_checkout_block' ), 20, 2 );
 		add_filter( 'woocommerce_checkout_fields', array( __CLASS__, 'checkout_fields' ), PHP_INT_MAX );
+		add_filter( 'woocommerce_checkout_required_field_notice', array( __CLASS__, 'required_field_notice' ), 10, 3 );
 		add_filter( 'woocommerce_enable_order_notes_field', array( __CLASS__, 'order_notes_enabled' ), PHP_INT_MAX );
 		add_filter( 'woocommerce_form_field', array( __CLASS__, 'billing_subheading' ), PHP_INT_MAX, 4 );
 		add_filter( 'woocommerce_gateway_title', array( __CLASS__, 'gateway_title' ), PHP_INT_MAX, 2 );
@@ -761,7 +762,7 @@ final class Delicat_Builder_V9_Purchase_Native {
 					'emailHelp'     => __( 'Le reçu et le code du produit sont envoyés à cette adresse.', 'delicat-builder-v9' ),
 					'nameLabel'     => __( 'Nom complet', 'delicat-builder-v9' ),
 					'phoneLabel'    => __( 'Numéro WhatsApp', 'delicat-builder-v9' ),
-					'phoneHelp'     => __( 'Pour vous joindre rapidement en cas de souci sur la livraison.', 'delicat-builder-v9' ),
+					'phoneHelp'     => __( 'Pour vous joindre rapidement sur WhatsApp en cas de souci sur la livraison.', 'delicat-builder-v9' ),
 					'billingTitle'  => __( 'Détails de facturation', 'delicat-builder-v9' ),
 					'serviceFee'    => __( 'Frais de service', 'delicat-builder-v9' ),
 					'free'          => __( 'Gratuit', 'delicat-builder-v9' ),
@@ -988,13 +989,19 @@ final class Delicat_Builder_V9_Purchase_Native {
 		}
 
 		if ( isset( $billing['billing_phone'] ) && is_array( $billing['billing_phone'] ) ) {
-			$minimal['billing_phone']                = $billing['billing_phone'];
-			$minimal['billing_phone']['label']       = __( 'Numéro WhatsApp', 'delicat-builder-v9' );
-			$minimal['billing_phone']['placeholder'] = __( '+509 XXXX XXXX', 'delicat-builder-v9' );
-			$minimal['billing_phone']['description'] = __( 'Pour vous joindre rapidement en cas de souci sur la livraison.', 'delicat-builder-v9' );
-			$minimal['billing_phone']['required']    = false;
-			$minimal['billing_phone']['priority']    = 30;
-			$minimal['billing_phone']['class']       = array( 'form-row-wide' );
+			/* 9.3: the WhatsApp number is how the store reaches a customer whose
+			 * delivery needs a word; it is required and sits right after the
+			 * e-mail, where the express sheet used to show the address twice. */
+			$minimal['billing_phone']                      = $billing['billing_phone'];
+			$minimal['billing_phone']['type']              = 'tel';
+			$minimal['billing_phone']['label']             = __( 'Numéro WhatsApp', 'delicat-builder-v9' );
+			$minimal['billing_phone']['placeholder']       = __( '+509 XXXX XXXX', 'delicat-builder-v9' );
+			$minimal['billing_phone']['description']       = __( 'Pour vous joindre rapidement sur WhatsApp en cas de souci sur la livraison.', 'delicat-builder-v9' );
+			$minimal['billing_phone']['required']          = (bool) apply_filters( 'delicat_builder_v9_whatsapp_required', true );
+			$minimal['billing_phone']['priority']          = 15;
+			$minimal['billing_phone']['autocomplete']      = 'tel';
+			$minimal['billing_phone']['class']             = array( 'form-row-wide' );
+			$minimal['billing_phone']['custom_attributes'] = array( 'inputmode' => 'tel', 'data-delicat-whatsapp' => '1' );
 		}
 
 		$fields['billing'] = $minimal;
@@ -1005,6 +1012,14 @@ final class Delicat_Builder_V9_Purchase_Native {
 		}
 
 		return $fields;
+	}
+
+	/** WooCommerce's "Billing Numéro WhatsApp is a required field." becomes a sentence a customer can act on. */
+	public static function required_field_notice( $notice, $field_label = '', $key = '' ) {
+		if ( 'billing_phone' === $key && self::minimal_checkout_active() ) {
+			return __( 'Indiquez votre numéro WhatsApp : c’est ainsi que nous vous joignons si votre livraison a besoin d’un mot.', 'delicat-builder-v9' );
+		}
+		return $notice;
 	}
 
 	/** Add the reference billing divider without inventing another form field. */

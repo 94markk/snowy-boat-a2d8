@@ -194,21 +194,39 @@ export default function mount({ root, signal, engine }) {
 		details.textContent = '';
 		let shown = 0;
 		const required = f.querySelectorAll('.woocommerce-billing-fields .validate-required input:not([type="hidden"]), .woocommerce-billing-fields .validate-required select, .woocommerce-billing-fields .validate-required textarea, .woocommerce-additional-fields .validate-required input:not([type="hidden"]), .woocommerce-additional-fields .validate-required select, .woocommerce-additional-fields .validate-required textarea');
+		/* One field per detail: when the checkout carries the same detail twice
+		   (two required e-mail fields, from WooCommerce and an extension), the
+		   sheet shows it once and posts the same value into both. */
+		const seen = new Map();
 		required.forEach((hidden, i) => {
 			if (hidden.disabled) return;
 			if (/country|state/.test(hidden.name) || hidden.type === 'file') state.fullRequired = true;
-			const wrap = el('label', 'dnp-express-field');
 			const rowNode = hidden.closest('.form-row');
 			const labelNode = rowNode ? rowNode.querySelector('label') : null;
-			wrap.appendChild(el('span', '', text(labelNode).replace(/\*\s*$/, '') || hidden.name));
+			const label = text(labelNode).replace(/\*\s*$/, '').replace(/\(optionnel\)|\(optional\)/i, '').trim() || hidden.name;
+			const kind = (hidden.type === 'email' || /email/i.test(hidden.name)) ? 'email' : ((hidden.type === 'tel' || /phone|whatsapp/i.test(hidden.name)) ? 'tel' : hidden.type + ':' + label.toLowerCase());
+			const twin = seen.get(kind);
+			if (twin) {
+				if (!hidden.value && twin.value) hidden.value = twin.value;
+				twin.addEventListener('input', () => { hidden.value = twin.value; });
+				twin.addEventListener('change', () => { hidden.value = twin.value; });
+				return;
+			}
+			const wrap = el('label', 'dnp-express-field dnp-express-field--' + (kind.split(':')[0] || 'text'));
+			wrap.appendChild(el('span', '', label));
 			const input = hidden.cloneNode(true);
 			input.id = 'dnpx-field-' + i;
 			input.value = hidden.value || ''; input.checked = hidden.checked;
 			input.removeAttribute('name'); input.setAttribute('aria-required', 'true');
+			if (kind === 'tel') { input.type = 'tel'; input.setAttribute('inputmode', 'tel'); input.setAttribute('autocomplete', 'tel'); }
+			if (kind === 'email') { input.setAttribute('inputmode', 'email'); input.setAttribute('autocomplete', 'email'); }
 			const sync = () => { hidden.value = input.value; hidden.checked = input.checked; };
 			input.addEventListener('input', sync); input.addEventListener('change', sync);
 			wrap.appendChild(input);
+			const hint = rowNode ? rowNode.querySelector('.description') : null;
+			if (hint && text(hint)) wrap.appendChild(el('small', 'dnp-express-hint', text(hint)));
 			details.appendChild(wrap);
+			seen.set(kind, input);
 			shown++;
 		});
 		if (shown) { details.insertBefore(el('h3', '', i18n.details || 'Vos coordonnées'), details.firstChild); details.hidden = false; }

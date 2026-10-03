@@ -59,7 +59,12 @@ contient ni nonce, ni nom, ni solde. iPhone : écrans de lancement générés de
 manifeste complété (id, display_override, raccourcis), barre d'état système, bouton retour dans
 l'application installée, étapes « Sur l'écran d'accueil » au lieu de l'APK Android, invitation à la
 deuxième visite. Téléphones modestes : ombres et transitions coûteuses retirées.
-(9) Les 52 jumeaux .min ont été retirés ; asset-min-map.php est vide par conception. Construction :
+(9) Fiche de commande express : le bloc « Vos coordonnées » montrait l'adresse e-mail deux fois et
+n'offrait aucun moyen de joindre le client. Chaque donnée n'apparaît qu'une fois (un champ en double
+reçoit la même valeur) et le numéro WhatsApp est obligatoire, juste après l'e-mail, avec le clavier
+téléphone, sur la fiche comme sur la page de paiement ; il est enregistré comme téléphone de
+facturation de la commande. Le filtre delicat_builder_v9_whatsapp_required permet de l'assouplir.
+(10) Les 52 jumeaux .min ont été retirés ; asset-min-map.php est vide par conception. Construction :
 cd delicat-builder-v9 && npm install && npm run build (npm run zip pour l'archive installable).
 Purgez LiteSpeed et le CDN après la mise à jour.
 

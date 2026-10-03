@@ -364,7 +364,7 @@
 		specs = [
 			['billing_email', config.emailLabel || 'Adresse e-mail', config.emailHelp || '', true],
 			['billing_first_name', config.nameLabel || 'Nom complet', '', true],
-			['billing_phone', config.phoneLabel || 'Numéro WhatsApp', config.phoneHelp || '', false]
+			['billing_phone', config.phoneLabel || 'Numéro WhatsApp', config.phoneHelp || '', true]
 		];
 		for (i = 0; i < specs.length; i++) {
 			field = root.querySelector('#' + specs[i][0] + '_field') || document.querySelector('#' + specs[i][0] + '_field');

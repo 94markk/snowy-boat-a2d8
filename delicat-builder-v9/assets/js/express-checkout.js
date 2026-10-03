@@ -354,23 +354,36 @@
     if (!details) return;
     details.textContent = '';
     var required = f.querySelectorAll('.woocommerce-billing-fields .validate-required input:not([type="hidden"]), .woocommerce-billing-fields .validate-required select, .woocommerce-billing-fields .validate-required textarea, .woocommerce-additional-fields .validate-required input:not([type="hidden"]), .woocommerce-additional-fields .validate-required select, .woocommerce-additional-fields .validate-required textarea');
-    var shown = 0;
+    var shown = 0, seen = {};
     for (var i = 0; i < required.length; i++) {
       var hidden = required[i]; if (hidden.disabled) continue;
       // Country/state or extension-driven checkout controls need Woo's full live update cycle.
       if (/country|state/.test(hidden.name) || hidden.type === 'file') state.fullRequired = true;
-      var wrap = el('label', 'dnp-express-field');
-      var labelNode = hidden.closest ? hidden.closest('.form-row') : null;
-      labelNode = labelNode ? labelNode.querySelector('label') : null;
-      wrap.appendChild(el('span', '', text(labelNode).replace(/\*\s*$/, '') || hidden.name));
+      var rowNode = hidden.closest ? hidden.closest('.form-row') : null;
+      var labelNode = rowNode ? rowNode.querySelector('label') : null;
+      var labelText = text(labelNode).replace(/\*\s*$/, '').replace(/\(optionnel\)|\(optional\)/i, '').replace(/^\s+|\s+$/g, '') || hidden.name;
+      var kind = (hidden.type === 'email' || /email/i.test(hidden.name)) ? 'email' : ((hidden.type === 'tel' || /phone|whatsapp/i.test(hidden.name)) ? 'tel' : hidden.type + ':' + labelText.toLowerCase());
+      if (seen[kind]) {
+        // The same detail twice: shown once, posted into both.
+        (function (twin, target) { if (!target.value && twin.value) target.value = twin.value; twin.addEventListener('input', function () { target.value = twin.value; }); twin.addEventListener('change', function () { target.value = twin.value; }); }(seen[kind], hidden));
+        continue;
+      }
+      var wrap = el('label', 'dnp-express-field dnp-express-field--' + kind.split(':')[0]);
+      wrap.appendChild(el('span', '', labelText));
       var input = hidden.cloneNode(true); input.id = 'dnpx-field-' + i;
+      if (kind === 'tel') { input.type = 'tel'; input.setAttribute('inputmode', 'tel'); input.setAttribute('autocomplete', 'tel'); }
+      if (kind === 'email') { input.setAttribute('inputmode', 'email'); input.setAttribute('autocomplete', 'email'); }
+      seen[kind] = input;
       input.value = hidden.value || ''; input.checked = hidden.checked;
       input.removeAttribute('name'); input.setAttribute('aria-required', 'true');
       (function (source, target) {
         function sync() { target.value = source.value; target.checked = source.checked; }
         source.addEventListener('input', sync); source.addEventListener('change', sync);
       }(input, hidden));
-      wrap.appendChild(input); details.appendChild(wrap); shown++;
+      wrap.appendChild(input);
+      var hint = rowNode ? rowNode.querySelector('.description') : null;
+      if (hint && text(hint)) wrap.appendChild(el('small', 'dnp-express-hint', text(hint)));
+      details.appendChild(wrap); shown++;
     }
     if (shown) { details.insertBefore(el('h3', '', i18n.details || 'Vos coordonnées'), details.firstChild); details.hidden = false; }
     else details.hidden = true;
