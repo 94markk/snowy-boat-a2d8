@@ -611,14 +611,12 @@ html.delicat-save-data body.dbp-type .delicat-category-tile,
 html.delicat-save-data body.dbp-type .delicat-process__card,
 html.delicat-save-data body.dbp-type .delicat-why__card,
 html.delicat-save-data body.dbp-type .delicat-testimonials__card,
-html.delicat-save-data body.dbp-type .delicat-bottom-nav,
 html.delicat-save-data body.dbp-type .dsb8-header,
 html.delicat-low-power body.dbp-type .delicat-product-card,
 html.delicat-low-power body.dbp-type .delicat-category-tile,
 html.delicat-low-power body.dbp-type .delicat-process__card,
 html.delicat-low-power body.dbp-type .delicat-why__card,
 html.delicat-low-power body.dbp-type .delicat-testimonials__card,
-html.delicat-low-power body.dbp-type .delicat-bottom-nav,
 html.delicat-low-power body.dbp-type .dsb8-header {
   box-shadow: none !important;
 }

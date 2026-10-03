@@ -111,7 +111,7 @@ export const device = {
 	get lowPower() {
 		return this.saveData || (memory > 0 && memory <= 4) || (cores > 0 && cores <= 4) || html.classList.contains('delicat-low-power');
 	},
-	get veryLowPower() { return (memory > 0 && memory <= 2) || (cores > 0 && cores <= 2); },
+	get veryLowPower() { return (memory > 0 && memory <= 2) || (cores > 0 && cores <= 2) || html.classList.contains('delicat-very-low-power'); },
 	get reducedMotion() { return !!(reduceQuery && reduceQuery.matches) || html.classList.contains('delicat-reduce-motion'); },
 	get touch() { return !!(coarseQuery && coarseQuery.matches) || navigator.maxTouchPoints > 0; },
 	get standalone() { return (win.matchMedia && win.matchMedia('(display-mode: standalone)').matches) || win.navigator.standalone === true; },

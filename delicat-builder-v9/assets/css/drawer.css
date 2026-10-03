@@ -24,7 +24,7 @@
 .dlx-drawer input,.dlx-drawer textarea,.dlx-drawer select{touch-action:auto}
 html.dlx-open,html.dlx-open body{overflow:hidden!important}
 html.dlx-open body{position:fixed;width:100%}
-html.dlx-open .dap-floating,html.dlx-open .dnp-mobile-dock,html.dlx-open .dpn-checkout-dock,html.dlx-open .delicat-bottom-nav,html.dlx-open [data-delicat-assistant],html.dlx-open [class*="delicat-assistant"],html.dlx-open [id*="delicat-assistant"],html.dlx-open [class*="assistant-widget"],html.dlx-open [id*="assistant-widget"],html.dlx-open [class*="assistant-fab"],html.dlx-open [id*="assistant-fab"],html.dlx-open [class*="chatbot"],html.dlx-open [id*="chatbot"],html.dlx-open iframe[title*="chat" i],html.dlx-open iframe[title*="assistant" i]{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
+html.dlx-open .dap-floating,html.dlx-open .dnp-mobile-dock,html.dlx-open .dpn-checkout-dock,html.dlx-open .delicat-bottom-nav,html.dlx-open [data-delicat-assistant],html.dlx-open .delicat-assistant,html.dlx-open [id*="delicat-assistant"],html.dlx-open .assistant-widget,html.dlx-open [id*="assistant-widget"],html.dlx-open .assistant-fab,html.dlx-open [id*="assistant-fab"],html.dlx-open .chatbot,html.dlx-open [id*="chatbot"],html.dlx-open iframe[title*="chat" i],html.dlx-open iframe[title*="assistant" i]{opacity:0!important;visibility:hidden!important;pointer-events:none!important}
 /* top */
 .dlx-drawer__top{display:flex;align-items:center;gap:12px;padding:calc(14px + env(safe-area-inset-top,0px)) 16px 12px;background:var(--dlx-card);border-bottom:1px solid var(--dlx-line)}
 .dlx-brand{display:flex;align-items:center;gap:11px;min-width:0;flex:1;text-decoration:none!important;color:inherit}

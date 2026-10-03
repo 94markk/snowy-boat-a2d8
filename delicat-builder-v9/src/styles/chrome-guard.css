@@ -131,36 +131,20 @@ html .dsb8-header .dsb8-header__back[hidden] { display: none !important; }
 
 /* ------------------------------------------------------------ bottom bar */
 
-html .delicat-bottom-nav .dbn-item { color: var(--dbn-text) !important; text-decoration: none !important; font-family: inherit; text-transform: none; }
-html .delicat-bottom-nav .dbn-item.is-active { color: var(--dbn-active) !important; }
-html .delicat-bottom-nav .dbn-label { color: inherit !important; }
+/* 9.3.2: the colour pins (!important) that stood here overrode the store's own
+   bar colours (theme variables, Design Studio) and turned every idle tab
+   grey; the leak they guarded against (the native document's link colour)
+   is fixed at its source, so the bar keeps the colours its own sheets give. */
+html .delicat-bottom-nav .dbn-item { text-decoration: none !important; font-family: inherit; text-transform: none; }
 html .delicat-bottom-nav .dbn-center, html .delicat-bottom-nav .dbn-badge { color: #fff !important; }
 html .delicat-bottom-nav .dbn-badge { font-style: normal; }
 html .delicat-bottom-nav .dbn-icon svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
-/* The bar stands on a shelf: under and around the floating pill the page
-   fades into its own background instead of showing through the gap. */
-html .delicat-bottom-nav { --dbn-shelf: var(--dlc-bg, #f7f8fb); }
-html[data-delicat-theme="dark"] .delicat-bottom-nav, html.dlc-theme-dark .delicat-bottom-nav { --dbn-shelf: var(--dlc-bg, #0f1220); }
-html .delicat-bottom-nav::before {
-	content: "";
-	position: absolute;
-	z-index: -1;
-	left: -12px;
-	right: -12px;
-	top: -34px;
-	bottom: calc(-10px - env(safe-area-inset-bottom, 0px));
-	pointer-events: none;
-	background: var(--dbn-shelf);
-	-webkit-mask-image: linear-gradient(to top, #000 calc(100% - 34px), rgba(0, 0, 0, 0));
-	mask-image: linear-gradient(to top, #000 calc(100% - 34px), rgba(0, 0, 0, 0));
-}
-@media (max-width: 820px) {
-	html .delicat-bottom-nav::before { bottom: calc(-7px - env(safe-area-inset-bottom, 0px)); }
-}
-@media (min-width: 560px) {
-	html .delicat-bottom-nav::before { left: 50%; right: auto; width: 100vw; transform: translateX(-50%); }
-}
+/* 9.3.2: the shelf that used to sit behind the pill (the page background
+   fading up around it) made the bar read as an edge-to-edge strip with a
+   line above it on the phone. The pill floats free again, as it did: its
+   own shadow separates it from the page (bottom-nav.css). */
+
 /* With the back control shown the row has one more item: the theme toggle
    (also in the drawer's footer) steps aside and the logo may shrink, so the
    cart never leaves the screen on a narrow phone. */

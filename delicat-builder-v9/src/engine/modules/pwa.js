@@ -103,10 +103,14 @@ export default function mount({ signal, config }) {
 	on(doc, 'delicat:install-app', (event) => { if (!goAndroid(event)) open(); }, { capture: true, signal });
 	on(doc, 'keydown', (event) => { if (event.key === 'Escape') { const m = doc.getElementById('dbv9-pwa-modal'); if (m && m.classList.contains('is-open')) { m.classList.remove('is-open'); releaseOverlay('pwa'); } } }, { signal });
 
-	/* ---- the invitation: second visit, once a month, iPhone and Android alike ---- */
+	/* ---- the invitation: iPhone and iPad only, second visit, once a month ----
+	   Android shoppers have the store's own app (the APK page) and Chrome's
+	   own install prompt; the invitation exists for Safari, which never
+	   offers to install anything by itself. It drops in from the top of the
+	   screen, where a system banner would. */
 	const invite = () => {
 		if (!UI || standalone || doc.hidden) return;
-		if (!(device.ios || prompt)) return;
+		if (!device.ios) return;
 		const until = Number(store.get('dbv9-install-quiet') || 0);
 		if (until && Date.now() < until) return;
 		const visits = Number(store.get('dbv9-visits') || 0);

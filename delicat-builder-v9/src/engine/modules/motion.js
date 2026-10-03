@@ -6,6 +6,19 @@
 import { device, doc, html, on, qsa, raf, win } from '../core/dom.js';
 
 const ALLOWED = new Set(['fade-up', 'fade', 'scale', 'slide-left', 'slide-right', 'soft-zoom']);
+/* The stylesheet (printed by the engine for every device class) normally
+   carries the values profile() computes; a value that is already in effect is
+   not written again, because an inherited variable written on <html> restyles
+   the whole page. */
+const rootVars = {};
+const parseVar = (value) => { const m = /^\s*(-?\d*\.?\d+)(ms|s|px)?\s*$/.exec(String(value)); if (!m) return null; let n = parseFloat(m[1]); let unit = m[2] || ''; if (unit === 's') { n *= 1000; unit = 'ms'; } return { n, unit }; };
+const sameVar = (a, b) => { const x = parseVar(a), y = parseVar(b); if (!x || !y) return String(a).trim() === String(b).trim(); return x.unit === y.unit && Math.abs(x.n - y.n) < 0.0015; };
+const setRootVar = (name, value) => {
+	if (rootVars[name] === undefined) { try { rootVars[name] = win.getComputedStyle(html).getPropertyValue(name); } catch (_) { rootVars[name] = ''; } }
+	if (sameVar(rootVars[name], value)) { rootVars[name] = value; return; }
+	rootVars[name] = value;
+	html.style.setProperty(name, value);
+};
 
 export default function mount({ root, signal, config }) {
 	const cfg = Object.assign({ enabled: true, effect: 'fade-up', duration: 440, intensity: 45, stagger: 55, baseDelay: 0, threshold: 0.04, desktop: true, tablet: true, mobile: true, mobileIntensity: 70 }, win.DelicaBuilderV9MotionConfig || config.motion || {});
@@ -25,7 +38,7 @@ export default function mount({ root, signal, config }) {
 		if (device.veryLowPower) { factor *= 0.72; duration = Math.min(duration, 300); stagger = Math.min(stagger, 16); effect = 'fade'; label = 'ultra-light'; }
 		return { factor, duration, stagger, effect, label };
 	};
-	const setStatus = (status, label = '') => { html.dataset.dbv9MotionStatus = status; if (label) html.dataset.dbv9MotionProfile = label; else delete html.dataset.dbv9MotionProfile; };
+	const setStatus = (status, label = '') => { if (html.dataset.dbv9MotionStatus !== status) html.dataset.dbv9MotionStatus = status; if (label) { if (html.dataset.dbv9MotionProfile !== label) html.dataset.dbv9MotionProfile = label; } else if (html.dataset.dbv9MotionProfile !== undefined) delete html.dataset.dbv9MotionProfile; };
 	const disconnect = () => { if (failsafe) win.clearTimeout(failsafe); failsafe = 0; if (observer) observer.disconnect(); observer = null; };
 	const revealAll = (scope = doc) => {
 		disconnect();
@@ -44,10 +57,12 @@ export default function mount({ root, signal, config }) {
 		const p = profile(kind);
 		setStatus('active', p.label);
 		const intensity = Math.max(0, Math.min(100, Number(cfg.intensity || 45))) * p.factor;
-		html.style.setProperty('--dbv9-motion-duration', p.duration + 'ms');
-		html.style.setProperty('--dbv9-motion-distance', Math.round(3 + (intensity / 100) * 26) + 'px');
-		html.style.setProperty('--dbv9-motion-scale-in', String(Math.max(0.95, 1 - (0.006 + (intensity / 100) * 0.028))));
-		html.style.setProperty('--dbv9-motion-scale-out', String(Math.min(1.045, 1 + 0.006 + (intensity / 100) * 0.022)));
+		/* Inherited variables on <html>: every change restyles the whole page,
+		   so they are written once per profile, not on every page. */
+		setRootVar('--dbv9-motion-duration', p.duration + 'ms');
+		setRootVar('--dbv9-motion-distance', Math.round(3 + (intensity / 100) * 26) + 'px');
+		setRootVar('--dbv9-motion-scale-in', String(Math.max(0.95, 1 - (0.006 + (intensity / 100) * 0.028))));
+		setRootVar('--dbv9-motion-scale-out', String(Math.min(1.045, 1 + 0.006 + (intensity / 100) * 0.022)));
 		const layouts = qsa('.delicat-page-layout[data-delicat-page-layout]', scope);
 		if (!layouts.length) { setStatus('no-builder-layout', p.label); return; }
 		const sections = [];

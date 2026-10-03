@@ -332,6 +332,13 @@ final class Delicat_Builder_V9_PWA {
 			}
 			$precache[] = $url;
 		}
+		/* 9.3.2: the product route's WordPress/WooCommerce scripts (recorded by
+		 * the engine with their exact version query) ride along, so the first
+		 * product opened in a session does not wait for jQuery and the variation
+		 * form over the network. */
+		if ( class_exists( 'Delicat_Builder_V9_Engine', false ) && is_callable( array( 'Delicat_Builder_V9_Engine', 'precache_urls' ) ) ) {
+			$precache = array_merge( $precache, (array) Delicat_Builder_V9_Engine::precache_urls() );
+		}
 		$precache = (array) apply_filters( 'delicat_builder_v9_pwa_precache', array_values( array_unique( array_map( 'esc_url_raw', $precache ) ) ) );
 		?>
 'use strict';

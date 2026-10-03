@@ -37,7 +37,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class Delicat_Builder_V9_Engine {
 
-	const VERSION       = '9.3.1';
+	const VERSION       = '9.3.2';
 	const DIST          = 'assets/dist/';
 	const HANDLE_CHROME = 'delicat-engine-chrome';
 	const HANDLE_ROUTE  = 'delicat-engine-route';
@@ -96,6 +96,8 @@ final class Delicat_Builder_V9_Engine {
 		}
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_chrome' ), 0 );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'shape' ), 100500 );
+		add_action( 'wp_print_scripts', array( __CLASS__, 'record_product_scripts' ), 100500 );
+		add_filter( 'body_class', array( __CLASS__, 'theme_body_class' ), 20 );
 		add_action( 'wp_head', array( __CLASS__, 'print_head' ), 2 );
 		add_action( 'wp_body_open', array( __CLASS__, 'progress_bar' ), 1 );
 		add_action( 'wp_print_footer_scripts', array( __CLASS__, 'absorb_late' ), 1 );
@@ -684,7 +686,46 @@ final class Delicat_Builder_V9_Engine {
 		return $out;
 	}
 
+	/**
+	 * The reveal motion's root variables for every device class, so the motion
+	 * module finds the values it would compute and writes nothing to <html>
+	 * (an inherited variable written there restyles the whole page at boot).
+	 * Mirrors profile() in src/engine/modules/motion.js.
+	 */
+	private static function motion_vars_css(): string {
+		if ( ! class_exists( 'Delicat_Builder_V9_Core', false ) || ! is_callable( array( 'Delicat_Builder_V9_Core', 'motion_settings' ) ) ) {
+			return '';
+		}
+		$m         = (array) Delicat_Builder_V9_Core::motion_settings();
+		$duration  = max( 180, min( 900, absint( $m['duration_ms'] ?? 440 ) ) );
+		$intensity = max( 0, min( 100, absint( $m['intensity'] ?? 45 ) ) );
+		$mobile    = max( 0.2, min( 1, absint( $m['mobile_intensity'] ?? 70 ) / 100 ) );
+		$num       = static function ( float $value ): string {
+			return rtrim( rtrim( number_format( $value, 4, '.', '' ), '0' ), '.' );
+		};
+		$vars = static function ( float $factor, int $ms ) use ( $intensity, $num ): string {
+			$i = $intensity * $factor;
+			return '--dbv9-motion-duration:' . $ms . 'ms;--dbv9-motion-distance:' . (int) round( 3 + ( $i / 100 ) * 26 ) . 'px;'
+				. '--dbv9-motion-scale-in:' . $num( max( 0.95, 1 - ( 0.006 + ( $i / 100 ) * 0.028 ) ) ) . ';'
+				. '--dbv9-motion-scale-out:' . $num( min( 1.045, 1 + 0.006 + ( $i / 100 ) * 0.022 ) );
+		};
+		$low  = min( $duration, 380 );
+		$very = min( $duration, 300 );
+		return 'html:root{' . $vars( 1, $duration ) . '}'
+			. 'html:root.delicat-low-power,html:root.delicat-save-data{' . $vars( 0.72, $low ) . '}'
+			. 'html:root.delicat-very-low-power{' . $vars( 0.72 * 0.72, $very ) . '}'
+			. '@media(max-width:640px){html:root{' . $vars( $mobile, $duration ) . '}'
+			. 'html:root.delicat-low-power,html:root.delicat-save-data{' . $vars( $mobile * 0.72, $low ) . '}'
+			. 'html:root.delicat-very-low-power{' . $vars( $mobile * 0.72 * 0.72, $very ) . '}}';
+	}
+
 	public static function print_head(): void {
+		if ( self::active() ) {
+			$motion_css = self::motion_vars_css();
+			if ( '' !== $motion_css ) {
+				echo '<style id="delicat-engine-motion">' . $motion_css . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- generated numbers only
+			}
+		}
 		if ( ! self::active() ) {
 			return;
 		}
@@ -857,6 +898,97 @@ final class Delicat_Builder_V9_Engine {
 			$files[] = self::DIST . $import;
 		}
 		return array_values( array_unique( array_filter( $files, static function ( $file ) { return is_file( DELICAT_BUILDER_V9_DIR . $file ); } ) ) );
+	}
+
+	/* ------------------------------------------------------ theme class */
+
+	/**
+	 * The theme module toggles dlc-theme-light / dlc-theme-dark on <body> at
+	 * boot. Toggling a class that is already there is free; adding it restyled
+	 * the whole page on every cold load (the body class carries rules). The
+	 * class is printed with the document when the outcome is certain: no
+	 * preference cookie, or a cookie naming the store's default. A different
+	 * cookie or a "system" preference is left to the module, so a page cache
+	 * that ignores the cookie can never hand one shopper another's theme.
+	 */
+	public static function theme_body_class( $classes ): array {
+		$classes = is_array( $classes ) ? $classes : array();
+		if ( ! self::active() ) {
+			return $classes;
+		}
+		$shell   = get_option( 'delicat_builder_v9_shell', array() );
+		$default = is_array( $shell ) ? (string) ( $shell['theme_default'] ?? 'light' ) : 'light';
+		if ( ! in_array( $default, array( 'light', 'dark' ), true ) ) {
+			return $classes; /* "system": the device decides */
+		}
+		$cookie = isset( $_COOKIE['dbv9_theme'] ) ? sanitize_key( (string) wp_unslash( $_COOKIE['dbv9_theme'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( '' !== $cookie && $cookie !== $default ) {
+			return $classes;
+		}
+		$classes[] = 'dlc-theme-' . $default;
+		/* The managed homepage mirrors the theme as delicat-home-mode-* on <body> too. */
+		if ( in_array( 'delicat-builder-homepage-managed', $classes, true ) ) {
+			$classes[] = 'delicat-home-mode-' . $default;
+		}
+		return array_values( array_unique( $classes ) );
+	}
+
+	/* ------------------------------------------------- product scripts */
+
+	const PRODUCT_SCRIPTS_OPTION = 'delicat_builder_v9_product_scripts';
+
+	/**
+	 * The scripts a product page loads beyond the engine (jQuery, wp-util,
+	 * WooCommerce's variation form …) are the slow part of the first product
+	 * opened in a session on a phone: they are fetched and compiled on that
+	 * tap. Their exact URLs (with WordPress's own version query) are recorded
+	 * when a product page prints them, so the service worker can hold them
+	 * from install and the first product tap reads them from the device.
+	 */
+	public static function record_product_scripts(): void {
+		if ( 'product' !== self::$route ) {
+			return;
+		}
+		$scripts = wp_scripts();
+		$queue   = (array) $scripts->queue;
+		if ( empty( $queue ) ) {
+			return;
+		}
+		$scripts->all_deps( $queue );
+		$urls = array();
+		foreach ( (array) $scripts->to_do as $handle ) {
+			$obj = $scripts->registered[ $handle ] ?? null;
+			if ( ! $obj || ! is_string( $obj->src ) || '' === $obj->src ) {
+				continue;
+			}
+			$src = $obj->src;
+			if ( 0 === strpos( $src, '//' ) ) {
+				$src = ( is_ssl() ? 'https:' : 'http:' ) . $src;
+			} elseif ( 0 === strpos( $src, '/' ) ) {
+				$src = site_url( $src );
+			}
+			if ( false !== strpos( $src, '/delicat-builder-v9/' ) || false === strpos( $src, home_url( '/' ) ) ) {
+				continue; /* the plugin's own files are precached by name; third-party hosts are not ours to cache */
+			}
+			$ver = $obj->ver ? (string) $obj->ver : get_bloginfo( 'version' );
+			if ( false !== $ver ) {
+				$src = add_query_arg( 'ver', $ver, $src );
+			}
+			$urls[] = esc_url_raw( $src );
+		}
+		$urls = array_values( array_unique( $urls ) );
+		if ( count( $urls ) > 24 ) {
+			$urls = array_slice( $urls, 0, 24 );
+		}
+		if ( $urls !== (array) get_option( self::PRODUCT_SCRIPTS_OPTION, array() ) ) {
+			update_option( self::PRODUCT_SCRIPTS_OPTION, $urls, false );
+		}
+	}
+
+	/** Absolute URLs the service worker precaches besides the plugin's own files. */
+	public static function precache_urls(): array {
+		$urls = (array) get_option( self::PRODUCT_SCRIPTS_OPTION, array() );
+		return array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
 	}
 
 	/* -------------------------------------------------------- litespeed */

@@ -251,6 +251,14 @@ final class Delicat_Builder_V9_Native_Product {
 		$classes = is_array( $classes ) ? $classes : array();
 		if ( function_exists('is_product') && is_product() && self::is_active_product( absint(get_queried_object_id()) ) ) {
 			$classes[] = 'delicat-native-product-document';
+			/* 9.3.2: the mobile dock's page class travels with the document. The
+			 * module used to add it after mounting, and because the class moves an
+			 * inherited variable (--dbv9-nav-band) that second restyle covered the
+			 * whole page on every product opened. dnp-floating-ready stays the
+			 * module's: it hides the inline buttons, so it must follow the dock. */
+			if ( ! empty( self::settings()['show_mobile_dock'] ) ) {
+				$classes[] = 'dnp-dock-visible';
+			}
 		}
 		return array_values( array_unique( $classes ) );
 	}
@@ -549,7 +557,7 @@ final class Delicat_Builder_V9_Native_Product {
 		if(!function_exists('is_product')||!is_product()||!self::is_active_product(absint(get_queried_object_id())))return;
 		// Native document does not render Elementor, a Woo gallery slider, zoom or Photoswipe.
 		foreach(array('elementor-frontend','elementor-pro','elementor-icons','eicons','photoswipe','photoswipe-default-skin','woocommerce_prettyPhoto_css','flexslider') as $h)wp_dequeue_style($h);
-		foreach(array('elementor-frontend','elementor-pro','imagesloaded','zoom','flexslider','photoswipe','photoswipe-ui-default','wc-single-product') as $h)wp_dequeue_script($h);
+		foreach(array('elementor-frontend','elementor-pro','imagesloaded','zoom','flexslider','photoswipe','photoswipe-ui-default','wc-single-product','comment-reply') as $h)wp_dequeue_script($h);
 		/* 9.3: with PhotoSwipe's stylesheet gone, WooCommerce's lightbox markup
 		 * rendered as a row of empty grey boxes under the footer. The native
 		 * gallery has no lightbox, so the markup is not printed at all. */

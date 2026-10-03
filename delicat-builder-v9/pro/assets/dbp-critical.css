@@ -145,8 +145,19 @@ body.dbp-app main {
 }
 
 /* Touch targets. 44px is the floor; the RC90 audit found 42 of 94 below it. */
-body.dbp-app a[class*="cta"],
-body.dbp-app button:not([class*="qty"]),
+/* 9.3.2: named, because `[class*="…"]` made every class change on <html>,
+   <body> or <main> restyle the whole page. */
+body.dbp-app a.cta,
+body.dbp-app a.delicat-builder-hero__cta,
+body.dbp-app a.delicat-product-card__cta,
+body.dbp-app a.delicat-archive-product-cta,
+body.dbp-app a.delicat-why__cta-button,
+body.dbp-app a.dlx-wallet__cta,
+body.dbp-app a.dpn-gate-cta,
+body.dbp-app a.dpn-wallet-modal-cta,
+body.dbp-app a.ddsw-plan-cta,
+body.dbp-app a.dnp-reviews-cta,
+body.dbp-app button:not(.qty):not(.dc-qty-btn):not(.delicat-qty-button):not(.delicat-qty-minus):not(.delicat-qty-plus):not(.dpn-qty-minus):not(.dpn-qty-plus):not(.dpn-qty-trash),
 body.dbp-app .dsb8-header__action {
   min-height: 44px;
 }

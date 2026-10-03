@@ -539,17 +539,20 @@ final class Delicat_Builder_V9_Storefront_Fix {
 		if ( ! self::native_header_engine_active() ) {
 			return;
 		}
-		// Scoped to the native-header body class; :not guards keep every
-		// delicat-* element visible even if a theme reuses generic classes.
+		// Scoped to the native-header body class; :not guards keep the plugin's
+		// own header and footer visible even if a theme reuses generic classes.
+		// 9.3.2: named classes — a `[class*="delicat"]` test made every class
+		// change on <html>, <body> or <main> restyle the whole page.
+		$own = ':not(.dsb8-header):not(.delicat-native-header):not(.delicat-shell-header):not(.dlx-drawer):not(.dbv9-footer):not(.delicat-footer)';
 		echo '<style id="delicat-native-header-engine">'
 			. 'body.delicat-native-header-active #site-header,'
 			. 'body.delicat-native-header-active #masthead,'
-			. 'body.delicat-native-header-active header.site-header:not([class*="delicat"]),'
-			. 'body.delicat-native-header-active .site-branding:not([class*="delicat"]),'
+			. 'body.delicat-native-header-active header.site-header' . $own . ','
+			. 'body.delicat-native-header-active .site-branding' . $own . ','
 			. 'body.delicat-native-header-active .elementor-location-header,'
 			. 'body.delicat-native-header-active #site-footer,'
 			. 'body.delicat-native-header-active #colophon,'
-			. 'body.delicat-native-header-active footer.site-footer:not([class*="delicat"]),'
+			. 'body.delicat-native-header-active footer.site-footer' . $own . ','
 			. 'body.delicat-native-header-active .elementor-location-footer'
 			. '{display:none!important}'
 			. '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped

@@ -24,8 +24,10 @@ html.delicat-scroll-locked body { position: fixed; left: 0; right: 0; width: 100
    slightly and stops taking taps, so a second tap cannot start a second
    navigation. */
 html.delicat-navigating-slow main[data-delicat-server-render]:not([data-delicat-placeholder]),
-html.delicat-navigating-slow main[data-delicat-native-document]:not([data-delicat-placeholder]) { opacity: .62; transition: opacity 180ms linear; pointer-events: none; }
-html.delicat-navigating a, html.delicat-navigating button { cursor: progress; }
+/* Opacity only: pointer-events and cursor are inherited, and changing them on
+   <main> restyles every element inside it twice per navigation. Taps on the
+   dimmed page are refused by the navigation module instead. */
+html.delicat-navigating-slow main[data-delicat-native-document]:not([data-delicat-placeholder]) { opacity: .62; transition: opacity 180ms linear; }
 
 /* Screen-reader only text (route announcements). */
 .dlc-sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -73,7 +75,8 @@ html.delicat-placeholder { overflow-anchor: none; }
 @keyframes dph-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
 @keyframes dph-in { from { opacity: .4; } }
 @media (prefers-reduced-motion: reduce) { .dph__bar, .dph__chip, .dph__thumb { animation: none; } }
-html.delicat-low-power .dph__bar, html.delicat-low-power .dph__chip, html.delicat-low-power .dph__thumb { animation: none; }
+html.delicat-low-power .dph__bar, html.delicat-low-power .dph__chip, html.delicat-low-power .dph__thumb { animation: none; background: rgba(120, 126, 150, .16); }
+html.delicat-low-power .delicat-placeholder-main { animation: none; }
 
 /* Low-power devices (theme.js sets the class from device memory / cores /
    Save-Data): the decorations that cost paint time on every scrolled frame
@@ -83,12 +86,10 @@ html.delicat-low-power .delicat-category-tile,
 html.delicat-low-power .dlx-account,
 html.delicat-low-power .dlx-wallet,
 html.delicat-low-power .dlx-section,
-html.delicat-low-power .dlx-item__icon,
-html.delicat-low-power .delicat-bottom-nav,
-html.delicat-low-power .dbn-item--center .dbn-center { box-shadow: none !important; }
+html.delicat-low-power .dlx-item__icon { box-shadow: none !important; }
 html.delicat-low-power .dbv9-reveal { transition-duration: 160ms !important; }
 html.delicat-low-power .delicat-product-card__image, html.delicat-low-power .delicat-category-tile img { transition: none !important; }
-html.delicat-low-power *::before, html.delicat-low-power *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html.delicat-low-power .dsb8-header--glass, html.delicat-low-power .dsb8-header--glass::before, html.delicat-low-power .dsb8-header--glass::after, html.delicat-low-power .delicat-design-buybar__inner, html.delicat-low-power .delicat-shell__search-layer, html.delicat-low-power .delicat-shell__drawer-layer, html.delicat-low-power .dbv9-push-help__backdrop, html.delicat-low-power .delicat-woo-card-glass li.product { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 
 /* Scrolling feels native when the browser never fights the finger. */
 html { -webkit-text-size-adjust: 100%; }

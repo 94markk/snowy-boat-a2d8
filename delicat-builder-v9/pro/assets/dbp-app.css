@@ -56,9 +56,14 @@ body.dbp-app .delicat-bottom-nav {
    recorded two continuously animated marquees on mobile; a transform running
    forever on a low-end handset is a permanent frame-rate tax. */
 
+/* 9.3.2: the rails are named. `[class*="…"]` selectors made the browser
+   recalculate the whole page on every class change of <html>, <body> or
+   <main> (about 90ms on a slow phone, several times per navigation); the
+   review marquee is no longer stopped here (it loops, and pauses off screen). */
 @media (max-width: 782px) {
-  body.dbp-app [class*="marquee"],
-  body.dbp-app [class*="__track"] {
+  body.dbp-app .delicat-carousel__track,
+  body.dbp-app .delicat-category-chips__track,
+  body.dbp-app .delicat-testimonials__track {
     animation: none !important;
     transform: none !important;
     overflow-x: auto;
@@ -67,11 +72,15 @@ body.dbp-app .delicat-bottom-nav {
     scrollbar-width: none;
   }
 
-  body.dbp-app [class*="__track"]::-webkit-scrollbar {
+  body.dbp-app .delicat-carousel__track::-webkit-scrollbar,
+  body.dbp-app .delicat-category-chips__track::-webkit-scrollbar,
+  body.dbp-app .delicat-testimonials__track::-webkit-scrollbar {
     display: none;
   }
 
-  body.dbp-app [class*="__track"] > * {
+  body.dbp-app .delicat-carousel__track > *,
+  body.dbp-app .delicat-category-chips__track > *,
+  body.dbp-app .delicat-testimonials__track > * {
     scroll-snap-align: start;
   }
 }
@@ -89,8 +98,7 @@ body.dbp-lowdata *::after {
   transition-duration: 0.001ms !important;
 }
 
-body.dbp-lowdata [class*="shadow"],
-body.dbp-lowdata [style*="box-shadow"] {
+body.dbp-lowdata * {
   box-shadow: none !important;
 }
 

@@ -6,7 +6,7 @@
 .dbv9-pwa-steps li:first-child{border-top:0}
 .dbv9-pwa-step-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:#eef0ff;color:#5964ff}
 .dbv9-pwa-step-text{flex:1;min-width:0}
-.dbv9-install-bar{position:fixed;left:12px;right:12px;bottom:calc(var(--dbv9-nav-band,0px) + 10px);z-index:2147481950;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border:1px solid rgba(20,24,40,.08);border-radius:18px;background:#fff;color:#101326;box-shadow:0 14px 34px rgba(16,24,40,.16);transform:translateY(16px);opacity:0;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .2s ease}
+.dbv9-install-bar{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:2147481950;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border:1px solid rgba(20,24,40,.08);border-radius:18px;background:#fff;color:#101326;box-shadow:0 14px 34px rgba(16,24,40,.16);transform:translateY(-120%);opacity:0;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .2s ease}
 .dbv9-install-bar.is-in{transform:none;opacity:1}
 .dbv9-install-bar__icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,#5964ff,#e63da9);color:#fff}
 .dbv9-install-bar__copy{display:flex;flex:1;min-width:0;flex-direction:column;line-height:1.25}
@@ -17,7 +17,9 @@
 html[data-delicat-theme="dark"] .dbv9-install-bar,html.dlc-theme-dark .dbv9-install-bar{background:#171a2b;color:#f3f4fa;border-color:rgba(255,255,255,.08)}
 html[data-delicat-theme="dark"] .dbv9-install-bar__close,html.dlc-theme-dark .dbv9-install-bar__close{background:#262a3d;color:#f3f4fa}
 html[data-delicat-theme="dark"] .dbv9-pwa-steps li,html.dlc-theme-dark .dbv9-pwa-steps li{border-top-color:#262a3d;color:#f3f4fa}
-@media(min-width:560px){.dbv9-install-bar{left:50%;right:auto;width:min(calc(100% - 24px),460px);transform:translate(-50%,16px)}.dbv9-install-bar.is-in{transform:translate(-50%,0)}}
+@media(min-width:560px){.dbv9-install-bar{left:50%;right:auto;width:min(calc(100% - 24px),460px);transform:translate(-50%,-120%)}.dbv9-install-bar.is-in{transform:translate(-50%,0)}}
+/* Signed-in staff see the WordPress bar above the page. */
+body.admin-bar .dbv9-install-bar{top:calc(env(safe-area-inset-top,0px) + 56px)}
 /* The installed app: no browser bar below, so the bar stands on the home indicator; the status bar keeps its own strip. */
 html.delicat-standalone body{overscroll-behavior-y:none}
 html.delicat-standalone .dbv9-install-bar,html.delicat-standalone [data-dlx-install],html.delicat-standalone .delicat-builder-v9-install-app{display:none!important}

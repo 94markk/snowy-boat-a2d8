@@ -30,7 +30,7 @@ import pwa from './modules/pwa.js';
 import walletLive from './modules/wallet-live.js';
 import marquee from './modules/marquee.js';
 
-const VERSION = '9.3.1';
+const VERSION = '9.3.2';
 const hasClass = (name) => !!(doc.body && doc.body.classList.contains(name));
 const productRoute = () => import('./routes/product.js');
 const purchaseRoute = () => import('./routes/purchase.js');

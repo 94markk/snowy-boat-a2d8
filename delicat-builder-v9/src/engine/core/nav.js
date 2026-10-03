@@ -156,6 +156,18 @@ function progressNode() {
 	return bar;
 }
 
+/* While a slow navigation dims the page, a tap on the outgoing content (a
+   button, a form control) is refused; a tap on another link is a new
+   destination and goes through. This replaces the pointer-events rules. */
+function guardDimmedTaps(event) {
+	if (!state.inflight || !html.classList.contains('delicat-navigating-slow')) return;
+	const main = currentMain();
+	if (!main || !(event.target instanceof Node) || !main.contains(event.target)) return;
+	if (closest(event.target, 'a[href]')) return;
+	event.preventDefault();
+	event.stopPropagation();
+}
+
 function progressStart() {
 	html.classList.add('delicat-navigating');
 	win.clearTimeout(state.progressTimer);
@@ -329,14 +341,21 @@ function ensureStyle(item, after) {
 	const norm = normalise(item.href);
 	if (state.loadedStyles.has(norm)) {
 		const existing = styleNode(item.href);
-		if (existing) { existing.disabled = false; existing.removeAttribute('data-delicat-inactive'); return { node: existing, promise: Promise.resolve(existing) }; }
+		if (existing) { existing.setAttribute('data-delicat-media', item.media || 'all'); existing.setAttribute('data-delicat-pending', '1'); return { node: existing, promise: Promise.resolve(existing) }; }
 		state.loadedStyles.delete(norm);
 	}
 	if (stylePromises.has(norm)) return stylePromises.get(norm);
 	const link = doc.createElement('link');
 	link.rel = 'stylesheet';
 	link.href = item.href;
-	link.media = item.media || 'all';
+	/* Loaded and parsed now, applied at the swap: a sheet that applies as soon
+	   as it lands restyles the outgoing page for nothing (a full pass on a
+	   slow phone), then the new page is restyled again. With a media query
+	   that never matches the sheet arrives ready and the switch to its real
+	   media is part of the swap's own style pass. */
+	link.media = 'not all';
+	link.setAttribute('data-delicat-media', item.media || 'all');
+	link.setAttribute('data-delicat-pending', '1');
 	if (item.id && !doc.getElementById(item.id)) link.id = item.id;
 	const promise = new Promise((resolve, reject) => {
 		let done = false;
@@ -371,13 +390,29 @@ async function syncStyles(styles) {
 	}
 	/* Sheets only the previous page used stay cached but stop applying, the
 	   way a direct load of this page would never have had them. */
+	const retire = [];
 	for (const link of qsa('link[rel="stylesheet"][href]')) {
 		const norm = normalise(link.href);
 		if (wanted.has(norm) || !isPluginAsset(norm)) continue;
-		link.disabled = true;
-		link.setAttribute('data-delicat-inactive', '1');
+		retire.push(link);
 	}
 	await Promise.all(loads);
+	/* One style pass: the incoming sheets switch on and the outgoing ones off
+	   in the same task as the content swap. */
+	return () => {
+		for (const node of qsa('link[rel="stylesheet"][data-delicat-pending]')) {
+			node.removeAttribute('data-delicat-pending');
+			const media = node.getAttribute('data-delicat-media') || 'all';
+			if (node.media !== media) node.media = media;
+			if (node.disabled) node.disabled = false;
+			node.removeAttribute('data-delicat-inactive');
+		}
+		for (const link of retire) {
+			if (link.disabled) continue;
+			link.disabled = true;
+			link.setAttribute('data-delicat-inactive', '1');
+		}
+	};
 }
 
 const isPluginAsset = (href) => /\/(?:plugins|mu-plugins)\/delicat-builder-v9\//.test(href) || /\/uploads\/delicat-builder-v9\//.test(href);
@@ -410,7 +445,8 @@ function runInline(item) {
 	}
 	const node = doc.createElement('script');
 	if (item.id) node.id = item.id;
-	node.text = item.code;
+	/* A name for profilers: an inline script otherwise shows as "(anonymous)". */
+	node.text = item.code + '\n//# sourceURL=' + (item.id ? 'inline-' + item.id : 'inline-main') + '.js';
 	(item.id ? doc.head : doc.body).appendChild(node);
 }
 
@@ -549,18 +585,19 @@ function scrollToHash(url) {
 
 function transitionsAllowed() {
 	if (!cfg.transitions || !doc.startViewTransition) return false;
-	if (device.reducedMotion || device.veryLowPower) return false;
+	if (device.reducedMotion || device.veryLowPower || device.lowPower) return false;
 	if (device.memory > 0 && device.memory <= 3) return false;
 	return true;
 }
 
 async function commit(payload, url, options, token) {
 	warmScripts(payload.scripts);
-	await syncStyles(payload.styles);
+	const activateStyles = await syncStyles(payload.styles);
 	if (token !== state.token) return;
 
 	let fresh = null;
 	const run = () => {
+		activateStyles();
 		fresh = applySwap(payload, url, options);
 		if (!fresh) throw new Error('swap-failed');
 		const hero = isProductUrl(url) ? heroImage(fresh) : null;
@@ -622,6 +659,22 @@ async function commit(payload, url, options, token) {
    chrome, the bar and the scroll position already behave as on the real page.
    It is only shown when nothing is cached and no prefetch is about to land. */
 const esc = (value) => String(value || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/**
+ * How long a tap waits for the document before the placeholder goes up. A
+ * document that lands within the grace period is shown as it is: building
+ * the placeholder costs a layout and a paint that a slow phone would pay
+ * twice when the real page follows at once (the skeleton felt slower than
+ * the page on cheap phones). The grace grows with how slow the phone is, and
+ * the slowest phones never build one: the progress bar is their feedback.
+ * -1 means no placeholder.
+ */
+function placeholderGrace() {
+	if (cfg.placeholder === false) return -1;
+	if (device.veryLowPower || html.classList.contains('delicat-very-low-power')) return -1;
+	if (device.lowPower) return 260;
+	return 160;
+}
 
 function placeholderRoute(url) {
 	if (isProductUrl(url)) return 'product';
@@ -722,20 +775,21 @@ export async function navigate(url, options = {}) {
 	let placeholder = false;
 	try {
 		let entry = recall(url);
-		const pending = entry ? null : state.pending.get(url.href);
-		if (!entry && pending && pending.promise) {
-			/* A prefetch that is about to land is worth a short wait; a slow one is not. */
-			entry = await Promise.race([pending.promise.catch(() => null), new Promise((resolve) => win.setTimeout(() => resolve(null), 90))]);
-			if (token !== state.token) return;
-		}
-		if (!entry && cfg.placeholder !== false && options.push !== false) placeholder = showPlaceholder(url, options.link || null);
-		if (!entry && pending && pending.promise) {
-			try { entry = await pending.promise; } catch (_) { entry = null; }
-			if (token !== state.token) return;
-		}
 		if (!entry) {
-			entry = await fetchDocument(url, { signal: controller.signal });
-			if (!entry.noStore) remember(entry.url, entry);
+			const pending = state.pending.get(url.href);
+			const fresh = () => fetchDocument(url, { signal: controller.signal }).then((fetched) => { if (!fetched.noStore) remember(fetched.url, fetched); return fetched; });
+			/* A prefetch in flight is used when it lands; a failed one is fetched again. */
+			const promise = pending && pending.promise ? pending.promise.catch(() => null).then((found) => found || fresh()) : fresh();
+			const grace = placeholderGrace();
+			if (grace > 0) {
+				entry = await Promise.race([promise.then((found) => found, () => null), new Promise((resolve) => win.setTimeout(() => resolve(null), grace))]);
+				if (token !== state.token) return;
+			}
+			if (!entry) {
+				if (grace >= 0 && options.push !== false) placeholder = showPlaceholder(url, options.link || null);
+				entry = await promise;
+				if (token !== state.token) return;
+			}
 		}
 		if (token !== state.token) return;
 		finalUrl = entry.url || url;
@@ -959,6 +1013,7 @@ export function bindNavigation() {
 	}
 
 	html.classList.add('delicat-shell-nav', 'delicat-engine-nav');
+	on(doc, 'click', guardDimmedTaps, { capture: true });
 	return true;
 }
 

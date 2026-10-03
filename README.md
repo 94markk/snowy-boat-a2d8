@@ -168,6 +168,50 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
   failure. Only a fatal in a Builder file, or one raised while running Builder code, trips it now.
 * Version 9.3.1: the compiled page sheets and every cached fragment refresh on update.
 
+## Fifth pass: iPhone fixes, the floating bar, slow phones
+
+* **Hero search row broken on the live site** (a "Reche…" label inside the row, the arrow button
+  pushed to a second line): the form prints a screen-reader label and relied on the theme or on
+  WooCommerce's stylesheet for the `.screen-reader-text` rule that hides it; with WooCommerce's
+  sheet trimmed on native documents, a theme without the rule showed the label. The chrome bundle
+  now carries the rule on every page (legacy bundle included).
+* **Floating bar**: the shelf added in the third pass (the page background fading up around the
+  pill) read as an edge-to-edge strip with a line above it on the phone. The pill floats free
+  again with its own shadow, kept on low-power phones too, and the colour pins that turned every
+  idle tab grey are gone, so the theme's or Design Studio's bar colours apply.
+* **Install invitation**: iPhone and iPad only (Safari never offers to install anything by
+  itself; Android has the APK link and Chrome's own prompt), and it drops in from the top of the
+  screen where a system banner would, above the WordPress bar for signed-in staff.
+* **Speed, the real cause**: ten `[class*="…"]` selectors (launcher copy, chat widgets, rails,
+  touch targets, the native-header guard) made the browser restyle the whole page whenever a class
+  changed on `<html>`, `<body>` or `<main>`: about 15ms at desktop speed, 90ms on a slow phone,
+  several times per navigation and at every tab update or section reveal. All ten are rewritten
+  with named classes; a class change on a root element now costs nothing unless a rule uses that
+  class. The per-navigation root changes were reworked on the same principle: the dimmed page no
+  longer flips inherited `pointer-events`/`cursor` (a tap guard in the navigation module refuses
+  taps on the outgoing page instead), the motion variables are written to the root once per
+  profile, the product dock's page class comes with the document, and the bottom band is a
+  non-inherited custom property (`@property`), so showing the dock restyles the body and the
+  layout, not every element.
+* **Skeleton on slow phones**: the placeholder is shown only when the document takes longer than
+  160ms to arrive (260ms on low-power phones) and never on the slowest phones, so a fast response
+  is painted once instead of twice; its shimmer is static on low-power phones. View transitions
+  are skipped on low-power phones. Phones that report neither memory nor cores (Safari) are
+  measured once per session with a short loop at idle and classed accordingly.
+* **First product tap**: the product route's WordPress and WooCommerce scripts (jQuery, wp-util,
+  the variation form …) are recorded with their exact URLs when a product page prints them and
+  precached by the service worker; the comment-reply script is dropped on native product pages.
+* **One style pass per page change**: the incoming route stylesheet is fetched ahead with a media
+  query that never matches and switched on in the same task as the content swap (it used to
+  restyle the outgoing page as soon as it landed, then the new page again); the outgoing sheet
+  is switched off at the same moment, so the old page never loses its styles while still shown.
+  The theme's body class is printed with the document, so the boot no longer adds it.
+* **Measured** (local site, Chromium with CPU throttling and slow 4G, signed in; before → after):
+  at 6× CPU a product opened from a home card 1688 → 1145ms, Back 892 → 436ms, a product already
+  seen 823 → 675ms, the bar's tabs 747–1012 → 175–487ms; at 4× CPU the cold home DOMContentLoaded
+  1623 → 1450ms, the card tap 1512 → 968ms, the bar's tabs 620–740 → 196–598ms. Any class change
+  on a root element now costs 0ms where it cost 15ms (desktop speed) before.
+
 ## Build
 
 ```

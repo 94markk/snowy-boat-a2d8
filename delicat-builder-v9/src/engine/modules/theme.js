@@ -8,7 +8,7 @@
  * this module takes over from there (toggle buttons, system changes, logo
  * swap, assistant chrome).
  */
-import { cookie, device, doc, emit, html, on, qsa, raf, win } from '../core/dom.js';
+import { cookie, device, doc, emit, html, idle, on, qsa, raf, win } from '../core/dom.js';
 
 const KEY = 'dbv9_theme';
 const VALID = new Set(['light', 'dark', 'system']);
@@ -146,10 +146,40 @@ function resync() {
 	primeAssistant();
 }
 
+/* Safari reports neither memory nor cores, so an old iPhone looks like a new
+   one. Once per session, at idle, a short arithmetic loop says how fast the
+   phone really is: a current phone finishes it in a few milliseconds, a slow
+   one in several times that. The verdict gives the phone the lighter page
+   (no view transitions, no placeholder on the slowest, fewer decorations). */
+const SPEED_KEY = 'dbv9-speed';
+function measureSpeed() {
+	let verdict = null;
+	try { verdict = win.sessionStorage.getItem(SPEED_KEY); } catch (_) {}
+	const apply = (value) => {
+		if (value === 'low') html.classList.add('delicat-low-power', 'dsb8-low-power', 'dsb-cheap-device');
+		else if (value === 'very-low') html.classList.add('delicat-low-power', 'delicat-very-low-power', 'dsb8-low-power', 'dsb-cheap-device');
+	};
+	if (verdict !== null) { apply(verdict); return; }
+	idle(() => {
+		let best = Infinity;
+		for (let run = 0; run < 2; run++) {
+			const started = win.performance.now();
+			let x = 0;
+			for (let i = 0; i < 300000; i++) x = (x * 31 + i) % 1000003;
+			if (x < 0) return; /* keeps the loop alive */
+			best = Math.min(best, win.performance.now() - started);
+		}
+		const value = best >= 12 ? 'very-low' : (best >= 7 ? 'low' : 'ok');
+		try { win.sessionStorage.setItem(SPEED_KEY, value); } catch (_) {}
+		apply(value);
+	}, 4000);
+}
+
 export default function mount({ signal }) {
 	if (device.saveData) html.classList.add('delicat-save-data');
 	if (device.lowPower) html.classList.add('delicat-low-power', 'dsb8-low-power', 'dsb-cheap-device');
 	else if (device.reducedMotion) html.classList.add('dsb-cheap-device');
+	if (!device.lowPower && !device.memory) measureSpeed();
 	if (device.reducedMotion) html.classList.add('delicat-reduce-motion');
 
 	applyTheme(read() || html.dataset.delicatThemePreference || 'light', false);

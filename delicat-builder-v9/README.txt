@@ -1,3 +1,43 @@
+9.3.2 : corrections iPhone, barre flottante, téléphones lents.
+(1) Barre de recherche du hero cassée sur le site (un libellé « Reche… » dans la ligne, la flèche
+rejetée à la ligne) : le formulaire imprime un libellé pour lecteurs d'écran et comptait sur le thème
+ou sur la feuille WooCommerce pour la règle .screen-reader-text qui le masque ; la feuille WooCommerce
+étant retirée des documents natifs, un thème sans cette règle affichait le libellé. La règle voyage
+désormais avec le chrome sur chaque page (livraison classique comprise).
+(2) Barre flottante : l'« étagère » ajoutée à la troisième passe (le fond de page remontant autour de
+la pilule) se lisait sur téléphone comme une bande bord à bord surmontée d'un trait. La pilule flotte à
+nouveau librement avec sa propre ombre, conservée aussi sur les téléphones modestes ; les couleurs
+forcées qui grisaient tous les onglets inactifs sont retirées, les couleurs du thème ou du Design
+Studio s'appliquent.
+(3) Invitation à installer l'application : iPhone et iPad seulement (Safari ne propose jamais rien de
+lui-même ; Android a l'APK et l'invite de Chrome), et elle descend depuis le haut de l'écran, sous la
+barre WordPress pour l'équipe connectée.
+(4) Vitesse, la vraie cause : dix sélecteurs [class*="…"] (copie du lanceur, widgets de chat, rails,
+cibles tactiles, garde de l'en-tête natif) obligeaient le navigateur à recalculer toute la page à
+chaque changement de classe sur <html>, <body> ou <main> : environ 15 ms sur ordinateur, 90 ms sur
+un téléphone lent, plusieurs fois par navigation et à chaque mise à jour d'onglet ou apparition de
+section. Les dix sont réécrits avec des classes nommées ; un changement de classe sur la racine ne
+coûte plus rien. Les changements de racine propres à la navigation suivent le même principe : la page
+estompée ne bascule plus pointer-events/cursor (le module de navigation refuse les touchers sur la
+page sortante), les variables de mouvement ne sont écrites qu'une fois par profil, la classe du dock
+produit arrive avec le document, et la bande du bas est une propriété non héritée (@property).
+(5) Squelette sur téléphone lent : le squelette n'apparaît que si le document met plus de 160 ms à
+arriver (260 ms sur téléphone modeste), jamais sur les plus lents ; une réponse rapide est peinte une
+fois au lieu de deux ; son scintillement est fixe sur téléphone modeste. Les transitions de vue sont
+sautées sur téléphone modeste. Les téléphones qui n'indiquent ni mémoire ni cœurs (Safari) sont
+mesurés une fois par session par une courte boucle au repos.
+(6) Premier produit ouvert : les scripts WordPress/WooCommerce de la route produit (jQuery, wp-util,
+formulaire de variations…) sont enregistrés avec leur URL exacte quand une fiche les imprime et
+pré-mis en cache par le service worker ; le script comment-reply n'est plus chargé sur les fiches.
+(7) Une seule passe de style par changement de page : la feuille de la route entrante est chargée en
+avance avec une requête média qui ne correspond jamais puis activée dans la même tâche que le
+remplacement du contenu (elle restylait la page sortante dès son arrivée, puis la nouvelle page) ; la
+feuille sortante est désactivée au même instant ; la classe de thème du <body> est imprimée avec le
+document. Mesures locales (Chromium, processeur ralenti 6×, 4G lente, connecté, avant → après) :
+fiche ouverte depuis l'accueil 1688 → 1145 ms, retour 892 → 436 ms, onglets de la barre 747–1012 →
+175–487 ms.
+Purgez LiteSpeed et le CDN après la mise à jour.
+
 9.3.1 : correctifs demandés par la boutique sur les avis et les animations.
 (1) « Laisser un avis » (bloc Avis de la fiche produit, bouton de la section Témoignages) restait sans
 effet dès que l'application avait été ouverte sur une page qui n'imprime pas la configuration des avis
