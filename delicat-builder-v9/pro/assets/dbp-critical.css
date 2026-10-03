@@ -125,9 +125,13 @@ html[data-dbp-loading] main button {
 /* Reserving the chrome's height before its stylesheet arrives is what removes
    the late jump described in the RC90 notes. Fixed steps, no calc. */
 
+/* 9.3.2: `clip`, not `hidden`. With the root already clipping sideways
+   overflow, `hidden` here turned <body> into a scroll container, and a
+   sticky header sticks to its nearest scroll container: the header scrolled
+   away on every page (and under the status bar in the installed app). */
 body.dbp-app {
   background: var(--dbp-shell);
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 body.dbp-app main {

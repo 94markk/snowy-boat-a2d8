@@ -1,8 +1,8 @@
 {
     "algorithm": "sha256",
-    "built": "2026-10-03T12:40:35.959+00:00",
+    "built": "2026-10-03T12:46:56.604+00:00",
     "version": "9.3.2",
-    "bytes": 6051747,
+    "bytes": 6052617,
     "count": 277,
     "files": {
         "APK-UPLOAD-PRO58.txt": {
@@ -26,8 +26,8 @@
             "sha256": "d0fb531cb82eead6d8b129915fad572b4ae63aa31a24d50fc6721c72bd1ac1e6"
         },
         "README.txt": {
-            "bytes": 33380,
-            "sha256": "7a4d7f1efc69167e06a3188710807d897ad483424cd380e5d147aa06d78a3327"
+            "bytes": 33453,
+            "sha256": "82d3073a1d9a6289487cab2ffdd00f863c0ab242e63228eaa6be2ec0d378533e"
         },
         "asset-min-map.php": {
             "bytes": 217,
@@ -35,7 +35,7 @@
         },
         "asset-versions.php": {
             "bytes": 6076,
-            "sha256": "0e79438560b81d0614e392646a457b48d42eb571aa1038dbfd192c8dff1c5cfa"
+            "sha256": "3dc151402bc717824e21a734a29e1eca4c1dc8a1732e3ce5b1664924666bcc48"
         },
         "assets/components/all-components.min.css": {
             "bytes": 170271,
@@ -246,8 +246,8 @@
             "sha256": "9a42d41687bd6d7648b9a27f0b6a8b7bdf8ae36e04aaa55ef884c008d50775fe"
         },
         "assets/css/pwa-runtime.css": {
-            "bytes": 4472,
-            "sha256": "3cc19220339bfd47c71d3308d1a242f629eadf3b5e7cbcb50b7efd5f2b0ea762"
+            "bytes": 4845,
+            "sha256": "8ea4ef214555b2e0fae3f21545d2205ca5565c2999c157337304168f1faf4881"
         },
         "assets/css/reviews.css": {
             "bytes": 4226,
@@ -313,9 +313,9 @@
             "bytes": 195139,
             "sha256": "e19676980cbbd7786788f6fb376b6ac933c48d8da5e2823fc5ef442bfd87b124"
         },
-        "assets/dist/chrome.ff57ed253559.css": {
-            "bytes": 115158,
-            "sha256": "ff57ed25355984ffab387202c6496013745bc1968a344bb82c78847b711800dd"
+        "assets/dist/chrome.4f2a547bf33d.css": {
+            "bytes": 115289,
+            "sha256": "4f2a547bf33d40e98e5e8529634fd785ca9ab0fc428cfd96d540c27288cb300a"
         },
         "assets/dist/chunks/chunk.A53HRFLU.js": {
             "bytes": 4347,
@@ -379,7 +379,7 @@
         },
         "assets/dist/manifest.json": {
             "bytes": 9219,
-            "sha256": "96873a2ae4a7c02c029a569a6d0fd19ce7356f01be0d00592a75ad4ee645413c"
+            "sha256": "e5c58603508ed116b6bee2e930d421f6650d975ad614fda426d8976d6ee46c5b"
         },
         "assets/dist/page.e69a224d5399.css": {
             "bytes": 36250,
@@ -978,8 +978,8 @@
             "sha256": "844b2ed5113dea6e0d3e2ccf9dea89809b3cd4e5a3674a704187a18ba5433890"
         },
         "pro/assets/dbp-critical.css": {
-            "bytes": 4866,
-            "sha256": "5332d9b299eb8b6198b7a1b7ef9a435d2558d2222683eaab629f969f21199239"
+            "bytes": 5159,
+            "sha256": "73c0baa227273ccf86a02e14bf677ab358194036505ba748529f82045a8125c5"
         },
         "pro/assets/dbp-nav.js": {
             "bytes": 36037,

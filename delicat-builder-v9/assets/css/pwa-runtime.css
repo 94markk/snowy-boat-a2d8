@@ -22,6 +22,9 @@ html[data-delicat-theme="dark"] .dbv9-pwa-steps li,html.dlc-theme-dark .dbv9-pwa
 body.admin-bar .dbv9-install-bar{top:calc(env(safe-area-inset-top,0px) + 56px)}
 /* The installed app: no browser bar below, so the bar stands on the home indicator; the status bar keeps its own strip. */
 html.delicat-standalone body{overscroll-behavior-y:none}
+/* 9.3.2: in the installed app the page runs under the status bar (viewport-fit=cover); the sticky header carries that inset, so its row sits below the clock and the island and its background fills the strip, as a native app's bar does. */
+html.delicat-standalone .dsb8-header{padding-top:env(safe-area-inset-top,0px)}
+html.delicat-standalone .dsb8-header.is-sticky{top:0}
 html.delicat-standalone .dbv9-install-bar,html.delicat-standalone [data-dlx-install],html.delicat-standalone .delicat-builder-v9-install-app{display:none!important}
 html.delicat-standalone a,html.delicat-standalone button,html.delicat-standalone .dbn-item,html.delicat-standalone .dlx-item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 html.delicat-standalone input,html.delicat-standalone textarea,html.delicat-standalone [contenteditable]{-webkit-user-select:text;user-select:text}

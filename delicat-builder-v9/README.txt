@@ -29,6 +29,13 @@ mesurés une fois par session par une courte boucle au repos.
 (6) Premier produit ouvert : les scripts WordPress/WooCommerce de la route produit (jQuery, wp-util,
 formulaire de variations…) sont enregistrés avec leur URL exacte quand une fiche les imprime et
 pré-mis en cache par le service worker ; le script comment-reply n'est plus chargé sur les fiches.
+(8) En-tête collant perdu, et sous la barre d'état dans l'application installée : la feuille critique
+Pro posait overflow-x:hidden sur <body> alors que la racine coupe déjà le débordement latéral ; le body
+devenait un conteneur de défilement, et un en-tête collant se colle à son conteneur de défilement le
+plus proche : l'en-tête partait avec la page (dans l'application installée il glissait sous l'heure et
+l'îlot, illisible et inatteignable). Le body utilise overflow-x:clip, qui coupe sans créer de conteneur
+de défilement ; l'en-tête colle à nouveau et, dans l'application installée, porte la marge de la barre
+d'état (env(safe-area-inset-top)) : sa ligne se place sous l'heure et son fond remplit la bande.
 (7) Une seule passe de style par changement de page : la feuille de la route entrante est chargée en
 avance avec une requête média qui ne correspond jamais puis activée dans la même tâche que le
 remplacement du contenu (elle restylait la page sortante dès son arrivée, puis la nouvelle page) ; la

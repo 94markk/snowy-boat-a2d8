@@ -207,6 +207,14 @@ All `.min` twins were removed (52 files, 540 KB); `asset-min-map.php` is empty b
   restyle the outgoing page as soon as it landed, then the new page again); the outgoing sheet
   is switched off at the same moment, so the old page never loses its styles while still shown.
   The theme's body class is printed with the document, so the boot no longer adds it.
+* **Sticky header lost, and under the status bar in the installed app**: the Pro critical sheet
+  set `overflow-x: hidden` on `<body>` while the root already clips sideways overflow; that made
+  the body a scroll container, and a sticky header sticks to its nearest scroll container, so the
+  header scrolled away on every page (in the installed app it slid under the clock and the
+  island, unreadable and unreachable). The body now uses `overflow-x: clip`, which clips without
+  creating a scroll container, so the header sticks again; in the installed app it carries the
+  status-bar inset (`env(safe-area-inset-top)`), so its row sits below the clock and its
+  background fills the strip like a native app's bar.
 * **Measured** (local site, Chromium with CPU throttling and slow 4G, signed in; before → after):
   at 6× CPU a product opened from a home card 1688 → 1145ms, Back 892 → 436ms, a product already
   seen 823 → 675ms, the bar's tabs 747–1012 → 175–487ms; at 4× CPU the cold home DOMContentLoaded
