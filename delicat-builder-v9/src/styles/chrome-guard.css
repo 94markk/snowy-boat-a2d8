@@ -161,3 +161,11 @@ html .delicat-bottom-nav::before {
 @media (min-width: 560px) {
 	html .delicat-bottom-nav::before { left: 50%; right: auto; width: 100vw; transform: translateX(-50%); }
 }
+/* With the back control shown the row has one more item: the theme toggle
+   (also in the drawer's footer) steps aside and the logo may shrink, so the
+   cart never leaves the screen on a narrow phone. */
+html .dsb8-header.has-back .dsb8-header__theme { display: none !important; }
+html .dsb8-header.has-back .dsb8-header__logo { flex: 0 1 auto !important; min-width: 0 !important; overflow: hidden; }
+html .dsb8-header.has-back .dsb8-header__logo img { max-width: 100%; height: auto; }
+html .dsb8-header.has-back .dsb8-header__brand { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+html .dsb8-header.has-back .dsb8-header__spacer { flex: 0 1 auto; }

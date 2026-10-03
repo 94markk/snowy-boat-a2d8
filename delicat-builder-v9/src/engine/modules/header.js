@@ -51,6 +51,8 @@ export default function mount({ signal }) {
 				row.insertBefore(button, row.firstChild);
 			}
 			if (button) button.hidden = !show;
+			const header = doc.querySelector('.dsb8-header');
+			if (header) header.classList.toggle('has-back', show && !!button);
 		};
 		syncBack();
 		on(doc, 'delicat:navigated', syncBack, { signal });
