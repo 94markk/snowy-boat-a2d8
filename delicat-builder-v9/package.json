@@ -1,6 +1,6 @@
 {
   "name": "delicat-builder-v9",
-  "version": "9.3.3",
+  "version": "9.3.4",
   "private": true,
   "engines": { "node": ">=18" },
   "description": "Delicat Builder V9 — native storefront engine build pipeline (JS bundle + CSS route bundles).",

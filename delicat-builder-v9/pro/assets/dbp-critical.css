@@ -125,13 +125,16 @@ html[data-dbp-loading] main button {
 /* Reserving the chrome's height before its stylesheet arrives is what removes
    the late jump described in the RC90 notes. Fixed steps, no calc. */
 
-/* 9.3.2: `clip`, not `hidden`. With the root already clipping sideways
-   overflow, `hidden` here turned <body> into a scroll container, and a
-   sticky header sticks to its nearest scroll container: the header scrolled
-   away on every page (and under the status bar in the installed app). */
+/* 9.3.4: <body> never clips. Sideways overflow is clipped by the root
+   (html{overflow-x:hidden} propagates to the viewport); any overflow value
+   but visible here turns <body> into a scroll container, and a sticky header
+   sticks to its nearest scroll container: the header scrolled away on every
+   page. 9.3.2 used `clip`, which Chrome handles but iOS WebKit still trips
+   on (sticky inside an overflow-x: clip box jitters or lets go, WebKit bug
+   247130): the installed app on iPhone lost its header. */
 body.dbp-app {
   background: var(--dbp-shell);
-  overflow-x: clip;
+  overflow-x: visible;
 }
 
 body.dbp-app main {

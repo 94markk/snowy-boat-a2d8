@@ -269,6 +269,41 @@ emulation; `cart-probe.mjs` cart with an item, tab lit, bar unobstructed, no bar
 `pass4-visual.mjs` invitation at the top on iPhone, none on Android; `banner-probe.mjs` five cards,
 peek 44 px, dots following the scroll and a dot tap; `flows.mjs` 17/17 steps, no console errors.
 
+## Seventh pass: pinned header on iPhone, pull-to-refresh, design audit
+
+* **Header not pinned in the installed app on iPhone.** The root and `<body>` both clipped sideways
+  overflow with `overflow-x: clip`. Chromium keeps a sticky header pinned under that, but WebKit does
+  not reliably: a sticky element inside an `overflow-x: clip` box jitters or lets go (WebKit bug
+  247130), and in Chromium the root `clip` also offset the header in captures. Now only the root
+  clips (`html{overflow-x:hidden}`, which propagates to the viewport) and `<body>` is `overflow:
+  visible` everywhere (theme-system, storefront-polish, native-product, the pro critical sheet), the
+  only arrangement every engine keeps a sticky header pinned under. `sticky-visual.mjs` captures the
+  scrolled header at the top on home and product; the `body{overflow-x:hidden}` variant breaks it.
+* **Cart page in the installed app.** The page head's own back chevron is hidden where the header
+  already carries one; the page's bottom padding no longer stacks on the bar's band (an empty cart
+  showed a screen of blank space); short pages keep a 40vh minimum on phones instead of 64vh; the
+  footer mark is pinned to 48px whatever the theme says about images.
+* **Pull-to-refresh on every page.** On by default on touch devices (filter
+  `delicat_builder_v9_app_polish_pull_refresh`). The gesture is unchanged (drag at the very top,
+  threshold 72px, stands down inside rails and overlays); the refresh now goes through the engine:
+  the memory cache is dropped, the session (cart, wallet, alerts) refreshed, the page fetched again
+  with `cache: 'reload'` and swapped in place, with a check mark when it lands. Session-bound pages
+  (cart, checkout, account, wallet) reload fully. `ptr-probe.mjs` drives the gesture with real touch
+  events through the DevTools protocol: indicator at 78px, armed, soft refresh, page not reloaded.
+* **Design audit (`audit-shots.mjs`: 13 routes × phone, dark, installed app, desktop, plus drawer,
+  cart panel, product and express states).** Fixed: the 404 page printed the theme's search form
+  (visible "Search…" label, overflowing orange button) and orange buttons with purple text, replaced
+  by the store's own search form and brand buttons; the sign-in form's "remember me" checkbox was
+  stretched to the row width (checkbox beside its label, button on its own line now); the legal
+  pages' summary numbered already numbered headings ("1. 1. …"); the product options' reset link sat
+  red under every pack grid before anything was selected (hidden until a selection, French, quiet);
+  the cart head's chevron floated between the title and the count (aligned with the title).
+* **Performance audit at 4× CPU** (`scrolljank.mjs`, `navtiming.mjs`, `cpuprofile.mjs`, `vitals.mjs`):
+  scrolling at a steady 17 ms per frame on home, shop and product; LCP 456–584 ms on a fast link,
+  CLS 0.000 on all three; soft navigations 365–975 ms on slow 4G, cold home DCL 1.44 s. Every scroll
+  listener is passive and frame-throttled, no `transition: all`, no blur filters on scrolling
+  content. The hottest boot function is the once-per-session speed probe (65 ms at 4×, at idle).
+
 ## Build
 
 ```

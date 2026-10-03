@@ -1266,7 +1266,7 @@ final class Delicat_Builder_V9_Swatches {
             echo '</section>';
         }
         if ( 'yes' === $this->get( 'show_reset' ) ) {
-            echo '<button type="button" class="ddsw-reset">' . esc_html__( 'Clear selection', 'delicat-swatches' ) . '</button>';
+            echo '<button type="button" class="ddsw-reset">' . esc_html__( 'Effacer la sélection', 'delicat-swatches' ) . '</button>';
         }
         echo '</div>';
         if ( $is_subscription_preset && 'yes' === $this->get( 'subscription_show_trust' ) ) {

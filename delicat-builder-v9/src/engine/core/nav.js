@@ -225,7 +225,7 @@ export function invalidate() {
 
 /* ---------------------------------------------------------------- fetching */
 
-async function fetchDocument(url, { signal, prefetch = false } = {}) {
+async function fetchDocument(url, { signal, prefetch = false, fresh = false } = {}) {
 	const controller = new AbortController();
 	const timer = win.setTimeout(() => controller.abort(new Error('navigation-timeout')), cfg.timeout);
 	if (signal) {
@@ -235,6 +235,7 @@ async function fetchDocument(url, { signal, prefetch = false } = {}) {
 	try {
 		const init = { credentials: 'same-origin', cache: 'default', redirect: 'follow', signal: controller.signal, headers: { Accept: 'text/html' } };
 		if (prefetch) { init.headers['X-Delicat-Prefetch'] = '1'; try { init.priority = 'low'; } catch (_) {} }
+		if (fresh) init.cache = 'reload'; /* pull-to-refresh: the network, not a copy */
 		const response = await fetch(url.href, init);
 		const type = response.headers.get('content-type') || '';
 		if (!response.ok || type.indexOf('text/html') === -1) {
@@ -774,10 +775,10 @@ export async function navigate(url, options = {}) {
 	let finalUrl = url;
 	let placeholder = false;
 	try {
-		let entry = recall(url);
+		let entry = options.fresh ? null : recall(url);
 		if (!entry) {
-			const pending = state.pending.get(url.href);
-			const fresh = () => fetchDocument(url, { signal: controller.signal }).then((fetched) => { if (!fetched.noStore) remember(fetched.url, fetched); return fetched; });
+			const pending = options.fresh ? null : state.pending.get(url.href);
+			const fresh = () => fetchDocument(url, { signal: controller.signal, fresh: !!options.fresh }).then((fetched) => { if (!fetched.noStore) remember(fetched.url, fetched); return fetched; });
 			/* A prefetch in flight is used when it lands; a failed one is fetched again. */
 			const promise = pending && pending.promise ? pending.promise.catch(() => null).then((found) => found || fresh()) : fresh();
 			const grace = placeholderGrace();

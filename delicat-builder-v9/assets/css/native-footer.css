@@ -89,9 +89,9 @@
 
 .dbv9-footer-logo-image {
   display: block;
-  width: auto;
-  max-width: 220px;
-  height: 48px;
+  width: auto !important; /* 9.3.4: themes size images to their column; the mark stays a mark */
+  max-width: min(60vw, 220px) !important;
+  height: 48px !important;
   object-fit: contain;
 }
 

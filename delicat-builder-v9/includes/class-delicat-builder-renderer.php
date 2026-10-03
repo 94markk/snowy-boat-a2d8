@@ -508,7 +508,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 		}
 		$out .= '</div>';
 		if ( $many && ! empty( $content['show_dots'] ) ) {
-			$out .= '<div class="delicat-banner-rail__dots" aria-hidden="true">' . str_repeat( '<i></i>', count( $cards ) ) . '</div>';
+			$out .= '<div class="delicat-banner-rail__dots" aria-hidden="true"><i class="is-active"></i>' . str_repeat( '<i></i>', count( $cards ) - 1 ) . '</div>';
 		}
 		return $out . '</div>';
 	}

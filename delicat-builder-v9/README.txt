@@ -1,3 +1,27 @@
+9.3.4 : en-tête épinglé sur iPhone, tirer pour actualiser, audit du design.
+(1) En-tête qui défilait avec la page dans l'application installée sur iPhone : la racine et <body>
+coupaient tous deux le débordement latéral avec overflow-x: clip. Chrome garde l'en-tête collant
+épinglé ainsi, WebKit non (un élément collant dans une boîte overflow-x: clip tremble ou lâche, bogue
+WebKit 247130). Seule la racine coupe désormais (html{overflow-x:hidden}, transmis à la fenêtre) et
+<body> reste overflow: visible partout : le seul arrangement que tous les moteurs respectent.
+(2) Page Panier dans l'application : plus de double chevron de retour (l'en-tête en porte déjà un),
+plus d'écran vide sous un panier vide (le rembourrage de la page ne s'empile plus sur la bande de la
+barre, hauteur minimale réduite sur téléphone), logo du pied de page fixé à 48 px quoi que dise le
+thème des images.
+(3) Tirer vers le bas pour actualiser, sur toutes les pages (appareils tactiles, activé par défaut) :
+la page est rechargée depuis le réseau et remplacée sur place par le moteur, avec une coche à
+l'arrivée ; panier, commande, compte et wallet se rechargent entièrement.
+(4) Audit visuel de 13 pages (téléphone, sombre, application, bureau, menu, panneau panier, fiche
+produit, feuille express) : page 404 (formulaire de recherche du thème avec libellé visible et bouton
+débordant, boutons orange à texte violet) refaite avec le formulaire et les couleurs de la boutique ;
+formulaire de connexion (case « Se souvenir de moi » étirée sur toute la ligne) ; sommaire des pages
+légales qui numérotait des titres déjà numérotés (« 1. 1. … ») ; lien « Effacer la sélection » des
+options produit, rouge et affiché avant toute sélection (masqué jusqu'à une sélection, en français,
+discret) ; chevron de l'en-tête du panier aligné sur le titre.
+(5) Audit de performance à CPU ×4 : défilement à 17 ms par image sur accueil, boutique et produit,
+LCP 456–584 ms, CLS 0, navigations douces 365–975 ms en 4G lente ; tous les écouteurs de défilement
+sont passifs et limités à une image ; aucun « transition: all », aucun flou sur le contenu défilant.
+
 9.3.3 : barre sur toutes les pages, application installée, bannière en carrousel.
 (1) Barre flottante disparue après une mise à jour (surtout dans l'application installée) : une page
 rendue avant la mise à jour désigne encore les fichiers hachés de l'ancienne version (chrome.<hash>.css,

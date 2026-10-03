@@ -372,8 +372,8 @@ body {
 	.woocommerce-loop-product__title { font-size:13.5px !important; }
 }
 
-/* Legacy pull-to-refresh UI remains available behind a feature filter, but is
- * disabled by default in RC85. These rules are inert unless the script creates it. */
+/* Pull-to-refresh indicator (9.3.4: on by default on touch devices; the
+ * engine fetches the page again and swaps it in place). */
 .dlx-ptr {
 	position:fixed;
 	top:max(env(safe-area-inset-top),4px);
@@ -385,7 +385,7 @@ body {
 	height:40px;
 	border-radius:999px;
 	background:var(--delicat-surface,#fff);
-	color:var(--delicat-primary,#8b5cf6);
+	color:#6d5dfc;
 	box-shadow:0 10px 26px rgba(16,24,40,.18);
 	opacity:0;
 	transform:translate3d(-50%,0,0);
@@ -397,3 +397,10 @@ body {
 .dlx-ptr.is-loading { transition:transform .18s ease; }
 .dlx-ptr.is-loading .dlx-ptr__ring { animation:dlx-ptr-spin .7s linear infinite; }
 @keyframes dlx-ptr-spin { to { transform:rotate(360deg); } }
+.dlx-ptr__check { display:none; }
+.dlx-ptr__check svg { display:block; width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2.6; stroke-linecap:round; stroke-linejoin:round; }
+.dlx-ptr.is-done { color:#139a5b; transition:transform .24s cubic-bezier(.2,.8,.2,1),opacity .24s ease; }
+.dlx-ptr.is-done .dlx-ptr__ring { display:none; }
+.dlx-ptr.is-done .dlx-ptr__check { display:block; animation:dlx-ptr-pop .26s cubic-bezier(.2,.8,.2,1); }
+@keyframes dlx-ptr-pop { from { transform:scale(.6); opacity:0; } to { transform:none; opacity:1; } }
+html.dlc-theme-dark .dlx-ptr { background:#1b2235; }

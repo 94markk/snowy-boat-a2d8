@@ -1,16 +1,21 @@
 /**
  * Banner rail: the position dots follow the card in view, and a tap on a dot
  * brings its card in. Scrolling itself is the browser's (snap points); this
- * only watches it, one frame at a time.
+ * only watches it, one frame at a time. The server lights the first dot, so
+ * nothing is measured at mount: the first measurement waits for the first
+ * scroll, when layout is already clean (measuring at boot forced a layout of
+ * the whole page, 65 ms on a slow phone).
  */
-import { device, on, qsa, raf } from '../core/dom.js';
+import { device, on, qsa, raf, win } from '../core/dom.js';
 
 export default function mount({ root, signal }) {
 	for (const rail of qsa('[data-dbv9-banner-rail]', root)) {
 		const track = rail.querySelector('[data-dbv9-banner-track]');
 		const dots = track ? Array.from(rail.querySelectorAll('.delicat-banner-rail__dots i')) : [];
 		if (!track || !dots.length) continue;
-		const step = () => { const cards = track.children; return cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : (cards[0] ? cards[0].offsetWidth : 0); };
+		let size = 0;
+		const step = () => { if (!size) { const cards = track.children; size = cards.length > 1 ? cards[1].offsetLeft - cards[0].offsetLeft : (cards[0] ? cards[0].offsetWidth : 0); } return size; };
+		on(win, 'resize', () => { size = 0; }, { passive: true, signal });
 		let queued = false;
 		const paint = () => {
 			queued = false;
@@ -27,6 +32,5 @@ export default function mount({ root, signal }) {
 			if (!dot) return;
 			try { track.scrollTo({ left: dots.indexOf(dot) * step(), behavior: device.reducedMotion ? 'auto' : 'smooth' }); } catch (_) { track.scrollLeft = dots.indexOf(dot) * step(); }
 		}, { signal });
-		paint();
 	}
 }

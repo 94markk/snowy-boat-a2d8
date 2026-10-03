@@ -588,3 +588,6 @@ html.delicat-slow-net .dbv9-reveal {
 }
 
 html.delicat-slow-net .delicat-legal__toc { background: #f4f6fc; }
+/* 9.3.4: the section headings carry their own numbers; the summary list adds none. */
+.delicat-legal__toc ol { list-style: none; margin: 0; padding: 0; }
+.delicat-legal__toc ol li { margin: 0 0 8px; padding: 0; }

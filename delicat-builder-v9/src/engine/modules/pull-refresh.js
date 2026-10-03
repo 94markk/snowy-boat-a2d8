@@ -1,12 +1,17 @@
 /**
- * Pull-to-refresh (App Polish feature). Drag down at the very top of the page
- * and the storefront reloads. Touch only; stands down while any overlay owns
- * the screen, inside scrollable rails and during horizontal swipes. The
- * non-passive touchmove listener exists only for the length of a qualifying
- * gesture, so ordinary scrolling keeps the compositor fast path.
+ * Pull-to-refresh. Drag down at the very top of the page and the page is
+ * fetched again from the network and swapped in place by the engine (9.3.4:
+ * no full reload, so the chrome stays and the refresh takes a few hundred
+ * milliseconds; session-bound pages such as the cart reload fully). Touch
+ * only; stands down while any overlay owns the screen, inside scrollable
+ * rails and during horizontal swipes. The non-passive touchmove listener
+ * exists only for the length of a qualifying gesture, so ordinary scrolling
+ * keeps the compositor fast path.
  */
 import { doc, emit, html, on, raf, win } from '../core/dom.js';
 import { anyOverlayOpen } from '../core/overlay.js';
+import { nav } from '../core/nav.js';
+import { session } from '../core/state.js';
 
 const THRESHOLD = 72;
 const MAX = 104;
@@ -26,6 +31,10 @@ export default function mount({ signal, config }) {
 		ring.className = 'dlx-ptr__ring';
 		ring.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
 		indicator.appendChild(ring);
+		const check = doc.createElement('div');
+		check.className = 'dlx-ptr__check';
+		check.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+		indicator.appendChild(check);
 		doc.body.appendChild(indicator);
 		return indicator;
 	};
@@ -61,14 +70,32 @@ export default function mount({ signal, config }) {
 		indicator.style.transform = ''; indicator.style.opacity = '';
 		win.setTimeout(() => { if (indicator) indicator.classList.remove('is-settling'); }, 260);
 	};
+	const hard = () => { try { location.reload(); } catch (_) { location.href = location.href; } };
 	const refresh = () => {
 		busy = true;
 		build();
 		indicator.classList.add('is-loading');
+		indicator.classList.remove('is-armed');
 		indicator.style.transform = 'translate3d(-50%,64px,0)';
 		indicator.style.opacity = '1';
 		emit('delicat:pull-refresh');
-		win.setTimeout(() => { try { location.reload(); } catch (_) { location.href = location.href; } }, 140);
+		const done = () => {
+			busy = false;
+			if (!indicator) return;
+			indicator.classList.remove('is-loading');
+			indicator.classList.add('is-done');
+			win.setTimeout(() => { if (indicator) { indicator.classList.remove('is-done'); reset(); } }, 560);
+		};
+		let promise = null;
+		try {
+			nav.invalidate();
+			session.refresh('pull-refresh');
+			promise = nav.navigate(location.href, { push: false, fresh: true });
+		} catch (_) { hard(); return; }
+		/* No promise: the engine handed the address to a full load (a session-bound page). */
+		if (!promise || typeof promise.then !== 'function') return;
+		const timer = win.setTimeout(hard, 15000);
+		promise.then(() => { win.clearTimeout(timer); done(); }, () => { win.clearTimeout(timer); hard(); });
 	};
 	const onMove = (event) => {
 		if (!start || event.touches.length !== 1) return;

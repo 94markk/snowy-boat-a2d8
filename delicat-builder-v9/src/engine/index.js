@@ -31,7 +31,7 @@ import walletLive from './modules/wallet-live.js';
 import marquee from './modules/marquee.js';
 import banner from './modules/banner.js';
 
-const VERSION = '9.3.3';
+const VERSION = '9.3.4';
 const hasClass = (name) => !!(doc.body && doc.body.classList.contains(name));
 const productRoute = () => import('./routes/product.js');
 const purchaseRoute = () => import('./routes/purchase.js');

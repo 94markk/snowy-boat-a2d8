@@ -37,7 +37,7 @@ defined( 'ABSPATH' ) || exit;
 
 final class Delicat_Builder_V9_Engine {
 
-	const VERSION       = '9.3.3';
+	const VERSION       = '9.3.4';
 	const DIST          = 'assets/dist/';
 	const HANDLE_CHROME = 'delicat-engine-chrome';
 	const HANDLE_ROUTE  = 'delicat-engine-route';
@@ -643,7 +643,7 @@ final class Delicat_Builder_V9_Engine {
 			'route'       => self::$route,
 			'nav'         => $nav,
 			'session'     => $session,
-			'pullRefresh' => (bool) apply_filters( 'delicat_builder_v9_app_polish_pull_refresh', false ),
+			'pullRefresh' => (bool) apply_filters( 'delicat_builder_v9_app_polish_pull_refresh', true ), /* 9.3.4: on by default (touch devices only; the module checks) */
 			'reviews'     => self::reviews_config(),
 			'globals'     => self::$globals,
 			'chunks'      => self::chunk_map(),

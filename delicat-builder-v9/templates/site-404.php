@@ -31,7 +31,14 @@ $delicat_site_404 = class_exists( 'Delicat_Builder_V9_Site', false )
 			<p class="delicat-site-404__text"><?php echo esc_html( (string) $delicat_site_404['text'] ); ?></p>
 		<?php endif; ?>
 
-		<div class="delicat-site-404__search"><?php get_search_form(); ?></div>
+		<div class="delicat-site-404__search">
+			<form role="search" method="get" class="delicat-site-404__form" action="<?php echo esc_url( home_url( '/' ) ); ?>">
+				<label class="screen-reader-text" for="delicat-404-search"><?php esc_html_e( 'Rechercher', 'delicat-builder-v9' ); ?></label>
+				<input id="delicat-404-search" type="search" name="s" placeholder="<?php esc_attr_e( 'Rechercher un jeu, une carte…', 'delicat-builder-v9' ); ?>" autocomplete="off">
+				<input type="hidden" name="post_type" value="product">
+				<button type="submit"><?php esc_html_e( 'Rechercher', 'delicat-builder-v9' ); ?></button>
+			</form>
+		</div>
 
 		<div class="delicat-site-404__actions">
 			<a class="delicat-site-404__button delicat-site-404__button--primary" href="<?php echo esc_url( (string) ( $delicat_site_404['home_url'] ?? home_url( '/' ) ) ); ?>"><?php esc_html_e( 'Retour à l’accueil', 'delicat-builder-v9' ); ?></a>
