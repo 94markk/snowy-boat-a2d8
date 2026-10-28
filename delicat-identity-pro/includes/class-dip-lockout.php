@@ -143,6 +143,66 @@ final class DIP_Lockout {
         return self::window_peek($key);
     }
 
+    /** Forget a counter_hit() bucket (for example after a success). */
+    public static function counter_clear($key) {
+        global $wpdb;
+        $table = self::counter_table();
+        if ($table !== '') {
+            $suppress = $wpdb->suppress_errors(true);
+            $wpdb->query($wpdb->prepare("DELETE FROM {$table} WHERE bucket = %s", hash('sha256', (string) $key)));
+            $wpdb->suppress_errors($suppress);
+        }
+        delete_transient($key);
+    }
+
+    /**
+     * Short exclusive lock on one options row. INSERT IGNORE inserts the row
+     * for exactly one request: add_option() is not a mutex (its INSERT … ON
+     * DUPLICATE KEY UPDATE also "succeeds" for a second writer whose value
+     * differs). A lock older than $ttl seconds is stale and taken over with
+     * a compare-and-delete, so a crashed request never blocks for good.
+     * $wait_ms waits a little for a concurrent holder instead of failing.
+     */
+    public static function mutex_acquire($name, $ttl = 6, $wait_ms = 0) {
+        global $wpdb;
+        $name = substr(sanitize_key((string) $name), 0, 170);
+        if ($name === '' || !is_object($wpdb)) return false;
+        $ttl = min(30, max(2, absint($ttl)));
+        $deadline = microtime(true) + min(2000, absint($wait_ms)) / 1000;
+        $suppress = $wpdb->suppress_errors(true);
+        $rows = 0;
+        try {
+            for ($i = 0; $i < 60; $i++) {
+                $now = time();
+                $rows = $wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", $name, (string) $now));
+                if ($rows === 1) return true;
+                if ($rows === false) break;
+                $held = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $name));
+                if ($held !== null && (int) $held + $ttl < $now && $i < 3) {
+                    $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", $name, (string) $held));
+                    continue;
+                }
+                if (microtime(true) >= $deadline) break;
+                usleep(50000);
+            }
+        } finally {
+            $wpdb->suppress_errors($suppress);
+            wp_cache_delete($name, 'options');
+        }
+        // The database refused the raw statement: keep the previous behaviour.
+        return $rows === false ? (bool) add_option($name, time(), '', false) : false;
+    }
+
+    public static function mutex_release($name) {
+        global $wpdb;
+        $name = substr(sanitize_key((string) $name), 0, 170);
+        if ($name === '' || !is_object($wpdb)) return;
+        $suppress = $wpdb->suppress_errors(true);
+        $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s", $name));
+        $wpdb->suppress_errors($suppress);
+        wp_cache_delete($name, 'options');
+    }
+
     /** Daily: drop counters whose window ended more than an hour ago. */
     public static function purge_counters() {
         global $wpdb;

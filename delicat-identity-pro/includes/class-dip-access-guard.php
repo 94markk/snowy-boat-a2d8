@@ -14,6 +14,8 @@ final class DIP_Access_Guard {
 
     /** @var bool */
     private static $protected_request = false;
+    /** @var bool|null */
+    private static $protected_memo = null;
 
     public static function init() {
         add_action('template_redirect', [__CLASS__, 'protect_frontend'], 0);
@@ -137,6 +139,7 @@ final class DIP_Access_Guard {
             'dip_unlink_microsoft',
             'dip_send_password_setup',
             'dip_reauth_confirm',
+            'dip_reauth_email_code',
             'dip_2fa_begin',
             'dip_2fa_confirm',
             'dip_2fa_disable',
@@ -299,12 +302,18 @@ final class DIP_Access_Guard {
     }
 
     public static function is_protected_frontend_request() {
+        if (self::$protected_memo !== null) return self::$protected_memo;
         if (is_admin() || wp_doing_ajax() || wp_doing_cron()) return false;
         if (defined('REST_REQUEST') && REST_REQUEST) return false;
-        if (self::is_identity_endpoint()) return true;
-        if (self::has_protected_shortcode()) return true;
-        $slugs = self::protected_page_slugs();
-        return $slugs && is_page($slugs);
+        $protected = self::is_identity_endpoint() || self::has_protected_shortcode();
+        if (!$protected) {
+            $slugs = self::protected_page_slugs();
+            $protected = $slugs && is_page($slugs);
+        }
+        // Settled once the main query ran: later header/redirect checks of the
+        // same request reuse it instead of re-parsing settings and page data.
+        if (did_action('wp')) self::$protected_memo = (bool) $protected;
+        return (bool) $protected;
     }
 
     private static function remember_return_url($url) {
