@@ -26,9 +26,11 @@ final class DIP_Reauth {
     const CODE_MAX_TRIES = 5;
     const CODE_MAIL_FLOOD = 10;
     const ACCOUNT_FAILURES = 20;
+    const DAY_FAILURES = 50;
 
     /** Session tokens issued during this request, by user id. */
     private static $issued = [];
+    private static $styles_printed = false;
 
     public static function init() {
         add_action('set_logged_in_cookie', [__CLASS__, 'capture_issued_token'], 10, 6);
@@ -194,8 +196,10 @@ final class DIP_Reauth {
 
     private static function passkey_available($user_id) {
         if (!class_exists('DIP_Passkeys') || !method_exists('DIP_Passkeys', 'count') || !DIP_Passkeys::available()) return false;
-        if (!wp_script_is('dip-passkeys', 'enqueued') && !wp_script_is('dip-passkeys', 'done')) return false;
-        return DIP_Passkeys::count($user_id) > 0;
+        if (DIP_Passkeys::count($user_id) < 1) return false;
+        // The button needs the passkey runtime, which enqueues itself once (C4).
+        if (method_exists('DIP_Passkeys', 'enqueue_runtime')) return (bool) DIP_Passkeys::enqueue_runtime();
+        return wp_script_is('dip-passkeys', 'enqueued') || wp_script_is('dip-passkeys', 'done');
     }
 
     // ------------------------------------------------------------- rate limits
@@ -217,21 +221,36 @@ final class DIP_Reauth {
         return true;
     }
 
-    /** Account-wide, failures only: rotating addresses must not allow endless guessing from a stolen session. */
-    private static function failure_key($user_id) {
-        return 'dip_reauth_fail_' . absint($user_id);
+    /**
+     * Account-wide, failures only: rotating addresses must not allow endless
+     * guessing from a stolen session (20 per 10 minutes, 50 per day). A real
+     * customer is never stuck: signing in again counts as a confirmation.
+     */
+    private static function failure_key($user_id, $scope = '') {
+        return 'dip_reauth_fail_' . ($scope !== '' ? $scope . '_' : '') . absint($user_id);
     }
 
+    /** '' (allowed), 'rate_limited' (short window) or 'locked' (daily cap). */
     private static function failures_exhausted($user_id) {
-        return class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_peek') && DIP_Lockout::counter_peek(self::failure_key($user_id))['count'] >= self::ACCOUNT_FAILURES;
+        if (!class_exists('DIP_Lockout') || !method_exists('DIP_Lockout', 'counter_peek')) return '';
+        if (DIP_Lockout::counter_peek(self::failure_key($user_id, 'day'))['count'] >= self::DAY_FAILURES) return 'locked';
+        return DIP_Lockout::counter_peek(self::failure_key($user_id))['count'] >= self::ACCOUNT_FAILURES ? 'rate_limited' : '';
     }
 
     private static function record_failure($user_id, $method) {
         if (class_exists('DIP_Audit')) DIP_Audit::record('reauth_failed', 'warning', $user_id, ['method'=>sanitize_key($method)]);
         if (!class_exists('DIP_Lockout') || !method_exists('DIP_Lockout', 'counter_hit')) return;
-        if (DIP_Lockout::counter_hit(self::failure_key($user_id), 10 * MINUTE_IN_SECONDS) === self::ACCOUNT_FAILURES && class_exists('DIP_Audit')) {
-            DIP_Audit::record('reauth_failures_limit', 'critical', $user_id);
+        $short = DIP_Lockout::counter_hit(self::failure_key($user_id), 10 * MINUTE_IN_SECONDS);
+        $day = DIP_Lockout::counter_hit(self::failure_key($user_id, 'day'), DAY_IN_SECONDS);
+        if (($short === self::ACCOUNT_FAILURES || $day === self::DAY_FAILURES) && class_exists('DIP_Audit')) {
+            DIP_Audit::record('reauth_failures_limit', 'critical', $user_id, ['window'=>$day === self::DAY_FAILURES ? 'day' : '10min']);
         }
+    }
+
+    private static function clear_failures($user_id) {
+        if (!class_exists('DIP_Lockout') || !method_exists('DIP_Lockout', 'counter_clear')) return;
+        DIP_Lockout::counter_clear(self::failure_key($user_id));
+        DIP_Lockout::counter_clear(self::failure_key($user_id, 'day'));
     }
 
     // --------------------------------------------------------------- redirects
@@ -339,9 +358,10 @@ final class DIP_Reauth {
 
         $user_id = get_current_user_id();
         $return = self::posted_return();
-        if (!self::rate_allowed($user_id) || self::failures_exhausted($user_id)) {
+        $exhausted = self::failures_exhausted($user_id);
+        if ($exhausted !== '' || !self::rate_allowed($user_id)) {
             if (class_exists('DIP_Audit')) DIP_Audit::record('reauth_rate_limited', 'warning', $user_id);
-            self::redirect('rate_limited', $return);
+            self::redirect($exhausted === 'locked' ? 'locked' : 'rate_limited', $return);
         }
 
         $user = get_userdata($user_id);
@@ -387,7 +407,7 @@ final class DIP_Reauth {
 
         self::mark_recent($user_id);
         delete_transient(self::rate_key($user_id));
-        if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_clear')) DIP_Lockout::counter_clear(self::failure_key($user_id));
+        self::clear_failures($user_id);
         if (class_exists('DIP_Audit')) DIP_Audit::record('reauth_success', 'info', $user_id, ['method'=>$method]);
         if ($return !== '') {
             wp_safe_redirect($return);
@@ -550,6 +570,7 @@ final class DIP_Reauth {
             'factor_required' => __('Votre compte est protégé par la 2FA : entrez un code de votre application Authenticator ou un code de récupération.', 'delicat-google-login'),
             'code_replayed' => __('Ce code vient déjà d’être utilisé. Attendez le code suivant de votre application (30 secondes).', 'delicat-google-login'),
             'rate_limited' => __('Trop de tentatives. Réessayez dans quelques minutes.', 'delicat-google-login'),
+            'locked' => __('Trop de confirmations échouées aujourd’hui. Pour continuer, déconnectez-vous puis reconnectez-vous : une connexion récente confirme aussi votre identité.', 'delicat-google-login'),
             'success' => __('Identité confirmée. Les actions sensibles sont autorisées temporairement.', 'delicat-google-login'),
             'code_sent' => sprintf(__('Un code à 6 chiffres vient d’être envoyé à %s. Il expire dans 10 minutes.', 'delicat-google-login'), $masked),
             'code_cooldown' => __('Un code vient déjà d’être envoyé. Vérifiez votre boîte de réception (et les indésirables) ou patientez une minute avant d’en demander un autre.', 'delicat-google-login'),
@@ -564,7 +585,12 @@ final class DIP_Reauth {
         elseif ($email_code) $lead = $passkey ? __('Votre compte n’a pas de mot de passe à retenir : confirmez avec une Passkey ou un code reçu par e-mail.', 'delicat-google-login') : __('Votre compte n’a pas de mot de passe à retenir : recevez un code de confirmation par e-mail.', 'delicat-google-login');
         else $lead = $passkey ? __('Confirmez avec une Passkey ou votre mot de passe actuel.', 'delicat-google-login') : __('Saisissez votre mot de passe actuel.', 'delicat-google-login');
         $post = esc_url(admin_url('admin-post.php'));
+        // Signing in again always works (a fresh sign-in counts as recent):
+        // say so to accounts without a password (Google, e-mail code) and
+        // whenever the in-place methods are throttled.
+        $relogin = !$recent && (in_array($status, ['locked', 'rate_limited'], true) || (!$two_factor && self::password_managed($user_id)));
         ob_start();
+        echo self::card_styles(); // phpcs:ignore WordPress.Security.EscapeOutput -- static CSS
         ?>
         <div class="dip-security-card dip-reauth-card" id="<?php echo esc_attr(self::ANCHOR); ?>" data-dip-reauth-card>
           <div class="dip-security-card-title"><span class="dip-security-card-icon" aria-hidden="true">↻</span><div><h3><?php esc_html_e('Confirmation d’identité', 'delicat-google-login'); ?></h3><p><?php echo $recent ? esc_html(sprintf(__('Confirmation active pour encore environ %d minutes.', 'delicat-google-login'), max(1, (int) ceil(self::seconds_remaining()/60)))) : esc_html__('Requise avant les actions sensibles : ajouter une Passkey, activer ou désactiver la 2FA, modifier l’e-mail, déconnecter des sessions ou un compte lié.', 'delicat-google-login'); ?></p></div></div>
@@ -608,9 +634,29 @@ final class DIP_Reauth {
             <button type="submit" class="dip-btn primary"><?php esc_html_e('Confirmer mon identité', 'delicat-google-login'); ?></button>
           </form>
           <?php endif; ?>
+          <?php if ($relogin): ?><p class="dip-reauth-hint"><?php echo esc_html(sprintf(_n('Vous pouvez aussi vous déconnecter puis vous reconnecter avec votre méthode habituelle (Google, code e-mail, Passkey…) : pendant %d minute, une connexion récente confirme votre identité.', 'Vous pouvez aussi vous déconnecter puis vous reconnecter avec votre méthode habituelle (Google, code e-mail, Passkey…) : pendant %d minutes, une connexion récente confirme votre identité.', (int) (self::window() / MINUTE_IN_SECONDS), 'delicat-google-login'), (int) (self::window() / MINUTE_IN_SECONDS))); ?> <a href="<?php echo esc_url(wp_logout_url()); ?>"><?php esc_html_e('Se déconnecter', 'delicat-google-login'); ?></a></p><?php endif; ?>
           <?php endif; ?>
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * Small scoped styles for the confirmation card and for error notices of
+     * the security cards (printed once per page, next to the first card).
+     */
+    public static function card_styles() {
+        if (self::$styles_printed) return '';
+        self::$styles_printed = true;
+        return '<style id="dip-security-cards-css">'
+            . '.dip-security-notice.is-error{border-color:#f3c9cf;background:#fff4f5;color:#a52a3c}'
+            . '.dip-reauth-card input,.dip-2fa-card input{box-sizing:border-box;max-width:100%}.dip-reauth-card a.dip-btn,.dip-2fa-card a.dip-btn{text-decoration:none}'
+            . '.dip-2fa-card .dip-2fa-open{text-align:center}@media (hover:hover) and (pointer:fine){.dip-2fa-card .dip-2fa-open{display:none}}'
+            . '.dip-reauth-card .dip-reauth-lead{margin:10px 0 2px!important;font-size:11.5px!important;line-height:1.5;color:#46506a!important}'
+            . '.dip-reauth-card .dip-reauth-passkey{display:grid;gap:8px;margin-top:12px}.dip-reauth-card .dip-reauth-passkey .dip-btn,.dip-reauth-card form .dip-btn{min-height:44px;font-size:11px}'
+            . '.dip-reauth-card .dip-reauth-or{margin:12px 0 0}.dip-reauth-card .dip-reauth-send{margin-top:10px}'
+            . '.dip-reauth-card .dip-reauth-more{margin-top:12px;font-size:10.5px;color:#68748e}.dip-reauth-card .dip-reauth-more summary{cursor:pointer;font-weight:800}'
+            . '.dip-reauth-card .dip-reauth-hint{margin:12px 0 0!important;font-size:10.5px!important;line-height:1.55;color:#7d879c!important}.dip-reauth-card .dip-reauth-hint a{font-weight:800}'
+            . '</style>';
     }
 }

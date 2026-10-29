@@ -124,6 +124,7 @@ final class DIP_Access_Guard {
             'dip_ui_repair','dip_analytics_export','dip_analytics_refresh',
             'dip_admin_google_revoke',
             'dip_assetlinks_test',
+            'dip_2fa_admin_reset',
         ]);
     }
 

@@ -25,6 +25,8 @@ final class DIP_Two_Factor {
     private static $cookie_authorized_user = 0;
     private static $last_failure = '';
     private static $cookie_valid_user = 0;
+    /** This request's password sign-in was answered "code required/invalid" (the password was right). */
+    private static $login_needs_code = false;
 
     public static function init() {
         add_filter('authenticate', [__CLASS__, 'enforce_password_second_factor'], PHP_INT_MAX - 20, 3);
@@ -48,6 +50,11 @@ final class DIP_Two_Factor {
         add_action('admin_post_dip_2fa_confirm', [__CLASS__, 'confirm_enrollment']);
         add_action('admin_post_dip_2fa_disable', [__CLASS__, 'disable']);
         add_action('admin_post_dip_2fa_recovery_regen', [__CLASS__, 'regenerate_recovery']);
+        // Support: an administrator can reset the 2FA of a customer account
+        // (lost phone and recovery codes). Staff accounts stay WP-CLI only.
+        add_action('edit_user_profile', [__CLASS__, 'render_admin_reset']);
+        add_action('admin_footer-user-edit.php', [__CLASS__, 'render_admin_reset_form']);
+        add_action('admin_post_dip_2fa_admin_reset', [__CLASS__, 'admin_reset']);
         if (defined('WP_CLI') && WP_CLI && class_exists('WP_CLI')) {
             \WP_CLI::add_command('delicat identity-2fa-reset', [__CLASS__, 'cli_reset']);
         }
@@ -301,7 +308,7 @@ final class DIP_Two_Factor {
             self::security_email(
                 $user_id,
                 __('Codes 2FA incorrects sur votre compte Delicat', 'delicat-google-login'),
-                sprintf(__('%d codes de vérification incorrects ont été saisis pour votre compte depuis la dernière connexion réussie. Votre mot de passe (ou votre premier moyen de connexion) a donc été utilisé correctement par quelqu’un : changez votre mot de passe dès maintenant.', 'delicat-google-login'), $count)
+                sprintf(__('%d codes de vérification 2FA incorrects ont été saisis pour votre compte depuis le dernier code accepté. Si ce n’était pas vous, quelqu’un connaît probablement votre mot de passe (ou a accès à une de vos sessions) : changez votre mot de passe et déconnectez les autres sessions dès maintenant.', 'delicat-google-login'), $count)
             );
         }
     }
@@ -366,6 +373,7 @@ final class DIP_Two_Factor {
             if (is_wp_error($guard)) return $guard;
         }
         $code = sanitize_text_field(wp_unslash($_POST['dip_2fa_code'] ?? ''));
+        self::$login_needs_code = true;
         if ($code === '') return new WP_Error('dip_2fa_required', __('Code de vérification à deux facteurs requis.', 'delicat-google-login'));
         if (!self::factor_attempt_allowed($user->ID)) return new WP_Error('dip_2fa_rate_limited', self::rate_limited_message($user->ID));
         if (!self::verify_factor($user->ID, $code, true)) {
@@ -373,6 +381,7 @@ final class DIP_Two_Factor {
             return new WP_Error('dip_2fa_invalid', self::invalid_message());
         }
         self::$password_gate_verified_user = (int) $user->ID;
+        self::$login_needs_code = false;
         self::clear_factor_rate($user->ID);
         if (class_exists('DIP_Audit')) DIP_Audit::record('two_factor_login_success', 'info', $user->ID);
         return $user;
@@ -445,10 +454,11 @@ final class DIP_Two_Factor {
     }
 
     private static function is_session_reissue($user_id, $new_token) {
-        // This request arrived with a valid auth cookie of this exact user.
+        // This request arrived with a valid auth cookie of this exact user
+        // (WordPress either keeps that session's token or creates a new one).
         if (!$user_id || self::$cookie_valid_user !== $user_id || get_current_user_id() !== $user_id || !class_exists('WP_Session_Tokens')) return false;
         $old = function_exists('wp_get_session_token') ? (string) wp_get_session_token() : '';
-        if ($old === '' || hash_equals($old, $new_token)) return false;
+        if ($old === '') return false;
         try { return WP_Session_Tokens::get_instance($user_id)->verify($old); }
         catch (Throwable $e) { return false; }
     }
@@ -469,13 +479,20 @@ final class DIP_Two_Factor {
         }
     }
 
+    /**
+     * Folded by default: most customers have no 2FA. It opens by itself once
+     * the password was accepted and the account asks for its code, and a
+     * 2FA user can open it beforehand to sign in in one step.
+     */
     public static function render_login_field() {
         if (is_user_logged_in()) return;
+        $open = self::$login_needs_code;
         ?>
-        <p class="dip-2fa-login-field">
-          <label for="dip_2fa_code"><?php esc_html_e('Code 2FA (si activé)', 'delicat-google-login'); ?></label>
-          <input type="text" name="dip_2fa_code" id="dip_2fa_code" inputmode="text" autocomplete="one-time-code" maxlength="32" class="input" value="">
-        </p>
+        <details class="dip-2fa-login-field"<?php echo $open ? ' open' : ''; ?> style="margin:0 0 16px">
+          <summary style="cursor:pointer;font-weight:600;margin:0 0 8px"><?php esc_html_e('Vérification en deux étapes activée ? Saisir le code', 'delicat-google-login'); ?></summary>
+          <label for="dip_2fa_code"><?php esc_html_e('Code de l’application Authenticator ou code de récupération', 'delicat-google-login'); ?></label>
+          <input type="text" name="dip_2fa_code" id="dip_2fa_code" inputmode="text" autocomplete="one-time-code" maxlength="32" class="input" value=""<?php echo $open ? ' autofocus' : ''; ?>>
+        </details>
         <?php
     }
 
@@ -500,7 +517,8 @@ final class DIP_Two_Factor {
         if (class_exists('DIP_Customer_Dashboard') && function_exists('wc_get_account_endpoint_url')) {
             $url = add_query_arg('dip_tab', 'security', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
         }
-        if ($status !== '') $url = add_query_arg('dip_2fa_status', sanitize_key($status), $url);
+        // Back on the 2FA card itself, so the result is in view.
+        if ($status !== '') $url = add_query_arg('dip_2fa_status', sanitize_key($status), $url) . '#dip-2fa';
         return $url;
     }
 
@@ -872,11 +890,13 @@ final class DIP_Two_Factor {
             'disabled_by_admin'=>__('L’enrôlement 2FA est actuellement désactivé par l’administrateur. Une 2FA déjà active reste toutefois obligatoire.', 'delicat-google-login'),
             'code_replayed'=>__('Ce code vient déjà d’être utilisé. Attendez le code suivant de votre application (30 secondes).', 'delicat-google-login'),
         ];
+        $is_error = !in_array($status, ['enabled', 'disabled', 'recovery_regenerated', 'setup'], true);
         ob_start();
+        if (class_exists('DIP_Reauth') && method_exists('DIP_Reauth', 'card_styles')) echo DIP_Reauth::card_styles(); // phpcs:ignore WordPress.Security.EscapeOutput -- static CSS
         ?>
-        <div class="dip-security-card dip-2fa-card">
+        <div class="dip-security-card dip-2fa-card" id="dip-2fa">
           <div class="dip-security-card-title"><span class="dip-security-card-icon" aria-hidden="true">2</span><div><h3><?php esc_html_e('Authentification à deux facteurs', 'delicat-google-login'); ?></h3><p><?php echo $enabled ? esc_html__('Active : un second code protège vos connexions.', 'delicat-google-login') : esc_html__('Ajoutez un code TOTP compatible Google Authenticator, Microsoft Authenticator, 1Password et applications similaires.', 'delicat-google-login'); ?></p></div></div>
-          <?php if (isset($messages[$status])): ?><div class="dip-security-notice" role="status"><?php echo esc_html($messages[$status]); ?></div><?php endif; ?>
+          <?php if (isset($messages[$status])): ?><div class="dip-security-notice<?php echo $is_error ? ' is-error' : ''; ?>" role="<?php echo $is_error ? 'alert' : 'status'; ?>"><?php echo esc_html($messages[$status]); ?></div><?php endif; ?>
           <?php if ($codes): ?>
             <div class="dip-recovery-box"><strong><?php esc_html_e('Codes de récupération — à enregistrer maintenant', 'delicat-google-login'); ?></strong><p><?php esc_html_e('Ils sont affichés temporairement dans cette session. Conservez-les hors ligne : chaque code ne peut être utilisé qu’une seule fois.', 'delicat-google-login'); ?></p><div class="dip-recovery-grid"><?php foreach ($codes as $code): ?><code><?php echo esc_html($code); ?></code><?php endforeach; ?></div></div>
           <?php endif; ?>
@@ -1081,17 +1101,76 @@ final class DIP_Two_Factor {
         exit;
     }
 
-    /**
-     * Server-console recovery only. This deliberately has no web endpoint.
-     * Example: wp delicat identity-2fa-reset 123
-     */
-    public static function cli_reset($args, $assoc_args = []) {
-        if (!(defined('WP_CLI') && WP_CLI && class_exists('WP_CLI'))) return;
-        $identifier = isset($args[0]) ? trim((string)$args[0]) : '';
-        $user = ctype_digit($identifier) ? get_userdata(absint($identifier)) : get_user_by('login', $identifier);
-        if (!$user && is_email($identifier)) $user = get_user_by('email', sanitize_email($identifier));
-        if (!($user instanceof WP_User)) { \WP_CLI::error('User not found.'); return; }
-        $user_id = (int)$user->ID;
+    /** Customer accounts only: staff 2FA can be reset from the server console alone. */
+    private static function admin_resettable($user) {
+        if (!($user instanceof WP_User)) return false;
+        foreach (['manage_options', 'manage_woocommerce', 'edit_posts', 'edit_users', 'list_users', 'promote_users'] as $cap) {
+            if (user_can($user, $cap)) return false;
+        }
+        return !class_exists('DIP_Account_Sync') || !method_exists('DIP_Account_Sync', 'is_customer_account') || DIP_Account_Sync::is_customer_account($user->ID);
+    }
+
+    public static function render_admin_reset($user) {
+        if (!($user instanceof WP_User) || (int) $user->ID === get_current_user_id() || !current_user_can('manage_options') || !current_user_can('edit_user', $user->ID)) return;
+        $enabled = self::is_enabled($user->ID);
+        $status = sanitize_key(wp_unslash($_GET['dip_2fa_admin'] ?? ''));
+        $notices = [
+            'reset' => __('2FA réinitialisée : les sessions Web et App du client ont été révoquées et il a été prévenu par e-mail.', 'delicat-google-login'),
+            'not_enabled' => __('La 2FA n’est pas active sur ce compte.', 'delicat-google-login'),
+            'privileged' => __('Compte d’équipe : la 2FA ne peut être réinitialisée que depuis le serveur (WP-CLI).', 'delicat-google-login'),
+        ];
+        echo '<h2>' . esc_html__('Delicat — Vérification en deux étapes', 'delicat-google-login') . '</h2><table class="form-table" role="presentation"><tr><th scope="row">' . esc_html__('État', 'delicat-google-login') . '</th><td>';
+        if (isset($notices[$status])) echo '<div class="notice notice-' . ($status === 'reset' ? 'success' : 'warning') . ' inline"><p>' . esc_html($notices[$status]) . '</p></div>';
+        if (!$enabled) {
+            echo '<p>' . esc_html__('Non activée.', 'delicat-google-login') . '</p>';
+        } elseif (!self::admin_resettable($user)) {
+            echo '<p>' . esc_html__('Activée.', 'delicat-google-login') . '</p><p class="description">' . esc_html(sprintf(__('Compte d’équipe : réinitialisation uniquement depuis le serveur, par exemple « wp delicat identity-2fa-reset %d ».', 'delicat-google-login'), (int) $user->ID)) . '</p>';
+        } else {
+            echo '<p>' . esc_html__('Activée.', 'delicat-google-login') . '</p>';
+            echo '<p><button type="submit" class="button" form="dip-2fa-admin-reset-form" onclick="return window.confirm(' . esc_attr(wp_json_encode(__('Réinitialiser la 2FA de ce client ? Toutes ses sessions Web et App seront révoquées.', 'delicat-google-login'))) . ');">' . esc_html__('Réinitialiser la 2FA du client', 'delicat-google-login') . '</button></p>';
+            echo '<p class="description">' . esc_html__('À utiliser seulement après avoir vérifié l’identité du client (téléphone et codes de récupération perdus). Il pourra ensuite se connecter sans code et reconfigurer la 2FA.', 'delicat-google-login') . '</p>';
+        }
+        echo '</td></tr></table>';
+    }
+
+    /** Printed outside the profile form (a form cannot be nested); the button targets it through form="…". */
+    public static function render_admin_reset_form() {
+        $user_id = absint($_GET['user_id'] ?? 0);
+        if (!$user_id || $user_id === get_current_user_id() || !current_user_can('manage_options') || !current_user_can('edit_user', $user_id)) return;
+        $user = get_userdata($user_id);
+        if (!self::is_enabled($user_id) || !self::admin_resettable($user)) return;
+        echo '<form id="dip-2fa-admin-reset-form" method="post" action="' . esc_url(admin_url('admin-post.php')) . '" hidden><input type="hidden" name="action" value="dip_2fa_admin_reset"><input type="hidden" name="user_id" value="' . esc_attr($user_id) . '">';
+        wp_nonce_field('dip_2fa_admin_reset_' . $user_id);
+        echo '</form>';
+    }
+
+    public static function admin_reset() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') wp_die(esc_html__('Méthode non autorisée.', 'delicat-google-login'), '', ['response'=>405]);
+        if (!current_user_can('manage_options')) wp_die(esc_html__('Cette fonction est réservée aux administrateurs.', 'delicat-google-login'), '', ['response'=>403]);
+        $user_id = absint($_POST['user_id'] ?? 0);
+        check_admin_referer('dip_2fa_admin_reset_' . $user_id);
+        $user = get_userdata($user_id);
+        if (!($user instanceof WP_User) || $user_id === get_current_user_id() || !current_user_can('edit_user', $user_id)) wp_die(esc_html__('Accès refusé.', 'delicat-google-login'), '', ['response'=>403]);
+        $back = add_query_arg('user_id', $user_id, admin_url('user-edit.php'));
+        if (!self::admin_resettable($user)) { wp_safe_redirect(add_query_arg('dip_2fa_admin', 'privileged', $back)); exit; }
+        if (!self::is_enabled($user_id)) { wp_safe_redirect(add_query_arg('dip_2fa_admin', 'not_enabled', $back)); exit; }
+        // A stolen administrator cookie alone must not strip a customer's 2FA.
+        if (class_exists('DIP_Reauth') && !DIP_Reauth::is_recent()) DIP_Reauth::require_recent_or_redirect();
+        self::wipe_state($user_id);
+        if (class_exists('WP_Session_Tokens')) WP_Session_Tokens::get_instance($user_id)->destroy_all();
+        $mobile = class_exists('DIP_Mobile_API') ? DIP_Mobile_API::revoke_all_for_user($user_id, 'two_factor_admin_reset') : 0;
+        if (class_exists('DIP_Audit')) {
+            DIP_Audit::record('two_factor_admin_reset', 'critical', $user_id, ['admin_id'=>get_current_user_id(),'mobile_revoked'=>(int) $mobile]);
+            DIP_Audit::record('two_factor_admin_reset_performed', 'warning', get_current_user_id(), ['customer_id'=>$user_id]);
+        }
+        do_action('dip_two_factor_disabled', $user_id);
+        self::security_email($user_id, __('2FA réinitialisée sur votre compte Delicat', 'delicat-google-login'), __('À votre demande, l’équipe Delicat Store a réinitialisé la vérification en deux étapes de votre compte et fermé toutes vos sessions. Connectez-vous puis réactivez la 2FA depuis Mon compte › Sécurité.', 'delicat-google-login'));
+        wp_safe_redirect(add_query_arg('dip_2fa_admin', 'reset', $back));
+        exit;
+    }
+
+    private static function wipe_state($user_id) {
+        $user_id = absint($user_id);
         delete_user_meta($user_id, self::META_ENABLED);
         delete_user_meta($user_id, self::META_SECRET);
         delete_user_meta($user_id, self::META_PENDING);
@@ -1103,6 +1182,21 @@ final class DIP_Two_Factor {
         self::release_lock('rate', $user_id);
         self::clear_factor_rate($user_id);
         self::clear_failure_day($user_id);
+    }
+
+    /**
+     * Server-console recovery (any account). Customer accounts can also be
+     * reset by an administrator from their profile screen.
+     * Example: wp delicat identity-2fa-reset 123
+     */
+    public static function cli_reset($args, $assoc_args = []) {
+        if (!(defined('WP_CLI') && WP_CLI && class_exists('WP_CLI'))) return;
+        $identifier = isset($args[0]) ? trim((string)$args[0]) : '';
+        $user = ctype_digit($identifier) ? get_userdata(absint($identifier)) : get_user_by('login', $identifier);
+        if (!$user && is_email($identifier)) $user = get_user_by('email', sanitize_email($identifier));
+        if (!($user instanceof WP_User)) { \WP_CLI::error('User not found.'); return; }
+        $user_id = (int)$user->ID;
+        self::wipe_state($user_id);
         if (class_exists('WP_Session_Tokens')) WP_Session_Tokens::get_instance($user_id)->destroy_all();
         if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::revoke_all_for_user($user_id, 'two_factor_cli_reset');
         if (class_exists('DIP_Audit')) DIP_Audit::record('two_factor_cli_reset', 'critical', $user_id);
