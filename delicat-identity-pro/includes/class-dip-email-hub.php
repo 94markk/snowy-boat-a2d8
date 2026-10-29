@@ -243,11 +243,21 @@ final class DIP_Email_Hub {
             $old_hash = (string)$old_user_data->user_pass;
             // No user id: a legacy hash must not be re-hashed (and re-enter this hook) here.
             if ($old_hash !== '' && (string)$password !== '' && wp_check_password((string)$password, $old_hash)) return;
-        } elseif (doing_filter('authenticate')) {
+        } elseif (doing_filter('authenticate') || self::rehash_in_progress()) {
+            // WordPress < 6.7 passes no previous data: a legacy hash upgraded by
+            // wp_check_password() (sign-in, app login, re-authentication) is the
+            // same password, not a change.
             return;
         }
         $user = get_userdata($user_id);
         if ($user instanceof WP_User) self::password_changed($user);
+    }
+
+    private static function rehash_in_progress() {
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+            if (empty($frame['class']) && isset($frame['function']) && 'wp_check_password' === $frame['function']) return true;
+        }
+        return false;
     }
 
     public static function password_changed($user, $new_pass = '') {

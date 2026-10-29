@@ -283,11 +283,16 @@ function dipes_render_account_email( $args, $type ) {
  * keeps its <style> block unchanged.
  */
 function dipes_inline_html( $html ) {
-    if ( ! is_string( $html ) || '' === $html || ! class_exists( 'WC_Email' ) ) { return $html; }
+    if ( ! is_string( $html ) || '' === $html ) { return $html; }
+    // WC_Email is not autoloadable: WooCommerce includes it when its mailer
+    // starts, which an Identity / WordPress e-mail request may not have done.
+    if ( ! class_exists( 'WC_Email', false ) && function_exists( 'WC' ) ) {
+        try { WC()->mailer(); } catch ( Throwable $e ) { return $html; }
+    }
+    if ( ! class_exists( 'WC_Email', false ) ) { return $html; }
     // style_inline() re-reads the same CSS through emails/email-styles.php:
     // drop the preview <style> block so the kept @media rules are not doubled.
-    $stripped = preg_replace( '~<style\b[^>]*>.*?</style>~is', '', $html, 1 );
-    if ( ! is_string( $stripped ) ) { return $html; }
+    $stripped = dipes_strip_style_block( $html );
     try {
         static $mailer = null;
         if ( null === $mailer ) { $mailer = new WC_Email(); }
@@ -295,9 +300,17 @@ function dipes_inline_html( $html ) {
     } catch ( Throwable $e ) {
         return $html;
     }
-    // A successful pass always re-creates a <style> block for the rules that
-    // cannot be inlined (media queries); without one, inlining did not happen.
-    return is_string( $out ) && false !== stripos( $out, '<style' ) ? $out : $html;
+    // WooCommerce returns the content unchanged when its inliner throws, and
+    // prepends a raw <style> block when it cannot inline (no DOMDocument):
+    // keep the original message, with its own <style> block, in both cases.
+    if ( ! is_string( $out ) || '' === $out || $out === $stripped || 0 === stripos( ltrim( $out ), '<style' ) ) { return $html; }
+    return $out;
+}
+
+/** The message without its first (preview-mode) <style> block. */
+function dipes_strip_style_block( $html ) {
+    $stripped = preg_replace( '~<style\b[^>]*>.*?</style>~is', '', (string) $html, 1 );
+    return is_string( $stripped ) ? $stripped : (string) $html;
 }
 
 function dipes_email_css( $email = null ) {
@@ -399,6 +412,9 @@ function dipes_email_css( $email = null ) {
         $css .= '@media (prefers-color-scheme:dark){' . $dark_rules . '}';
     }
 
-    if ( ! empty( $s['custom_css'] ) ) { $css .= "\n" . $s['custom_css']; }
+    // Sanitized again on output: a value stored before the sanitizer fix (or
+    // by the former standalone plugin) can never close this <style> block.
+    $custom_css = ! empty( $s['custom_css'] ) ? dipes_sanitize_css( $s['custom_css'] ) : '';
+    if ( '' !== $custom_css ) { $css .= "\n" . $custom_css; }
     return apply_filters( 'dipes_email_css', $css, $email, $id );
 }

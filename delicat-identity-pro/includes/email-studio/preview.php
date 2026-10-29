@@ -186,9 +186,14 @@ function dipes_preview_overrides_from_request( $email_id ) {
 }
 
 add_action( 'admin_post_dipes_email_preview', static function () {
-    if ( ! dipes_admin_capable() ) { wp_die( 'Accès refusé.' ); }
+    if ( ! dipes_admin_capable() ) { wp_die( 'Accès refusé.', 'Accès refusé', array( 'response' => 403 ) ); }
+    // The live preview posts the whole (unsaved) form: no length limit, and
+    // no custom CSS / HTML in URLs or server access logs.
+    if ( 'POST' !== strtoupper( isset( $_SERVER['REQUEST_METHOD'] ) ? (string) $_SERVER['REQUEST_METHOD'] : '' ) ) {
+        wp_die( 'Méthode non autorisée.', 'Aperçu e-mail', array( 'response' => 405 ) );
+    }
     check_admin_referer( 'dipes_email_preview' );
-    $type = isset( $_GET['type'] ) ? sanitize_key( wp_unslash( $_GET['type'] ) ) : 'customer_processing_order';
+    $type = isset( $_POST['type'] ) && is_string( $_POST['type'] ) ? sanitize_key( wp_unslash( $_POST['type'] ) ) : 'customer_processing_order';
     $overrides = dipes_preview_overrides_from_request( $type );
     nocache_headers();
     header( 'Content-Type: text/html; charset=utf-8' );
@@ -212,15 +217,24 @@ add_action( 'admin_post_dipes_email_test', static function () {
     // form (g[] / e[]) and go through the same sanitizer as a real save.
     $unsaved = ( isset( $_POST['g'] ) && is_array( $_POST['g'] ) ) || ( isset( $_POST['e'] ) && is_array( $_POST['e'] ) );
     $overrides = $unsaved ? dipes_preview_overrides_from_request( $type ) : array();
+    $types = dipes_email_types();
+    $type = isset( $types[ $type ] ) ? $type : 'customer_processing_order';
     $html = dipes_build_preview( $type, $overrides );
+    // The CSS is inlined (by WooCommerce's mailer, or below) while the same
+    // settings are active, exactly like a real e-mail: once, never with the
+    // saved settings over the unsaved ones.
     $GLOBALS['dipes_preview_overrides'] = $overrides;
     $GLOBALS['dipes_preview_email_id'] = $type;
-    $html = dipes_inline_html( $html );
     $ctx = dipes_preview_context();
     $subject = dipes_replace_tokens( dipes_email_setting( $type, 'subject', 'Test e-mail' ), $ctx );
-    unset( $GLOBALS['dipes_preview_overrides'], $GLOBALS['dipes_preview_email_id'] );
     $subject = ( $unsaved ? '[TEST — paramètres non enregistrés] ' : '[TEST] ' ) . wp_strip_all_tags( $subject );
-    $sent = function_exists( 'WC' ) && WC()->mailer() ? WC()->mailer()->send( $to, $subject, $html, 'Content-Type: text/html; charset=UTF-8' ) : wp_mail( $to, $subject, $html, array( 'Content-Type: text/html; charset=UTF-8' ) );
+    if ( function_exists( 'WC' ) && WC()->mailer() ) {
+        // WC_Emails::send() inlines through WC_Email::style_inline() itself.
+        $sent = WC()->mailer()->send( $to, $subject, dipes_strip_style_block( $html ), 'Content-Type: text/html; charset=UTF-8' );
+    } else {
+        $sent = wp_mail( $to, $subject, dipes_inline_html( $html ), array( 'Content-Type: text/html; charset=UTF-8' ) );
+    }
+    unset( $GLOBALS['dipes_preview_overrides'], $GLOBALS['dipes_preview_email_id'] );
     wp_safe_redirect( add_query_arg( array( 'page' => 'delicat-identity-emails', 'dipes_test' => $sent ? 'ok' : 'fail' ), admin_url( 'admin.php' ) ) );
     exit;
 } );

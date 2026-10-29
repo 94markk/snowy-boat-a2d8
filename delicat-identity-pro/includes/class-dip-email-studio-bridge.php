@@ -22,8 +22,9 @@ final class DIP_Email_Studio_Bridge {
 
         // Plugin replacement/update does not always execute an activation hook.
         // Finish the migration on the next privileged admin request as well.
-        // The plugins screen also catches a renamed copy of the old plugin.
-        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION || 'plugins.php' === ($GLOBALS['pagenow'] ?? '')) {
+        // The plugins screen also catches a renamed copy of the old plugin, and
+        // a flag stored by an older version without autoload gets repaired.
+        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION || !self::flag_autoloaded() || 'plugins.php' === ($GLOBALS['pagenow'] ?? '')) {
             add_action('admin_init', [__CLASS__, 'maybe_complete_migration'], 1);
         }
 
@@ -45,17 +46,33 @@ final class DIP_Email_Studio_Bridge {
             self::install();
             return;
         }
+        if (!self::flag_autoloaded()) self::store_flag(DIP_VERSION);
         // Plugins screen: name-based scan (get_plugins() is loaded there anyway).
-        self::deactivate_standalone();
+        if ('plugins.php' === ($GLOBALS['pagenow'] ?? '')) self::deactivate_standalone();
     }
 
     public static function install() {
         self::migrate_settings();
         self::deactivate_standalone();
-        // Read by init() on every request: autoloaded, so it costs no query.
-        update_option(self::MIGRATION_FLAG, DIP_VERSION, true);
-        if (function_exists('wp_set_option_autoload')) wp_set_option_autoload(self::MIGRATION_FLAG, true);
+        self::store_flag(DIP_VERSION);
         self::$standalone_active = null;
+    }
+
+    /** The migration flag is read by init() on every request: autoloaded, so it costs no query. */
+    private static function store_flag($value) {
+        if (function_exists('wp_set_option_autoload')) {
+            update_option(self::MIGRATION_FLAG, $value, true);
+            wp_set_option_autoload(self::MIGRATION_FLAG, true);
+            return;
+        }
+        // WordPress < 6.4: update_option() keeps the autoload of an unchanged value.
+        delete_option(self::MIGRATION_FLAG);
+        add_option(self::MIGRATION_FLAG, $value, '', 'yes');
+    }
+
+    private static function flag_autoloaded() {
+        $all = function_exists('wp_load_alloptions') ? wp_load_alloptions() : [];
+        return is_array($all) && array_key_exists(self::MIGRATION_FLAG, $all);
     }
 
     public static function load() {
@@ -129,7 +146,7 @@ final class DIP_Email_Studio_Bridge {
         $matches = [];
         foreach (self::plugin_inventory() as $basename => $data) {
             $name = isset($data['Name']) ? (string)$data['Name'] : '';
-            if (stripos($name, 'Delicat Email Studio Pro') !== false || preg_match('~^delicat-email-studio-pro[^/]*/delicat-email-studio-pro\.php$~', $basename)) {
+            if (stripos($name, 'Delicat Email Studio Pro') !== false || preg_match('~(?:^|/)delicat-email-studio-pro\.php$~', $basename)) {
                 $matches[] = $basename;
             }
         }
@@ -149,7 +166,8 @@ final class DIP_Email_Studio_Bridge {
         if (is_multisite()) $active = array_merge($active, array_keys((array) get_site_option('active_sitewide_plugins', [])));
         $found = false;
         foreach ($active as $basename) {
-            if (is_string($basename) && preg_match('~^delicat-email-studio-pro[^/]*/delicat-email-studio-pro\.php$~', $basename)) { $found = true; break; }
+            // Any folder (renamed copies included) holding the old main file.
+            if (is_string($basename) && preg_match('~(?:^|/)delicat-email-studio-pro\.php$~', $basename)) { $found = true; break; }
         }
         self::$standalone_active = $found;
         return $found;

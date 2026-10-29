@@ -305,6 +305,14 @@ function dipes_normalize_settings( $saved ) {
         if ( isset( $saved['emails'][ $id ]['block_order'] ) ) {
             $out['emails'][ $id ]['block_order'] = dipes_sanitize_block_order( $saved['emails'][ $id ]['block_order'] );
         }
+        if ( isset( $email['accent'] ) && '' !== $email['accent'] ) {
+            $out['emails'][ $id ]['accent'] = dipes_sanitize_color( $email['accent'], isset( $defaults['emails'][ $id ]['accent'] ) ? $defaults['emails'][ $id ]['accent'] : '' );
+        }
+    }
+    // Colours go raw into the CSS: a stored value that never went through the
+    // sanitizer (legacy or standalone option) falls back to its default.
+    foreach ( dipes_color_keys() as $key ) {
+        $out[ $key ] = dipes_sanitize_color( isset( $out[ $key ] ) ? $out[ $key ] : '', $defaults[ $key ] );
     }
     return $out;
 }
@@ -325,6 +333,11 @@ function dipes_email_setting( $email_id, $key, $default = '' ) {
     return $default;
 }
 
+/** Settings holding a colour (printed raw into the e-mail CSS). */
+function dipes_color_keys() {
+    return array( 'page_bg','container_bg','header_bg','header_text','text','muted','heading','border','accent','button_bg','button_text','footer_bg','footer_text_color','table_header_bg','table_header_text','card_bg','card_border' );
+}
+
 function dipes_sanitize_color( $value, $fallback ) {
     $color = is_string( $value ) ? sanitize_hex_color( $value ) : '';
     return $color ? $color : $fallback;
@@ -340,7 +353,7 @@ function dipes_css_forbidden_patterns() {
         '/@import\b[^;]*;?/i',
         '/expression\s*\([^)]*\)?/i',
         '/(?:javascript|vbscript)\s*:/i',
-        '/(?:behavior|-moz-binding)\s*:[^;}]*;?/i',
+        '/(?<![\w-])(?:behavior|-moz-binding)\s*:[^;}]*;?/i',
     );
 }
 
@@ -434,8 +447,7 @@ function dipes_sanitize_settings( $input ) {
     $v = dipes_scalar_input( $input, 'whatsapp' );
     $out['whatsapp'] = null !== $v ? preg_replace( '/[^0-9+]/', '', $v ) : '';
 
-    $color_keys = array( 'page_bg','container_bg','header_bg','header_text','text','muted','heading','border','accent','button_bg','button_text','footer_bg','footer_text_color','table_header_bg','table_header_text','card_bg','card_border' );
-    foreach ( $color_keys as $key ) {
+    foreach ( dipes_color_keys() as $key ) {
         $out[ $key ] = dipes_sanitize_color( dipes_scalar_input( $input, $key ), $defaults[ $key ] );
     }
 

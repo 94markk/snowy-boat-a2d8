@@ -54,13 +54,12 @@
         schedulePreview();
     }
 
-    function previewUrl(){
+    function previewData(){
         var type = $picker.val() || 'customer_processing_order';
         var params = new URLSearchParams();
         params.set('action', 'dipes_email_preview');
         params.set('_wpnonce', DIPES_ADMIN.previewNonce);
         params.set('type', type);
-        params.set('_t', Date.now());
         var g = collect($form, 'data-desp-global');
         var e = collect(activeEmailPanel(), 'data-desp-email');
         if (previewTheme === 'light' && DIPES_ADMIN.presets && DIPES_ADMIN.presets.glass_light) {
@@ -68,28 +67,58 @@
         } else if (previewTheme === 'dark' && DIPES_ADMIN.presets && DIPES_ADMIN.presets.glass_dark) {
             g = Object.assign({}, g, DIPES_ADMIN.presets.glass_dark.tokens || {}, { appearance_mode: 'dark' });
         }
-        Object.keys(g).forEach(function(k){ params.set('g[' + k + ']', g[k]); });
-        Object.keys(e).forEach(function(k){ params.set('e[' + k + ']', e[k]); });
-        return DIPES_ADMIN.previewUrl + '?' + params.toString();
+        Object.keys(g).forEach(function(k){ params.set('g[' + k + ']', g[k] == null ? '' : g[k]); });
+        Object.keys(e).forEach(function(k){ params.set('e[' + k + ']', e[k] == null ? '' : e[k]); });
+        return params;
     }
 
+    // The whole form is POSTed (no URL length limit) and the e-mail is shown
+    // through srcdoc in a sandboxed frame (no scripts). The document carries its
+    // own CSP: nothing but images, inline styles and fonts may load in it.
+    var PREVIEW_CSP = "default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src https: http: data:; base-uri 'none'; form-action 'none'";
+    var previewSeq = 0, previewAbort = null, previewScroll = 0, previewPending = false;
+    function previewStatus(text){ $('#desp-preview-status').text(text); }
+    function previewFailed(){ previewStatus('Aperçu indisponible : rechargez la page (session expirée ?)'); }
+    function showPreview(html){
+        var frame = $frame[0];
+        try { previewScroll = frame.contentWindow ? (frame.contentWindow.scrollY || 0) : 0; } catch (err) { previewScroll = 0; }
+        var meta = '<meta http-equiv="Content-Security-Policy" content="' + PREVIEW_CSP + '">';
+        html = /<head[^>]*>/i.test(html) ? html.replace(/<head([^>]*)>/i, function(m){ return m + meta; }) : meta + html;
+        previewPending = true;
+        frame.srcdoc = html;
+    }
     function refreshPreview(){
-        $('#desp-preview-status').text('Mise à jour…');
-        $frame.attr('src', previewUrl());
+        var seq = ++previewSeq;
+        previewStatus('Mise à jour…');
+        if (previewAbort) { try { previewAbort.abort(); } catch (err) {} }
+        previewAbort = window.AbortController ? new window.AbortController() : null;
+        window.fetch(DIPES_ADMIN.previewUrl, {
+            method: 'POST',
+            body: previewData(),
+            credentials: 'same-origin',
+            cache: 'no-store',
+            signal: previewAbort ? previewAbort.signal : undefined
+        }).then(function(r){
+            return r.text().then(function(html){ return { ok: r.ok, html: html }; });
+        }).then(function(res){
+            if (seq !== previewSeq) return;
+            // An expired nonce or a server error returns a WordPress page.
+            if (!res.ok || res.html.indexOf('id="desp-shell"') === -1) { previewFailed(); return; }
+            showPreview(res.html);
+        }).catch(function(err){
+            if ((err && err.name === 'AbortError') || seq !== previewSeq) return;
+            previewFailed();
+        });
     }
     function schedulePreview(){
         window.clearTimeout(timer);
         timer = window.setTimeout(refreshPreview, 260);
     }
     $frame.on('load', function(){
-        // The preview is sandboxed (no scripts) but same-origin: an expired
-        // nonce or a server error returns a WordPress page, not an e-mail.
-        var ok = true;
-        try {
-            var doc = $frame[0].contentDocument;
-            ok = !doc || !doc.body || !!doc.getElementById('desp-shell');
-        } catch (err) { ok = true; }
-        $('#desp-preview-status').text(ok ? (isDirty ? 'Modifications non enregistrées' : 'Aperçu en direct') : 'Aperçu indisponible : rechargez la page (session expirée ?)');
+        if (!previewPending) return;
+        previewPending = false;
+        if (previewScroll) { try { this.contentWindow.scrollTo(0, previewScroll); } catch (err) {} }
+        previewStatus(isDirty ? 'Modifications non enregistrées' : 'Aperçu en direct');
     });
 
     $form.on('input change', '[data-desp-global],[data-desp-email]', function(){

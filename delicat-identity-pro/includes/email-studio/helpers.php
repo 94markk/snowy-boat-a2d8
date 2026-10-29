@@ -217,22 +217,33 @@ function dipes_wc_filter_object_order( $object ) {
 
 /**
  * Subject + heading are safe filters; WooCommerce still handles recipients and
- * sending. Registered when this file loads (during plugins_loaded, long before
- * any e-mail is sent): a nested plugins_loaded callback would never run.
+ * sending. This file loads during plugins_loaded (priority 28), so a nested
+ * plugins_loaded callback never ran: the filters are registered on init
+ * (e-mail types added by the theme included), or right away when this file
+ * is loaded later than that.
  */
-foreach ( array_keys( dipes_email_types() ) as $dipes_wc_email_id ) {
-    add_filter( 'woocommerce_email_subject_' . $dipes_wc_email_id, static function ( $subject, $object = null, $email = null ) use ( $dipes_wc_email_id ) {
-        $custom = dipes_wc_custom_text( $dipes_wc_email_id, 'subject' );
-        if ( '' === $custom ) { return $subject; }
-        return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, dipes_wc_filter_object_order( $object ) ) );
-    }, 99, 3 );
-    add_filter( 'woocommerce_email_heading_' . $dipes_wc_email_id, static function ( $heading, $object = null, $email = null ) use ( $dipes_wc_email_id ) {
-        $custom = dipes_wc_custom_text( $dipes_wc_email_id, 'heading' );
-        if ( '' === $custom ) { return $heading; }
-        return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, dipes_wc_filter_object_order( $object ) ) );
-    }, 99, 3 );
+function dipes_register_wc_text_filters() {
+    static $done = false;
+    if ( $done ) { return; }
+    $done = true;
+    foreach ( array_keys( dipes_email_types() ) as $id ) {
+        add_filter( 'woocommerce_email_subject_' . $id, static function ( $subject, $object = null, $email = null ) use ( $id ) {
+            $custom = dipes_wc_custom_text( $id, 'subject' );
+            if ( '' === $custom ) { return $subject; }
+            return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, dipes_wc_filter_object_order( $object ) ) );
+        }, 99, 3 );
+        add_filter( 'woocommerce_email_heading_' . $id, static function ( $heading, $object = null, $email = null ) use ( $id ) {
+            $custom = dipes_wc_custom_text( $id, 'heading' );
+            if ( '' === $custom ) { return $heading; }
+            return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, dipes_wc_filter_object_order( $object ) ) );
+        }, 99, 3 );
+    }
 }
-unset( $dipes_wc_email_id );
+if ( did_action( 'init' ) ) {
+    dipes_register_wc_text_filters();
+} else {
+    add_action( 'init', 'dipes_register_wc_text_filters', 1 );
+}
 
 add_filter( 'woocommerce_email_order_items_args', static function ( $args ) {
     if ( empty( $GLOBALS['dipes_rendering_email'] ) && empty( $GLOBALS['dipes_preview_mode'] ) ) { return $args; }
