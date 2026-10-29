@@ -62,6 +62,7 @@ final class DIP_Passkeys {
         add_filter('login_form_middle', [__CLASS__, 'login_form_middle'], 40, 2);
         add_filter('script_loader_tag', [__CLASS__, 'protect_script_tag'], 10, 2);
         add_filter('wp_inline_script_attributes', [__CLASS__, 'protect_inline_config'], 10, 2);
+        add_filter('dip_customer_rest_rules', [__CLASS__, 'firewall_rules']);
         if (defined('WP_CLI') && WP_CLI && class_exists('WP_CLI')) {
             \WP_CLI::add_command('delicat identity-passkeys-reset', [__CLASS__, 'cli_reset']);
         }
@@ -352,6 +353,17 @@ final class DIP_Passkeys {
         ]);
     }
 
+    /**
+     * Strict REST firewall (DIP_Security_Architecture): the removal route
+     * accepts every WebAuthn credential id length (its own pattern stops at
+     * 160 characters, i.e. ids up to 120 bytes).
+     */
+    public static function firewall_rules($rules) {
+        $rules = is_array($rules) ? $rules : [];
+        $rules[] = ['#^/delicat-identity/v1/passkeys/[A-Za-z0-9_-]{20,1366}$#', ['DELETE']];
+        return $rules;
+    }
+
     public static function permission_customer($request = null) {
         if (!is_user_logged_in()) return new WP_Error('dip_login_required', __('Connexion requise.', 'delicat-google-login'), ['status'=>401]);
         $uid = get_current_user_id();
@@ -487,13 +499,15 @@ final class DIP_Passkeys {
         return $user;
     }
 
-    /** The one account whose passkey user handle this is, or 0 (same lookup as DIP_Mobile_Passkeys). */
-    private static function user_by_handle($handle) {
+    /**
+     * Accounts whose passkey user handle this is, at most two (same lookup as
+     * DIP_Mobile_Passkeys): sign-in needs exactly one.
+     */
+    private static function users_by_handle($handle) {
         $handle = (string) $handle;
-        if ($handle === '' || strlen($handle) > 128 || self::b64u_decode($handle) === false) return 0;
+        if ($handle === '' || strlen($handle) > 128 || self::b64u_decode($handle) === false) return [];
         $ids = get_users(['meta_key'=>self::META_USER_HANDLE, 'meta_value'=>$handle, 'number'=>2, 'fields'=>'ID', 'count_total'=>false]);
-        $ids = array_values(array_map('absint', (array) $ids));
-        return count($ids) === 1 ? (int) $ids[0] : 0;
+        return array_values(array_filter(array_map('absint', (array) $ids)));
     }
 
     private static function safe_redirect($value, $fallback = '') {
@@ -521,7 +535,8 @@ final class DIP_Passkeys {
             $raw = (string) ($state['redirect_raw'] ?? '');
             $target = $raw !== '' ? wp_validate_redirect($raw, '') : '';
             $path = $target !== '' ? (string) wp_parse_url($target, PHP_URL_PATH) : '';
-            if ($target === '' || preg_match('~/wp-login\.php$~i', $path)) $target = admin_url();
+            if ($target === '' || preg_match('~/wp-login\.php$~i', $path)) return admin_url();
+            if (!preg_match('~/wp-admin(?:/|$)~i', $path)) $target = add_query_arg('dip_auth_sync', DIP_Session_Router::sync_marker(), remove_query_arg('dip_auth_sync', $target));
             return $target;
         }
         $redirect = self::safe_redirect((string) ($state['redirect'] ?? ''), self::default_login_redirect());
@@ -922,15 +937,20 @@ final class DIP_Passkeys {
         $state_uid = absint($state['user_id'] ?? 0);
         if (!empty($state['discoverable'])) {
             // The account is the one the userHandle names; the credential must be one of ITS passkeys.
-            $state_uid = self::user_by_handle(self::str_field($body, 'userHandle'));
+            $handle_ids = self::users_by_handle(self::str_field($body, 'userHandle'));
+            $state_uid = count($handle_ids) === 1 ? (int) $handle_ids[0] : 0;
             $credential_id = self::request_credential_id($body);
             $known = $state_uid && $credential_id !== '' && is_array(self::find_credential($state_uid, $credential_id)[0]);
             if (!$known) {
                 DIP_Lockout::counter_hit($address_failures, self::LOGIN_ADDRESS_WINDOW);
                 if ($state_uid) DIP_Lockout::counter_hit(self::login_counter_key('login_verify_uid_fail', 'uid:' . $state_uid), self::LOGIN_ADDRESS_WINDOW);
                 if (class_exists('DIP_Audit')) DIP_Audit::record('passkey_login_failed', 'warning', $state_uid, ['reason'=>'unknown_credential']);
-                // 'unknown_credential' lets the page ask the browser to forget a passkey this site no longer accepts.
-                return new WP_Error('dip_passkey_unknown', __('Cette Passkey n’est plus reconnue par Delicat Store. Utilisez une autre méthode de connexion.', 'delicat-google-login'), ['status'=>401, 'unknown_credential'=>1]);
+                // 'unknown_credential' lets the page ask the browser to forget a passkey this site
+                // no longer accepts: only when nothing on the site matches it (never for a handle
+                // shared by two accounts, e.g. copied user meta).
+                $data = ['status'=>401];
+                if (count($handle_ids) < 2) $data['unknown_credential'] = 1;
+                return new WP_Error('dip_passkey_unknown', __('Cette Passkey n’est plus reconnue par Delicat Store. Utilisez une autre méthode de connexion.', 'delicat-google-login'), $data);
             }
             $state['user_id'] = $state_uid;
         }
@@ -1060,12 +1080,13 @@ final class DIP_Passkeys {
     }
 
     /**
-     * The DIPPasskeys config (wp_localize_script) is an inline script printed
-     * outside script_loader_tag: keep Rocket Loader / LiteSpeed from
-     * deferring it after passkeys.js.
+     * Configs printed by wp_localize_script() are inline scripts that
+     * script_loader_tag never sees: keep Rocket Loader / LiteSpeed from
+     * deferring them after their (protected) scripts — passkeys.js and the
+     * identity modal shell that hands its passkey config to the frame.
      */
     public static function protect_inline_config($attributes, $data = '') {
-        if (!is_array($attributes) || ($attributes['id'] ?? '') !== 'dip-passkeys-js-extra') return $attributes;
+        if (!is_array($attributes) || !in_array($attributes['id'] ?? '', ['dip-passkeys-js-extra', 'dip-auth-shell-js-extra', 'dip-session-router-js-extra'], true)) return $attributes;
         $attributes['data-cfasync'] = 'false';
         $attributes['data-no-optimize'] = '1';
         $attributes['data-no-defer'] = '1';
@@ -1073,10 +1094,14 @@ final class DIP_Passkeys {
         return $attributes;
     }
 
-    private static function security_url() {
+    /** The identity confirmation card (DIP_Reauth, anchor #dip-reauth), returning to this page afterwards. */
+    private static function confirm_url() {
+        // A site path; DIP_Reauth keeps it only when it is a page of this site.
+        $here = isset($_SERVER['REQUEST_URI']) && is_string($_SERVER['REQUEST_URI']) ? wp_unslash($_SERVER['REQUEST_URI']) : '';
+        if (class_exists('DIP_Reauth') && method_exists('DIP_Reauth', 'confirm_url')) return (string) DIP_Reauth::confirm_url($here);
         $url = home_url('/my-account/');
         if (function_exists('wc_get_account_endpoint_url') && class_exists('DIP_Customer_Dashboard')) $url = wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT);
-        return add_query_arg('dip_tab', 'security', $url);
+        return add_query_arg('dip_tab', 'security', $url) . '#dip-reauth';
     }
 
     public static function frontend_config(){
@@ -1091,7 +1116,7 @@ final class DIP_Passkeys {
             'rpId'=>self::rp_id(),
             /** Passkey autofill (conditional mediation) on login forms. */
             'autofill'=>apply_filters('dip_passkeys_autofill', true) ? 1 : 0,
-            'securityUrl'=>$logged_in ? self::security_url() : '',
+            'securityUrl'=>$logged_in ? self::confirm_url() : '',
             'strings'=>[
                 'unsupported'=>__('Ce navigateur ou cet appareil ne prend pas en charge les Passkeys.','delicat-google-login'),
                 'inApp'=>__('Pour utiliser une Passkey, ouvrez le site dans Safari ou Chrome.','delicat-google-login'),
@@ -1102,6 +1127,8 @@ final class DIP_Passkeys {
                 'origin'=>__('Les Passkeys fonctionnent uniquement sur l’adresse officielle du site.','delicat-google-login'),
                 'expired'=>__('Vérification Passkey expirée. Réessayez.','delicat-google-login'),
                 'constraint'=>__('Activez le verrouillage de l’écran (Face ID, empreinte ou code) de cet appareil, puis réessayez.','delicat-google-login'),
+                'device'=>__('Votre appareil n’a pas pu terminer la vérification. Réessayez, ou utilisez une autre méthode.','delicat-google-login'),
+                'stale'=>__('Cette page a expiré. Actualisez-la puis réessayez.','delicat-google-login'),
                 'network'=>__('Impossible de joindre le service Passkey. Vérifiez votre connexion puis réessayez.','delicat-google-login'),
                 'slow'=>__('Le serveur met trop de temps à répondre. Réessayez.','delicat-google-login'),
                 'blocked'=>__('Le service Passkey est momentanément inaccessible. Actualisez la page puis réessayez.','delicat-google-login'),
@@ -1122,12 +1149,17 @@ final class DIP_Passkeys {
         ];
     }
 
-    /** Pages whose content renders passkey markup: load the stylesheet in <head> there (no unstyled flash). */
+    /**
+     * Pages whose content renders passkey markup for this visitor (security
+     * card when signed in, sign-in button when not): load the stylesheet in
+     * <head> there (no unstyled flash).
+     */
     private static function page_has_passkey_markup() {
         if (!is_singular()) return false;
         $post = get_post();
         if (!($post instanceof WP_Post)) return false;
-        foreach (['delicat_security_center', 'delicat_identity_dashboard', 'delicat_auth_panel'] as $shortcode) {
+        $shortcodes = is_user_logged_in() ? ['delicat_security_center', 'delicat_identity_dashboard'] : ['delicat_auth_panel'];
+        foreach ($shortcodes as $shortcode) {
             if (has_shortcode((string) $post->post_content, $shortcode)) return true;
         }
         return false;

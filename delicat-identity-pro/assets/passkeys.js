@@ -35,6 +35,7 @@
   function errorMessage(err,kind){
     if(!err)return str('network','Impossible de joindre le service Passkey. Réessayez.');
     if(err.dipOwn)return err.message;
+    if(err.code==='rest_cookie_invalid_nonce')return str('stale','Cette page a expiré. Actualisez-la puis réessayez.');
     if(err.status&&err.code&&err.message)return err.message; // WP_Error messages are French.
     switch(err.name){
       case 'NotAllowedError':return kind==='login'?str('cancelledLogin','Vérification annulée, ou aucune Passkey de ce compte sur cet appareil.'):str('cancelled','Vérification Passkey annulée ou indisponible.');
@@ -43,6 +44,7 @@
       case 'NotSupportedError':return str('unsupported','Ce navigateur ne prend pas en charge les Passkeys.');
       case 'AbortError':case 'TimeoutError':return str('expired','Vérification Passkey expirée. Réessayez.');
       case 'ConstraintError':return str('constraint','Activez le verrouillage de l’écran de cet appareil, puis réessayez.');
+      case 'UnknownError':case 'NotReadableError':case 'OperationError':return str('device','Votre appareil n’a pas pu terminer la vérification. Réessayez, ou utilisez une autre méthode.');
     }
     if(err.status===429)return str('rateLimited','Trop de tentatives. Réessayez plus tard.');
     if(err.status===401||err.status===403)return str('blocked','Le service Passkey est momentanément inaccessible. Actualisez la page puis réessayez.');
@@ -326,14 +328,14 @@
 
   // ------------------------------------------------------------------ Passkey autofill (conditional mediation)
   // The ceremony lives CEREMONY_TTL (300 s) on the server: refresh before it expires.
-  var AUTOFILL_REFRESH_MS=240000;
+  var AUTOFILL_REFRESH_MS=240000,AUTOFILL_MAX_REFRESH=5;
   function visible(el){return !!(el&&el.isConnected&&el.getClientRects().length);}
   function stopAutofill(state){
     clearTimeout(state.timer);state.timer=0;state.data=null;
     if(state.controller){var c=state.controller;state.controller=null;try{c.abort();}catch(e){}}
   }
   function wakeAutofill(state){
-    if(document.hidden||!visible(state.input)||busyRoot(state.root))return;
+    if(state.submitted||document.hidden||!visible(state.input)||busyRoot(state.root))return;
     if(state.controller&&state.data&&Date.now()-state.at<AUTOFILL_REFRESH_MS)return;
     if(state.controller&&!state.data)return; // options request in flight
     stopAutofill(state);startAutofill(state);
@@ -345,7 +347,9 @@
     request('/passkeys/login/options','POST',{identifier:'',remember:ctx.remember,redirect:ctx.redirect},false).then(function(data){
       if(state.controller!==controller)return;
       state.data=data;state.at=Date.now();
-      state.timer=setTimeout(function(){state.timer=0;if(state.controller===controller){stopAutofill(state);wakeAutofill(state);}},AUTOFILL_REFRESH_MS);
+      // Fresh ceremony before the server one expires; an untouched page stops after a few
+      // refreshes (each stores a ceremony) and starts again on focus.
+      state.timer=setTimeout(function(){state.timer=0;if(state.controller!==controller)return;stopAutofill(state);if(++state.refreshes<=AUTOFILL_MAX_REFRESH)wakeAutofill(state);},AUTOFILL_REFRESH_MS);
       return navigator.credentials.get({mediation:'conditional',signal:controller.signal,publicKey:requestOptions(data)}).then(function(cred){
         if(state.controller!==controller||!cred)return;
         // The customer picked a passkey in the autofill list.
@@ -376,16 +380,23 @@
       qsa('[data-dip-passkey-login]').forEach(function(button){
         var root=loginRoot(button),input=identifierInput(root);
         if(!input||root.__dipAutofill||button.hidden)return;
-        var state={root:root,input:input,button:button,controller:null,data:null,at:0,timer:0};root.__dipAutofill=state;
+        var state={root:root,input:input,button:button,controller:null,data:null,at:0,timer:0,refreshes:0,submitted:false};root.__dipAutofill=state;
         addWebauthnToken(input);
         var form=input.form||(root.querySelector&&root.querySelector('form'));
-        // A password sign-in cancels the pending autofill request.
-        if(form)form.addEventListener('submit',function(){stopAutofill(state);},true);
-        input.addEventListener('focus',function(){wakeAutofill(state);});
+        // A password sign-in cancels the pending autofill request; it stays off while that
+        // sign-in runs and comes back when the customer edits the form again (failed attempt).
+        if(form){
+          form.addEventListener('submit',function(){state.submitted=true;stopAutofill(state);},true);
+          form.addEventListener('input',function(){if(state.submitted){state.submitted=false;wakeAutofill(state);}},true);
+        }
+        input.addEventListener('focus',function(){state.refreshes=0;wakeAutofill(state);});
         if(typeof IntersectionObserver!=='undefined'){new IntersectionObserver(function(entries){if(entries.some(function(e){return e.isIntersecting;}))wakeAutofill(state);}).observe(input);}
         else wakeAutofill(state);
       });
-      document.addEventListener('visibilitychange',function(){if(!document.hidden)qsa('[data-dip-passkey-login]').forEach(function(b){var s=loginRoot(b).__dipAutofill;if(s)wakeAutofill(s);});});
+      function wakeAll(){qsa('[data-dip-passkey-login]').forEach(function(b){var s=loginRoot(b).__dipAutofill;if(s)wakeAutofill(s);});}
+      document.addEventListener('visibilitychange',function(){if(!document.hidden)wakeAll();});
+      // Back/forward cache: the page comes back with the old (consumed or expired) ceremony.
+      window.addEventListener('pageshow',function(e){if(!e.persisted)return;qsa('[data-dip-passkey-login]').forEach(function(b){var s=loginRoot(b).__dipAutofill;if(s){s.submitted=false;stopAutofill(s);}});wakeAll();});
     }).catch(noop);
   }
 
@@ -393,19 +404,20 @@
   document.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('[data-dip-passkey-register],[data-dip-passkey-reauth],[data-dip-passkey-remove],[data-dip-passkey-login]');
     if(!b)return;e.preventDefault();if(b.disabled)return;
-    if(!ready()&&!initialized)init();
+    if(!initialized)init();
     if(b.hasAttribute('data-dip-passkey-register'))register(b);
     else if(b.hasAttribute('data-dip-passkey-reauth'))reauth(b);
     else if(b.hasAttribute('data-dip-passkey-remove'))remove(b,false);
     else login(b);
   });
 
-  var initialized=false;
+  var initialized=false,initTries=0,initTimer=0;
   function init(){
     if(initialized)return;
-    // Config still missing (deferred by an optimizer): leave the buttons alone and retry later.
-    if(!ready())return;
-    initialized=true;
+    // Config still missing (deferred by an optimizer): leave the buttons alone and retry
+    // a few times (a click also retries).
+    if(!ready()){if(!initTimer&&initTries<8){initTries++;initTimer=setTimeout(function(){initTimer=0;init();},400*initTries);}return;}
+    initialized=true;clearTimeout(initTimer);initTimer=0;
     qsa('[data-dip-passkeys-card]').forEach(initCard);
     if(!usable()){
       qsa('[data-dip-passkey-register],[data-dip-passkey-reauth],[data-dip-passkey-login]').forEach(function(b){b.disabled=true;b.setAttribute('aria-disabled','true');});
