@@ -67,8 +67,17 @@ final class DIP_Provider_Manager {
         )));
         $raw['provider_order'] = implode(',', $order ?: ['google', 'microsoft']);
         update_option(DIP_Plugin::OPTION, $raw, false);
+        $rejected = [];
+        if (class_exists('DIP_Headless_Google') && isset($_POST['headless_origins'])) {
+            $before = DIP_Headless_Google::settings();
+            $rejected = DIP_Headless_Google::save_settings(!empty($_POST['headless_enabled']), sanitize_textarea_field(wp_unslash($_POST['headless_origins'])));
+            $after = DIP_Headless_Google::settings();
+            if ($before !== $after && class_exists('DIP_Audit')) DIP_Audit::record('headless_google_settings_updated', 'warning', get_current_user_id(), ['enabled' => $after['enabled'], 'origins' => count($after['origins'])]);
+        }
         if (class_exists('DIP_Audit')) DIP_Audit::record('provider_settings_updated', 'info', get_current_user_id(), ['order' => $raw['provider_order']]);
-        wp_safe_redirect(add_query_arg('dip_saved', '1', admin_url('options-general.php?page=' . self::PAGE)));
+        $args = ['dip_saved' => '1'];
+        if ($rejected) $args['dip_origins_rejected'] = count($rejected);
+        wp_safe_redirect(add_query_arg($args, admin_url('options-general.php?page=' . self::PAGE)));
         exit;
     }
 
@@ -124,6 +133,7 @@ final class DIP_Provider_Manager {
                 <div class="dip-hero-score"><small>Fournisseurs prêts</small><strong><?php echo esc_html((string) count(array_filter($providers, static function ($p) { return !empty($p['enabled']) && !empty($p['configured']); }))); ?></strong><span>sur <?php echo esc_html((string) count($providers)); ?></span></div>
             </section>
             <?php if (!empty($_GET['dip_saved'])): ?><div class="notice notice-success is-dismissible"><p>Configuration des fournisseurs enregistrée.</p></div><?php endif; ?>
+            <?php if (!empty($_GET['dip_origins_rejected'])): ?><div class="notice notice-warning is-dismissible"><p><?php echo esc_html(sprintf('%d origine(s) ignorée(s) : utilisez https://domaine.exemple, sans chemin ni port.', absint($_GET['dip_origins_rejected']))); ?></p></div><?php endif; ?>
             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                 <input type="hidden" name="action" value="dip_provider_save">
                 <?php wp_nonce_field('dip_provider_save'); ?>
@@ -144,6 +154,20 @@ final class DIP_Provider_Manager {
                         </div>
                     </article>
                 <?php endforeach; ?>
+                <?php if (class_exists('DIP_Headless_Google')): $headless = DIP_Headless_Google::settings(); ?>
+                    <article class="dip-quick-card">
+                        <span class="dip-status-dot <?php echo $headless['enabled'] === 'yes' && $headless['origins'] ? 'is-good' : 'is-info'; ?>"></span>
+                        <div style="width:100%">
+                            <small>HEADLESS</small>
+                            <strong>Boutique headless (Google)</strong>
+                            <p>Seules ces origines HTTPS exactes peuvent recevoir une connexion Google de la boutique.</p>
+                            <label><input type="checkbox" name="headless_enabled" value="1" <?php checked($headless['enabled'], 'yes'); ?>> Activer la connexion Google de la boutique</label>
+                            <p><label for="dip-headless-origins">Origines autorisées (une par ligne)</label><br>
+                            <textarea id="dip-headless-origins" name="headless_origins" rows="3" class="large-text code" placeholder="https://boutique.exemple"><?php echo esc_textarea(implode("\n", $headless['origins'])); ?></textarea></p>
+                            <p class="description">Format : https://domaine.exemple, sans chemin ni port. Retour : <code><?php echo esc_html(DIP_Headless_Google::CALLBACK_PATH); ?></code></p>
+                        </div>
+                    </article>
+                <?php endif; ?>
                 </section>
                 <p class="description">L’ordre affiché ci-dessus est utilisé par les shortcodes sociaux. Les fournisseurs désactivés restent configurés mais ne sont plus proposés aux clients.</p>
                 <p><button type="submit" class="button button-primary">Enregistrer les fournisseurs</button> <a class="button" href="<?php echo esc_url(admin_url('options-general.php?page=delicat-identity')); ?>">Réglages avancés</a></p>

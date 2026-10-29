@@ -16,8 +16,12 @@ final class DIP_Headless_Google {
     const COOKIE_PREFIX = 'dip_hg_';
     const TICKET_PREFIX = 'dip_hg_ticket_';
     const CLEANUP_HOOK = 'dip_headless_google_cleanup';
+    const FLOW_PREFIX = 'dip_hg_flow_';
+    // Storefront origin trusted before the setting existed; still the default
+    // until an administrator saves the Fournisseurs page.
     const DEFAULT_ORIGIN = 'https://delicat-store-ultra-fast.louismarkenricky.chatgpt.site';
     const CALLBACK_PATH = '/api/commerce/auth/google/callback';
+    const OPTION = 'dip_headless_google';
 
     public static function init() {
         add_action('init', [__CLASS__, 'route'], 0);
@@ -25,8 +29,52 @@ final class DIP_Headless_Google {
         add_action('dip_account_linked', [__CLASS__, 'synchronize_verified_subject'], 35, 2);
         add_action('dip_login_success', [__CLASS__, 'synchronize_verified_subject'], 35, 2);
         add_action('dip_login_success', [__CLASS__, 'capture_google_login'], 90, 2);
+        add_action('dip_identity_resolved', [__CLASS__, 'record_provider_proof'], 10, 3);
+        add_action('dip_account_disconnected', [__CLASS__, 'clear_subject'], 20, 2);
+        add_action('dip_account_unlinked', [__CLASS__, 'clear_subject'], 20, 2);
         add_filter('delicat_app_exchange_identity_credential', [__CLASS__, 'exchange_credential'], 20, 4);
         add_action(self::CLEANUP_HOOK, [__CLASS__, 'cleanup_tickets']);
+    }
+
+    /** https://host (no path, port or credentials), or '' when invalid. */
+    public static function normalize_origin($origin) {
+        $parts = wp_parse_url(trim((string) $origin));
+        if (!is_array($parts)
+            || strtolower((string) ($parts['scheme'] ?? '')) !== 'https'
+            || empty($parts['host'])
+            || isset($parts['port']) || isset($parts['user']) || isset($parts['pass'])
+            || isset($parts['query']) || isset($parts['fragment'])
+            || !in_array((string) ($parts['path'] ?? ''), ['', '/'], true)
+            || !preg_match('/^[a-z0-9.-]+$/D', strtolower((string) $parts['host']))
+        ) return '';
+        return 'https://' . strtolower((string) $parts['host']);
+    }
+
+    /** Storefront hand-off switch and trusted origins (administrator setting). */
+    public static function settings() {
+        $raw = get_option(self::OPTION, null);
+        if (!is_array($raw)) return ['enabled' => 'yes', 'origins' => [self::DEFAULT_ORIGIN]];
+        $origins = array_values(array_unique(array_filter(array_map([__CLASS__, 'normalize_origin'], (array) ($raw['origins'] ?? [])))));
+        return ['enabled' => ($raw['enabled'] ?? 'yes') === 'no' ? 'no' : 'yes', 'origins' => $origins];
+    }
+
+    public static function enabled() {
+        return self::settings()['enabled'] === 'yes';
+    }
+
+    /** Saves the switch and the origins (one per line); returns the rejected lines. */
+    public static function save_settings($enabled, $origins_text) {
+        $origins = [];
+        $rejected = [];
+        foreach (preg_split('/[\r\n,]+/', (string) $origins_text) as $line) {
+            $line = trim($line);
+            if ($line === '') continue;
+            $origin = self::normalize_origin($line);
+            if ($origin === '') $rejected[] = $line;
+            elseif (!in_array($origin, $origins, true)) $origins[] = $origin;
+        }
+        update_option(self::OPTION, ['enabled' => $enabled ? 'yes' : 'no', 'origins' => array_slice($origins, 0, 10)], false);
+        return $rejected;
     }
 
     public static function activate() {
@@ -55,7 +103,7 @@ final class DIP_Headless_Google {
             && !empty($settings['client_secret']);
 
         $response = new WP_REST_Response([
-            'enabled' => $app && $google && is_ssl(),
+            'enabled' => $app && $google && is_ssl() && self::enabled(),
             'version' => defined('DIP_VERSION') ? DIP_VERSION : '',
             'session_exchange' => $app,
             'browser_recovery' => true,
@@ -83,7 +131,28 @@ final class DIP_Headless_Google {
     }
 
     private static function flow_key($state) {
-        return 'dip_hg_flow_' . substr(hash_hmac('sha256', $state, wp_salt('nonce')), 0, 40);
+        return self::FLOW_PREFIX . substr(hash_hmac('sha256', $state, wp_salt('nonce')), 0, 40);
+    }
+
+    /**
+     * Flows live in non-autoloaded option rows, like DIP_Flow_Store: an
+     * object-cache flush during the Google step no longer loses the flow.
+     */
+    private static function load_flow($state) {
+        $raw = get_option(self::flow_key($state), false);
+        $flow = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($flow)) $flow = get_transient(self::flow_key($state)); // flow started before the update
+        return is_array($flow) ? $flow : null;
+    }
+
+    private static function save_flow(array $flow) {
+        $json = wp_json_encode($flow);
+        return is_string($json) && update_option(self::flow_key((string) $flow['state']), $json, false);
+    }
+
+    private static function delete_flow($state) {
+        delete_option(self::flow_key($state));
+        delete_transient(self::flow_key($state));
     }
 
     private static function cookie_name($state) {
@@ -151,8 +220,10 @@ final class DIP_Headless_Google {
             || isset($parts['fragment'])
         ) return '';
 
+        // The administrator's switch is a kill switch, also for in-flight flows.
+        if (!self::enabled()) return '';
         $incoming = 'https://' . strtolower((string) $parts['host']);
-        $allowed = apply_filters('dip_headless_allowed_origins', [self::DEFAULT_ORIGIN]);
+        $allowed = apply_filters('dip_headless_allowed_origins', self::settings()['origins']);
         foreach ((array) $allowed as $origin) {
             $trusted = wp_parse_url((string) $origin);
             if (!is_array($trusted)
@@ -189,7 +260,7 @@ final class DIP_Headless_Google {
 
     public static function route() {
         $action = sanitize_key(wp_unslash($_GET['delicat_headless_auth'] ?? ''));
-        if (!in_array($action, ['start', 'complete'], true)) return;
+        if (!in_array($action, ['start', 'confirm', 'complete'], true)) return;
 
         if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
         if (has_action('litespeed_control_set_nocache')) {
@@ -208,6 +279,10 @@ final class DIP_Headless_Google {
             self::start();
             return;
         }
+        if ($action === 'confirm') {
+            self::confirm();
+            return;
+        }
         self::complete();
     }
 
@@ -216,7 +291,12 @@ final class DIP_Headless_Google {
         $callback = self::trusted_callback(wp_unslash($_GET['return_to'] ?? ''));
         $provider = sanitize_key(wp_unslash($_GET['provider'] ?? ''));
         $next = self::safe_next(wp_unslash($_GET['next'] ?? ''));
-        if (!self::valid_state($state) || $callback === '' || $provider !== 'google') {
+        // Optional PKCE-style binding (S256): when the storefront sends a
+        // challenge, the credential can only be redeemed with its verifier.
+        $challenge = sanitize_text_field(wp_unslash($_GET['code_challenge'] ?? ''));
+        $challenge_method = sanitize_text_field(wp_unslash($_GET['code_challenge_method'] ?? ''));
+        $challenge_ok = $challenge === '' || ($challenge_method === 'S256' && preg_match('/^[A-Za-z0-9_-]{43}$/D', $challenge));
+        if (!self::valid_state($state) || $callback === '' || $provider !== 'google' || !$challenge_ok) {
             wp_die(esc_html__('Demande Google Identity non autorisée.', 'delicat-google-login'), '', ['response' => 400]);
         }
         if (self::rate_limited()) {
@@ -226,8 +306,7 @@ final class DIP_Headless_Google {
         self::activate();
 
         $browser = self::random_hex();
-        $resume = self::random_hex();
-        if ($browser === '' || $resume === '' || !self::flow_cookie($state, $browser)) {
+        if ($browser === '' || !self::flow_cookie($state, $browser)) {
             wp_die(esc_html__('Impossible de protéger cette connexion Google.', 'delicat-google-login'), '', ['response' => 503]);
         }
         $flow = [
@@ -235,12 +314,29 @@ final class DIP_Headless_Google {
             'callback' => $callback,
             'next' => $next,
             'browser' => hash_hmac('sha256', $browser, wp_salt('secure_auth')),
-            'resume' => hash_hmac('sha256', $resume, wp_salt('auth')),
+            'challenge' => $challenge,
             'expires' => time() + self::FLOW_TTL,
         ];
-        if (!set_transient(self::flow_key($state), $flow, self::FLOW_TTL)) {
+        if (!self::save_flow($flow)) {
             self::failure($flow, 'authentication_failed');
         }
+
+        // An existing WordPress session is never turned into a storefront
+        // credential by itself (a page on the trusted origin could otherwise
+        // do it with a mere navigation). The visitor confirms, and Google
+        // signs them in again; linking Google stays in « Comptes connectés ».
+        if (is_user_logged_in()) self::confirmation_page($flow);
+        self::continue_to_google($flow);
+    }
+
+    /** Sends the browser to the Identity Google sign-in for this flow. */
+    private static function continue_to_google(array $flow) {
+        $state = (string) $flow['state'];
+        $resume = self::random_hex();
+        if ($resume === '') self::failure($flow, 'authentication_failed');
+        $flow['resume'] = hash_hmac('sha256', $resume, wp_salt('auth'));
+        if (!self::save_flow($flow)) self::failure($flow, 'authentication_failed');
+        $callback = (string) $flow['callback'];
 
         $complete = add_query_arg([
             'delicat_headless_auth' => 'complete',
@@ -257,22 +353,69 @@ final class DIP_Headless_Google {
             'redirect' => rawurlencode($complete),
             'tracker' => 'headless_' . $state,
         ];
-        if (is_user_logged_in()) {
-            $current_user = get_current_user_id();
-            $linked_subject = (string) get_user_meta($current_user, '_dglp_google_sub', true);
-            if ($linked_subject === '' && self::customer_allowed($current_user)) {
-                $login_args['link'] = '1';
-                $login_args['_dip_nonce'] = wp_create_nonce('dip_link_' . $current_user);
-            }
-        }
         $login = add_query_arg($login_args, home_url('/'));
         wp_safe_redirect($login, 302, 'Delicat Identity Pro');
         exit;
     }
 
+    private static function masked_email($email) {
+        $email = (string) $email;
+        $at = strpos($email, '@');
+        if ($at === false || $at < 1) return '•••';
+        return substr($email, 0, 1) . str_repeat('•', min(6, max(3, $at - 1))) . substr($email, $at);
+    }
+
+    /** Signed-in visitor: confirm before Google signs them in for the storefront. */
+    private static function confirmation_page(array $flow) {
+        $user = wp_get_current_user();
+        $state = (string) $flow['state'];
+        status_header(200);
+        header('Content-Type: text/html; charset=utf-8');
+        // No form-action directive: browsers apply it to the redirects that
+        // follow the POST (to Google, or back to the storefront on cancel).
+        header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'");
+        $action = add_query_arg('delicat_headless_auth', 'confirm', home_url('/'));
+        ?><!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<title><?php esc_html_e('Continuer vers la boutique', 'delicat-google-login'); ?></title>
+<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f7f9;color:#111827;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{box-sizing:border-box;width:min(440px,calc(100% - 32px));background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:28px;box-shadow:0 10px 30px rgba(17,24,39,.08)}h1{font-size:1.3rem;margin:0 0 12px}p{margin:0 0 12px;color:#374151}form{display:flex;flex-direction:column;gap:10px;margin-top:20px}button{font:inherit;font-weight:600;border-radius:10px;padding:12px 16px;border:1px solid #d1d5db;background:#fff;color:#111827;cursor:pointer}button.primary{background:#111827;border-color:#111827;color:#fff}button:focus-visible{outline:3px solid #2563eb;outline-offset:2px}@media (prefers-color-scheme:dark){body{background:#0b0f17;color:#f3f4f6}main{background:#111827;border-color:#1f2937}p{color:#d1d5db}button{background:#1f2937;border-color:#374151;color:#f3f4f6}button.primary{background:#f3f4f6;border-color:#f3f4f6;color:#111827}}</style>
+</head><body><main>
+<h1><?php esc_html_e('Continuer vers la boutique Delicat', 'delicat-google-login'); ?></h1>
+<p><?php echo wp_kses(sprintf(__('Vous êtes connecté en tant que %s.', 'delicat-google-login'), '<strong>' . esc_html(self::masked_email($user->user_email)) . '</strong>'), ['strong' => []]); ?></p>
+<p><?php esc_html_e('Pour ouvrir la boutique, confirmez avec Google : cette session sera d’abord fermée, puis Google vous reconnectera au compte que vous choisirez.', 'delicat-google-login'); ?></p>
+<form method="post" action="<?php echo esc_url($action); ?>">
+<input type="hidden" name="state" value="<?php echo esc_attr($state); ?>">
+<input type="hidden" name="_wpnonce" value="<?php echo esc_attr(wp_create_nonce('dip_hg_confirm_' . $state)); ?>">
+<button type="submit" class="primary" name="decision" value="continue"><?php esc_html_e('Continuer avec Google', 'delicat-google-login'); ?></button>
+<button type="submit" name="decision" value="cancel"><?php esc_html_e('Annuler', 'delicat-google-login'); ?></button>
+</form>
+</main></body></html><?php
+        exit;
+    }
+
+    private static function confirm() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+            wp_die(esc_html__('Méthode non autorisée.', 'delicat-google-login'), '', ['response' => 405]);
+        }
+        $state = sanitize_text_field(wp_unslash($_POST['state'] ?? ''));
+        $flow = self::current_flow($state);
+        if (!$flow) {
+            wp_safe_redirect(add_query_arg('dip_auth_error', 'headless_session_expired', home_url('/')) . '#delicat-login');
+            exit;
+        }
+        $decision = sanitize_key(wp_unslash($_POST['decision'] ?? ''));
+        if ($decision !== 'continue') self::failure($flow, 'authentication_failed');
+        if (is_user_logged_in()) {
+            $nonce = sanitize_text_field(wp_unslash($_POST['_wpnonce'] ?? ''));
+            if (!wp_verify_nonce($nonce, 'dip_hg_confirm_' . $state)) self::failure($flow, 'authentication_failed');
+            wp_logout();
+        }
+        self::continue_to_google($flow);
+    }
+
     private static function current_flow($state, $resume = '') {
         if (!self::valid_state($state)) return null;
-        $flow = get_transient(self::flow_key($state));
+        $flow = self::load_flow($state);
         if (!is_array($flow)
             || empty($flow['state'])
             || !hash_equals((string) $flow['state'], $state)
@@ -326,7 +469,15 @@ final class DIP_Headless_Google {
         if (count($identity_owners) !== 1 || (int) $identity_owners[0] !== (int) $user_id) return false;
 
         $existing = (string) get_user_meta($user_id, '_delicat_google_sub', true);
-        if ($existing !== '' && !hash_equals($existing, $subject)) return false;
+        $replace = false;
+        if ($existing !== '' && !hash_equals($existing, $subject)) {
+            // A mirror left by an earlier Google account (disconnected, then
+            // another one linked) is replaced only once no account still holds
+            // that old subject in Identity.
+            $old_owners = get_users(['meta_key' => '_dglp_google_sub', 'meta_value' => $existing, 'number' => 1, 'fields' => 'ids']);
+            if ($old_owners) return false;
+            $replace = true;
+        }
         $api_owners = array_map('absint', (array) get_users([
             'meta_key' => '_delicat_google_sub',
             'meta_value' => $subject,
@@ -336,7 +487,10 @@ final class DIP_Headless_Google {
         foreach ($api_owners as $owner) {
             if ((int) $owner !== (int) $user_id) return false;
         }
-        if ($existing === '') update_user_meta($user_id, '_delicat_google_sub', $subject);
+        if ($existing === '' || $replace) {
+            update_user_meta($user_id, '_delicat_google_sub', $subject);
+            if ($replace && class_exists('DIP_Audit')) DIP_Audit::record('headless_google_subject_replaced', 'notice', $user_id);
+        }
         return hash_equals($subject, (string) get_user_meta($user_id, '_delicat_google_sub', true));
     }
 
@@ -350,14 +504,42 @@ final class DIP_Headless_Google {
         }
     }
 
+    /** The mirror follows the Identity link: disconnecting Google clears it. */
+    public static function clear_subject($user_id, $provider = '') {
+        if (sanitize_key((string) $provider) !== 'google') return;
+        $user_id = absint($user_id);
+        if ($user_id && (string) get_user_meta($user_id, '_dglp_google_sub', true) === '') delete_user_meta($user_id, '_delicat_google_sub');
+    }
+
+    /**
+     * Google has just proven this user in the callback of a storefront flow:
+     * remember it in the flow. Only that proof (not a session that existed
+     * before the flow) can later become a storefront credential.
+     */
+    public static function record_provider_proof($user_id, $profile = [], $link_user = 0) {
+        if (absint($link_user) || !is_array($profile) || ($profile['provider'] ?? '') !== 'google') return;
+        if (!preg_match('/^headless_([a-f0-9]{64})$/D', (string) ($profile['_tracker'] ?? ''), $m)) return;
+        $flow = self::load_flow($m[1]);
+        if (!is_array($flow) || empty($flow['state']) || !hash_equals((string) $flow['state'], $m[1]) || time() > (int) ($flow['expires'] ?? 0)) return;
+        $flow['proof_user'] = absint($user_id);
+        $flow['proof_sub'] = sanitize_text_field((string) ($profile['sub'] ?? ''));
+        self::save_flow($flow);
+    }
+
+    private static function proven_for($flow, $user_id) {
+        return is_array($flow) && absint($user_id) > 0
+            && (int) ($flow['proof_user'] ?? 0) === absint($user_id)
+            && (string) ($flow['proof_sub'] ?? '') !== '';
+    }
+
     public static function capture_google_login($user_id, $profile) {
         if (!is_array($profile) || sanitize_key((string) ($profile['provider'] ?? 'google')) !== 'google') return;
         $tracker = (string) ($profile['_tracker'] ?? '');
         if (strpos($tracker, 'headless_') !== 0) return;
         $state = substr($tracker, 9);
         $flow = self::current_flow($state);
-        if (!$flow) return;
-        self::finish($flow, absint($user_id), sanitize_text_field((string) ($profile['sub'] ?? '')));
+        if (!$flow || !self::proven_for($flow, $user_id)) return;
+        self::finish($flow, absint($user_id), (string) $flow['proof_sub']);
     }
 
     private static function complete() {
@@ -378,7 +560,13 @@ final class DIP_Headless_Google {
         // WordPress session that existed before this flow.
         if (isset($_GET['dip_auth_error'])) self::failure($flow, 'authentication_failed');
         if (!is_user_logged_in()) self::failure($flow, 'authentication_failed');
-        self::finish($flow, get_current_user_id(), '');
+        // Only the account Google proved in this flow's callback (session
+        // created by that sign-in or its 2FA step) gets a credential.
+        if (!self::proven_for($flow, get_current_user_id())) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('headless_google_unproven_session_refused', 'warning', get_current_user_id());
+            self::failure($flow, 'authentication_failed');
+        }
+        self::finish($flow, get_current_user_id(), (string) $flow['proof_sub']);
     }
 
     private static function finish(array $flow, $user_id, $expected_subject) {
@@ -393,12 +581,13 @@ final class DIP_Headless_Google {
             'state' => (string) $flow['state'],
             'expires' => time() + self::TICKET_TTL,
             'subject' => (string) get_user_meta($user_id, '_dglp_google_sub', true),
+            'challenge' => (string) ($flow['challenge'] ?? ''),
         ]);
         if (!is_string($record) || !add_option(self::ticket_option($credential), $record, '', false)) {
             self::failure($flow, 'authentication_failed');
         }
 
-        delete_transient(self::flow_key((string) $flow['state']));
+        self::delete_flow((string) $flow['state']);
         self::flow_cookie((string) $flow['state'], '', true);
         if (class_exists('DIP_Audit')) DIP_Audit::record('headless_google_ticket_created', 'info', absint($user_id));
         $target = add_query_arg([
@@ -412,7 +601,7 @@ final class DIP_Headless_Google {
 
     private static function failure(array $flow, $error) {
         $state = (string) ($flow['state'] ?? '');
-        delete_transient(self::flow_key($state));
+        if (self::valid_state($state)) self::delete_flow($state);
         self::flow_cookie($state, '', true);
         $target = add_query_arg([
             'state' => $state,
@@ -424,6 +613,7 @@ final class DIP_Headless_Google {
 
     public static function exchange_credential($resolved, $credential, $provider, $request) {
         if (sanitize_key((string) $provider) !== self::PROVIDER) return $resolved;
+        if (!self::enabled()) return new WP_Error('dip_headless_disabled', 'La connexion Google de la boutique est désactivée.', ['status' => 403]);
         if (!($request instanceof WP_REST_Request)
             || (string) $request->get_route() !== '/delicat-app/v1/auth/identity/exchange'
             || strtoupper((string) $request->get_method()) !== 'POST'
@@ -440,6 +630,16 @@ final class DIP_Headless_Google {
             || !hash_equals((string) $record['state'], $state)
             || time() > (int) ($record['expires'] ?? 0)
         ) return new WP_Error('dip_headless_credential_expired', 'La confirmation Google a expiré ou a déjà été utilisée.', ['status' => 401]);
+        if (!empty($record['challenge'])) {
+            $verifier = $request->get_param('code_verifier');
+            $verifier = is_string($verifier) ? $verifier : '';
+            $computed = preg_match('/^[A-Za-z0-9._~-]{43,128}$/D', $verifier)
+                ? rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=')
+                : '';
+            if ($computed === '' || !hash_equals((string) $record['challenge'], $computed)) {
+                return new WP_Error('dip_headless_verifier_invalid', 'Justificatif Google invalide.', ['status' => 401]);
+            }
+        }
 
         global $wpdb;
         $claimed = $wpdb->query($wpdb->prepare(
@@ -462,15 +662,16 @@ final class DIP_Headless_Google {
 
     public static function cleanup_tickets() {
         global $wpdb;
-        $pattern = $wpdb->esc_like(self::TICKET_PREFIX) . '%';
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 200",
-            $pattern
-        ), ARRAY_A);
-        foreach (is_array($rows) ? $rows : [] as $row) {
-            $record = json_decode((string) ($row['option_value'] ?? ''), true);
-            if (!is_array($record) || time() > (int) ($record['expires'] ?? 0)) {
-                delete_option((string) $row['option_name']);
+        foreach ([self::TICKET_PREFIX, self::FLOW_PREFIX] as $prefix) {
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 200",
+                $wpdb->esc_like($prefix) . '%'
+            ), ARRAY_A);
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                $record = json_decode((string) ($row['option_value'] ?? ''), true);
+                if (!is_array($record) || time() > (int) ($record['expires'] ?? 0)) {
+                    delete_option((string) $row['option_name']);
+                }
             }
         }
     }

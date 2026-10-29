@@ -131,6 +131,9 @@ final class DIP_Privileged_Social {
         $local_sub = (string)get_user_meta($user_id, DIP_Identity::META_SUB, true);
         if ($local_sub === '' || !hash_equals($local_sub, $sub)) return false;
         update_user_meta($user_id, self::META_GOOGLE_ADMIN_APPROVAL, self::marker($user_id, $sub));
+        // The explicit TOTP-gated approval supersedes the Nextend continuity
+        // exception, so a later revoke cannot leave continuity behind.
+        delete_user_meta($user_id, self::META_LEGACY_GOOGLE_CONTINUITY);
         if (class_exists('DIP_Audit')) DIP_Audit::record('admin_google_secure_link_authorized', 'warning', $user_id, ['source'=>sanitize_key($source)]);
         self::security_email($user_id, __('Google autorisé pour votre compte administrateur Delicat', 'delicat-google-login'), __('La connexion Google sécurisée vient d’être autorisée pour votre compte Administrateur. Chaque connexion Google exigera encore votre second facteur Delicat.', 'delicat-google-login'));
         return true;
@@ -139,16 +142,23 @@ final class DIP_Privileged_Social {
     public static function revoke($user_id, $reason = 'manual') {
         $user_id = absint($user_id);
         if (!$user_id) return;
-        $had = (string)get_user_meta($user_id, self::META_GOOGLE_ADMIN_APPROVAL, true) !== '';
+        $had_approval = (string)get_user_meta($user_id, self::META_GOOGLE_ADMIN_APPROVAL, true) !== '';
+        $had_continuity = (string)get_user_meta($user_id, self::META_LEGACY_GOOGLE_CONTINUITY, true) !== '';
         delete_user_meta($user_id, self::META_GOOGLE_ADMIN_APPROVAL);
-        if ($had && class_exists('DIP_Audit')) DIP_Audit::record('admin_google_secure_link_revoked', 'critical', $user_id, ['reason'=>sanitize_key($reason)]);
+        // Revoking (manually, or by turning TOTP off) must also end the Nextend
+        // continuity exception, which otherwise kept Google able to open the
+        // privileged session without TOTP. The subject stays linked, so the
+        // next Google sign-in is refused until it is approved again.
+        delete_user_meta($user_id, self::META_LEGACY_GOOGLE_CONTINUITY);
+        if (($had_approval || $had_continuity) && class_exists('DIP_Audit')) DIP_Audit::record('admin_google_secure_link_revoked', 'critical', $user_id, [
+            'reason'=>sanitize_key($reason),
+            'approval'=>$had_approval ? 1 : 0,
+            'legacy_continuity'=>$had_continuity ? 1 : 0,
+        ]);
     }
 
     public static function provider_disconnected($user_id, $provider) {
-        if (sanitize_key($provider) === 'google') {
-            self::revoke(absint($user_id), 'google_disconnected');
-            delete_user_meta(absint($user_id), self::META_LEGACY_GOOGLE_CONTINUITY);
-        }
+        if (sanitize_key($provider) === 'google') self::revoke(absint($user_id), 'google_disconnected');
     }
 
     public static function two_factor_disabled($user_id) {
@@ -244,6 +254,7 @@ final class DIP_Privileged_Social {
         $linked_sub = (string)get_user_meta($user_id, DIP_Identity::META_SUB, true);
         $linked = $linked_sub !== '';
         $approved = $linked && self::approved($user_id, $linked_sub);
+        $legacy = $linked && self::legacy_continuity_approved($user_id, $linked_sub);
         $totp = class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id);
         $passkey = class_exists('DIP_Passkeys') && DIP_Passkeys::has_passkeys($user_id);
         $recent = !class_exists('DIP_Reauth') || DIP_Reauth::is_recent($user_id);
@@ -266,6 +277,7 @@ final class DIP_Privileged_Social {
           <div class="dip-check"><span><?php esc_html_e('Mode sécurisé Administrateur', 'delicat-google-login'); ?></span><span class="dip-pill <?php echo self::secure_mode_enabled()?'is-ok':'is-warn'; ?>"><?php echo self::secure_mode_enabled()?esc_html__('Actif','delicat-google-login'):esc_html__('Désactivé','delicat-google-login'); ?></span></div>
           <div class="dip-check"><span><?php esc_html_e('Google lié', 'delicat-google-login'); ?></span><span class="dip-pill <?php echo $linked?'is-ok':'is-warn'; ?>"><?php echo $linked?esc_html__('Oui','delicat-google-login'):esc_html__('Non','delicat-google-login'); ?></span></div>
           <div class="dip-check"><span><?php esc_html_e('Identité Google approuvée pour admin', 'delicat-google-login'); ?></span><span class="dip-pill <?php echo $approved?'is-ok':'is-warn'; ?>"><?php echo $approved?esc_html__('Approuvée','delicat-google-login'):esc_html__('À autoriser','delicat-google-login'); ?></span></div>
+          <?php if ($legacy): ?><div class="dip-check"><span><?php echo $totp ? esc_html__('Continuité Nextend active', 'delicat-google-login') : esc_html__('Continuité Nextend active (sans TOTP)', 'delicat-google-login'); ?></span><span class="dip-pill is-warn"><?php esc_html_e('Google accepté', 'delicat-google-login'); ?></span></div><?php endif; ?>
           <div class="dip-check"><span><?php esc_html_e('TOTP 2FA obligatoire', 'delicat-google-login'); ?></span><span class="dip-pill <?php echo $totp?'is-ok':'is-warn'; ?>"><?php echo $totp?esc_html__('Actif','delicat-google-login'):esc_html__('Requis','delicat-google-login'); ?></span></div>
           <div class="dip-check"><span><?php esc_html_e('Passkey de secours recommandée', 'delicat-google-login'); ?></span><span class="dip-pill <?php echo $passkey?'is-ok':'is-warn'; ?>"><?php echo $passkey?esc_html__('Disponible','delicat-google-login'):esc_html__('Recommandée','delicat-google-login'); ?></span></div>
           <div class="dip-actions">
@@ -275,10 +287,11 @@ final class DIP_Privileged_Social {
             <span class="dip-btn" aria-disabled="true"><?php esc_html_e('TOTP + confirmation requis avant liaison', 'delicat-google-login'); ?></span>
           <?php elseif ($linked && !$approved && $totp && $recent && is_ssl()): ?>
             <a class="dip-btn primary" href="<?php echo esc_url($connect_url); ?>"><?php esc_html_e('Vérifier Google et autoriser cet Administrateur', 'delicat-google-login'); ?></a>
-          <?php elseif ($linked && !$approved): ?>
+          <?php elseif ($linked && !$approved && !$legacy): ?>
             <span class="dip-btn" aria-disabled="true"><?php esc_html_e('TOTP + confirmation requis avant vérification Google', 'delicat-google-login'); ?></span>
-          <?php elseif ($approved): ?>
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-dip-confirm="<?php echo esc_attr__('Retirer l’autorisation Google Administrateur ? Les autres méthodes de connexion resteront disponibles.', 'delicat-google-login'); ?>"><input type="hidden" name="action" value="dip_admin_google_revoke"><?php wp_nonce_field(self::NONCE . '_revoke'); ?><button type="submit" class="dip-btn danger"><?php esc_html_e('Retirer l’autorisation Google Admin', 'delicat-google-login'); ?></button></form>
+          <?php endif; ?>
+          <?php if ($approved || $legacy): ?>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-dip-confirm="<?php echo esc_attr__('Retirer l’autorisation Google Administrateur ? Les autres méthodes de connexion resteront disponibles.', 'delicat-google-login'); ?>"><input type="hidden" name="action" value="dip_admin_google_revoke"><?php wp_nonce_field(self::NONCE . '_revoke'); ?><button type="submit" class="dip-btn danger"><?php echo $approved ? esc_html__('Retirer l’autorisation Google Admin', 'delicat-google-login') : esc_html__('Mettre fin à la continuité Google', 'delicat-google-login'); ?></button></form>
           <?php endif; ?>
           </div>
           <?php if (!$recent): ?><p class="dip-security-empty"><?php esc_html_e('Confirmez d’abord votre identité dans la carte « Confirmation d’identité » ci-dessous.', 'delicat-google-login'); ?></p><?php endif; ?>

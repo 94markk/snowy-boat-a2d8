@@ -13,6 +13,15 @@ interface DIP_Provider {
 final class DIP_Provider_Registry {
     private $providers = [];
 
+    /**
+     * A verified profile always carries the id of the provider that verified
+     * it: Identity resolves accounts (and Google's e-mail authority) by that id.
+     */
+    public static function stamp($profile, $provider_id) {
+        if (is_array($profile)) $profile['provider'] = sanitize_key((string) $provider_id);
+        return $profile;
+    }
+
     public function register(DIP_Provider $provider) {
         $id = sanitize_key($provider->id());
         if (!$id || isset($this->providers[$id])) return false;
@@ -46,7 +55,7 @@ final class DIP_Google_Provider implements DIP_Provider {
     }
     private function client() { return new DIP_Google($this->settings['client_id'], $this->settings['client_secret'], $this->callback, ($this->settings['google_prompt_select_account'] ?? 'yes') === 'yes'); }
     public function authorization_url(array $flow) { return $this->client()->authorization_url($flow); }
-    public function authenticate($code, array $flow) { return $this->client()->authenticate($code, $flow); }
+    public function authenticate($code, array $flow) { return DIP_Provider_Registry::stamp($this->client()->authenticate($code, $flow), $this->id()); }
 }
 
 final class DIP_Microsoft_Provider implements DIP_Provider {
@@ -61,5 +70,5 @@ final class DIP_Microsoft_Provider implements DIP_Provider {
     }
     private function client() { return new DIP_Microsoft($this->settings['microsoft_client_id'], $this->settings['microsoft_client_secret'], $this->settings['microsoft_tenant'] ?? 'common', $this->callback); }
     public function authorization_url(array $flow) { return $this->client()->authorization_url($flow); }
-    public function authenticate($code, array $flow) { return $this->client()->authenticate($code, $flow); }
+    public function authenticate($code, array $flow) { return DIP_Provider_Registry::stamp($this->client()->authenticate($code, $flow), $this->id()); }
 }

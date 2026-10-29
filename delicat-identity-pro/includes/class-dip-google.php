@@ -33,7 +33,14 @@ final class DIP_Google {
             'code_challenge_method' => 'S256',
         ];
         if ($this->prompt_select_account) $args['prompt'] = 'select_account';
-        return add_query_arg($args, 'https://accounts.google.com/o/oauth2/v2/auth');
+        // add_query_arg() does not encode values: a callback URL that carries
+        // its own query (?lang=fr&dip_action=callback) reached Google truncated.
+        return 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query($args, '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /** A string claim/header value, or '' for anything else (arrays, objects, numbers). */
+    private static function str($source, $key) {
+        return is_array($source) && isset($source[$key]) && is_string($source[$key]) ? $source[$key] : '';
     }
 
     /** A transport failure or a Google 5xx is worth one more attempt. */
@@ -104,6 +111,8 @@ final class DIP_Google {
             if (array_key_exists($claim_key, $claims)) $result[$claim_key] = $claims[$claim_key];
         }
         $result['email_authoritative'] = self::email_is_authoritative($claims);
+        // Identity resolves the account by provider id; never leave it implied.
+        $result['provider'] = 'google';
         return $result;
     }
 
@@ -127,8 +136,10 @@ final class DIP_Google {
 
         $header = json_decode($header_raw, true);
         $claims = json_decode($claims_raw, true);
-        $kid = is_array($header) ? sanitize_text_field((string) ($header['kid'] ?? '')) : '';
-        if (!is_array($header) || !is_array($claims) || ($header['alg'] ?? '') !== 'RS256' || $kid === '' || strlen($kid) > 200) {
+        // The header is untrusted until the signature is checked: only a plain
+        // string kid is used (an array kid used to log PHP warnings).
+        $kid = sanitize_text_field(self::str($header, 'kid'));
+        if (!is_array($header) || !is_array($claims) || self::str($header, 'alg') !== 'RS256' || $kid === '' || strlen($kid) > 200) {
             return new WP_Error('google_jwt_header', 'Signature Google invalide.');
         }
 
@@ -163,43 +174,43 @@ final class DIP_Google {
                 if (is_string($candidate) && in_array($candidate, $audiences, true)) { $aud_ok = true; break; }
             }
             if ($aud_ok && count($aud) > 1) {
-                $azp = (string) ($claims['azp'] ?? '');
+                $azp = self::str($claims, 'azp');
                 if ($azp === '' || !in_array($azp, $audiences, true)) $aud_ok = false;
             }
         }
         if (!$aud_ok) return new WP_Error('invalid_audience', 'Audience Google incorrecte.');
 
-        if (!in_array((string) ($claims['iss'] ?? ''), ['accounts.google.com', 'https://accounts.google.com'], true)) {
+        if (!in_array(self::str($claims, 'iss'), ['accounts.google.com', 'https://accounts.google.com'], true)) {
             return new WP_Error('invalid_issuer', 'Émetteur Google incorrect.');
         }
         $now = time();
         if (empty($claims['exp']) || (int) $claims['exp'] < $now - 30) return new WP_Error('invalid_token_time', 'Le jeton Google a expiré.');
         if (!empty($claims['nbf']) && (int) $claims['nbf'] > $now + 60) return new WP_Error('invalid_token_time', 'Le jeton Google n’est pas encore valide.');
         if (!empty($claims['iat']) && (int) $claims['iat'] > $now + 300) return new WP_Error('invalid_token_time', 'Le jeton Google a une date invalide.');
-        if ($expected_nonce !== '' && (empty($claims['nonce']) || !hash_equals((string) $expected_nonce, (string) $claims['nonce']))) {
+        if ($expected_nonce !== '' && (self::str($claims, 'nonce') === '' || !hash_equals((string) $expected_nonce, self::str($claims, 'nonce')))) {
             return new WP_Error('invalid_nonce', 'Nonce Google incorrect.');
         }
 
-        $sub = sanitize_text_field((string) ($claims['sub'] ?? ''));
+        $sub = sanitize_text_field(self::str($claims, 'sub'));
         if ($sub === '' || strlen($sub) > 255) return new WP_Error('invalid_subject', 'Identité Google invalide.');
-        $email = sanitize_email($claims['email'] ?? '');
+        $email = sanitize_email(self::str($claims, 'email'));
         $verified = in_array($claims['email_verified'] ?? false, [true, 1, '1', 'true'], true);
         if (!$email || !$verified) return new WP_Error('email_not_verified', 'Google n’a pas confirmé cette adresse e-mail.');
 
         $claims['sub'] = $sub;
         $claims['email'] = $email;
         $claims['email_verified'] = true;
-        if (isset($claims['hd'])) $claims['hd'] = strtolower(substr(sanitize_text_field((string) $claims['hd']), 0, 253));
+        if (isset($claims['hd'])) $claims['hd'] = strtolower(substr(sanitize_text_field(self::str($claims, 'hd')), 0, 253));
         return $claims;
     }
 
     /** Google only guarantees current mailbox ownership for Gmail/Workspace. */
     public static function email_is_authoritative(array $claims) {
-        $email = strtolower(sanitize_email($claims['email'] ?? ''));
+        $email = strtolower(sanitize_email(self::str($claims, 'email')));
         $verified = in_array($claims['email_verified'] ?? false, [true, 1, '1', 'true'], true);
         if (!$email || !$verified) return false;
         if (substr($email, -10) === '@gmail.com') return true;
-        $hd = strtolower(trim((string) ($claims['hd'] ?? '')));
+        $hd = strtolower(trim(self::str($claims, 'hd')));
         return $hd !== '' && strlen($hd) <= 253 && preg_match('/^[a-z0-9.-]+$/D', $hd);
     }
 

@@ -8,10 +8,42 @@ defined('ABSPATH') || exit;
 final class DIP_Connected_Accounts {
     const NONCE_ACTION = 'dip_disconnect_provider';
 
+    /** Subjects read just before the WooCommerce account screen unlinks them. */
+    private static $unlinking = [];
+
     public static function init() {
         add_shortcode('delicat_connected_accounts', [__CLASS__, 'shortcode']);
         add_action('admin_post_dip_disconnect_provider', [__CLASS__, 'disconnect']);
         add_action('wp_ajax_dip_connected_accounts_status', [__CLASS__, 'ajax_status']);
+        // The legacy WooCommerce unlink handlers delete the subject before they
+        // announce dip_account_unlinked: read it first, record it afterwards.
+        add_action('admin_post_dip_unlink_google', [__CLASS__, 'capture_unlinking_google'], 0);
+        add_action('admin_post_dip_unlink_microsoft', [__CLASS__, 'capture_unlinking_microsoft'], 0);
+        add_action('dip_account_unlinked', [__CLASS__, 'remember_unlinked_subject'], 5, 2);
+        add_action('admin_init', ['DIP_Identity', 'repair_unproven_signup_links']);
+    }
+
+    public static function capture_unlinking_google() { self::capture_unlinking('google'); }
+    public static function capture_unlinking_microsoft() { self::capture_unlinking('microsoft'); }
+
+    private static function capture_unlinking($provider) {
+        $providers = self::providers();
+        $user_id = get_current_user_id();
+        if (!$user_id || empty($providers[$provider]['meta_sub'])) return;
+        $sub = (string) get_user_meta($user_id, $providers[$provider]['meta_sub'], true);
+        if ($sub !== '') self::$unlinking[$user_id . '|' . $provider] = $sub;
+    }
+
+    public static function remember_unlinked_subject($user_id, $provider) {
+        $user_id = absint($user_id);
+        $provider = sanitize_key((string) $provider);
+        $key = $user_id . '|' . $provider;
+        if (empty(self::$unlinking[$key])) return;
+        $sub = self::$unlinking[$key];
+        unset(self::$unlinking[$key]);
+        $providers = self::providers();
+        $current = empty($providers[$provider]['meta_sub']) ? '' : (string) get_user_meta($user_id, $providers[$provider]['meta_sub'], true);
+        if ($current === '' && method_exists('DIP_Identity', 'remember_disconnected_subject')) DIP_Identity::remember_disconnected_subject($user_id, $provider, $sub);
     }
 
     public static function providers() {
@@ -62,7 +94,7 @@ final class DIP_Connected_Accounts {
             $html .= '<article class="dip-connected-row ' . ($item['connected'] ? 'is-connected' : 'is-disconnected') . '">';
             $html .= '<span class="dip-provider-mark" aria-hidden="true">' . esc_html(strtoupper(substr($item['label'], 0, 1))) . '</span>';
             $html .= '<div class="dip-connected-copy"><strong>' . esc_html($item['label']) . '</strong>';
-            $html .= '<small>' . ($item['connected'] ? 'Connecté' : ($enabled ? 'Non connecté' : 'Désactivé par l’administrateur')) . '</small></div>';
+            $html .= '<small>' . ($item['connected'] ? 'Connecté' : ($enabled ? 'Non connecté' : (self::provider_switched_on($id, $settings) ? 'Indisponible pour le moment' : 'Désactivé par l’administrateur'))) . '</small></div>';
             if ($item['connected']) {
                 $html .= '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" class="dip-provider-inline-form" data-dip-confirm="Déconnecter ' . esc_attr($item['label']) . ' ?">';
                 $html .= '<input type="hidden" name="action" value="dip_disconnect_provider"><input type="hidden" name="provider" value="' . esc_attr($id) . '">';
@@ -93,10 +125,14 @@ final class DIP_Connected_Accounts {
         if (!self::can_disconnect($user_id, $provider)) {
             self::redirect_with_status('blocked');
         }
+        // Remember the subject before it goes, so an old Nextend mapping cannot
+        // silently link it again on the next sign-in.
+        $sub = (string) get_user_meta($user_id, $providers[$provider]['meta_sub'], true);
+        if ($sub !== '') DIP_Identity::remember_disconnected_subject($user_id, $provider, $sub);
         delete_user_meta($user_id, $providers[$provider]['meta_sub']);
         delete_user_meta($user_id, $providers[$provider]['meta_linked']);
         if ($provider === 'google') { delete_user_meta($user_id, DIP_Identity::META_AVATAR); delete_user_meta($user_id, '_dip_google_explicit_link_v2'); }
-        do_action('dip_account_disconnected', $user_id, $provider);
+        do_action('dip_account_disconnected', $user_id, $provider, $sub);
         if (class_exists('DIP_Audit')) DIP_Audit::record('account_disconnected', 'info', $user_id, ['provider' => $provider]);
         self::redirect_with_status('disconnected');
     }
@@ -113,9 +149,28 @@ final class DIP_Connected_Accounts {
         return $connected > 0;
     }
 
-    private static function provider_enabled($provider, array $settings) {
+    private static function provider_switched_on($provider, array $settings) {
         if ($provider === 'google') return ($settings['enabled'] ?? 'no') === 'yes';
         return ($settings[$provider . '_enabled'] ?? 'no') === 'yes';
+    }
+
+    /**
+     * Offer « Connecter » only when the sign-in can really start: switched on,
+     * HTTPS, and complete credentials (same rule as the provider adapters).
+     */
+    private static function provider_enabled($provider, array $settings) {
+        if (!self::provider_switched_on($provider, $settings)) return false;
+        $credentials = [
+            'google' => ['client_id', 'client_secret'],
+            'microsoft' => ['microsoft_client_id', 'microsoft_client_secret'],
+        ];
+        if (!isset($credentials[$provider])) return true;
+        if (!is_ssl()) return false;
+        list($id_key, $secret_key) = $credentials[$provider];
+        if (trim((string) ($settings[$id_key] ?? '')) === '') return false;
+        $secret = (string) ($settings[$secret_key] ?? '');
+        if ($secret !== '' && class_exists('DIP_Crypto')) $secret = (string) DIP_Crypto::decrypt($secret);
+        return trim($secret) !== '';
     }
 
     private static function current_url() {
