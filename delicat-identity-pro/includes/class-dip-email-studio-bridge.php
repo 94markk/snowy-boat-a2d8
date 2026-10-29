@@ -15,12 +15,15 @@ final class DIP_Email_Studio_Bridge {
 
     private static $loaded = false;
     private static $admin_loaded = false;
+    /** @var bool|null per-request result of standalone_active() */
+    private static $standalone_active = null;
 
     public static function init() {
 
         // Plugin replacement/update does not always execute an activation hook.
         // Finish the migration on the next privileged admin request as well.
-        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION) {
+        // The plugins screen also catches a renamed copy of the old plugin.
+        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION || 'plugins.php' === ($GLOBALS['pagenow'] ?? '')) {
             add_action('admin_init', [__CLASS__, 'maybe_complete_migration'], 1);
         }
 
@@ -38,13 +41,21 @@ final class DIP_Email_Studio_Bridge {
 
     public static function maybe_complete_migration() {
         if (!is_admin() || !current_user_can('activate_plugins')) return;
-        self::install();
+        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION) {
+            self::install();
+            return;
+        }
+        // Plugins screen: name-based scan (get_plugins() is loaded there anyway).
+        self::deactivate_standalone();
     }
 
     public static function install() {
         self::migrate_settings();
         self::deactivate_standalone();
-        update_option(self::MIGRATION_FLAG, DIP_VERSION, false);
+        // Read by init() on every request: autoloaded, so it costs no query.
+        update_option(self::MIGRATION_FLAG, DIP_VERSION, true);
+        if (function_exists('wp_set_option_autoload')) wp_set_option_autoload(self::MIGRATION_FLAG, true);
+        self::$standalone_active = null;
     }
 
     public static function load() {
@@ -125,12 +136,23 @@ final class DIP_Email_Studio_Bridge {
         return array_values(array_unique($matches));
     }
 
+    /**
+     * Whether the old standalone Email Studio is active, from the (autoloaded)
+     * active plugin lists only: no plugins-directory scan (get_plugins()) and
+     * no wp-admin include on storefront, REST, mobile or AJAX requests. The
+     * name-based scan of renamed copies stays in the privileged migration
+     * (maybe_complete_migration() / deactivate_standalone()).
+     */
     public static function standalone_active() {
-        if (!function_exists('is_plugin_active')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
-        foreach (self::standalone_basenames() as $basename) {
-            if (function_exists('is_plugin_active') && is_plugin_active($basename)) return true;
+        if (null !== self::$standalone_active) return self::$standalone_active;
+        $active = (array) get_option('active_plugins', []);
+        if (is_multisite()) $active = array_merge($active, array_keys((array) get_site_option('active_sitewide_plugins', [])));
+        $found = false;
+        foreach ($active as $basename) {
+            if (is_string($basename) && preg_match('~^delicat-email-studio-pro[^/]*/delicat-email-studio-pro\.php$~', $basename)) { $found = true; break; }
         }
-        return false;
+        self::$standalone_active = $found;
+        return $found;
     }
 
     public static function deactivate_standalone() {
@@ -141,6 +163,7 @@ final class DIP_Email_Studio_Bridge {
         }
         if ($active && function_exists('deactivate_plugins')) {
             deactivate_plugins($active, true, false);
+            self::$standalone_active = null;
             if (class_exists('DIP_Audit')) DIP_Audit::record('standalone_email_studio_deactivated', 'notice', get_current_user_id(), ['count'=>count($active)]);
         }
     }

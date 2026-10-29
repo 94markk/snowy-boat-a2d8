@@ -11,6 +11,9 @@ defined('ABSPATH') || exit;
  */
 final class DIP_Security_Architecture {
     const REST_NAMESPACE = '/delicat-identity/v1/';
+    /** Denials audited per address, account and event before the audit goes quiet. */
+    const AUDIT_BURST = 5;
+    const AUDIT_WINDOW = 600;
 
     private static $initialized = false;
 
@@ -101,30 +104,55 @@ final class DIP_Security_Architecture {
         ]);
     }
 
+    /**
+     * WordPress dispatches REST routes case-insensitively (preg_match …$@i),
+     * so /DELICAT-IDENTITY/v1/mobile/profile reaches the same handler as the
+     * canonical route: it is classified exactly like it (lower-cased match).
+     */
+    private static function route_matches($pattern, $route) {
+        $route = (string) $route;
+        return (bool) preg_match($pattern, $route) || (bool) preg_match($pattern, strtolower($route));
+    }
+
     private static function matches_rule($route, $method, array $rules) {
         $method = strtoupper((string) $method);
         foreach ($rules as $rule) {
             $pattern = isset($rule[0]) ? (string) $rule[0] : '';
             $methods = isset($rule[1]) ? array_map('strtoupper', (array) $rule[1]) : [];
-            if ($pattern && preg_match($pattern, $route) && in_array($method, $methods, true)) return true;
+            if ($pattern && in_array($method, $methods, true) && self::route_matches($pattern, $route)) return true;
         }
         return false;
     }
 
     private static function is_identity_route($route) {
-        return strpos((string) $route, self::REST_NAMESPACE) === 0;
+        return stripos((string) $route, self::REST_NAMESPACE) === 0;
     }
 
     private static function known_rest_route($route) {
         foreach (array_merge(self::public_rest_rules(), self::customer_rest_rules(), self::mobile_rest_rules()) as $rule) {
             $pattern = isset($rule[0]) ? (string) $rule[0] : '';
-            if ($pattern && preg_match($pattern, (string) $route)) return true;
+            if ($pattern && self::route_matches($pattern, $route)) return true;
         }
         return false;
     }
 
+    /**
+     * Every denial is refused, but only the first few per address, account and
+     * event in ten minutes are written to the security log: a script looping
+     * over random routes or actions must not add one row per request (and bury
+     * real events). The last recorded row says that the next ones are muted.
+     */
     private static function audit_denied($event, array $meta = []) {
         if (!class_exists('DIP_Audit')) return;
+        if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_hit')) {
+            $ip = class_exists('DIP_Native_Auth') && method_exists('DIP_Native_Auth', 'throttle_ip')
+                ? (string) DIP_Native_Auth::throttle_ip()
+                : sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'] ?? ''));
+            $key = 'dip_fw_audit_' . substr(hash_hmac('sha256', $event . '|' . $ip . '|' . get_current_user_id(), wp_salt('nonce')), 0, 24);
+            $hits = (int) DIP_Lockout::counter_hit($key, self::AUDIT_WINDOW);
+            if ($hits > self::AUDIT_BURST) return;
+            if ($hits === self::AUDIT_BURST) $meta['further_denials_muted_minutes'] = (int) (self::AUDIT_WINDOW / MINUTE_IN_SECONDS);
+        }
         $safe = [];
         foreach ($meta as $key => $value) {
             $key = sanitize_key((string) $key);
@@ -148,9 +176,12 @@ final class DIP_Security_Architecture {
         // REST OPTIONS is metadata/preflight only. Permit it for known routes
         // so browser/mobile clients can negotiate without opening unknown APIs.
         if ($method === 'OPTIONS' && self::known_rest_route($route)) return $result;
-        if (self::matches_rule($route, $method, self::public_rest_rules())) return $result;
+        // WordPress serves HEAD with the route's GET handler: classify it as
+        // GET (uptime monitors and link previews probe public GET routes).
+        $rule_method = $method === 'HEAD' ? 'GET' : $method;
+        if (self::matches_rule($route, $rule_method, self::public_rest_rules())) return $result;
 
-        if (self::matches_rule($route, $method, self::customer_rest_rules())) {
+        if (self::matches_rule($route, $rule_method, self::customer_rest_rules())) {
             if (!is_user_logged_in()) {
                 self::audit_denied('rest_customer_login_required', ['route'=>$route,'method'=>$method]);
                 return new WP_Error('dip_login_required', __('Connexion requise.', 'delicat-google-login'), ['status'=>401]);
@@ -163,7 +194,7 @@ final class DIP_Security_Architecture {
             return $result;
         }
 
-        if (self::matches_rule($route, $method, self::mobile_rest_rules())) {
+        if (self::matches_rule($route, $rule_method, self::mobile_rest_rules())) {
             if (!class_exists('DIP_Mobile_API') || !DIP_Mobile_API::logged_in($request)) {
                 self::audit_denied('rest_mobile_access_denied', ['route'=>$route,'method'=>$method]);
                 return new WP_Error('dip_mobile_auth_required', __('Authentification mobile sécurisée requise.', 'delicat-google-login'), ['status'=>401]);
@@ -200,6 +231,12 @@ final class DIP_Security_Architecture {
         $response->header('X-Content-Type-Options', 'nosniff');
         $response->header('Referrer-Policy', 'no-referrer');
         $response->header('X-Frame-Options', 'DENY');
+        // LiteSpeed Cache ignores no-store (it kept GET /mobile/capabilities
+        // for 7 days, FIX-6.11.0): opt every identity answer out explicitly,
+        // e.g. GET /headless/status, which the storefront polls.
+        $response->header('X-LiteSpeed-Cache-Control', 'no-cache, no-store');
+        if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+        do_action('litespeed_control_set_nocache', 'Delicat Identity REST');
         return $response;
     }
 

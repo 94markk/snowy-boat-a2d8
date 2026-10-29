@@ -159,7 +159,7 @@ function dipes_admin_page() {
                         <label class="desp-field"><span>Nom de marque</span><input type="text" name="<?php echo esc_attr( dipes_field_name('brand_name') ); ?>" value="<?php echo esc_attr($settings['brand_name']); ?>" placeholder="<?php echo esc_attr(dipes_brand_name()); ?>" data-desp-global="brand_name"></label>
                         <label class="desp-field"><span>URL du logo</span><div class="desp-media-row"><input id="desp-logo-url" type="url" name="<?php echo esc_attr( dipes_field_name('logo_url') ); ?>" value="<?php echo esc_attr($settings['logo_url']); ?>" data-desp-global="logo_url"><button type="button" class="button" id="desp-logo-pick">Choisir</button></div></label>
                         <div class="desp-grid-2">
-                            <label class="desp-field"><span>Largeur logo</span><input type="number" min="40" max="320" name="<?php echo esc_attr( dipes_field_name('logo_width') ); ?>" value="<?php echo esc_attr($settings['logo_width']); ?>" data-desp-global="logo_width"><em>px</em></label>
+                            <label class="desp-field"><span>Largeur logo</span><input type="number" min="40" max="90" name="<?php echo esc_attr( dipes_field_name('logo_width') ); ?>" value="<?php echo esc_attr( min( 90, max( 40, absint( $settings['logo_width'] ) ) ) ); ?>" data-desp-global="logo_width"><em>px</em></label>
                             <label class="desp-field"><span>Alignement logo</span><select name="<?php echo esc_attr( dipes_field_name('logo_align') ); ?>" data-desp-global="logo_align"><option value="left" <?php selected($settings['logo_align'],'left'); ?>>Gauche</option><option value="center" <?php selected($settings['logo_align'],'center'); ?>>Centre</option><option value="right" <?php selected($settings['logo_align'],'right'); ?>>Droite</option></select></label>
                         </div>
                     </section>
@@ -171,7 +171,7 @@ function dipes_admin_page() {
                         <div class="desp-grid-2">
                             <label class="desp-field"><span>URL support</span><input type="url" name="<?php echo esc_attr(dipes_field_name('support_url')); ?>" value="<?php echo esc_attr($settings['support_url']); ?>" data-desp-global="support_url"></label>
                             <label class="desp-field"><span>Libellé bouton</span><input type="text" name="<?php echo esc_attr(dipes_field_name('support_label')); ?>" value="<?php echo esc_attr($settings['support_label']); ?>" data-desp-global="support_label"></label>
-                            <label class="desp-field"><span>WhatsApp</span><input type="text" name="<?php echo esc_attr(dipes_field_name('whatsapp')); ?>" value="<?php echo esc_attr($settings['whatsapp']); ?>" placeholder="+50933111283" data-desp-global="whatsapp"></label>
+                            <label class="desp-field"><span>WhatsApp</span><input type="text" name="<?php echo esc_attr(dipes_field_name('whatsapp')); ?>" value="<?php echo esc_attr($settings['whatsapp']); ?>" placeholder="+50900000000" data-desp-global="whatsapp"></label>
                             <label class="desp-field"><span>E-mail support</span><input type="email" name="<?php echo esc_attr(dipes_field_name('support_email')); ?>" value="<?php echo esc_attr($settings['support_email']); ?>" data-desp-global="support_email"></label>
                         </div>
                     </section>
@@ -189,7 +189,7 @@ function dipes_admin_page() {
                     <?php foreach ( $emails as $id => $label ) : $e = $settings['emails'][$id]; ?>
                     <div class="desp-email-panel <?php echo 'customer_processing_order' === $id ? 'is-active' : ''; ?>" data-email-panel="<?php echo esc_attr($id); ?>">
                         <section class="desp-card">
-                            <div class="desp-card-head"><div><b><?php echo esc_html($label); ?></b><small>Variables dynamiques disponibles : {first_name}, {order_number}, {order_total}, {payment_method}, {order_url}, {site_name}…</small></div>
+                            <div class="desp-card-head"><div><b><?php echo esc_html($label); ?></b><small>Variables dynamiques disponibles : {first_name}, {order_number}, {order_total}, {payment_method}, {order_url}, {payment_url}, {site_name}…</small><?php if ( 'wp_new_user_admin' !== $id ) : ?><small>Objet et titre principal : tant qu’ils gardent le texte par défaut du Studio, les e-mails WooCommerce conservent ceux réglés dans WooCommerce.</small><?php endif; ?></div>
                                 <label class="desp-mini-toggle"><input type="checkbox" name="<?php echo esc_attr(dipes_email_field_name($id,'enabled')); ?>" value="yes" <?php checked($e['enabled'],'yes'); ?> data-desp-email="enabled"> Personnalisation active</label>
                             </div>
                             <label class="desp-field"><span>Objet</span><input type="text" name="<?php echo esc_attr(dipes_email_field_name($id,'subject')); ?>" value="<?php echo esc_attr($e['subject']); ?>" data-desp-email="subject"></label>
@@ -221,7 +221,7 @@ function dipes_admin_page() {
                             <div class="desp-card-head"><div><b>Ordre des blocs</b><small>Glissez-déposez. Les hooks WooCommerce restent attachés aux blocs correspondants.</small></div></div>
                             <div class="desp-layout-presets" data-layout-email="<?php echo esc_attr($id); ?>"><button type="button" data-block-layout="premium">Premium</button><button type="button" data-block-layout="compact">Compact</button><button type="button" data-block-layout="details_first">Détails d’abord</button></div>
                             <ul class="desp-sortable" data-email="<?php echo esc_attr($id); ?>">
-                                <?php $labels = array('intro'=>'Introduction','notice'=>'Notification / note','summary'=>'Récapitulatif','progress'=>'Suivi','cta'=>'Bouton','order_details'=>'Détails commande','order_meta'=>'Métadonnées commande','customer_details'=>'Coordonnées client','additional'=>'Contenu additionnel','custom'=>'Bloc personnalisé'); foreach ( $e['block_order'] as $block ) : ?><li data-block="<?php echo esc_attr($block); ?>"><span class="dashicons dashicons-menu"></span><?php echo esc_html($labels[$block]); ?></li><?php endforeach; ?>
+                                <?php $labels = array('intro'=>'Introduction','notice'=>'Notification / note','summary'=>'Récapitulatif','progress'=>'Suivi','cta'=>'Bouton','order_details'=>'Détails commande','order_meta'=>'Métadonnées commande','customer_details'=>'Coordonnées client','additional'=>'Contenu additionnel','custom'=>'Bloc personnalisé'); foreach ( $e['block_order'] as $block ) : ?><li data-block="<?php echo esc_attr($block); ?>"><span class="dashicons dashicons-menu"></span><?php echo esc_html( isset( $labels[ $block ] ) ? $labels[ $block ] : $block ); ?></li><?php endforeach; ?>
                             </ul>
                             <input class="desp-order-input" type="hidden" name="<?php echo esc_attr(dipes_email_field_name($id,'block_order')); ?>" value="<?php echo esc_attr(implode(',',$e['block_order'])); ?>" data-desp-email="block_order">
                         </section>
@@ -261,7 +261,7 @@ function dipes_admin_page() {
                     <span id="desp-preview-status">Aperçu en direct</span>
                     <button type="button" class="button" id="desp-refresh-preview">Actualiser</button>
                 </div>
-                <div class="desp-preview-stage"><iframe id="desp-preview-frame" title="Aperçu e-mail"></iframe></div>
+                <div class="desp-preview-stage"><iframe id="desp-preview-frame" title="Aperçu e-mail" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"></iframe></div>
                 <form class="desp-test-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="dipes_email_test"><?php wp_nonce_field('dipes_email_test'); ?>
                     <input id="desp-test-type" type="hidden" name="type" value="customer_processing_order">

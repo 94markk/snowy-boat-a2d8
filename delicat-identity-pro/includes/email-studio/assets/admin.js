@@ -81,7 +81,16 @@
         window.clearTimeout(timer);
         timer = window.setTimeout(refreshPreview, 260);
     }
-    $frame.on('load', function(){ $('#desp-preview-status').text('Aperçu en direct'); });
+    $frame.on('load', function(){
+        // The preview is sandboxed (no scripts) but same-origin: an expired
+        // nonce or a server error returns a WordPress page, not an e-mail.
+        var ok = true;
+        try {
+            var doc = $frame[0].contentDocument;
+            ok = !doc || !doc.body || !!doc.getElementById('desp-shell');
+        } catch (err) { ok = true; }
+        $('#desp-preview-status').text(ok ? (isDirty ? 'Modifications non enregistrées' : 'Aperçu en direct') : 'Aperçu indisponible : rechargez la page (session expirée ?)');
+    });
 
     $form.on('input change', '[data-desp-global],[data-desp-email]', function(){
         isDirty = true;
@@ -90,6 +99,33 @@
         schedulePreview();
     });
     $form.on('submit', function(){ isDirty = false; $('.desp-topbar').removeClass('is-dirty'); });
+
+    // The test e-mail uses the same unsaved edits as the preview. It is sent
+    // in the background so those edits stay on the page.
+    $('.desp-test-form').on('submit', function(ev){
+        var $test = $(this);
+        $test.find('.desp-test-unsaved').remove();
+        if (!isDirty || !window.fetch || !window.FormData) return;
+        ev.preventDefault();
+        var add = function(name, value){
+            $('<input type="hidden" class="desp-test-unsaved">').attr('name', name).val(value == null ? '' : value).appendTo($test);
+        };
+        var g = collect($form, 'data-desp-global');
+        var e = collect(activeEmailPanel(), 'data-desp-email');
+        Object.keys(g).forEach(function(k){ add('g[' + k + ']', g[k]); });
+        Object.keys(e).forEach(function(k){ add('e[' + k + ']', e[k]); });
+        var $btn = $test.find('button[type="submit"]').prop('disabled', true);
+        var $status = $('#desp-preview-status').text('Envoi du test…');
+        var body = new FormData(this);
+        $test.find('.desp-test-unsaved').remove();
+        window.fetch($test.attr('action'), { method: 'POST', body: body, credentials: 'same-origin' })
+            .then(function(r){
+                var ok = r.ok && /[?&]dipes_test=ok(?:&|$)/.test(r.url || '');
+                $status.text(ok ? 'E-mail de test envoyé avec les modifications non enregistrées.' : 'L’e-mail de test n’a pas pu être envoyé. Vérifiez votre SMTP / wp_mail.');
+            })
+            .catch(function(){ $status.text('L’e-mail de test n’a pas pu être envoyé.'); })
+            .then(function(){ $btn.prop('disabled', false); });
+    });
     $('#desp-refresh-preview').on('click', refreshPreview);
 
     $('.desp-tabs button').on('click', function(){

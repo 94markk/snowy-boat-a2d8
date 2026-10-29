@@ -14,7 +14,10 @@ final class DIP_Operations {
         $checks[] = self::check('rest', 'REST API', function_exists('rest_get_server'), function_exists('rest_get_server') ? 'Disponible' : 'Indisponible');
         $checks[] = self::check('cron_audit', 'Nettoyage audit', (bool) wp_next_scheduled(DIP_Audit::CRON_HOOK), wp_next_scheduled(DIP_Audit::CRON_HOOK) ? 'Planifié' : 'Non planifié');
         $checks[] = self::check('cron_devices', 'Nettoyage appareils', (bool) wp_next_scheduled(DIP_Devices::CRON_HOOK), wp_next_scheduled(DIP_Devices::CRON_HOOK) ? 'Planifié' : 'Non planifié');
-        $checks[] = self::check('google', 'Google', !empty($settings['client_id']) && !empty($settings['client_secret']), !empty($settings['client_id']) && !empty($settings['client_secret']) ? 'Identifiants présents' : 'Configuration incomplète');
+        // Like Microsoft: incomplete credentials only matter while Google sign-in is on.
+        $google_on = ($settings['enabled'] ?? 'no') === 'yes';
+        $google_ok = !$google_on || (!empty($settings['client_id']) && !empty($settings['client_secret']));
+        $checks[] = self::check('google', 'Google', $google_ok, !$google_on ? 'Connexion Google désactivée' : ($google_ok ? 'Identifiants présents' : 'Configuration incomplète'));
         $ms_ok = ($settings['microsoft_enabled'] ?? 'no') !== 'yes' || (!empty($settings['microsoft_client_id']) && !empty($settings['microsoft_client_secret']));
         $checks[] = self::check('microsoft', 'Microsoft', $ms_ok, $ms_ok ? 'Configuration cohérente' : 'Fournisseur actif mais incomplet');
         $country_policy = ($settings['country_policy_mode'] ?? 'off') !== 'off';
@@ -53,12 +56,16 @@ final class DIP_Operations {
         global $wpdb;
         $days = max(1, min(180, absint($days)));
         $cutoff = gmdate('Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS);
-        $rows = $wpdb->get_results($wpdb->prepare('SELECT context, COUNT(*) total FROM ' . DIP_Audit::table() . " WHERE event_type='login_success' AND created_at >= %s GROUP BY context", $cutoff), ARRAY_A);
+        // Social sign-ins: web (login_success.provider), app Google sign-in
+        // (login_success.method) and those completed by the 2FA challenge.
+        $rows = $wpdb->get_results($wpdb->prepare('SELECT context, COUNT(*) total FROM ' . DIP_Audit::table() . " WHERE event_type IN ('login_success','two_factor_challenge_success') AND created_at >= %s GROUP BY context", $cutoff), ARRAY_A);
         $out = ['google'=>0,'microsoft'=>0,'unknown'=>0];
-        foreach ($rows as $row) {
+        $map = ['google'=>'google','google_social'=>'google','mobile_google'=>'google','microsoft'=>'microsoft','microsoft_social'=>'microsoft'];
+        foreach ((array) $rows as $row) {
             $ctx = json_decode((string)$row['context'], true);
-            $provider = sanitize_key($ctx['provider'] ?? 'unknown');
-            if (!isset($out[$provider])) $provider = 'unknown';
+            $ctx = is_array($ctx) ? $ctx : [];
+            $provider = sanitize_key((string) ($ctx['provider'] ?? ($ctx['method'] ?? 'unknown')));
+            $provider = $map[$provider] ?? 'unknown';
             $out[$provider] += (int)$row['total'];
         }
         return $out;
@@ -71,9 +78,9 @@ final class DIP_Operations {
         header('Content-Type: text/csv; charset=utf-8');
         header('Content-Disposition: attachment; filename="delicat-identity-security-' . gmdate('Ymd-His') . '.csv"');
         $out = fopen('php://output', 'w');
-        fputcsv($out, ['created_at_utc','event_type','severity','user_id','fingerprint_prefix','context']);
+        fputcsv($out, ['created_at_utc','event_type','severity','user_id','fingerprint_prefix','context'], ',', '"', '\\');
         foreach ($rows as $row) {
-            fputcsv($out, [$row['created_at'],$row['event_type'],$row['severity'],(int)$row['user_id'],substr($row['fingerprint'],0,12),$row['context']]);
+            fputcsv($out, [$row['created_at'],$row['event_type'],$row['severity'],(int)$row['user_id'],substr((string) $row['fingerprint'],0,12),$row['context']], ',', '"', '\\');
         }
         fclose($out);
         exit;

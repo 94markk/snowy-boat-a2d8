@@ -8,6 +8,19 @@ defined('ABSPATH') || exit;
 final class DIP_Analytics {
     const CRON_HOOK = 'dip_analytics_daily_rollup';
     const CACHE_GROUP = 'dip_analytics_';
+    /** Daily rows « sign-ins by method » (derived from the events below). */
+    const METHOD_PREFIX = 'signin_via_';
+
+    /**
+     * Each sign-in flow records exactly one of these events (social, password
+     * and app sign-ins: login_success; web Passkey; 2FA challenge after Google,
+     * Microsoft or an e-mail code; e-mail code; magic link; QR code from the
+     * app). App token renewals (mobile_session_issued) are not sign-ins.
+     */
+    const SIGNIN_EVENTS = ['login_success','passkey_login_success','two_factor_challenge_success','passwordless_otp_login','magic_link_login','app_pairing_consumed'];
+
+    /** @var array<int,bool> users whose password change was recorded in this request */
+    private static $password_recorded = [];
 
     public static function init() {
         add_action('admin_post_dip_analytics_export', [__CLASS__, 'export_csv']);
@@ -17,7 +30,9 @@ final class DIP_Analytics {
         add_action('edit_user_profile', [__CLASS__, 'user_timeline_profile']);
         add_action('user_register', [__CLASS__, 'record_registration'], 20, 1);
         add_action('profile_update', [__CLASS__, 'record_profile_update'], 20, 2);
-        add_action('after_password_reset', [__CLASS__, 'record_password_reset'], 20, 2);
+        // password_reset fires for WordPress and WooCommerce « mot de passe
+        // oublié » resets alike (WooCommerce never fires after_password_reset).
+        add_action('password_reset', [__CLASS__, 'record_password_reset'], 20, 2);
     }
 
     public static function install() {
@@ -62,18 +77,60 @@ final class DIP_Analytics {
         self::flush_cache();
     }
 
+    /**
+     * profile_update also fires for every WooCommerce customer save (each
+     * checkout) with nothing changed: only a real change of the password or
+     * of an account field is recorded. The analytics cache is not flushed
+     * here (the rollup refreshes it).
+     */
     public static function record_profile_update($user_id, $old_user_data) {
-        unset($old_user_data);
-        DIP_Audit::record('profile_updated', 'notice', absint($user_id));
-        self::flush_cache();
+        $user_id = absint($user_id);
+        $current = $user_id ? get_userdata($user_id) : false;
+        if (!$current || !($old_user_data instanceof WP_User)) return;
+        $old_hash = (string) $old_user_data->user_pass;
+        if ($old_hash !== '' && !hash_equals($old_hash, (string) $current->user_pass)) self::record_password_changed($user_id);
+        $changed = [];
+        foreach (['user_email','user_login','display_name','user_url'] as $field) {
+            if ((string) $old_user_data->$field !== (string) $current->$field) $changed[] = $field;
+        }
+        if ($changed) DIP_Audit::record('profile_updated', 'notice', $user_id, ['fields'=>implode(',', $changed)]);
     }
 
-    public static function record_password_reset($user, $new_pass) {
+    public static function record_password_reset($user, $new_pass = '') {
         unset($new_pass);
-        if ($user instanceof WP_User) DIP_Audit::record('password_changed', 'notice', (int) $user->ID);
-        self::flush_cache();
+        if ($user instanceof WP_User) self::record_password_changed((int) $user->ID);
     }
 
+    /** One « mot de passe modifié » event per account and request. */
+    private static function record_password_changed($user_id) {
+        $user_id = absint($user_id);
+        if (!$user_id || isset(self::$password_recorded[$user_id])) return;
+        self::$password_recorded[$user_id] = true;
+        DIP_Audit::record('password_changed', 'notice', $user_id);
+    }
+
+    /** Sign-in method of one sign-in event (its context), for the « par méthode » rows. */
+    private static function signin_method($event, $context) {
+        $direct = ['passkey_login_success'=>'passkey','passwordless_otp_login'=>'email_code','magic_link_login'=>'magic_link','app_pairing_consumed'=>'app_pairing'];
+        if (isset($direct[$event])) return $direct[$event];
+        $ctx = is_array($context) ? $context : json_decode((string) $context, true);
+        $ctx = is_array($ctx) ? $ctx : [];
+        $raw = sanitize_key((string) ($ctx['provider'] ?? ($ctx['method'] ?? '')));
+        $map = [
+            'password'=>'password','google'=>'google','google_social'=>'google','mobile_google'=>'google',
+            'microsoft'=>'microsoft','microsoft_social'=>'microsoft','passkey'=>'passkey','mobile_passkey'=>'passkey',
+            'mobile_biometric'=>'app_quick','email_otp'=>'email_code','magic_link'=>'magic_link','delicat_app_pairing'=>'app_pairing',
+        ];
+        return $map[$raw] ?? 'other';
+    }
+
+    /**
+     * Daily totals from the security log. The log is purged by age at the
+     * cron's time of day, so its oldest day is only partly present: a stored
+     * total is never lowered (the 90/365-day views would otherwise keep the
+     * partial count for good). Only totals that grew are written, in
+     * multi-row statements.
+     */
     public static function rollup($days = 45) {
         global $wpdb;
         if (!self::audit_table_exists()) return;
@@ -87,12 +144,38 @@ final class DIP_Analytics {
              GROUP BY DATE(created_at), event_type",
             $cutoff
         ), ARRAY_A);
-        foreach ($rows as $row) {
-            $wpdb->query($wpdb->prepare(
-                "INSERT INTO {$daily} (metric_date,event_type,total) VALUES (%s,%s,%d)
-                 ON DUPLICATE KEY UPDATE total=VALUES(total)",
-                $row['metric_date'], sanitize_key($row['event_type']), absint($row['total'])
-            ));
+        $fresh = [];
+        foreach ((array) $rows as $row) {
+            $event = substr(sanitize_key($row['event_type']), 0, 64);
+            if ($event === '' || strpos($event, self::METHOD_PREFIX) === 0) continue;
+            $fresh[$row['metric_date'] . '|' . $event] = absint($row['total']);
+            if (in_array($event, ['passkey_login_success','passwordless_otp_login','magic_link_login','app_pairing_consumed'], true)) {
+                $key = $row['metric_date'] . '|' . self::METHOD_PREFIX . self::signin_method($event, null);
+                $fresh[$key] = ($fresh[$key] ?? 0) + absint($row['total']);
+            }
+        }
+        // The method of social, password and app sign-ins is in their context.
+        $contexts = $wpdb->get_results($wpdb->prepare(
+            "SELECT DATE(created_at) metric_date, event_type, context, COUNT(*) total
+             FROM {$audit} WHERE created_at >= %s AND event_type IN ('login_success','two_factor_challenge_success')
+             GROUP BY DATE(created_at), event_type, context",
+            $cutoff
+        ), ARRAY_A);
+        foreach ((array) $contexts as $row) {
+            $key = $row['metric_date'] . '|' . self::METHOD_PREFIX . self::signin_method((string) $row['event_type'], $row['context']);
+            $fresh[$key] = ($fresh[$key] ?? 0) + absint($row['total']);
+        }
+        $stored = [];
+        $existing = $wpdb->get_results($wpdb->prepare("SELECT metric_date,event_type,total FROM {$daily} WHERE metric_date >= %s", substr($cutoff, 0, 10)), ARRAY_A);
+        foreach ((array) $existing as $row) $stored[$row['metric_date'] . '|' . $row['event_type']] = absint($row['total']);
+        $values = [];
+        foreach ($fresh as $key => $total) {
+            if ($total <= ($stored[$key] ?? 0)) continue;
+            list($date, $event) = explode('|', $key, 2);
+            $values[] = $wpdb->prepare('(%s,%s,%d)', $date, $event, $total);
+        }
+        foreach (array_chunk($values, 200) as $chunk) {
+            $wpdb->query("INSERT INTO {$daily} (metric_date,event_type,total) VALUES " . implode(',', $chunk) . " ON DUPLICATE KEY UPDATE total=GREATEST(total,VALUES(total))"); // phpcs:ignore WordPress.DB.PreparedSQL -- values prepared above
         }
         $wpdb->query($wpdb->prepare("DELETE FROM {$daily} WHERE metric_date < %s", gmdate('Y-m-d', time() - 400 * DAY_IN_SECONDS)));
         self::flush_cache();
@@ -114,7 +197,10 @@ final class DIP_Analytics {
         $cache_key = self::CACHE_GROUP . $days;
         $cached = get_transient($cache_key);
         if (is_array($cached)) return $cached;
-        self::rollup($days + 2);
+        // The daily cron aggregates the whole window: a cache miss only
+        // refreshes today and yesterday (all of it when the cron is late).
+        $last = (int) get_option('dip_analytics_last_rollup', 0);
+        self::rollup($last > time() - 2 * DAY_IN_SECONDS ? 2 : $days + 2);
         $table = self::table();
         $cutoff = gmdate('Y-m-d', time() - (($days - 1) * DAY_IN_SECONDS));
         $rows = $wpdb->get_results($wpdb->prepare(
@@ -130,17 +216,20 @@ final class DIP_Analytics {
             if (!isset($series[$row['metric_date']])) $series[$row['metric_date']] = [];
             $series[$row['metric_date']][$event] = $count;
         }
-        $result = ['days'=>$days,'totals'=>$totals,'series'=>$series,'generated'=>time()];
+        $result = ['days'=>$days,'totals'=>$totals,'series'=>$series,'generated'=>time(),'warnings'=>self::severity_count('warning', $days)];
         set_transient($cache_key, $result, 15 * MINUTE_IN_SECONDS);
         return $result;
     }
 
-    private static function total_like(array $totals, array $needles) {
+    /** Exact event names (substrings counted refusals and maintenance toggles as sign-ins). */
+    private static function total_of(array $totals, array $events, array $prefixes = [], array $except = []) {
         $sum = 0;
         foreach ($totals as $event => $count) {
-            foreach ($needles as $needle) {
-                if ($event === $needle || strpos($event, $needle) !== false) { $sum += (int) $count; break; }
-            }
+            $event = (string) $event;
+            if (in_array($event, $except, true)) continue;
+            $hit = in_array($event, $events, true);
+            foreach ($prefixes as $prefix) if (!$hit && strpos($event, $prefix) === 0) $hit = true;
+            if ($hit) $sum += (int) $count;
         }
         return $sum;
     }
@@ -148,13 +237,24 @@ final class DIP_Analytics {
     private static function metrics(array $data) {
         $t = $data['totals'];
         return [
-            'logins' => self::total_like($t, ['login_success','mobile_biometric_success','mobile_session_issued']),
-            'registrations' => self::total_like($t, ['user_registered','registration_success','account_created']),
-            'failed' => self::total_like($t, ['login_failed','login_blocked','mobile_rate_limited','authentication_failed','lockout']),
-            'providers' => self::total_like($t, ['google_login','microsoft_login','social_login','account_connected']),
-            'new_devices' => self::total_like($t, ['new_device_login']),
-            'pairings' => self::total_like($t, ['app_pairing_approved','app_pairing_completed']),
-            'warnings' => self::severity_count('warning', $data['days']),
+            'logins' => self::total_of($t, self::SIGNIN_EVENTS),
+            'registrations' => self::total_of($t, ['user_registered']),
+            // Social refusals are recorded as login_<code>.
+            'failed' => self::total_of($t, ['passkey_login_failed','passkey_login_rate_limited','two_factor_login_failed','two_factor_challenge_failed','passwordless_otp_failed','passwordless_otp_verify_throttled','mobile_passkey_login_failed','mobile_biometric_proof_failed','mobile_two_factor_failed','mobile_rate_limited','temporary_lockout','authentication_failed'], ['login_'], ['login_success','login_session_redelivered']),
+            'providers' => self::total_of($t, [self::METHOD_PREFIX . 'google', self::METHOD_PREFIX . 'microsoft']),
+            'new_devices' => self::total_of($t, ['new_device_login']),
+            'pairings' => self::total_of($t, ['app_pairing_approved']),
+            'warnings' => isset($data['warnings']) ? (int) $data['warnings'] : self::severity_count('warning', $data['days']),
+        ];
+    }
+
+    private static function method_labels() {
+        return [
+            'password'=>__('Mot de passe', 'delicat-google-login'),'google'=>__('Google (site et application)', 'delicat-google-login'),
+            'microsoft'=>__('Microsoft', 'delicat-google-login'),'passkey'=>__('Passkey (site et application)', 'delicat-google-login'),
+            'app_quick'=>__('Connexion rapide de l’application', 'delicat-google-login'),'email_code'=>__('Code reçu par e-mail', 'delicat-google-login'),
+            'magic_link'=>__('Lien de connexion par e-mail', 'delicat-google-login'),'app_pairing'=>__('QR code depuis l’application', 'delicat-google-login'),
+            'other'=>__('Autre méthode', 'delicat-google-login'),
         ];
     }
 
@@ -176,7 +276,13 @@ final class DIP_Analytics {
         $metrics = self::metrics($data);
         $last = (int) get_option('dip_analytics_last_rollup', 0);
         $max = 1;
-        foreach ($data['series'] as $day) $max = max($max, self::total_like($day, ['login_success','mobile_biometric_success','mobile_session_issued']));
+        foreach ($data['series'] as $day) $max = max($max, self::total_of($day, self::SIGNIN_EVENTS));
+        $by_method = [];
+        foreach ($data['totals'] as $event => $count) {
+            if (strpos((string) $event, self::METHOD_PREFIX) === 0 && $count > 0) $by_method[substr((string) $event, strlen(self::METHOD_PREFIX))] = (int) $count;
+        }
+        arsort($by_method);
+        $method_labels = self::method_labels();
         ?>
         <div class="wrap dip-analytics-wrap">
           <h1><?php esc_html_e('Delicat Identity Analytics', 'delicat-google-login'); ?></h1>
@@ -186,19 +292,22 @@ final class DIP_Analytics {
             <div><a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_analytics_refresh&days='.$days), 'dip_analytics_refresh')); ?>"><?php esc_html_e('Actualiser', 'delicat-google-login'); ?></a> <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_analytics_export&days='.$days), 'dip_analytics_export')); ?>"><?php esc_html_e('Exporter CSV', 'delicat-google-login'); ?></a></div>
           </div>
           <div class="dip-an-cards">
-          <?php $labels=['logins'=>'Connexions réussies','registrations'=>'Inscriptions','failed'=>'Échecs / blocages','providers'=>'Activité sociale','new_devices'=>'Nouveaux appareils','pairings'=>'Associations app','warnings'=>'Alertes']; foreach ($labels as $key=>$label): ?>
+          <?php $labels=['logins'=>'Connexions réussies','registrations'=>'Inscriptions','failed'=>'Échecs / blocages','providers'=>'Connexions Google / Microsoft','new_devices'=>'Nouveaux appareils','pairings'=>'Associations app','warnings'=>'Alertes']; foreach ($labels as $key=>$label): ?>
             <article><span><?php echo esc_html__($label,'delicat-google-login'); ?></span><strong><?php echo esc_html(number_format_i18n($metrics[$key])); ?></strong></article>
           <?php endforeach; ?>
           </div>
           <section class="dip-an-panel"><h2><?php esc_html_e('Tendance des connexions', 'delicat-google-login'); ?></h2>
             <div class="dip-an-chart" role="img" aria-label="<?php esc_attr_e('Connexions quotidiennes', 'delicat-google-login'); ?>">
-            <?php foreach ($data['series'] as $date=>$events): $count=self::total_like($events,['login_success','mobile_biometric_success','mobile_session_issued']); $height=max(3,(int)round(($count/$max)*100)); ?>
+            <?php foreach ($data['series'] as $date=>$events): $count=self::total_of($events,self::SIGNIN_EVENTS); $height=max(3,(int)round(($count/$max)*100)); ?>
               <div class="dip-an-bar-wrap" title="<?php echo esc_attr($date . ': ' . $count); ?>"><span class="dip-an-value"><?php echo esc_html($count); ?></span><div class="dip-an-bar" style="height:<?php echo esc_attr($height); ?>%"></div><small><?php echo esc_html(date_i18n('d/m', strtotime($date))); ?></small></div>
             <?php endforeach; ?>
             </div>
           </section>
+          <?php if ($by_method): ?><section class="dip-an-panel"><h2><?php esc_html_e('Connexions par méthode', 'delicat-google-login'); ?></h2><table class="widefat striped"><thead><tr><th><?php esc_html_e('Méthode','delicat-google-login'); ?></th><th><?php esc_html_e('Total','delicat-google-login'); ?></th></tr></thead><tbody>
+          <?php foreach ($by_method as $method=>$count): ?><tr><td><?php echo esc_html($method_labels[$method] ?? $method_labels['other']); ?></td><td><?php echo esc_html(number_format_i18n($count)); ?></td></tr><?php endforeach; ?>
+          </tbody></table><p class="description"><?php esc_html_e('Les journées agrégées avant cette mise à jour ne détaillent pas la méthode de connexion.', 'delicat-google-login'); ?></p></section><?php endif; ?>
           <section class="dip-an-panel"><h2><?php esc_html_e('Événements les plus fréquents', 'delicat-google-login'); ?></h2><table class="widefat striped"><thead><tr><th><?php esc_html_e('Événement','delicat-google-login'); ?></th><th><?php esc_html_e('Total','delicat-google-login'); ?></th></tr></thead><tbody>
-          <?php arsort($data['totals']); foreach (array_slice($data['totals'],0,15,true) as $event=>$count): ?><tr><td><code><?php echo esc_html($event); ?></code></td><td><?php echo esc_html(number_format_i18n($count)); ?></td></tr><?php endforeach; ?>
+          <?php $top = array_filter($data['totals'], function ($event) { return strpos((string) $event, DIP_Analytics::METHOD_PREFIX) !== 0; }, ARRAY_FILTER_USE_KEY); arsort($top); foreach (array_slice($top,0,15,true) as $event=>$count): ?><tr><td><code><?php echo esc_html($event); ?></code></td><td><?php echo esc_html(number_format_i18n($count)); ?></td></tr><?php endforeach; ?>
           </tbody></table></section>
           <p class="description"><?php echo esc_html($last ? sprintf(__('Dernière agrégation : %s','delicat-google-login'), date_i18n('Y-m-d H:i', $last)) : __('L’agrégation sera créée automatiquement.','delicat-google-login')); ?></p>
         </div>
@@ -227,8 +336,8 @@ final class DIP_Analytics {
         header('Content-Disposition: attachment; filename="delicat-identity-analytics-' . gmdate('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['date','event_type','total']);
-        foreach ($data['series'] as $date=>$events) foreach ($events as $event=>$count) fputcsv($out, [$date,$event,$count]);
+        fputcsv($out, ['date','event_type','total'], ',', '"', '\\');
+        foreach ($data['series'] as $date=>$events) foreach ($events as $event=>$count) fputcsv($out, [$date,$event,$count], ',', '"', '\\');
         fclose($out); exit;
     }
 

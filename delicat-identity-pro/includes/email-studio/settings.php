@@ -68,7 +68,7 @@ function dipes_default_email_copy() {
         'customer_invoice' => array(
             'subject' => 'Détails de votre commande #{order_number}', 'heading' => 'Détails de votre commande', 'preheader' => 'Retrouvez votre facture et les détails de votre commande.',
             'badge' => 'Facture', 'intro_title' => 'Voici votre facture.', 'intro_text' => 'Bonjour {first_name}, retrouvez ci-dessous le détail complet de votre commande.',
-            'cta_label' => 'Voir ma commande', 'cta_url' => '{order_url}', 'accent' => '#0f766e',
+            'cta_label' => '{payment_label}', 'cta_url' => '{payment_url}', 'accent' => '#0f766e',
         ),
         'customer_note' => array(
             'subject' => 'Nouvelle information — commande #{order_number}', 'heading' => 'Mise à jour de votre commande', 'preheader' => 'Une nouvelle information a été ajoutée à votre commande.',
@@ -102,6 +102,25 @@ function dipes_default_block_order() {
     return array( 'intro', 'notice', 'summary', 'progress', 'cta', 'order_details', 'order_meta', 'customer_details', 'additional', 'custom' );
 }
 
+/**
+ * A block order as a list of known, unique block ids, with every missing
+ * default block appended. Accepts the hidden field's comma list or a flat
+ * list of strings; anything else yields the default order.
+ */
+function dipes_sanitize_block_order( $order ) {
+    $allowed = dipes_default_block_order();
+    if ( is_string( $order ) ) { $order = explode( ',', $order ); }
+    if ( ! is_array( $order ) ) { return $allowed; }
+    $clean = array();
+    foreach ( $order as $block ) {
+        if ( ! is_string( $block ) ) { continue; }
+        $block = sanitize_key( $block );
+        if ( in_array( $block, $allowed, true ) && ! in_array( $block, $clean, true ) ) { $clean[] = $block; }
+    }
+    foreach ( $allowed as $block ) { if ( ! in_array( $block, $clean, true ) ) { $clean[] = $block; } }
+    return $clean;
+}
+
 function dipes_defaults() {
     $preset = dipes_presets()['glass_dark']['tokens'];
     $emails = array();
@@ -118,10 +137,10 @@ function dipes_defaults() {
 
     return array_merge(
         array(
-            'schema_version' => 7,
+            'schema_version' => 8,
             'preset' => 'glass_dark',
             'appearance_mode' => 'auto', 'visual_effect' => 'glass_neomorph', 'effect_strength' => 78, 'shadow_depth' => 72, 'glass_highlight' => 42,
-            'brand_name' => '', 'logo_url' => '', 'logo_width' => 92, 'logo_align' => 'left', 'header_layout' => 'banner',
+            'brand_name' => '', 'logo_url' => '', 'logo_width' => 90, 'logo_align' => 'left', 'header_layout' => 'banner',
             'container_width' => 620, 'radius' => 22, 'card_radius' => 16, 'button_radius' => 14, 'body_padding' => 30,
             'font' => 'system', 'heading_font' => 'system', 'body_size' => 15, 'heading_size' => 29, 'small_size' => 11,
             'show_status_colors' => 'yes', 'show_summary' => 'yes', 'show_progress' => 'yes', 'show_cta' => 'yes', 'show_item_images' => 'yes',
@@ -253,8 +272,40 @@ function dipes_normalize_settings( $saved ) {
         $saved['schema_version'] = 7;
     }
 
+    $saved_schema = isset( $saved['schema_version'] ) ? absint( $saved['schema_version'] ) : 0;
+    if ( $saved && $saved_schema < 8 ) {
+        // v6.11: the invoice / payment-request button pays the order when it
+        // needs payment ({payment_url} falls back to the order page otherwise).
+        // Only the untouched previous defaults are replaced.
+        if ( isset( $saved['emails']['customer_invoice'] ) && is_array( $saved['emails']['customer_invoice'] ) ) {
+            $invoice = $saved['emails']['customer_invoice'];
+            if ( isset( $invoice['cta_url'] ) && '{order_url}' === $invoice['cta_url'] ) {
+                $saved['emails']['customer_invoice']['cta_url'] = $defaults['emails']['customer_invoice']['cta_url'];
+                if ( isset( $invoice['cta_label'] ) && 'Voir ma commande' === $invoice['cta_label'] ) {
+                    $saved['emails']['customer_invoice']['cta_label'] = $defaults['emails']['customer_invoice']['cta_label'];
+                }
+            }
+        }
+        $saved['schema_version'] = 8;
+    }
+
     $out = array_replace_recursive( $defaults, $saved );
     if ( isset( $saved['accent'] ) && $saved['accent'] ) { $out['accent'] = $saved['accent']; $out['button_bg'] = $saved['accent']; }
+
+    // array_replace_recursive() merges lists by index: a stored block order
+    // shorter than the current one would keep the default tail (duplicated
+    // and missing blocks). Re-validate every stored order instead, and never
+    // let a corrupt (non-array) e-mail entry replace its defaults.
+    if ( ! isset( $out['emails'] ) || ! is_array( $out['emails'] ) ) { $out['emails'] = $defaults['emails']; }
+    foreach ( $out['emails'] as $id => $email ) {
+        if ( ! is_array( $email ) ) {
+            if ( isset( $defaults['emails'][ $id ] ) ) { $out['emails'][ $id ] = $defaults['emails'][ $id ]; } else { unset( $out['emails'][ $id ] ); }
+            continue;
+        }
+        if ( isset( $saved['emails'][ $id ]['block_order'] ) ) {
+            $out['emails'][ $id ]['block_order'] = dipes_sanitize_block_order( $saved['emails'][ $id ]['block_order'] );
+        }
+    }
     return $out;
 }
 
@@ -275,26 +326,84 @@ function dipes_email_setting( $email_id, $key, $default = '' ) {
 }
 
 function dipes_sanitize_color( $value, $fallback ) {
-    $color = sanitize_hex_color( $value );
+    $color = is_string( $value ) ? sanitize_hex_color( $value ) : '';
     return $color ? $color : $fallback;
 }
 
 function dipes_sanitize_html( $value ) {
-    return wp_kses_post( (string) $value );
+    return is_scalar( $value ) ? wp_kses_post( (string) $value ) : '';
+}
+
+/** Constructs custom e-mail CSS may never contain (remote stylesheets, script-capable CSS). */
+function dipes_css_forbidden_patterns() {
+    return array(
+        '/@import\b[^;]*;?/i',
+        '/expression\s*\([^)]*\)?/i',
+        '/(?:javascript|vbscript)\s*:/i',
+        '/(?:behavior|-moz-binding)\s*:[^;}]*;?/i',
+    );
+}
+
+/** Remove the forbidden constructs until the string stops changing (nested tokens cannot rebuild them). */
+function dipes_css_strip_forbidden( $css ) {
+    $patterns = dipes_css_forbidden_patterns();
+    for ( $i = 0; $i < 20; $i++ ) {
+        $before = $css;
+        $css = (string) preg_replace( $patterns, '', $css );
+        if ( $css === $before ) { break; }
+    }
+    return $css;
+}
+
+/** What a CSS parser reads: comments dropped and backslash escapes decoded (\69mport => import). */
+function dipes_css_decoded_probe( $css ) {
+    $css = (string) preg_replace( '~/\*.*?(?:\*/|$)~s', '', $css );
+    return (string) preg_replace_callback(
+        '/\\\\(?:([0-9a-fA-F]{1,6})\s?|(.))/s',
+        static function ( $m ) {
+            if ( isset( $m[1] ) && '' !== $m[1] ) {
+                $cp = hexdec( $m[1] );
+                return ( $cp > 0 && $cp < 128 ) ? chr( $cp ) : '~';
+            }
+            return isset( $m[2] ) ? $m[2] : '';
+        },
+        $css
+    );
+}
+
+function dipes_css_has_forbidden( $css ) {
+    foreach ( dipes_css_forbidden_patterns() as $pattern ) {
+        if ( preg_match( $pattern, $css ) ) { return true; }
+    }
+    return false;
 }
 
 function dipes_sanitize_css( $value ) {
-    $value = wp_unslash( (string) $value );
+    // Callers (options.php, the preview handler) already pass unslashed data:
+    // escapes such as content:"\201C" or .w-1\/2 must survive.
+    if ( ! is_string( $value ) ) { return ''; }
 
-    // Custom CSS is administrator-authored, but still prevent it from breaking out of the
-    // e-mail style block or using legacy script-capable CSS constructs.
-    $value = str_ireplace( array( '</style', '<style', '<?', '?>' ), '', $value );
-    $value = preg_replace( '/@import\s+[^;]+;?/i', '', $value );
-    $value = preg_replace( '/expression\s*\([^)]*\)/i', '', $value );
-    $value = preg_replace( '/(?:javascript|vbscript)\s*:/i', '', $value );
-    $value = preg_replace( '/(?:behavior|-moz-binding)\s*:[^;}]*(?:;|})/i', '', $value );
+    // Custom CSS lands inside a <style> block of every e-mail and of the admin
+    // preview. CSS never needs '<' (child combinators use '>'), so dropping it
+    // makes a </style> breakout or any tag impossible, however it is nested.
+    $value = str_replace( array( '<', "\0" ), '', $value );
+    $value = dipes_css_strip_forbidden( $value );
 
-    return trim( (string) $value );
+    // Escapes or comments can still spell a forbidden construct for the CSS
+    // parser (@\69mport, javas\63ript:). Only then drop them and strip again.
+    if ( dipes_css_has_forbidden( dipes_css_decoded_probe( $value ) ) ) {
+        $value = (string) preg_replace( '~/\*.*?(?:\*/|$)~s', '', $value );
+        $value = (string) preg_replace( '/\\\\(?:[0-9a-fA-F]{1,6}\s?|.)?/s', '', $value );
+        $value = dipes_css_strip_forbidden( $value );
+        if ( dipes_css_has_forbidden( dipes_css_decoded_probe( $value ) ) ) { return ''; }
+    }
+
+    return trim( $value );
+}
+
+/** A scalar request/setting value as a string, or null for anything else (arrays, objects). */
+function dipes_scalar_input( $input, $key ) {
+    return is_array( $input ) && isset( $input[ $key ] ) && is_scalar( $input[ $key ] ) ? (string) $input[ $key ] : null;
 }
 
 function dipes_sanitize_settings( $input ) {
@@ -302,34 +411,42 @@ function dipes_sanitize_settings( $input ) {
     $input = is_array( $input ) ? $input : array();
     $out = $defaults;
 
+    // Every scalar setting is read through dipes_scalar_input(): an array
+    // posted for a scalar field (malformed form, preview URL) falls back to
+    // the default instead of reaching esc_url_raw()/preg_* as an array.
     $presets = dipes_presets();
-    $out['preset'] = isset( $input['preset'], $presets[ $input['preset'] ] ) ? sanitize_key( $input['preset'] ) : $defaults['preset'];
+    $preset = dipes_scalar_input( $input, 'preset' );
+    $out['preset'] = null !== $preset && isset( $presets[ $preset ] ) ? sanitize_key( $preset ) : $defaults['preset'];
 
     $text_keys = array( 'brand_name','support_title','support_text','support_label','whatsapp','support_email','footer_note','social_facebook','social_instagram','social_tiktok' );
     foreach ( $text_keys as $key ) {
-        $out[ $key ] = isset( $input[ $key ] ) ? sanitize_text_field( $input[ $key ] ) : $defaults[ $key ];
+        $v = dipes_scalar_input( $input, $key );
+        $out[ $key ] = null !== $v ? sanitize_text_field( $v ) : $defaults[ $key ];
     }
-    $out['logo_url'] = isset( $input['logo_url'] ) ? esc_url_raw( $input['logo_url'] ) : '';
-    $out['support_url'] = isset( $input['support_url'] ) ? esc_url_raw( $input['support_url'] ) : '';
-    $out['footer_custom_text'] = isset( $input['footer_custom_text'] ) ? dipes_sanitize_html( $input['footer_custom_text'] ) : '';
-    foreach ( array( 'social_facebook', 'social_instagram', 'social_tiktok' ) as $social_key ) {
-        $out[ $social_key ] = isset( $input[ $social_key ] ) ? esc_url_raw( $input[ $social_key ] ) : '';
+    foreach ( array( 'logo_url', 'support_url', 'social_facebook', 'social_instagram', 'social_tiktok' ) as $url_key ) {
+        $v = dipes_scalar_input( $input, $url_key );
+        $out[ $url_key ] = null !== $v ? esc_url_raw( $v ) : '';
     }
-    $out['support_email'] = isset( $input['support_email'] ) ? sanitize_email( $input['support_email'] ) : '';
-    $out['whatsapp'] = isset( $input['whatsapp'] ) ? preg_replace( '/[^0-9+]/', '', (string) $input['whatsapp'] ) : '';
+    $v = dipes_scalar_input( $input, 'footer_custom_text' );
+    $out['footer_custom_text'] = null !== $v ? dipes_sanitize_html( $v ) : '';
+    $v = dipes_scalar_input( $input, 'support_email' );
+    $out['support_email'] = null !== $v ? sanitize_email( $v ) : '';
+    $v = dipes_scalar_input( $input, 'whatsapp' );
+    $out['whatsapp'] = null !== $v ? preg_replace( '/[^0-9+]/', '', $v ) : '';
 
     $color_keys = array( 'page_bg','container_bg','header_bg','header_text','text','muted','heading','border','accent','button_bg','button_text','footer_bg','footer_text_color','table_header_bg','table_header_text','card_bg','card_border' );
     foreach ( $color_keys as $key ) {
-        $out[ $key ] = dipes_sanitize_color( isset( $input[ $key ] ) ? $input[ $key ] : '', $defaults[ $key ] );
+        $out[ $key ] = dipes_sanitize_color( dipes_scalar_input( $input, $key ), $defaults[ $key ] );
     }
 
     $number_bounds = array(
-        'logo_width' => array( 40, 320 ), 'container_width' => array( 480, 760 ), 'radius' => array( 0, 32 ), 'card_radius' => array( 0, 32 ),
+        'logo_width' => array( 40, 90 ), 'container_width' => array( 480, 760 ), 'radius' => array( 0, 32 ), 'card_radius' => array( 0, 32 ),
         'button_radius' => array( 0, 32 ), 'body_padding' => array( 16, 56 ), 'body_size' => array( 12, 20 ), 'heading_size' => array( 20, 44 ),
         'small_size' => array( 10, 16 ), 'image_size' => array( 36, 96 ), 'effect_strength' => array( 0, 100 ), 'shadow_depth' => array( 0, 100 ), 'glass_highlight' => array( 0, 100 ),
     );
     foreach ( $number_bounds as $key => $bounds ) {
-        $v = isset( $input[ $key ] ) ? absint( $input[ $key ] ) : $defaults[ $key ];
+        $v = dipes_scalar_input( $input, $key );
+        $v = null !== $v ? absint( $v ) : $defaults[ $key ];
         $out[ $key ] = max( $bounds[0], min( $bounds[1], $v ) );
     }
 
@@ -346,7 +463,7 @@ function dipes_sanitize_settings( $input ) {
     foreach ( $toggles as $key ) {
         $out[ $key ] = isset( $input[ $key ] ) && 'yes' === $input[ $key ] ? 'yes' : 'no';
     }
-    $out['custom_css'] = isset( $input['custom_css'] ) ? dipes_sanitize_css( $input['custom_css'] ) : '';
+    $out['custom_css'] = dipes_sanitize_css( dipes_scalar_input( $input, 'custom_css' ) );
 
     $email_defaults = dipes_default_email_copy();
     $allowed_blocks = dipes_default_block_order();
@@ -357,26 +474,26 @@ function dipes_sanitize_settings( $input ) {
 
         $email['enabled'] = isset( $raw['enabled'] ) && 'yes' === $raw['enabled'] ? 'yes' : 'no';
         foreach ( array( 'subject','heading','preheader','badge','intro_title','cta_label','cta_url' ) as $key ) {
-            $email[ $key ] = isset( $raw[ $key ] ) ? sanitize_text_field( $raw[ $key ] ) : $base[ $key ];
+            $v = dipes_scalar_input( $raw, $key );
+            $email[ $key ] = null !== $v ? sanitize_text_field( $v ) : $base[ $key ];
         }
-        $email['intro_text'] = isset( $raw['intro_text'] ) ? dipes_sanitize_html( $raw['intro_text'] ) : $base['intro_text'];
-        $email['custom_html'] = isset( $raw['custom_html'] ) ? dipes_sanitize_html( $raw['custom_html'] ) : '';
-        $email['accent'] = isset( $raw['accent'] ) && $raw['accent'] ? dipes_sanitize_color( $raw['accent'], $base['accent'] ) : $base['accent'];
+        $v = dipes_scalar_input( $raw, 'intro_text' );
+        $email['intro_text'] = null !== $v ? dipes_sanitize_html( $v ) : $base['intro_text'];
+        $v = dipes_scalar_input( $raw, 'custom_html' );
+        $email['custom_html'] = null !== $v ? dipes_sanitize_html( $v ) : '';
+        $v = dipes_scalar_input( $raw, 'accent' );
+        $email['accent'] = $v ? dipes_sanitize_color( $v, $base['accent'] ) : $base['accent'];
         foreach ( array( 'show_badge','show_order_details','show_customer_details','show_additional' ) as $key ) {
             $email[ $key ] = isset( $raw[ $key ] ) && 'yes' === $raw[ $key ] ? 'yes' : 'no';
         }
         foreach ( array( 'show_summary','show_progress','show_cta' ) as $key ) {
             $email[ $key ] = isset( $raw[ $key ] ) && in_array( $raw[ $key ], array( 'inherit','yes','no' ), true ) ? $raw[ $key ] : 'inherit';
         }
-        $order = isset( $raw['block_order'] ) ? $raw['block_order'] : $allowed_blocks;
-        if ( is_string( $order ) ) { $order = array_filter( array_map( 'sanitize_key', explode( ',', $order ) ) ); }
-        $order = is_array( $order ) ? array_values( array_intersect( $order, $allowed_blocks ) ) : $allowed_blocks;
-        foreach ( $allowed_blocks as $block ) { if ( ! in_array( $block, $order, true ) ) { $order[] = $block; } }
-        $email['block_order'] = $order;
+        $email['block_order'] = dipes_sanitize_block_order( isset( $raw['block_order'] ) ? $raw['block_order'] : $allowed_blocks );
         $out['emails'][ $id ] = $email;
     }
 
-    $out['schema_version'] = 7;
+    $out['schema_version'] = 8;
     return apply_filters( 'dipes_sanitized_settings', $out, $input );
 }
 

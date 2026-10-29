@@ -8,7 +8,28 @@ final class DIP_Security_Recommendations {
         return wp_parse_args((array)get_option(class_exists('DIP_Plugin') ? DIP_Plugin::OPTION : 'dglp_settings', []), $defaults);
     }
 
-    public static function customer($user_id = 0) {
+    /** Sign-in providers a customer can link right now (switched on and configured). */
+    private static function linkable_providers(array $settings) {
+        if (($settings['social_login_maintenance'] ?? 'no') === 'yes') return [];
+        $out = [];
+        if (($settings['enabled'] ?? 'no') === 'yes' && trim((string) ($settings['client_id'] ?? '')) !== '') $out[] = 'Google';
+        if (($settings['microsoft_enabled'] ?? 'no') === 'yes' && trim((string) ($settings['microsoft_client_id'] ?? '')) !== '') $out[] = 'Microsoft';
+        return $out;
+    }
+
+    /** Identity Center « Comptes connectés » tab, when WooCommerce My Account is available. */
+    private static function accounts_url() {
+        if (!function_exists('wc_get_account_endpoint_url') || !class_exists('DIP_Customer_Dashboard')) return '';
+        return add_query_arg('dip_tab', 'accounts', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
+    }
+
+    /**
+     * $devices: the account's DIP_Devices::user_devices() rows when the caller
+     * already has them. Each item may carry an 'action': ['label', 'href'] (a
+     * card of the Security Center or a page) or ['label', 'post'] (a Security
+     * Center admin-post action).
+     */
+    public static function customer($user_id = 0, $devices = null) {
         $user_id = absint($user_id ?: get_current_user_id());
         $items = [];
         if (!$user_id) return $items;
@@ -17,14 +38,16 @@ final class DIP_Security_Recommendations {
 
         $settings = self::settings();
         if (($settings['passkeys_available'] ?? 'yes') === 'yes' && (!class_exists('DIP_Passkeys') || !DIP_Passkeys::has_passkeys($user_id))) {
-            $items[] = ['priority'=>'high','title'=>'Ajouter une Passkey','detail'=>'Activez Face ID, Touch ID, biométrie Android, Windows Hello ou une clé de sécurité pour une connexion résistante au phishing sans exposer de secret réutilisable.'];
+            $item = ['priority'=>'high','title'=>'Ajouter une Passkey','detail'=>'Activez Face ID, Touch ID, biométrie Android, Windows Hello ou une clé de sécurité pour une connexion résistante au phishing sans exposer de secret réutilisable.'];
+            if (class_exists('DIP_Passkeys') && DIP_Passkeys::available()) $item['action'] = ['label'=>'Ajouter une Passkey','href'=>'#dip-passkeys'];
+            $items[] = $item;
         }
         if (($settings['two_factor_available'] ?? 'yes') === 'yes' && (!class_exists('DIP_Two_Factor') || !DIP_Two_Factor::is_enabled($user_id))) {
-            $items[] = ['priority'=>'high','title'=>'Activer la vérification en deux étapes','detail'=>'Ajoutez un code Authenticator et des codes de récupération pour protéger les connexions même si le mot de passe est compromis.'];
+            $items[] = ['priority'=>'high','title'=>'Activer la vérification en deux étapes','detail'=>'Ajoutez un code Authenticator et des codes de récupération pour protéger les connexions même si le mot de passe est compromis.','action'=>['label'=>'Activer la 2FA','href'=>'#dip-2fa']];
         } elseif (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id)) {
             $recovery = get_user_meta($user_id, '_dip_totp_recovery_hashes_v1', true);
             if (!is_array($recovery) || count($recovery) < 2) {
-                $items[] = ['priority'=>'high','title'=>'Renouveler vos codes de récupération','detail'=>'Il reste moins de deux codes de récupération 2FA. Générez-en de nouveaux et conservez-les hors ligne.'];
+                $items[] = ['priority'=>'high','title'=>'Renouveler vos codes de récupération','detail'=>'Il reste moins de deux codes de récupération 2FA. Générez-en de nouveaux et conservez-les hors ligne.','action'=>['label'=>'Renouveler les codes','href'=>'#dip-2fa']];
             }
         }
 
@@ -39,17 +62,35 @@ final class DIP_Security_Recommendations {
             }
             $linked = $approved_admin_google;
         }
-        if (!$linked) $items[] = ['priority'=>'medium','title'=>'Ajouter une méthode de connexion secondaire','detail'=>user_can($user_id, 'manage_options') ? 'Pour un Administrateur, privilégiez une Passkey et Google Secure Mode explicitement vérifié. Microsoft et les liaisons sociales génériques ne doivent pas ouvrir le back-office.' : 'Reliez Google ou Microsoft afin de disposer d’une méthode de récupération/connexion supplémentaire.'];
+        if (!$linked) {
+            if (user_can($user_id, 'manage_options')) {
+                $items[] = ['priority'=>'medium','title'=>'Ajouter une méthode de connexion secondaire','detail'=>'Pour un Administrateur, privilégiez une Passkey et Google Secure Mode explicitement vérifié. Microsoft et les liaisons sociales génériques ne doivent pas ouvrir le back-office.'];
+            } elseif ((!class_exists('DIP_Account_Sync') || DIP_Account_Sync::is_customer_account($user_id)) && ($providers = self::linkable_providers($settings))) {
+                // Only the providers this store offers (a Google-only store never
+                // says « ou Microsoft »); other staff roles cannot use social sign-in.
+                $item = ['priority'=>'medium','title'=>'Ajouter une méthode de connexion secondaire','detail'=>sprintf('Reliez %s afin de disposer d’une méthode de récupération/connexion supplémentaire.', implode(' ou ', $providers))];
+                $accounts = self::accounts_url();
+                if ($accounts !== '') $item['action'] = ['label'=>sprintf('Relier %s', implode(' ou ', $providers)),'href'=>$accounts];
+                $items[] = $item;
+            }
+        }
 
-        $devices = class_exists('DIP_Devices') ? DIP_Devices::user_devices($user_id) : [];
+        if (!is_array($devices)) $devices = class_exists('DIP_Devices') ? DIP_Devices::user_devices($user_id) : [];
         $trusted = false;
         foreach ((array)$devices as $device) if (!empty($device['trusted'])) { $trusted = true; break; }
-        if (!$trusted) $items[] = ['priority'=>'medium','title'=>'Approuver votre appareil principal','detail'=>'Marquez votre appareil personnel comme fiable depuis le Centre de sécurité.'];
+        if (!$trusted) $items[] = ['priority'=>'medium','title'=>'Approuver votre appareil principal','detail'=>'Marquez votre appareil personnel (celui que vous utilisez en ce moment, s’il vous appartient) comme appareil de confiance.','action'=>['label'=>'Voir mes appareils','href'=>'#dip-security-devices']];
 
         $fingerprint = (string)get_user_meta($user_id, '_dip_verified_email_fingerprint', true);
         $current = is_email($user->user_email) ? hash('sha256', strtolower(sanitize_email($user->user_email))) : '';
         $verified = get_user_meta($user_id, 'dip_email_verified', true) === 'yes' && $fingerprint !== '' && $current !== '' && hash_equals($fingerprint, $current);
-        if (!$verified) $items[] = ['priority'=>'high','title'=>'Vérifier votre adresse e-mail','detail'=>'La vérification de l’adresse protège les récupérations de compte et les changements d’identité.'];
+        if (!$verified) {
+            $item = ['priority'=>'high','title'=>'Vérifier votre adresse e-mail','detail'=>'La vérification de l’adresse protège les récupérations de compte et les changements d’identité.'];
+            if (class_exists('DIP_Security_Center') && method_exists('DIP_Security_Center', 'can_request_email_verification') && DIP_Security_Center::can_request_email_verification($user_id)) {
+                $item['detail'] .= ' Recevez un lien de vérification à votre adresse actuelle.';
+                $item['action'] = ['label'=>'Recevoir le lien de vérification','post'=>'dip_security_verify_email'];
+            }
+            $items[] = $item;
+        }
 
         if (!is_ssl()) $items[] = ['priority'=>'high','title'=>'Connexion HTTPS requise','detail'=>'N’utilisez pas les fonctions sensibles tant que la connexion n’est pas protégée par HTTPS.'];
         return $items;
@@ -98,6 +139,17 @@ final class DIP_Security_Recommendations {
         if ($admins_low_recovery > 0) {
             $items[] = ['priority'=>'critical','title'=>'Renouveler les codes de récupération administrateur','detail'=>sprintf('%d administrateur(s) protégé(s) par 2FA ont moins de deux codes de récupération disponibles.', $admins_low_recovery)];
         }
+        // Shop managers reach every order and customer record: same advice.
+        $managers_unprotected = 0;
+        foreach ((array) get_users(['role'=>'shop_manager','fields'=>'ID','number'=>200]) as $manager_id) {
+            $manager_id = absint($manager_id);
+            $has_2fa = class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($manager_id);
+            $has_passkey = class_exists('DIP_Passkeys') && DIP_Passkeys::has_passkeys($manager_id);
+            if (!$has_2fa && !$has_passkey) $managers_unprotected++;
+        }
+        if ($managers_unprotected > 0) {
+            $items[] = ['priority'=>'high','title'=>'Protéger les gestionnaires de boutique','detail'=>sprintf('%d gestionnaire(s) de boutique n’ont ni 2FA ni Passkey. Ces comptes accèdent aux commandes et aux données clients : demandez-leur d’activer la vérification en deux étapes ou une Passkey depuis leur Centre de sécurité.', $managers_unprotected)];
+        }
         if ($admins_with_app_passwords > 0) {
             $items[] = ['priority'=>'high','title'=>'Auditer les Application Passwords WordPress','detail'=>sprintf('%d compte(s) administrateur(s) possèdent des Application Passwords. Delicat les bloque par défaut lorsqu’un compte active 2FA; supprimez les anciens identifiants API inutiles.', $admins_with_app_passwords)];
         }
@@ -114,12 +166,26 @@ final class DIP_Security_Recommendations {
         return $items;
     }
 
-    public static function render_customer($user_id = 0) {
-        $items = self::customer($user_id);
-        if (!$items) return '<div class="dip-security-card dip-recommendations"><div class="dip-security-card-title"><span class="dip-security-card-icon" aria-hidden="true">✓</span><div><h3>'.esc_html__('Recommandations', 'delicat-google-login').'</h3><p>'.esc_html__('Aucune action importante recommandée pour le moment.', 'delicat-google-login').'</p></div></div></div>';
+    private static function render_action(array $action) {
+        $label = (string) ($action['label'] ?? '');
+        if ($label === '') return '';
+        if (!empty($action['post']) && class_exists('DIP_Security_Center')) {
+            return '<div class="dip-rec-action"><form method="post" action="' . esc_url(admin_url('admin-post.php')) . '" data-dip-sc-form><input type="hidden" name="action" value="' . esc_attr(sanitize_key($action['post'])) . '">'
+                . wp_nonce_field(DIP_Security_Center::NONCE, '_wpnonce', true, false)
+                . '<button type="submit" class="dip-btn">' . esc_html($label) . '</button></form></div>';
+        }
+        $href = (string) ($action['href'] ?? '');
+        if ($href === '') return '';
+        $url = $href[0] === '#' ? esc_attr('#' . sanitize_html_class(substr($href, 1))) : esc_url($href);
+        return '<div class="dip-rec-action"><a class="dip-btn" href="' . $url . '">' . esc_html($label) . '</a></div>';
+    }
+
+    public static function render_customer($user_id = 0, $devices = null) {
+        $items = self::customer($user_id, $devices);
+        if (!$items) return '<div class="dip-security-card dip-recommendations" id="dip-security-recommendations"><div class="dip-security-card-title"><span class="dip-security-card-icon" aria-hidden="true">✓</span><div><h3>'.esc_html__('Recommandations', 'delicat-google-login').'</h3><p>'.esc_html__('Aucune action importante recommandée pour le moment.', 'delicat-google-login').'</p></div></div></div>';
         ob_start(); ?>
-        <div class="dip-security-card dip-recommendations"><div class="dip-security-card-title"><span class="dip-security-card-icon" aria-hidden="true">!</span><div><h3><?php esc_html_e('Recommandations de sécurité', 'delicat-google-login'); ?></h3><p><?php esc_html_e('Actions personnalisées pour renforcer votre propre compte.', 'delicat-google-login'); ?></p></div></div>
-        <?php foreach ($items as $item): ?><div class="dip-recommendation is-<?php echo esc_attr($item['priority']); ?>"><strong><?php echo esc_html($item['title']); ?></strong><p><?php echo esc_html($item['detail']); ?></p></div><?php endforeach; ?></div>
+        <div class="dip-security-card dip-recommendations" id="dip-security-recommendations"><div class="dip-security-card-title"><span class="dip-security-card-icon" aria-hidden="true">!</span><div><h3><?php esc_html_e('Recommandations de sécurité', 'delicat-google-login'); ?></h3><p><?php esc_html_e('Actions personnalisées pour renforcer votre propre compte.', 'delicat-google-login'); ?></p></div></div>
+        <?php foreach ($items as $item): ?><div class="dip-recommendation is-<?php echo esc_attr($item['priority']); ?>"><strong><?php echo esc_html($item['title']); ?></strong><p><?php echo esc_html($item['detail']); ?></p><?php if (!empty($item['action']) && is_array($item['action'])) echo self::render_action($item['action']); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in render_action ?></div><?php endforeach; ?></div>
         <?php return ob_get_clean();
     }
 

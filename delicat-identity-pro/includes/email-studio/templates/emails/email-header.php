@@ -14,7 +14,10 @@ $show_badge = 'yes' === dipes_email_setting( $id, 'show_badge', 'yes' );
 $dark_enabled = 'yes' === dipes_get( 'dark_mode', 'yes' );
 $appearance_mode = dipes_get( 'appearance_mode', 'auto' );
 $scheme = 'dark' === $appearance_mode ? 'dark' : ( 'light' === $appearance_mode ? 'light' : ( $dark_enabled ? 'light dark' : 'light' ) );
-$hero_kicker = strtoupper( $brand );
+$hero_kicker = function_exists( 'mb_strtoupper' ) ? mb_strtoupper( $brand, 'UTF-8' ) : strtoupper( $brand );
+// Text colours inline as well: readable even where the <style> block is dropped.
+$header_color = 'minimal' === $layout ? dipes_get( 'heading' ) : dipes_get( 'header_text' );
+$body_color = dipes_get( 'text' );
 ?>
 <!doctype html>
 <html <?php language_attributes(); ?>>
@@ -28,11 +31,11 @@ $hero_kicker = strtoupper( $brand );
 <?php if ( ! empty( $GLOBALS['dipes_preview_mode'] ) ) : ?><style type="text/css"><?php echo dipes_email_css( $email ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></style><?php endif; ?>
 </head>
 <body marginwidth="0" topmargin="0" marginheight="0" offset="0" bgcolor="<?php echo esc_attr( dipes_get( 'page_bg' ) ); ?>">
-<div style="display:none!important;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;"><?php echo esc_html( wp_strip_all_tags( $preheader ) ); ?>&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
+<div class="-emogrifier-keep" style="display:none!important;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;"><?php echo esc_html( wp_strip_all_tags( $preheader ) ); ?>&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" id="desp-outer" bgcolor="<?php echo esc_attr( dipes_get( 'page_bg' ) ); ?>"><tr><td align="center" valign="top">
 <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="<?php echo esc_attr( dipes_get( 'container_width', 640 ) ); ?>" id="desp-shell" bgcolor="<?php echo esc_attr( dipes_get( 'container_bg' ) ); ?>">
 <tr><td id="desp-accent-bar" bgcolor="<?php echo esc_attr( dipes_email_accent( $id ) ); ?>">&nbsp;</td></tr>
-<tr><td id="desp-header" bgcolor="<?php echo esc_attr( dipes_get( 'header_bg' ) ); ?>">
+<tr><td id="desp-header" bgcolor="<?php echo esc_attr( dipes_get( 'header_bg' ) ); ?>" style="color:<?php echo esc_attr( $header_color ); ?>;">
 <table class="desp-brand-row" role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%"><tr>
 <td class="desp-brand-cell" align="<?php echo esc_attr( $logo_align ); ?>" valign="middle">
 <?php if ( $logo ) : ?><a href="<?php echo esc_url( home_url( '/' ) ); ?>" target="_blank"><img id="desp-logo" src="<?php echo esc_url( $logo ); ?>" width="<?php echo esc_attr( min( 90, absint( dipes_get( 'logo_width', 90 ) ) ) ); ?>" alt="<?php echo esc_attr( $brand ); ?>" /></a><?php else : ?><div id="desp-brand"><?php echo esc_html( $brand ); ?></div><?php endif; ?>
@@ -45,4 +48,4 @@ $hero_kicker = strtoupper( $brand );
 <?php if ( 'centered' === $layout && $show_badge && $badge ) : ?><div style="margin-top:16px"><span class="desp-status" style="background:<?php echo esc_attr( dipes_email_accent( $id ) ); ?>;"><?php echo esc_html( $badge ); ?></span></div><?php endif; ?>
 </div>
 </td></tr>
-<tr><td id="desp-body" bgcolor="<?php echo esc_attr( dipes_get( 'container_bg' ) ); ?>"><div id="body_content"><div id="body_content_inner">
+<tr><td id="desp-body" bgcolor="<?php echo esc_attr( dipes_get( 'container_bg' ) ); ?>" style="color:<?php echo esc_attr( $body_color ); ?>;"><div id="body_content"><div id="body_content_inner">

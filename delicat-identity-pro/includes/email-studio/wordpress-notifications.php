@@ -136,7 +136,7 @@ function dipes_build_wp_new_user_admin_email( $user, $blogname = '' ) {
     dipes_render_cta( $email_id, $ctx );
     dipes_render_custom( $email_id, $ctx );
     include DIPES_DIR . 'templates/emails/email-footer.php';
-    $html = ob_get_clean();
+    $html = dipes_inline_html( ob_get_clean() );
 
     if ( null === $old_current ) {
         unset( $GLOBALS['dipes_current_email_id'] );
@@ -274,10 +274,11 @@ function dipes_build_wp_new_user_client_email( $user, $blogname = '', $setup_url
     dipes_render_intro( $email_id, $ctx );
     dipes_render_account_panel( $ctx );
     dipes_render_account_security( $ctx );
-    dipes_render_cta( $email_id, $ctx );
+    // The set-password link is printed whatever the button settings.
+    dipes_render_cta_with_required( $email_id, $ctx, (string) $setup_url, 'Créer mon mot de passe' );
     dipes_render_custom( $email_id, $ctx );
     include DIPES_DIR . 'templates/emails/email-footer.php';
-    $html = ob_get_clean();
+    $html = dipes_inline_html( ob_get_clean() );
 
     if ( null === $old_current ) {
         unset( $GLOBALS['dipes_current_email_id'] );

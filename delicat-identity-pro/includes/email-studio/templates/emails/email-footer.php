@@ -9,7 +9,7 @@ $footer = dipes_get( 'footer_custom_text' );
 $note = dipes_replace_tokens( dipes_get( 'footer_note' ), $footer_ctx );
 ?>
 </div></div></td></tr>
-<tr><td id="desp-footer" bgcolor="<?php echo esc_attr( dipes_get( 'footer_bg' ) ); ?>">
+<tr><td id="desp-footer" bgcolor="<?php echo esc_attr( dipes_get( 'footer_bg' ) ); ?>" style="color:<?php echo esc_attr( dipes_get( 'footer_text_color' ) ); ?>;">
 <?php if ( 'yes' === dipes_get( 'support_enabled' ) ) : ?>
 <div class="desp-support">
 <p class="desp-support-title"><?php echo esc_html( dipes_get( 'support_title' ) ); ?></p>
@@ -32,7 +32,7 @@ $note = dipes_replace_tokens( dipes_get( 'footer_note' ), $footer_ctx );
 <?php if ( dipes_get( 'social_tiktok' ) ) : ?><a href="<?php echo esc_url( dipes_get( 'social_tiktok' ) ); ?>">TikTok</a><?php endif; ?>
 </div><?php endif; ?>
 
-<?php if ( $footer ) : ?><div><?php echo wp_kses_post( wpautop( dipes_replace_tokens( $footer, $footer_ctx ) ) ); ?></div><?php endif; ?>
+<?php if ( $footer ) : ?><div><?php echo wp_kses_post( wpautop( dipes_replace_tokens( $footer, $footer_ctx, true ) ) ); ?></div><?php endif; ?>
 <?php if ( $note ) : ?><p style="margin:14px 0 0"><?php echo esc_html( $note ); ?></p><?php endif; ?>
 <p style="margin:8px 0 0">© <?php echo esc_html( gmdate( 'Y' ) ); ?> <?php echo esc_html( dipes_brand_name() ); ?>.</p>
 </td></tr>

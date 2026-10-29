@@ -2,8 +2,8 @@
 defined( 'ABSPATH' ) || exit;
 
 function dipes_render_intro( $email_id, $ctx ) {
-    $title = dipes_replace_tokens( dipes_email_setting( $email_id, 'intro_title', '' ), $ctx );
-    $text  = dipes_replace_tokens( dipes_email_setting( $email_id, 'intro_text', '' ), $ctx );
+    $title = dipes_replace_tokens( dipes_email_setting( $email_id, 'intro_title', '' ), $ctx, true );
+    $text  = dipes_replace_tokens( dipes_email_setting( $email_id, 'intro_text', '' ), $ctx, true );
     if ( ! $title && ! $text ) { return; }
     echo '<div class="desp-intro">';
     if ( $title ) { echo '<h2>' . wp_kses_post( $title ) . '</h2>'; }
@@ -17,7 +17,9 @@ function dipes_render_notice( $email_id, $args, $ctx ) {
         return;
     }
     if ( 'customer_invoice' === $email_id && ! empty( $ctx['payment_url'] ) && isset( $args['order'] ) && is_object( $args['order'] ) && $args['order']->needs_payment() ) {
-        echo '<div class="desp-notice"><div class="desp-notice-label">Paiement requis</div><div class="desp-notice-content">Votre commande est prête à être payée. Utilisez le bouton sécurisé ci-dessous pour finaliser le paiement.</div></div>';
+        // The payment link lives in the notice itself, so it is present whatever
+        // the button settings or the block order.
+        echo '<div class="desp-notice"><div class="desp-notice-label">Paiement requis</div><div class="desp-notice-content">Votre commande est prête à être payée. Finalisez le paiement en toute sécurité : <a href="' . esc_url( $ctx['payment_url'] ) . '">Payer ma commande</a></div></div>';
     }
 }
 
@@ -61,23 +63,59 @@ function dipes_render_progress( $email_id, $order ) {
     echo '</tr></table></div>';
 }
 
+/**
+ * Button markup. The colours are also inline so the button stays visible in
+ * mail clients that drop the <style> block (and before CSS inlining).
+ */
+function dipes_button_html( $label, $url ) {
+    $style = 'display:inline-block;background:' . dipes_get( 'button_bg', '#2563eb' ) . ';color:' . dipes_get( 'button_text', '#ffffff' ) . ';padding:17px 24px;border-radius:' . absint( dipes_get( 'button_radius', 14 ) ) . 'px;font-weight:900;text-decoration:none;';
+    return '<p class="desp-button-wrap"><a class="desp-button" href="' . esc_url( $url ) . '" style="' . esc_attr( $style ) . '">' . esc_html( $label ) . '</a></p>';
+}
+
 function dipes_render_cta( $email_id, $ctx ) {
     if ( ! dipes_email_toggle( $email_id, 'show_cta', 'show_cta' ) ) { return; }
     $label = dipes_replace_tokens( dipes_email_setting( $email_id, 'cta_label', '' ), $ctx );
     $url   = dipes_replace_tokens( dipes_email_setting( $email_id, 'cta_url', '' ), $ctx );
     if ( ! $label || ! $url ) { return; }
-    echo '<p class="desp-button-wrap"><a class="desp-button" href="' . esc_url( $url ) . '">' . esc_html( $label ) . '</a></p>';
+    echo dipes_button_html( $label, $url ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+}
+
+/**
+ * A security-critical action (password reset, first password): always
+ * printed, whatever the cosmetic button settings, with the link also in
+ * plain text for clients that hide buttons.
+ */
+function dipes_render_required_action( $label, $url ) {
+    if ( ! $url ) { return; }
+    echo dipes_button_html( $label, $url ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+    echo '<p class="desp-link-fallback" style="margin:-14px 0 26px;font-size:12px;line-height:1.5;text-align:center;word-break:break-all;">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br /><a href="' . esc_url( $url ) . '">' . esc_html( $url ) . '</a></p>';
+}
+
+/**
+ * The e-mail's button when it carries $required_url; otherwise the required
+ * button first, then the configured one (when shown) as a secondary action.
+ * A hidden global button or an edited button URL can no longer remove the
+ * only reset / set-password link of an e-mail.
+ */
+function dipes_render_cta_with_required( $email_id, $ctx, $required_url, $required_label ) {
+    if ( ! $required_url ) { dipes_render_cta( $email_id, $ctx ); return; }
+    $shown = dipes_email_toggle( $email_id, 'show_cta', 'show_cta' );
+    $label = dipes_replace_tokens( dipes_email_setting( $email_id, 'cta_label', '' ), $ctx );
+    $url   = dipes_replace_tokens( dipes_email_setting( $email_id, 'cta_url', '' ), $ctx );
+    $same  = $url && $url === $required_url;
+    dipes_render_required_action( $same && $label ? $label : $required_label, $required_url );
+    if ( $shown && ! $same ) { dipes_render_cta( $email_id, $ctx ); }
 }
 
 function dipes_render_custom( $email_id, $ctx ) {
     $html = dipes_email_setting( $email_id, 'custom_html', '' );
     if ( ! $html ) { return; }
-    echo '<div class="desp-custom">' . wp_kses_post( dipes_replace_tokens( $html, $ctx ) ) . '</div>';
+    echo '<div class="desp-custom">' . wp_kses_post( dipes_replace_tokens( $html, $ctx, true ) ) . '</div>';
 }
 
 function dipes_render_additional( $email_id, $additional_content, $ctx ) {
     if ( 'yes' !== dipes_email_setting( $email_id, 'show_additional', 'yes' ) || ! $additional_content ) { return; }
-    $content = wp_kses_post( wpautop( wptexturize( dipes_replace_tokens( $additional_content, $ctx ) ) ) );
+    $content = wp_kses_post( wpautop( wptexturize( dipes_replace_tokens( $additional_content, $ctx, true ) ) ) );
     echo '<table class="desp-message-card" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr>';
     echo '<td class="desp-message-icon" width="46" valign="top"><span>i</span></td>';
     echo '<td class="desp-message-copy" valign="top"><div class="desp-message-kicker">Message de ' . esc_html( dipes_brand_name() ) . '</div><div class="desp-message-text">' . $content . '</div></td>';
@@ -224,11 +262,42 @@ function dipes_render_account_email( $args, $type ) {
         dipes_render_account_panel( $ctx );
         dipes_render_account_security( $ctx );
     }
-    dipes_render_cta( $type, $ctx );
+    if ( 'customer_new_account' === $type ) {
+        $required = 'yes' === (string) $ctx['needs_password_setup'] ? (string) $ctx['set_password_url'] : '';
+        dipes_render_cta_with_required( $type, $ctx, $required, 'Créer mon mot de passe' );
+    } else {
+        dipes_render_cta_with_required( $type, $ctx, (string) $ctx['reset_password_url'], 'Créer un nouveau mot de passe' );
+    }
     dipes_render_additional( $type, isset( $args['additional_content'] ) ? $args['additional_content'] : '', $ctx );
     dipes_render_custom( $type, $ctx );
     do_action( 'woocommerce_email_footer', $email );
     unset( $GLOBALS['dipes_rendering_email'] );
+}
+
+/**
+ * Inline the Studio CSS into style attributes with WooCommerce's own inliner
+ * (the engine of every WooCommerce e-mail), for the messages WooCommerce does
+ * not send itself: Identity codes / links / alerts and WordPress core e-mails.
+ * Clients that drop or cap <style> blocks then still render readable text,
+ * buttons and widths. Without WooCommerce, or if inlining fails, the message
+ * keeps its <style> block unchanged.
+ */
+function dipes_inline_html( $html ) {
+    if ( ! is_string( $html ) || '' === $html || ! class_exists( 'WC_Email' ) ) { return $html; }
+    // style_inline() re-reads the same CSS through emails/email-styles.php:
+    // drop the preview <style> block so the kept @media rules are not doubled.
+    $stripped = preg_replace( '~<style\b[^>]*>.*?</style>~is', '', $html, 1 );
+    if ( ! is_string( $stripped ) ) { return $html; }
+    try {
+        static $mailer = null;
+        if ( null === $mailer ) { $mailer = new WC_Email(); }
+        $out = $mailer->style_inline( $stripped );
+    } catch ( Throwable $e ) {
+        return $html;
+    }
+    // A successful pass always re-creates a <style> block for the rules that
+    // cannot be inlined (media queries); without one, inlining did not happen.
+    return is_string( $out ) && false !== stripos( $out, '<style' ) ? $out : $html;
 }
 
 function dipes_email_css( $email = null ) {

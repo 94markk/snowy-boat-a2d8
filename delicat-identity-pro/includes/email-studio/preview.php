@@ -5,20 +5,23 @@ function dipes_admin_capable() {
     return current_user_can( 'manage_options' );
 }
 
+/**
+ * Sample data for previews and test e-mails: obviously fictional (example.com
+ * addresses, placeholder phone and Player IDs), never a real customer.
+ */
 function dipes_preview_context() {
-    $symbol = function_exists( 'get_woocommerce_currency_symbol' ) ? get_woocommerce_currency_symbol() : 'G';
     return array(
         'site_name' => dipes_brand_name(),
-        'first_name' => 'Louis', 'last_name' => 'Salomon', 'full_name' => 'Louis Salomon',
-        'billing_email' => 'markenlouis@gmail.com', 'billing_phone' => '+509 3311-1283', 'billing_company' => 'Delicat Store',
-        'order_number' => '8960', 'order_date' => 'August 11, 2026', 'order_total' => 'G590 HTG', 'order_total_html' => 'G590 HTG',
+        'first_name' => 'Alex', 'last_name' => 'Exemple', 'full_name' => 'Alex Exemple',
+        'billing_email' => 'client@example.com', 'billing_phone' => '+509 0000-0000', 'billing_company' => 'Société Exemple',
+        'order_number' => '1234', 'order_date' => '11 août 2026', 'order_total' => 'G590 HTG', 'order_total_html' => 'G590 HTG',
         'payment_method' => 'Payer avec Delicat Wallet', 'order_status' => 'En traitement',
-        'order_url' => home_url( '/my-account/view-order/8960/' ), 'admin_order_url' => admin_url( 'post.php?post=8960&action=edit' ),
-        'payment_url' => home_url( '/checkout/order-pay/8960/' ),
+        'order_url' => home_url( '/my-account/view-order/1234/' ), 'admin_order_url' => admin_url( 'post.php?post=1234&action=edit' ),
+        'payment_url' => home_url( '/checkout/order-pay/1234/' ), 'payment_label' => 'Payer ma commande',
         'account_url' => function_exists( 'wc_get_page_permalink' ) ? wc_get_page_permalink( 'myaccount' ) : home_url( '/my-account/' ),
         'account_orders_url' => function_exists( 'wc_get_account_endpoint_url' ) ? wc_get_account_endpoint_url( 'orders' ) : home_url( '/my-account/orders/' ),
-        'username' => 'bethinaduclervil01', 'display_name' => 'Bethina', 'user_email' => 'bethinaduclervil01@gmail.com',
-        'user_id' => '2451', 'user_role' => 'Client', 'registered_at' => 'August 11, 2026 4:11 PM', 'edit_user_url' => admin_url( 'user-edit.php?user_id=2451' ),
+        'username' => 'client.exemple', 'display_name' => 'Alex', 'user_email' => 'client@example.com',
+        'user_id' => '1234', 'user_role' => 'Client', 'registered_at' => '11 août 2026 16:11', 'edit_user_url' => admin_url( 'user-edit.php?user_id=1234' ),
         'reset_password_url' => home_url( '/my-account/lost-password/?key=secure-preview' ),
         'set_password_url' => home_url( '/my-account/lost-password/?key=secure-new-account-preview' ),
         'account_primary_url' => home_url( '/my-account/lost-password/?key=secure-new-account-preview' ),
@@ -32,8 +35,8 @@ function dipes_preview_context() {
 function dipes_preview_order_table( $ctx ) {
     $image = DIPES_URL . 'assets/preview-freefire.jpg';
     $items = array(
-        array( 'Free Fire (LATAM) – 341 Diamonds', 'Player ID: 10146926113 · Player account: ✓ ALPHA-♡', '×1', 'G445' ),
-        array( 'Free Fire (LATAM) – 110 Diamonds', 'Player ID: 9799678630 · Player account: ✓ MR_FLANKY.', '×1', 'G145' ),
+        array( 'Free Fire (LATAM) – 341 Diamonds', 'Player ID: 0000000000 · Player account: ✓ JOUEUR-EXEMPLE', '×1', 'G445' ),
+        array( 'Free Fire (LATAM) – 110 Diamonds', 'Player ID: 1111111111 · Player account: ✓ JOUEUR-DEMO', '×1', 'G145' ),
     );
     ?>
     <h2 style="margin-top:28px">Résumé de la commande</h2>
@@ -109,14 +112,14 @@ function dipes_preview_body( $email_id, $ctx ) {
         dipes_render_intro( $email_id, $ctx );
         dipes_render_account_panel( $ctx );
         dipes_render_account_security( $ctx );
-        dipes_render_cta( $email_id, $ctx );
+        dipes_render_cta_with_required( $email_id, $ctx, 'yes' === $ctx['needs_password_setup'] ? $ctx['set_password_url'] : '', 'Créer mon mot de passe' );
         dipes_render_custom( $email_id, $ctx );
         return;
     }
 
     if ( 'customer_reset_password' === $email_id ) {
         dipes_render_intro( $email_id, $ctx );
-        dipes_render_cta( $email_id, $ctx );
+        dipes_render_cta_with_required( $email_id, $ctx, $ctx['reset_password_url'], 'Créer un nouveau mot de passe' );
         dipes_render_custom( $email_id, $ctx );
         return;
     }
@@ -128,7 +131,7 @@ function dipes_preview_body( $email_id, $ctx ) {
                 if ( 'customer_note' === $email_id ) {
                     echo '<div class="desp-notice"><div class="desp-notice-label">Message de notre équipe</div><div class="desp-notice-content">Votre recharge a été vérifiée et la livraison est en cours.</div></div>';
                 } elseif ( 'customer_invoice' === $email_id ) {
-                    echo '<div class="desp-notice"><div class="desp-notice-label">Paiement requis</div><div class="desp-notice-content">Finalisez le paiement de cette commande avec le bouton sécurisé.</div></div>';
+                    echo '<div class="desp-notice"><div class="desp-notice-label">Paiement requis</div><div class="desp-notice-content">Votre commande est prête à être payée. Finalisez le paiement en toute sécurité : <a href="' . esc_url( $ctx['payment_url'] ) . '">Payer ma commande</a></div></div>';
                 }
                 break;
             case 'summary': dipes_preview_summary( $email_id, $ctx ); break;
@@ -138,7 +141,7 @@ function dipes_preview_body( $email_id, $ctx ) {
             case 'order_meta': break;
             case 'customer_details':
                 if ( 'yes' === dipes_email_setting( $email_id, 'show_customer_details', 'yes' ) ) {
-                    echo '<table class="desp-customer-panel" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td class="desp-customer-panel-head" colspan="2"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td class="desp-customer-avatar" width="42" valign="middle"><span>✓</span></td><td valign="middle"><div class="desp-customer-kicker">Commande sécurisée</div><div class="desp-customer-title">Coordonnées du client</div></td></tr></table></td></tr><tr class="desp-customer-row"><td class="desp-contact-label" width="34%">Nom</td><td class="desp-contact-value">Delicat Store</td></tr><tr class="desp-customer-row"><td class="desp-contact-label">E-mail</td><td class="desp-contact-value"><a class="desp-contact-link" href="#">delicatstoreha@gmail.com</a></td></tr><tr class="desp-customer-row"><td class="desp-contact-label">Téléphone</td><td class="desp-contact-value"><a class="desp-contact-link" href="#">+509 3311-1283</a></td></tr></table>';
+                    echo '<table class="desp-customer-panel" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td class="desp-customer-panel-head" colspan="2"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"><tr><td class="desp-customer-avatar" width="42" valign="middle"><span>✓</span></td><td valign="middle"><div class="desp-customer-kicker">Commande sécurisée</div><div class="desp-customer-title">Coordonnées du client</div></td></tr></table></td></tr><tr class="desp-customer-row"><td class="desp-contact-label" width="34%">Nom</td><td class="desp-contact-value">' . esc_html( $ctx['full_name'] ) . '</td></tr><tr class="desp-customer-row"><td class="desp-contact-label">E-mail</td><td class="desp-contact-value"><a class="desp-contact-link" href="#">' . esc_html( $ctx['billing_email'] ) . '</a></td></tr><tr class="desp-customer-row"><td class="desp-contact-label">Téléphone</td><td class="desp-contact-value"><a class="desp-contact-link" href="#">' . esc_html( $ctx['billing_phone'] ) . '</a></td></tr></table>';
                 }
                 break;
             case 'additional':
@@ -190,6 +193,11 @@ add_action( 'admin_post_dipes_email_preview', static function () {
     nocache_headers();
     header( 'Content-Type: text/html; charset=utf-8' );
     header( 'X-Frame-Options: SAMEORIGIN' );
+    header( 'X-Content-Type-Options: nosniff' );
+    header( 'Referrer-Policy: no-referrer' );
+    // Defense in depth: the preview is same-origin with wp-admin. No script,
+    // form, plugin or remote stylesheet may ever run or load in it.
+    header( "Content-Security-Policy: default-src 'none'; img-src https: http: data:; style-src 'unsafe-inline'; font-src https: http: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'self'" );
     echo dipes_build_preview( $type, $overrides ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     exit;
 } );
@@ -197,14 +205,22 @@ add_action( 'admin_post_dipes_email_preview', static function () {
 add_action( 'admin_post_dipes_email_test', static function () {
     if ( ! dipes_admin_capable() ) { wp_die( 'Accès refusé.' ); }
     check_admin_referer( 'dipes_email_test' );
-    $type = isset( $_POST['type'] ) ? sanitize_key( wp_unslash( $_POST['type'] ) ) : 'customer_processing_order';
-    $to = isset( $_POST['to'] ) ? sanitize_email( wp_unslash( $_POST['to'] ) ) : get_option( 'admin_email' );
+    $type = isset( $_POST['type'] ) && is_string( $_POST['type'] ) ? sanitize_key( wp_unslash( $_POST['type'] ) ) : 'customer_processing_order';
+    $to = isset( $_POST['to'] ) && is_string( $_POST['to'] ) ? sanitize_email( wp_unslash( $_POST['to'] ) ) : get_option( 'admin_email' );
     if ( ! is_email( $to ) ) { $to = get_option( 'admin_email' ); }
-    $html = dipes_build_preview( $type );
-    if ( class_exists( 'WC_Email' ) ) { $wc_email = new WC_Email(); $html = $wc_email->style_inline( $html ); }
+    // The test reflects what the preview shows: unsaved edits travel with the
+    // form (g[] / e[]) and go through the same sanitizer as a real save.
+    $unsaved = ( isset( $_POST['g'] ) && is_array( $_POST['g'] ) ) || ( isset( $_POST['e'] ) && is_array( $_POST['e'] ) );
+    $overrides = $unsaved ? dipes_preview_overrides_from_request( $type ) : array();
+    $html = dipes_build_preview( $type, $overrides );
+    $GLOBALS['dipes_preview_overrides'] = $overrides;
+    $GLOBALS['dipes_preview_email_id'] = $type;
+    $html = dipes_inline_html( $html );
     $ctx = dipes_preview_context();
     $subject = dipes_replace_tokens( dipes_email_setting( $type, 'subject', 'Test e-mail' ), $ctx );
-    $sent = function_exists( 'WC' ) && WC()->mailer() ? WC()->mailer()->send( $to, '[TEST] ' . wp_strip_all_tags( $subject ), $html, 'Content-Type: text/html; charset=UTF-8' ) : wp_mail( $to, '[TEST] ' . wp_strip_all_tags( $subject ), $html, array( 'Content-Type: text/html; charset=UTF-8' ) );
+    unset( $GLOBALS['dipes_preview_overrides'], $GLOBALS['dipes_preview_email_id'] );
+    $subject = ( $unsaved ? '[TEST — paramètres non enregistrés] ' : '[TEST] ' ) . wp_strip_all_tags( $subject );
+    $sent = function_exists( 'WC' ) && WC()->mailer() ? WC()->mailer()->send( $to, $subject, $html, 'Content-Type: text/html; charset=UTF-8' ) : wp_mail( $to, $subject, $html, array( 'Content-Type: text/html; charset=UTF-8' ) );
     wp_safe_redirect( add_query_arg( array( 'page' => 'delicat-identity-emails', 'dipes_test' => $sent ? 'ok' : 'fail' ), admin_url( 'admin.php' ) ) );
     exit;
 } );

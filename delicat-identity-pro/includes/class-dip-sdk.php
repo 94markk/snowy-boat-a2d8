@@ -84,9 +84,10 @@ final class DIP_SDK {
             'message' => 'Table d’audit',
         ];
         $settings = wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
+        $google_on = ($settings['enabled'] ?? 'no') === 'yes';
         $checks['google'] = [
-            'status' => !empty($settings['client_id']) ? 'pass' : 'warn',
-            'message' => !empty($settings['client_id']) ? 'Google configuré' : 'Google Client ID manquant',
+            'status' => (!$google_on || !empty($settings['client_id'])) ? 'pass' : 'warn',
+            'message' => !$google_on ? 'Connexion Google désactivée' : (!empty($settings['client_id']) ? 'Google configuré' : 'Google Client ID manquant'),
         ];
         $checks['cron'] = [
             'status' => wp_next_scheduled(DIP_Audit::CRON_HOOK) ? 'pass' : 'warn',

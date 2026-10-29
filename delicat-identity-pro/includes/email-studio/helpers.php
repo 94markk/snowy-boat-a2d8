@@ -97,6 +97,7 @@ function dipes_context( $email = null, $order = null, $extra = array() ) {
         'order_url' => $order_url,
         'admin_order_url' => $admin_order_url,
         'payment_url' => $payment_url ?: $order_url,
+        'payment_label' => $payment_url ? 'Payer ma commande' : 'Voir ma commande',
         'account_url' => function_exists( 'wc_get_page_permalink' ) ? wc_get_page_permalink( 'myaccount' ) : home_url( '/my-account/' ),
         'account_orders_url' => function_exists( 'wc_get_account_endpoint_url' ) ? wc_get_account_endpoint_url( 'orders' ) : home_url( '/my-account/orders/' ),
         'security_url' => class_exists( 'DIP_Email_Hub' ) ? DIP_Email_Hub::security_url() : ( function_exists( 'wc_get_page_permalink' ) ? wc_get_page_permalink( 'myaccount' ) : home_url( '/my-account/' ) ),
@@ -115,12 +116,21 @@ function dipes_context( $email = null, $order = null, $extra = array() ) {
     return $ctx;
 }
 
-function dipes_replace_tokens( $text, $ctx ) {
-    if ( '' === (string) $text ) { return ''; }
+/**
+ * Replace {token} placeholders. With $html = true (intro, custom blocks,
+ * footer, additional content: HTML fields) values are escaped, so a customer
+ * name or company can never add markup or links to an e-mail; *_html tokens
+ * (formatted totals) are trusted markup and stay as they are. Subjects, labels
+ * and URLs keep raw values and are escaped where they are printed.
+ */
+function dipes_replace_tokens( $text, $ctx, $html = false ) {
+    if ( ! is_scalar( $text ) || '' === (string) $text ) { return ''; }
     $replace = array();
-    foreach ( $ctx as $key => $value ) {
+    foreach ( (array) $ctx as $key => $value ) {
         if ( is_scalar( $value ) ) {
-            $replace[ '{' . $key . '}' ] = (string) $value;
+            $value = (string) $value;
+            if ( $html && '_html' !== substr( (string) $key, -5 ) ) { $value = esc_html( $value ); }
+            $replace[ '{' . $key . '}' ] = $value;
         }
     }
     return strtr( (string) $text, $replace );
@@ -185,25 +195,44 @@ function dipes_current_block_order( $email_id ) {
     return is_array( $order ) ? $order : dipes_default_block_order();
 }
 
-/** Subject + heading are safe filters; WooCommerce still handles recipients and sending. */
-add_action( 'plugins_loaded', static function () {
-    foreach ( dipes_email_types() as $id => $label ) {
-        add_filter( 'woocommerce_email_subject_' . $id, function ( $subject, $object = null, $email = null ) use ( $id ) {
-            if ( 'yes' !== dipes_email_setting( $id, 'enabled', 'yes' ) ) { return $subject; }
-            $custom = dipes_email_setting( $id, 'subject', '' );
-            if ( ! $custom ) { return $subject; }
-            $order = is_object( $object ) && is_a( $object, 'WC_Order' ) ? $object : ( is_numeric( $object ) && function_exists( 'wc_get_order' ) ? wc_get_order( absint( $object ) ) : null );
-            return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, $order ) );
-        }, 99, 3 );
-        add_filter( 'woocommerce_email_heading_' . $id, function ( $heading, $object = null, $email = null ) use ( $id ) {
-            if ( 'yes' !== dipes_email_setting( $id, 'enabled', 'yes' ) ) { return $heading; }
-            $custom = dipes_email_setting( $id, 'heading', '' );
-            if ( ! $custom ) { return $heading; }
-            $order = is_object( $object ) && is_a( $object, 'WC_Order' ) ? $object : ( is_numeric( $object ) && function_exists( 'wc_get_order' ) ? wc_get_order( absint( $object ) ) : null );
-            return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, $order ) );
-        }, 99, 3 );
-    }
-} );
+/**
+ * The Studio subject / heading of a WooCommerce e-mail, or '' when WooCommerce's
+ * own text must be kept: personalisation off, empty, or still the Studio's
+ * default copy (a store keeps its WooCommerce subjects until an administrator
+ * actually edits them in the Studio).
+ */
+function dipes_wc_custom_text( $id, $key ) {
+    if ( 'yes' !== dipes_email_setting( $id, 'enabled', 'yes' ) ) { return ''; }
+    $custom = dipes_email_setting( $id, $key, '' );
+    if ( ! is_string( $custom ) || '' === trim( $custom ) ) { return ''; }
+    $defaults = dipes_default_email_copy();
+    if ( isset( $defaults[ $id ][ $key ] ) && $defaults[ $id ][ $key ] === $custom ) { return ''; }
+    return $custom;
+}
+
+function dipes_wc_filter_object_order( $object ) {
+    if ( is_object( $object ) && is_a( $object, 'WC_Order' ) ) { return $object; }
+    return is_numeric( $object ) && function_exists( 'wc_get_order' ) ? wc_get_order( absint( $object ) ) : null;
+}
+
+/**
+ * Subject + heading are safe filters; WooCommerce still handles recipients and
+ * sending. Registered when this file loads (during plugins_loaded, long before
+ * any e-mail is sent): a nested plugins_loaded callback would never run.
+ */
+foreach ( array_keys( dipes_email_types() ) as $dipes_wc_email_id ) {
+    add_filter( 'woocommerce_email_subject_' . $dipes_wc_email_id, static function ( $subject, $object = null, $email = null ) use ( $dipes_wc_email_id ) {
+        $custom = dipes_wc_custom_text( $dipes_wc_email_id, 'subject' );
+        if ( '' === $custom ) { return $subject; }
+        return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, dipes_wc_filter_object_order( $object ) ) );
+    }, 99, 3 );
+    add_filter( 'woocommerce_email_heading_' . $dipes_wc_email_id, static function ( $heading, $object = null, $email = null ) use ( $dipes_wc_email_id ) {
+        $custom = dipes_wc_custom_text( $dipes_wc_email_id, 'heading' );
+        if ( '' === $custom ) { return $heading; }
+        return wp_strip_all_tags( dipes_format_wc_email_text( $custom, $email, dipes_wc_filter_object_order( $object ) ) );
+    }, 99, 3 );
+}
+unset( $dipes_wc_email_id );
 
 add_filter( 'woocommerce_email_order_items_args', static function ( $args ) {
     if ( empty( $GLOBALS['dipes_rendering_email'] ) && empty( $GLOBALS['dipes_preview_mode'] ) ) { return $args; }

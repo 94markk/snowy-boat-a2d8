@@ -62,7 +62,8 @@ final class DIP_Assistant {
             $issues[] = self::issue('mobile_without_https', 'critical', 'API mobile active sans HTTPS', 'Les jetons mobiles ne doivent jamais circuler sur une connexion non chiffrée.', 'Désactivez immédiatement l’API mobile ou activez HTTPS valide avant tout test.');
         }
         if (($settings['mobile_api_enabled'] ?? 'no') === 'yes' && empty($settings['client_id'])) {
-            $issues[] = ['level'=>'critical','title'=>'Audience serveur Google manquante','message'=>'Renseignez le Client ID Web / serveur utilisé par l’application native.'];
+            $score -= 15;
+            $issues[] = self::issue('mobile_server_audience_missing', 'critical', 'Audience serveur Google manquante', 'L’application native ne peut pas valider les jetons Google sans Client ID Web / serveur.', 'Renseignez le Client ID Web / serveur utilisé par l’application native.');
         }
         if (($settings['mobile_api_enabled'] ?? 'no') === 'yes' && empty($settings['android_client_id']) && empty($settings['ios_client_id'])) {
             $score -= 8;
