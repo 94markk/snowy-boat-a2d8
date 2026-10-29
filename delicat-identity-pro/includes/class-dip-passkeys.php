@@ -17,7 +17,7 @@ defined('ABSPATH') || exit;
  * DIP_Mobile_Passkeys (the app's Credential Manager routes) reuses the same
  * CBOR, COSE, authenticator-data and assertion checks.
  *
- * 6.11.1 (website):
+ * 6.12.0 (website):
  * - sign-in can be discoverable: without an e-mail, login/options returns an
  *   empty allowCredentials and login/verify finds the account from the
  *   assertion's userHandle (exactly one account), then requires the
@@ -152,7 +152,7 @@ final class DIP_Passkeys {
     }
 
     /**
-     * Every valid stored passkey of the account. 6.11.1: never truncated to
+     * Every valid stored passkey of the account. 6.12.0: never truncated to
      * max_per_user() — lowering the setting used to hide, then delete at the
      * next sign-in, the passkeys above the new limit.
      */
@@ -176,7 +176,7 @@ final class DIP_Passkeys {
             $entry['label'] = sanitize_text_field((string) ($entry['label'] ?? __('Passkey', 'delicat-google-login')));
             $transports = isset($entry['transports']) && is_array($entry['transports']) ? $entry['transports'] : [];
             $entry['transports'] = array_values(array_intersect(array_map('sanitize_key', array_filter($transports, 'is_scalar')), self::TRANSPORTS));
-            // Optional since 6.11.1 (backup eligibility/state, credProps.rk): absent on older entries.
+            // Optional since 6.12.0 (backup eligibility/state, credProps.rk): absent on older entries.
             foreach (['be', 'bs', 'discoverable'] as $flag) {
                 if (isset($entry[$flag])) $entry[$flag] = empty($entry[$flag]) ? 0 : 1;
             }
@@ -194,7 +194,7 @@ final class DIP_Passkeys {
         return self::count($user_id) > 0;
     }
 
-    /** @internal 6.11.0: shared with DIP_Mobile_Passkeys. 6.11.1: no max_per_user() truncation. */
+    /** @internal 6.11.0: shared with DIP_Mobile_Passkeys. 6.12.0: no max_per_user() truncation. */
     public static function save_credentials($user_id, array $credentials) {
         $user_id = absint($user_id);
         if (!$user_id) return false;
@@ -300,7 +300,7 @@ final class DIP_Passkeys {
      * 20 times the old 30; login/verify counts refused assertions only (100
      * per address, 18 per account and address), read before the check.
      *
-     * 6.11.1: the last transient buckets (12 option requests per e-mail, 18
+     * 6.12.0: the last transient buckets (12 option requests per e-mail, 18
      * per account, 12 confirmations) counted successful uses, answered 429
      * under lock contention and let anyone lock a customer's passkey sign-in
      * by naming the e-mail. They are gone: confirmations count refused
@@ -337,7 +337,7 @@ final class DIP_Passkeys {
         register_rest_route(self::REST_NAMESPACE, '/passkeys/register/verify', [
             'methods'=>'POST','callback'=>[__CLASS__,'rest_register_verify'],'permission_callback'=>[__CLASS__,'permission_customer'],
         ]);
-        // Kept for pages still running the pre-6.11.1 script (two-step enrolment).
+        // Kept for pages still running the pre-6.12.0 script (two-step enrolment).
         register_rest_route(self::REST_NAMESPACE, '/passkeys/register/proof', [
             'methods'=>'POST','callback'=>[__CLASS__,'rest_register_proof'],'permission_callback'=>[__CLASS__,'permission_sensitive_customer'],
         ]);
@@ -411,7 +411,7 @@ final class DIP_Passkeys {
 
     /**
      * E-mail-first sign-in: a transport-free descriptor list padded to the
-     * per-account maximum. 6.11.1: the padding is derived from the typed
+     * per-account maximum. 6.12.0: the padding is derived from the typed
      * identifier (same answer on every call, for known and unknown accounts),
      * its lengths follow real authenticators (16 to 64 bytes) and the list is
      * ordered by a keyed hash, so neither repeated calls, lengths nor
@@ -731,7 +731,7 @@ final class DIP_Passkeys {
 
     /**
      * @internal 6.11.0: shared with DIP_Mobile_Passkeys (which keeps the
-     * strict fmt 'none' rule). 6.11.1: also returns the authenticator flags;
+     * strict fmt 'none' rule). 6.12.0: also returns the authenticator flags;
      * the website passes $any_format: a client or security key may still
      * answer a self-attested 'packed' statement although 'none' was asked.
      * The statement is never verified nor stored either way (no device
@@ -792,7 +792,7 @@ final class DIP_Passkeys {
     }
 
     /**
-     * @internal 6.11.0: shared with DIP_Mobile_Passkeys. 6.11.1: the full
+     * @internal 6.11.0: shared with DIP_Mobile_Passkeys. 6.12.0: the full
      * (untruncated) list is saved back, and the backup flags (BE/BS) of the
      * latest assertion are kept for the « Synchronisée » badge.
      */
@@ -854,7 +854,7 @@ final class DIP_Passkeys {
         if (is_wp_error($state)) return $state;
         $uid = get_current_user_id();
         if (!$uid || absint($state['user_id'] ?? 0) !== $uid) return new WP_Error('dip_passkey_user_mismatch', __('Session Passkey liée à un autre compte.', 'delicat-google-login'), ['status'=>403]);
-        // A ceremony opened before 6.11.1 does not carry the recent-auth flag.
+        // A ceremony opened before 6.12.0 does not carry the recent-auth flag.
         if (empty($state['recent']) && class_exists('DIP_Reauth') && !DIP_Reauth::is_recent()) return self::reauth_required_error();
         $client = self::verify_client_data(self::str_field($body, 'clientDataJSON'), $state, 'webauthn.create');
         if (is_wp_error($client)) return $client;
@@ -909,7 +909,7 @@ final class DIP_Passkeys {
         ], 200);
     }
 
-    /** Pre-6.11.1 second step (proof assertion), kept for ceremonies opened by the old script. */
+    /** Pre-6.12.0 second step (proof assertion), kept for ceremonies opened by the old script. */
     public static function rest_register_proof($request) {
         $body=self::json_body($request);
         $state=self::consume_ceremony(self::str_field($body, 'ceremony'),'register_proof');
@@ -1014,7 +1014,7 @@ final class DIP_Passkeys {
         return ($s['otp_enabled'] ?? 'yes') === 'yes' || ($s['magic_enabled'] ?? 'yes') === 'yes';
     }
 
-    /** @internal 6.11.0: shared with DIP_Mobile_Passkeys. 6.11.1: e-mail code / magic link counts. */
+    /** @internal 6.11.0: shared with DIP_Mobile_Passkeys. 6.12.0: e-mail code / magic link counts. */
     public static function has_other_primary_login_method($user_id) {
         $user_id = absint($user_id);
         if (!$user_id) return false;
@@ -1184,7 +1184,7 @@ final class DIP_Passkeys {
     }
 
     /**
-     * Early (head) loading where passkey markup is known to appear. 6.11.1:
+     * Early (head) loading where passkey markup is known to appear. 6.12.0:
      * anonymous storefront pages no longer load the files: the identity modal
      * runs its own copy inside its frame (auth-shell.js) with CSS inlined.
      * A theme that prints its own [data-dip-passkey-login] button in the page

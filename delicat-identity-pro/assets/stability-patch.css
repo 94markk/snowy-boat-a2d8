@@ -1,4 +1,4 @@
-/* v6.0.2 focused UI and accessibility corrections. 6.11.1: merged into ui-front.css (no longer enqueued); kept for themes that load it directly. */
+/* v6.0.2 focused UI and accessibility corrections. 6.12.0: merged into ui-front.css (no longer enqueued); kept for themes that load it directly. */
 .dip-auth-box,.dip-auth-card,.dip-security-center,.dip-connected-accounts{box-sizing:border-box}
 .dip-auth-box input,.dip-auth-box select,.dip-auth-box button{font:inherit}
 .dip-auth-box input:focus,.dip-auth-box select:focus{outline:3px solid rgba(37,99,235,.18);outline-offset:1px;border-color:#2563eb}

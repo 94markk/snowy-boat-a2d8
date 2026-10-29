@@ -49,7 +49,7 @@ final class DIP_Android_App {
      * Upper-case hex, 32 bytes separated by colons, or '' when the line is not
      * a SHA-256 fingerprint. Accepted input: AA:BB:… or 64 hex digits, any
      * case, optionally followed by a note after a space (« … (clé d’envoi) »).
-     * 6.11.1: a « SHA256: » / « SHA-256: » prefix (keytool, Play Console) is
+     * 6.12.0: a « SHA256: » / « SHA-256: » prefix (keytool, Play Console) is
      * accepted too.
      */
     public static function normalize_fingerprint($line) {
@@ -177,7 +177,7 @@ final class DIP_Android_App {
             $found = self::fingerprints_in_file(is_string($raw) ? json_decode($raw, true) : null, self::package());
             return !array_diff($expected, $found);
         }
-        // 6.11.1: Android only reads https://<host>/.well-known/assetlinks.json.
+        // 6.12.0: Android only reads https://<host>/.well-known/assetlinks.json.
         // With the site's address in a sub-folder, WordPress cannot answer there.
         if (!self::served_at_host_root()) return false;
         return self::enabled();
@@ -220,7 +220,7 @@ final class DIP_Android_App {
         if (!headers_sent()) {
             status_header((int) $response['status']);
             foreach ($response['headers'] as $name => $value) header($name . ': ' . $value, true);
-            // 6.11.1: LiteSpeed (server and LSCWP) keeps it one hour, not its default public TTL.
+            // 6.12.0: LiteSpeed (server and LSCWP) keeps it one hour, not its default public TTL.
             header('X-LiteSpeed-Cache-Control: public,max-age=3600', true);
         }
         do_action('litespeed_control_set_ttl', 3600);
@@ -242,7 +242,7 @@ final class DIP_Android_App {
     }
 
     /**
-     * 6.11.1: the directory the web server serves https://<host>/ from. With
+     * 6.12.0: the directory the web server serves https://<host>/ from. With
      * WordPress in its own directory (site address …/wp, ABSPATH …/wp/) that
      * is the parent of ABSPATH, not ABSPATH: the site URL's path is taken off
      * ABSPATH; when ABSPATH does not end with it, DOCUMENT_ROOT, else ABSPATH.
@@ -410,7 +410,7 @@ final class DIP_Android_App {
             } elseif ($package !== '') {
                 $out['mobile_android_package'] = $package;
             } else {
-                // 6.11.1: a typo no longer silently becomes the default package:
+                // 6.12.0: a typo no longer silently becomes the default package:
                 // the previous value stays and the administrator is told.
                 $previous = self::valid_package($out['mobile_android_package'] ?? '');
                 $out['mobile_android_package'] = $previous !== '' ? $previous : self::DEFAULT_PACKAGE;
@@ -435,7 +435,7 @@ final class DIP_Android_App {
     }
 
     /**
-     * 6.11.1: when what /.well-known/assetlinks.json says changes (package,
+     * 6.12.0: when what /.well-known/assetlinks.json says changes (package,
      * fingerprints, test build, publication), page caches drop the old copy
      * (LiteSpeed Cache; a no-op without it). Google keeps its own answer
      * cached for a while (see « Tester »).

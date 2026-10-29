@@ -210,7 +210,7 @@ final class DIP_Native_Auth {
     }
 
     /**
-     * Address of the lockout/registration/resend buckets. 6.11.1: the
+     * Address of the lockout/registration/resend buckets. 6.12.0: the
      * visitor address (throttle_ip()) instead of the connection address.
      * Behind Cloudflare the connection address is a shared edge: 20 wrong
      * passwords from any visitor locked every customer routed through it,
@@ -306,7 +306,7 @@ final class DIP_Native_Auth {
     }
 
     /**
-     * One failure in a bucket, returning the new total. 6.11.1: counted by
+     * One failure in a bucket, returning the new total. 6.12.0: counted by
      * DIP_Lockout::counter_hit() (one atomic statement, 24 h window) where
      * the transient read-then-write lost most of a burst of simultaneous
      * guesses, so the lock and its escalation never engaged.
@@ -383,7 +383,7 @@ final class DIP_Native_Auth {
     /**
      * WordPress and WooCommerce forms hash and check the password exactly as
      * posted, i.e. with magic-quote slashes (« l\'été »); this modal (before
-     * 6.11.1), REST, the app and passwordless sign-up stored the typed text.
+     * 6.12.0), REST, the app and passwordless sign-up stored the typed text.
      * A password with ' " or \ set on one side was therefore refused on the
      * other. When WordPress' own check failed, try the other form of the
      * same typed password for that account only. The verification, 2FA and
@@ -504,7 +504,7 @@ final class DIP_Native_Auth {
         if (!is_email($email)) self::json_error(__('Adresse email invalide.', 'delicat-google-login'), 'invalid_email');
 
         // Mail-bombing guards. The cooldown and the hourly cap belong to the
-        // mailbox, whatever the sender's address (6.11.1: they were per
+        // mailbox, whatever the sender's address (6.12.0: they were per
         // address, so rotating addresses sent one e-mail per request); the
         // per-address bucket still caps one sender across many mailboxes.
         $recent = ['message'=>__('Un e-mail a déjà été demandé récemment. Vérifiez votre boîte de réception et les indésirables.', 'delicat-google-login')];
@@ -709,7 +709,7 @@ final class DIP_Native_Auth {
         // Stored as WordPress and WooCommerce forms store it (the posted,
         // slashed value), so WooCommerce's own current-password check in
         // « Détails du compte » accepts it too. Accounts registered before
-        // 6.11.1 keep the typed form: password_slash_compat() covers both.
+        // 6.12.0 keep the typed form: password_slash_compat() covers both.
         $user_id = DIP_Account_Sync::create_customer($email, $username, wp_slash($pass), [
             'display_name' => $name,
             'first_name' => $names[0] ?? $name,

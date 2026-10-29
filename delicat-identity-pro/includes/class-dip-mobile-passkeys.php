@@ -43,7 +43,7 @@ final class DIP_Mobile_Passkeys {
     const ACCOUNT_FAILURE_LIMIT = 18;
     const ACCOUNT_FAILURE_PREFIX = 'dip_mob_passkey_login_verify_user_';
     /**
-     * 6.11.1: every login/options call stores a ceremony, so the address
+     * 6.12.0: every login/options call stores a ceremony, so the address
      * keeps an all-attempts flood ceiling (disk-filling guard, as /mobile/google's
      * 500 and the website's 600), far above a carrier NAT address's human use.
      */
@@ -134,7 +134,7 @@ final class DIP_Mobile_Passkeys {
      * on the atomic counter table, then read-and-delete. The ceremony must be
      * a mobile one for $purpose, unexpired, and finished by the SAME
      * installation and device that opened it. WP_Error otherwise.
-     * 6.11.1: an id with no stored ceremony is refused before any write (no
+     * 6.12.0: an id with no stored ceremony is refused before any write (no
      * lock option, no counter row for random ids).
      */
     private static function consume_ceremony($id, $purpose, WP_REST_Request $r) {
@@ -247,7 +247,7 @@ final class DIP_Mobile_Passkeys {
         // Failures only (owner rule, 2026-10-24): 10 per installation, 100 per
         // address; every request counts only against the flood guard
         // (DIP_Mobile_API::SESSION_FLOOD_LIMIT per installation) and, since
-        // each call stores a ceremony, the address flood ceiling (6.11.1).
+        // each call stores a ceremony, the address flood ceiling (6.12.0).
         $gate = DIP_Mobile_API::throttle('passkey_login_options', 10, 10 * MINUTE_IN_SECONDS, $r, self::LOGIN_OPTIONS_ADDRESS_FLOOD, null, true);
         if (is_wp_error($gate)) return $gate;
         $ok = self::gate();
@@ -269,7 +269,7 @@ final class DIP_Mobile_Passkeys {
      * Every refused sign-in: counted against the address, one generic 401.
      * Once the account is known (its user handle resolved), the refusal also
      * counts against that account's failure bucket (ACCOUNT_FAILURE_LIMIT).
-     * 6.11.1: while the address failure ceiling holds, the 429 at once and
+     * 6.12.0: while the address failure ceiling holds, the 429 at once and
      * nothing written.
      */
     private static function login_failed($gate, $reason, $user_id = 0) {
@@ -281,7 +281,7 @@ final class DIP_Mobile_Passkeys {
     }
 
     /**
-     * 6.11.1: the account's failure bucket is per account AND address, as on
+     * 6.12.0: the account's failure bucket is per account AND address, as on
      * the website: a third party holding a customer's user handle can no
      * longer lock that customer's app passkey sign-in everywhere.
      */
@@ -380,7 +380,7 @@ final class DIP_Mobile_Passkeys {
         if (is_wp_error($ok)) return $ok;
         $session = self::session_or_error($r);
         if (is_wp_error($session)) return $session;
-        // 6.11.1: flood guard only (a ceremony claim per call), as register/options.
+        // 6.12.0: flood guard only (a ceremony claim per call), as register/options.
         $limited = DIP_Mobile_API::session_route_limit('passkey_register_verify', (int) $session->id);
         if ($limited) return $limited;
         $uid = (int) $session->user_id;

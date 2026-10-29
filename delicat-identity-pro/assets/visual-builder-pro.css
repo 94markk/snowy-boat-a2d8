@@ -27,7 +27,7 @@
 .dipb-stage .dip-auth-links{flex-wrap:wrap}
 @media(max-width:960px){.dipb-stage{min-height:650px}}
 
-/* 6.11.1: the preview follows « Rayon / Bordure / Hauteur des champs » (the admin input rule has the same specificity and loads later) */
+/* 6.12.0: the preview follows « Rayon / Bordure / Hauteur des champs » (the admin input rule has the same specificity and loads later) */
 .dipb-stage .dip-auth-card input[type=email],.dipb-stage .dip-auth-card input[type=password],.dipb-stage .dip-auth-card input[type=text]{border:1px solid var(--dipb-input-border);border-radius:var(--dipb-input-radius);min-height:var(--dipb-input-height);background:var(--dipb-input-bg);color:var(--dipb-input-text);box-shadow:none}
 .dipb-stage .dip-auth-card input:focus{border-color:var(--dipb-accent)}
 .dipb-switch input:focus-visible+span{box-shadow:0 0 0 3px rgba(18,104,186,.35)}

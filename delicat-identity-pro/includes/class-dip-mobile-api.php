@@ -27,9 +27,9 @@ final class DIP_Mobile_API {
     const ISSUE_METHODS = ['google', 'passkey', 'biometric', 'password_upgrade'];
     private static $settings_cb;
     private static $revoking = [];
-    /** 6.11.1: sessions resolved in this request (one lookup and one last_used_at write per request). */
+    /** 6.12.0: sessions resolved in this request (one lookup and one last_used_at write per request). */
     private static $sessions = [];
-    /** 6.11.1: the account a mobile token made current in this request: ['user' => id, 'prior' => id before, 'request' => the WP_REST_Request it was granted for, or null]. */
+    /** 6.12.0: the account a mobile token made current in this request: ['user' => id, 'prior' => id before, 'request' => the WP_REST_Request it was granted for, or null]. */
     private static $granted = null;
 
     public static function init($settings_cb) {
@@ -37,7 +37,7 @@ final class DIP_Mobile_API {
         add_action('rest_api_init', [__CLASS__, 'routes']);
         add_filter('rest_post_dispatch', [__CLASS__, 'secure_rest_response'], 10, 3);
         add_filter('determine_current_user', [__CLASS__, 'authenticate_bearer'], 25);
-        // 6.11.1: a mobile identity only ever serves the routes it was granted
+        // 6.12.0: a mobile identity only ever serves the routes it was granted
         // for, checked on the route WordPress really dispatches (batch
         // sub-requests included), before the firewall and the callbacks.
         add_filter('rest_pre_dispatch', [__CLASS__, 'guard_dispatch'], 0, 3);
@@ -169,7 +169,7 @@ final class DIP_Mobile_API {
     }
 
     public static function secure_rest_response($response, $server, $request) {
-        // 6.11.1: WordPress matches routes case-insensitively, so do the no-store headers.
+        // 6.12.0: WordPress matches routes case-insensitively, so do the no-store headers.
         $route = (string) $request->get_route();
         if ((stripos($route, '/delicat-identity/v1/mobile/') === 0 || stripos($route, '/delicat-identity/v1/pairing/') === 0) && $response instanceof WP_REST_Response) {
             $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -226,7 +226,7 @@ final class DIP_Mobile_API {
      * flight when it is reached still finish: the overshoot is at most the
      * number of requests a caller has running at that moment, once a window.
      *
-     * 6.11.1 (closes the 6.10.2 open question, owner rule of 2026-10-24): for
+     * 6.12.0 (closes the 6.10.2 open question, owner rule of 2026-10-24): for
      * a $failures_only gate with a valid installation ID, a full address
      * failure ceiling no longer refuses the request before it is looked at.
      * The gate comes back with 'address_blocked': the handler checks the
@@ -296,7 +296,7 @@ final class DIP_Mobile_API {
     }
 
     /**
-     * 6.11.1: the request proved possession (valid refresh token, verified
+     * 6.12.0: the request proved possession (valid refresh token, verified
      * Google token, valid signature or assertion, enrolled installation):
      * counts the installation flood guard (and the all-attempts address
      * ceiling, when the gate has one) that throttle() deferred while the
@@ -322,7 +322,7 @@ final class DIP_Mobile_API {
      * remember which installations failed (first 10 per window) so the
      * lockout audit can name them.
      *
-     * 6.11.1: returns null, or — while the address failure ceiling holds
+     * 6.12.0: returns null, or — while the address failure ceiling holds
      * (throttle()'s 'address_blocked') — the 429 the request must answer
      * instead of its own error, without writing anything (the ceiling is
      * already reached). Callers: `if ($e = proof_failed(...)) return $e;`.
@@ -479,7 +479,7 @@ final class DIP_Mobile_API {
     }
 
     /**
-     * 6.11.1: the route is the one WordPress will dispatch —
+     * 6.12.0: the route is the one WordPress will dispatch —
      * $wp->query_vars['rest_route'], which rest_api_loaded() hands to the
      * REST server — never the URL path: a form body `rest_route=…` overrides
      * the path, and the token used to follow the path to a core route.
@@ -507,7 +507,7 @@ final class DIP_Mobile_API {
     }
 
     /**
-     * 6.11.1 defence in depth: a mobile identity (Bearer, or a session route's
+     * 6.12.0 defence in depth: a mobile identity (Bearer, or a session route's
      * permission check / REST firewall calling logged_in()) is only valid for
      * the routes bearer_route_allowed() names. When any other route is about
      * to run with it — a mismatch between the URL and the dispatched route, a
@@ -683,7 +683,7 @@ final class DIP_Mobile_API {
         $factor_error = self::second_factor((int) $resolved, $request, 'mobile');
         if ($factor_error) return $factor_error;
         if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled((int)$resolved)) $profile['two_factor'] = 1;
-        // 6.11.1: the sign-in comes from the app (no browser, no device cookie):
+        // 6.12.0: the sign-in comes from the app (no browser, no device cookie):
         // browser-device listeners can tell it apart. The app's new-device
         // alert is dip_mobile_session_issued (first installation only).
         $profile['channel'] = 'mobile';
@@ -759,7 +759,7 @@ final class DIP_Mobile_API {
      * Write a session row: a new one, or (refresh) the row being rotated.
      * Returns [access, refresh, device, row_id] or a WP_Error.
      *
-     * 6.11.1: the rotation only updates a row that is still live
+     * 6.12.0: the rotation only updates a row that is still live
      * (revoked_at IS NULL) and never writes revoked_at: a revocation that
      * lands between refresh()'s read and this write (password change,
      * « déconnecter les autres »…) can no longer be undone by the refresh.
@@ -855,7 +855,7 @@ final class DIP_Mobile_API {
         // installation and, once the token is valid, per session. Password
         // customers upgraded to Identity sessions (quick sign-in, passkeys) all
         // renew here, so a valid refresh must never meet a usage limit.
-        // 6.11.1: a valid refresh token renews even while the address failure
+        // 6.12.0: a valid refresh token renews even while the address failure
         // ceiling holds (carrier NAT, see throttle()); failures still get the 429.
         $gate = self::throttle('refresh', 20, 10 * MINUTE_IN_SECONDS, $request, 0, null, true);
         if (is_wp_error($gate)) return $gate;
@@ -898,7 +898,7 @@ final class DIP_Mobile_API {
         }
         if (!preg_match('/^[A-Za-z0-9\-_]{40,512}$/', $token)) return null;
         $token_hash = self::hash_token($token);
-        // 6.11.1 (C5): one resolution per request. The REST firewall, the
+        // 6.12.0 (C5): one resolution per request. The REST firewall, the
         // determine_current_user bridge, the permission callback and the
         // handler used to look the row up (and write last_used_at) 4 times,
         // and a device mismatch was audited twice. The memo is keyed on what
@@ -978,7 +978,7 @@ final class DIP_Mobile_API {
         self::forget_sessions();
         if ($updated === false) return 0;
         $keys = self::revoke_keys_where('user_id=%d', [$user_id], $reason);
-        // 6.11.1: a quick sign-in that read its key before it was revoked
+        // 6.12.0: a quick sign-in that read its key before it was revoked
         // checks it again once its session exists (biometric_verify()); a
         // session it inserted after the first UPDATE is ended by this one.
         if ($keys > 0) { $updated += (int) $wpdb->query($sql); self::forget_sessions(); }
@@ -1171,7 +1171,7 @@ final class DIP_Mobile_API {
         $uid = (int) $session->user_id;
         $user = get_userdata($uid);
         $password = self::scalar($r->get_param('password'));
-        // 6.11.1: WordPress and WooCommerce forms hash the password as posted
+        // 6.12.0: WordPress and WooCommerce forms hash the password as posted
         // (magic-quote slashes: « l\'été »), the app sends the typed text:
         // both forms are tried, as on the website (DIP_Reauth, DIP_Native_Auth).
         $slashed = wp_slash($password);
@@ -1333,7 +1333,7 @@ final class DIP_Mobile_API {
      * Atomic one-time use of a quick sign-in ceremony: the add_option lock
      * (as for the website's passkeys), a one-time claim on the atomic counter
      * table, then the transient is read and deleted whatever happens next.
-     * 6.11.1: an id with no stored ceremony is refused before any write (no
+     * 6.12.0: an id with no stored ceremony is refused before any write (no
      * lock option, no counter row for random ids).
      */
     private static function bio_consume_ceremony($id, $purpose) {
@@ -1591,7 +1591,7 @@ final class DIP_Mobile_API {
         if (is_wp_error($issued)) return $issued;
         $now = self::now_ts();
         $wpdb->update(self::biometric_table(), ['last_used_at' => self::mysql_at($now), 'expires_at' => self::mysql_at($now + self::BIOMETRIC_KEY_TTL)], ['id' => (int) $row->id, 'revoked_at' => null]);
-        // 6.11.1: the key must still be live once the session exists: a
+        // 6.12.0: the key must still be live once the session exists: a
         // revocation that landed after the key was read (password change,
         // « déconnecter les autres ») ends the new session too.
         $live = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.self::biometric_table().' WHERE id=%d AND revoked_at IS NULL', (int) $row->id));

@@ -8,7 +8,7 @@
 .dip-auth-links a{font-size:var(--dipb-link-font-size)}
 @media(max-width:600px){.dip-auth-shell{min-height:min(var(--dipb-shell-height),100vh)}.dip-auth-card{width:100%;max-width:100%}.dip-auth-provider,.dip-auth-primary{font-size:min(var(--dipb-button-font-size),16px)}}
 
-/* 6.11.1 panel sign-in (native endpoints, Passkey, 2FA) driven by the builder variables */
+/* 6.12.0 panel sign-in (native endpoints, Passkey, 2FA) driven by the builder variables */
 .dip-auth-providers .dip-login-wrap{max-width:none;margin:var(--dipb-provider-gap) 0}
 .dip-auth-card .dip-google-button{width:100%;min-height:var(--dipb-button-height);gap:12px;border:var(--dipb-provider-border-width) solid var(--dipb-input-border)!important;border-radius:var(--dipb-button-radius);background:var(--dipb-provider-bg)!important;color:var(--dipb-provider-text)!important;font-size:var(--dipb-button-font-size);font-weight:700;box-shadow:none}
 .dip-auth-card .dip-google-button:hover{border-color:var(--dipb-accent)!important}

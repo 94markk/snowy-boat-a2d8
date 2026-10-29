@@ -2,10 +2,30 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.11.0
+Stable tag: 6.12.0
 License: GPLv2 or later
 
 Secure Google and Microsoft identity platform for WordPress and WooCommerce.
+
+== 6.12.0 Full Security Audit, Smooth Passkeys and a New Customer Area ==
+
+* Critical: a mobile access token could reach any WordPress REST route by overriding rest_route (or batch/v1) inside a /delicat-identity/v1/ request, e.g. to change the account password or e-mail. A mobile identity now only serves the route WordPress really dispatches under the allowed prefixes (filter dip_mobile_bearer_auto_auth_prefixes), with a second check at dispatch; refusals are audited as mobile_identity_route_refused.
+* Account pre-hijacking closed: an unverified account registered with someone else's address no longer keeps its registrant's password and sessions when the real owner proves the mailbox with Google, an e-mail code or a magic link (random managed password, Web and App sessions revoked, notice e-mail; merge refused when passkeys, TOTP or another provider exist). Microsoft and non-Gmail Google sign-ups bind the provider only after the same browser confirms the e-mail.
+* E-mail OTP: the 5-guess limit is now atomic (it could be raced) with a verify-side throttle; OTP and magic-link sign-in are customers-only.
+* WooCommerce password resets now revoke app sessions and quick sign-in keys and send the « mot de passe modifié » alert (wp_set_password, once per change). The My Account e-mail-change reauth gate now really runs (WooCommerce passes a stdClass).
+* Admin Google Secure Mode: revoking Google Admin approval, disabling TOTP or disconnecting Google ends Nextend legacy continuity; a disconnected Google subject is never silently re-linked.
+* /mobile/refresh can no longer resurrect a session revoked at the same moment; the same guarantee for quick sign-in.
+* 2FA: replay protection and single-use recovery codes hold under concurrency; the enrolment code cannot be reused to sign in; daily failure cap (50) with customer alerts; for 2FA accounts the password alone no longer confirms sensitive actions. Server-side QR code (no third party), modernised challenge page.
+* Re-authentication: a fresh sign-in of any method counts as recent (except app pairing); password-less customers confirm with a 6-digit e-mail code (admin-post dip_reauth_email_code); bounced actions land on the confirmation card and return afterwards. Linking Google/Microsoft now needs a recent confirmation.
+* Passkeys: username-less (discoverable) sign-in on wp-login.php, WooCommerce forms, the modal and [delicat_auth_panel]; passkey autofill (conditional mediation); one-step enrolment (no second biometric prompt, no orphan keychain entries); assets load on demand (buttons now work on [delicat_security_center] / [delicat_identity_dashboard] / wp_login_form(); anonymous pages load nothing); French error messages; remember-me and redirect_to honoured; modern card; Signal API; 120 s timeout; lowering the per-account maximum never deletes passkeys; long credential ids deletable (website, app and firewall, up to 1366 characters); no account enumeration through allowCredentials. Themes that print their own [data-dip-passkey-login] must call DIP_Passkeys::render_login_button() or add_filter('dip_passkeys_enqueue_storefront', '__return_true').
+* My Account / Identity Center: unified design tokens, automatic dark mode (filter dip_account_color_scheme), WCAG AA contrast, 12 px minimum text, full mobile navigation, server-rendered counters and balance (no layout shift), lighter CSS, no Gravatar by default (filter dip_account_use_gravatar), private pages never cached, WooCommerce orders query for recent orders. Security Center in French with grouped history, « Cet appareil », in-page confirmations and actionable recommendations; Application tab lists connected phones.
+* REST firewall follows namespace case variants and HEAD requests, all Identity answers opt out of LiteSpeed caching, audit log flood-protected. Headless storefront: explicit confirmation before turning an existing site session into a storefront session, optional PKCE (S256). Pairing approval needs a recent app proof (403 reauth_required) and offers POST /pairing/preview.
+* Native modal: correct landing page after password sign-in, redirect_to / cart / checkout / order-pay honoured, passwords containing ' " or \ accepted everywhere, atomic lockout counters per visitor address (throttle_ip()), lazy preparation of the modal.
+* Email Studio: custom CSS can no longer break out of <style>; sandboxed POST preview; Identity and WordPress e-mails CSS-inlined with a text part; reset/set-password link always present; WooCommerce subjects/headings applied; preheader kept; no plugins-directory scan per request.
+* Visual Builder settings now reach the live site; disabled toggles stay disabled; robust import; [delicat_auth_panel] gains passkey and 2FA steps. Legacy options-general.php?page=… admin URLs work with a proper title.
+* Performance: settings read once per request and autoloaded; no DNS lookup per Google avatar; one mobile session lookup per request (was four); migrations never run inside storefront requests; cron events cleared on deactivation.
+* PHP 8.x warnings on array-typed request parameters removed across public routes. Still PHP 7.4 / WordPress 6.2 compatible.
+* Passkey end-to-end suite: 49/49 scenarios pass (6.11.0: 22/40). See FIX-6.12.0.md.
 
 == 6.11.0 Passkeys and Quick Sign-in in the App ==
 
