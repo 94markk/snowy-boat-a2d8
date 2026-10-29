@@ -1,13 +1,17 @@
 (function(){
   'use strict';
   /*
-   * Security Center forms (form[data-dip-sc-form]).
+   * Security Center forms (form[data-dip-sc-form]) and the confirmation forms
+   * of the cards rendered inside it (2FA, Google Administrateur:
+   * .dip-security-center form[data-dip-confirm]).
    * - In-page confirmation instead of window.confirm(), which some Android
    *   WebViews and in-app browsers answer « false » silently (the action was
    *   then impossible): a first click arms the button, a second one confirms.
    * - One submission per click: the button is disabled with a busy state.
    */
   var ARM_MS = 8000;
+  var SELECTOR = 'form[data-dip-sc-form],.dip-security-center form[data-dip-confirm]';
+  var DEFAULT_CONFIRM = 'Oui, confirmer';
   function ready(fn){if(document.readyState!=='loading')fn();else document.addEventListener('DOMContentLoaded',fn,{once:true});}
   function button(form){return form.querySelector('button[type="submit"],button:not([type])');}
 
@@ -23,10 +27,10 @@
   function arm(form){
     var b=button(form);
     if(!b)return;
-    document.querySelectorAll('form[data-dip-sc-form][data-dip-armed]').forEach(function(other){if(other!==form)disarm(other);});
+    document.querySelectorAll('form[data-dip-armed]').forEach(function(other){if(other!==form)disarm(other);});
     form.setAttribute('data-dip-armed','1');
     b.setAttribute('data-dip-label',b.textContent);
-    b.textContent=form.getAttribute('data-dip-confirm-label')||b.textContent;
+    b.textContent=form.getAttribute('data-dip-confirm-label')||DEFAULT_CONFIRM;
     b.classList.add('is-confirming');
     var note=document.createElement('span');
     note.className='dip-sc-confirm';
@@ -54,17 +58,22 @@
   }
 
   ready(function(){
-    var forms=document.querySelectorAll('form[data-dip-sc-form]');
+    var forms=document.querySelectorAll(SELECTOR);
     if(!forms.length)return;
     forms.forEach(function(form){
       form.addEventListener('submit',function(event){
         if(form.getAttribute('data-dip-busy')==='1'){event.preventDefault();return;}
         if(form.hasAttribute('data-dip-confirm')&&form.getAttribute('data-dip-armed')!=='1'){
+          // Cancelled submission: page-level confirm() listeners need not see it.
           event.preventDefault();
+          event.stopPropagation();
           arm(form);
           return;
         }
         busy(form);
+        // A later listener (a page-level confirm() answered « Annuler ») may
+        // still cancel this submission: the button must not stay disabled.
+        setTimeout(function(){if(event.defaultPrevented)reset(form);},0);
       });
       form.addEventListener('keydown',function(event){
         if((event.key==='Escape'||event.key==='Esc')&&form.getAttribute('data-dip-armed')==='1'){disarm(form);var b=button(form);if(b)b.focus();}

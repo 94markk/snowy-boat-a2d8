@@ -100,6 +100,10 @@ final class DIP_Security_Recommendations {
         $s = self::settings();
         $items = [];
         $admin_ids = get_users(['role'=>'administrator','fields'=>'ID','number'=>-1]);
+        $manager_ids = get_users(['role'=>'shop_manager','fields'=>'ID','number'=>200]);
+        // One meta query for every account checked below (2FA, Passkeys, Google).
+        $checked_ids = array_map('absint', array_merge((array) $admin_ids, (array) $manager_ids));
+        if ($checked_ids) update_meta_cache('user', $checked_ids);
         $admins_without_2fa = 0;
         $admins_without_passkey = 0;
         $admins_low_recovery = 0;
@@ -141,7 +145,7 @@ final class DIP_Security_Recommendations {
         }
         // Shop managers reach every order and customer record: same advice.
         $managers_unprotected = 0;
-        foreach ((array) get_users(['role'=>'shop_manager','fields'=>'ID','number'=>200]) as $manager_id) {
+        foreach ((array) $manager_ids as $manager_id) {
             $manager_id = absint($manager_id);
             $has_2fa = class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($manager_id);
             $has_passkey = class_exists('DIP_Passkeys') && DIP_Passkeys::has_passkeys($manager_id);

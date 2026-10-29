@@ -83,7 +83,7 @@ final class DIP_Analytics {
      * of an account field is recorded. The analytics cache is not flushed
      * here (the rollup refreshes it).
      */
-    public static function record_profile_update($user_id, $old_user_data) {
+    public static function record_profile_update($user_id, $old_user_data = null) {
         $user_id = absint($user_id);
         $current = $user_id ? get_userdata($user_id) : false;
         if (!$current || !($old_user_data instanceof WP_User)) return;

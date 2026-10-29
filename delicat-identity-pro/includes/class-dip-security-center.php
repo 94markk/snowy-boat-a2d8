@@ -48,12 +48,25 @@ final class DIP_Security_Center {
         DIP_Audit::record('login_success', 'info', $user->ID, ['method' => 'password']);
     }
 
+    /** @var array<int,array> per-request device rows and scores (the My Account header, the dashboard and this screen share them) */
+    private static $devices_memo = [];
+    private static $score_memo = [];
+
+    /** The account's DIP_Devices::user_devices() rows, read once per request. */
+    public static function devices($user_id) {
+        $user_id = absint($user_id);
+        if (!isset(self::$devices_memo[$user_id])) self::$devices_memo[$user_id] = $user_id ? (array) DIP_Devices::user_devices($user_id) : [];
+        return self::$devices_memo[$user_id];
+    }
+
     /** $devices: the account's DIP_Devices::user_devices() rows when the caller already has them. */
     public static function score($user_id, $devices = null) {
+        $user_id = absint($user_id);
+        if (!is_array($devices) && isset(self::$score_memo[$user_id])) return self::$score_memo[$user_id];
         $user = get_userdata($user_id);
         if (!$user) return ['score'=>0,'items'=>[]];
         $statuses = class_exists('DIP_Connected_Accounts') ? DIP_Connected_Accounts::status($user_id) : [];
-        if (!is_array($devices)) $devices = DIP_Devices::user_devices($user_id);
+        if (!is_array($devices)) $devices = self::devices($user_id);
         $has_provider = false;
         foreach ($statuses as $status) if (!empty($status['connected'])) $has_provider = true;
         $is_admin = user_can($user_id, 'manage_options');
@@ -67,11 +80,7 @@ final class DIP_Security_Center {
                 && class_exists('DIP_Privileged_Social')
                 && DIP_Privileged_Social::approved($user_id, $google_sub);
         }
-        $email_fingerprint = (string) get_user_meta($user_id, '_dip_verified_email_fingerprint', true);
-        $current_email_fingerprint = is_email($user->user_email) ? hash('sha256', strtolower(sanitize_email($user->user_email))) : '';
-        $email_verified = get_user_meta($user_id, 'dip_email_verified', true) === 'yes'
-            && $email_fingerprint !== '' && $current_email_fingerprint !== ''
-            && hash_equals($email_fingerprint, $current_email_fingerprint);
+        $email_verified = self::email_verified($user_id);
         $items = [
             'passkey' => [
                 'ok' => class_exists('DIP_Passkeys') && DIP_Passkeys::has_passkeys($user_id),
@@ -95,7 +104,7 @@ final class DIP_Security_Center {
         ];
         $score = 0;
         foreach ($items as $item) if ($item['ok']) $score += $item['points'];
-        return ['score'=>min(100,$score),'items'=>$items];
+        return self::$score_memo[$user_id] = ['score'=>min(100,$score),'items'=>$items];
     }
 
     /** Customer-facing French label of a security event. */
@@ -105,7 +114,9 @@ final class DIP_Security_Center {
             'login_success'=>'Connexion réussie','login_failed'=>'Échec de connexion','login_blocked'=>'Connexion bloquée',
             'login_session_redelivered'=>'Session de connexion rétablie','new_device_login'=>'Nouvel appareil détecté',
             'device_trusted'=>'Appareil marqué de confiance','device_untrusted'=>'Confiance retirée à un appareil',
-            'device_forgotten'=>'Appareil supprimé de la liste','sessions_revoked'=>'Autres sessions déconnectées',
+            'device_forgotten'=>'Appareil supprimé de la liste','device_trust'=>'Appareil marqué de confiance',
+            'device_untrust'=>'Confiance retirée à un appareil','device_forget'=>'Appareil supprimé de la liste',
+            'sessions_revoked'=>'Autres sessions déconnectées','temporary_lockout'=>'Connexion bloquée temporairement après plusieurs échecs',
             'other_sessions_revoked'=>'Autres sessions déconnectées','auth_cookie_blocked_by_account_policy'=>'Session refusée par la politique du compte',
             'user_registered'=>'Compte créé','custom_registration'=>'Compte créé','customer_created'=>'Compte créé avec Google ou Microsoft',
             'custom_registration_pending_verification'=>'Compte créé : vérification de l’e-mail en attente',
@@ -127,6 +138,8 @@ final class DIP_Security_Center {
             'pending_provider_link_dropped'=>'Liaison Google ou Microsoft en attente annulée',
             'provider_link_pending_email_proof'=>'Liaison en attente de la vérification de l’e-mail',
             'unproven_provider_link_removed'=>'Liaison non vérifiée retirée','account_disconnected'=>'Compte Google ou Microsoft déconnecté',
+            'account_unlinked'=>'Compte Google déconnecté','account_unlinked_microsoft'=>'Compte Microsoft déconnecté',
+            'unsafe_registration_role_blocked'=>'Inscription : rôle non autorisé refusé','unsafe_registration_role_downgraded'=>'Inscription : rôle client appliqué',
             'unverified_account_adopted_by_provider'=>'Compte rattaché à Google ou Microsoft','unverified_account_merge_refused'=>'Rattachement d’un compte non vérifié refusé',
             'google_non_authoritative_email_requires_local_proof'=>'Google : confirmation de l’adresse e-mail demandée',
             'google_provider_email_changed_not_synced'=>'Adresse Google différente : non synchronisée',
@@ -169,6 +182,7 @@ final class DIP_Security_Center {
             'mobile_session_revoked_from_web'=>'Session de l’application fermée depuis le site',
             'mobile_credentials_erased'=>'Passkeys et connexion rapide de l’application effacées',
             'mobile_access_device_mismatch'=>'Accès de l’application refusé : appareil différent','mobile_identity_route_refused'=>'Accès de l’application refusé',
+            'rest_mobile_identity_mismatch'=>'Session de l’application refusée','rest_customer_login_required'=>'Accès refusé : connexion requise',
             'mobile_google_token_rejected'=>'Connexion Google refusée (application)','mobile_rate_limited'=>'Trop de tentatives depuis l’application',
             'mobile_two_factor_required'=>'Code 2FA demandé (application)','mobile_two_factor_success'=>'Code 2FA validé (application)',
             'mobile_two_factor_failed'=>'Code 2FA incorrect (application)','mobile_two_factor_rate_limited'=>'Trop de codes 2FA (application)',
@@ -237,12 +251,25 @@ final class DIP_Security_Center {
         ), ARRAY_A);
         $admin_ops = '/^(performance_|analytics_|security_export|security_log_|assistant_|migration_|automatic_migration_|maintenance_|integrity_|ui_system_|assetlinks_|email_studio_|standalone_email_studio_|identity_email_settings_|social_login_maintenance_|two_factor_admin_reset_performed)|_settings_updated$/';
         $out = [];
-        foreach ((array) $rows as $row) {
+        $rows = array_values((array) $rows);
+        foreach ($rows as $i => $row) {
             if (preg_match($admin_ops, (string) $row['event_type'])) continue;
+            // An app revocation that closed nothing (no app session, no quick
+            // sign-in key) would read « Sessions de l’application fermées »,
+            // and so would the password-change marker recorded right after it.
+            if ($row['event_type'] === 'mobile_sessions_revoked' && self::revoked_nothing($row)) continue;
+            if (in_array($row['event_type'], ['password_reset_mobile_sessions_revoked', 'account_password_changed_mobile_revoked'], true)
+                && isset($rows[$i + 1]) && $rows[$i + 1]['event_type'] === 'mobile_sessions_revoked' && self::revoked_nothing($rows[$i + 1])) continue;
             $out[] = $row;
             if (count($out) >= $limit) break;
         }
         return $out;
+    }
+
+    /** mobile_sessions_revoked row that closed no app session and no quick sign-in key. */
+    private static function revoked_nothing(array $row) {
+        $ctx = json_decode((string) $row['context'], true);
+        return is_array($ctx) && isset($ctx['count']) && (int) $ctx['count'] === 0 && (int) ($ctx['keys'] ?? 0) === 0;
     }
 
     /** Consecutive identical events (same type and detail) become one line « ×N ». */
@@ -292,7 +319,7 @@ final class DIP_Security_Center {
         return '<style id="dip-security-center-css">'
             . '.dip-security-center .dip-security-notice.is-info{border-color:var(--dip-line,#e2e7f1);background:var(--dip-card-2,#f7f8fc);color:var(--dip-ink-2,#3a4563)}'
             . '.dip-security-center .dip-device-name{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}.dip-security-center .dip-device-name strong{display:inline}'
-            . '.dip-security-center .dip-device-name .dip-pill{min-height:22px;padding:2px 9px;font-size:12px}'
+            . '.dip-security-center .dip-device-name .dip-pill{min-height:22px;padding:2px 9px;font-size:12px}.dip-security-center .dip-device small{font-size:13px}'
             . '.dip-security-center .dip-pill.is-sev-info{background:var(--dip-card-2,#f7f8fc);color:var(--dip-ink-2,#3a4563)}'
             . '.dip-security-center .dip-pill.is-sev-notice{background:var(--dip-accent-soft,#eef2ff);color:var(--dip-accent-ink,#2a44b6)}'
             . '.dip-security-center .dip-pill.is-sev-warning{background:var(--dip-warn-soft,#fff1e3);color:var(--dip-warn-ink,#934507)}'
@@ -366,9 +393,11 @@ final class DIP_Security_Center {
 
         $atts = shortcode_atts(['title'=>'Centre de sécurité'], $atts, 'delicat_security_center');
         $user_id = get_current_user_id();
-        // One device query for the score, the recommendations and the list.
-        $devices = (array) DIP_Devices::user_devices($user_id);
-        $score = self::score($user_id, $devices);
+        // One device query and one score per request: the My Account header
+        // (DIP_My_Account_Modern::security_context), the recommendations and
+        // the list below share them.
+        $devices = self::devices($user_id);
+        $score = self::score($user_id);
         $groups = self::group_events(self::user_events($user_id));
         $current_hash = (string) DIP_Devices::current_hash();
         $status = sanitize_key(wp_unslash($_GET['dip_security_status'] ?? ''));
@@ -398,8 +427,8 @@ final class DIP_Security_Center {
             </div>
 
             <?php if (class_exists('DIP_Privileged_Social')) echo DIP_Privileged_Social::render_security_card($user_id); ?>
-            <?php if (class_exists('DIP_Two_Factor')) echo DIP_Two_Factor::render_settings($user_id); ?>
             <?php if (class_exists('DIP_Passkeys')) echo DIP_Passkeys::render_settings($user_id); ?>
+            <?php if (class_exists('DIP_Two_Factor')) echo DIP_Two_Factor::render_settings($user_id); ?>
             <?php if (class_exists('DIP_Reauth')) echo DIP_Reauth::render_form(); ?>
             <?php if (class_exists('DIP_Security_Recommendations')) echo DIP_Security_Recommendations::render_customer($user_id, $devices); ?>
 
@@ -477,7 +506,7 @@ final class DIP_Security_Center {
         self::redirect('sessions');
     }
 
-    /** Is the account's current e-mail address proven (same rule as score())? */
+    /** Is the account's current e-mail address proven (its verified fingerprint matches)? */
     private static function email_verified($user_id) {
         $user = get_userdata($user_id);
         if (!$user || !is_email($user->user_email)) return false;

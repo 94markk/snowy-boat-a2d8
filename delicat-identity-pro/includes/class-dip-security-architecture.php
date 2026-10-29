@@ -74,7 +74,7 @@ final class DIP_Security_Architecture {
             ['#^/delicat-identity/v1/passkeys/register/proof$#', ['POST']],
             ['#^/delicat-identity/v1/passkeys/reauth/options$#', ['POST']],
             ['#^/delicat-identity/v1/passkeys/reauth/verify$#', ['POST']],
-            ['#^/delicat-identity/v1/passkeys/[A-Za-z0-9_-]{20,160}$#', ['DELETE']],
+            ['#^/delicat-identity/v1/passkeys/[A-Za-z0-9_-]{20,1366}$#', ['DELETE']],
         ]);
     }
 
@@ -95,7 +95,7 @@ final class DIP_Security_Architecture {
             ['#^/delicat-identity/v1/mobile/passkeys$#', ['GET']],
             ['#^/delicat-identity/v1/mobile/passkeys/register/options$#', ['POST']],
             ['#^/delicat-identity/v1/mobile/passkeys/register/verify$#', ['POST']],
-            ['#^/delicat-identity/v1/mobile/passkeys/[A-Za-z0-9_-]{20,160}$#', ['DELETE']],
+            ['#^/delicat-identity/v1/mobile/passkeys/[A-Za-z0-9_-]{20,1366}$#', ['DELETE']],
             ['#^/delicat-identity/v1/mobile/reauth/password$#', ['POST']],
             ['#^/delicat-identity/v1/mobile/reauth/google$#', ['POST']],
             ['#^/delicat-identity/v1/mobile/reauth/passkey/options$#', ['POST']],
