@@ -397,7 +397,10 @@ final class DIP_Account_Sync {
         if ($old_user_data instanceof WP_User) {
             $old_hash = (string) $old_user_data->user_pass;
             if ($old_hash !== '' && (string) $password !== '' && wp_check_password((string) $password, $old_hash)) return;
-        } elseif (doing_filter('authenticate')) {
+        } elseif (doing_filter('authenticate') || self::rehash_in_progress()) {
+            // WordPress < 6.7 passes no previous data: a legacy hash upgraded
+            // by wp_check_password() (web sign-in, app « confirmer avec le mot
+            // de passe », re-authentication) is the same password, not a change.
             return;
         }
         if (class_exists('DIP_Identity') && method_exists('DIP_Identity', 'clear_pending_provider_link')) {
@@ -406,6 +409,39 @@ final class DIP_Account_Sync {
         if (self::revoke_app_credentials_once($user_id, 'password_reset') && class_exists('DIP_Audit')) {
             DIP_Audit::record('password_reset_mobile_sessions_revoked', 'warning', $user_id);
         }
+    }
+
+    private static function rehash_in_progress() {
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+            if (empty($frame['class']) && isset($frame['function']) && 'wp_check_password' === $frame['function']) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Credentials of an unverified account that a pre-verification reset
+     * does not end: passkeys, an authenticator app and provider identities.
+     * They belong to whoever set the account up (for instance someone who
+     * changed their own account's address to this one), so e-mail code and
+     * magic-link sign-in refuse such an account instead of handing it to the
+     * mailbox owner, as DIP_Identity refuses the provider merge.
+     */
+    public static function unproven_account_credentials($user_id) {
+        $user_id = absint($user_id);
+        if (!$user_id) return [];
+        $found = [];
+        if (class_exists('DIP_Passkeys') && method_exists('DIP_Passkeys', 'has_passkeys') && DIP_Passkeys::has_passkeys($user_id)) $found[] = 'passkey';
+        if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id)) $found[] = 'totp';
+        $keys = class_exists('DIP_Identity') ? ['google' => DIP_Identity::META_SUB, 'microsoft' => DIP_Identity::meta_sub_key('microsoft')] : [];
+        if (class_exists('DIP_Connected_Accounts')) {
+            foreach ((array) DIP_Connected_Accounts::providers() as $id => $item) {
+                if (is_array($item) && !empty($item['meta_sub']) && is_string($item['meta_sub'])) $keys[sanitize_key((string) $id)] = $item['meta_sub'];
+            }
+        }
+        foreach ($keys as $id => $key) {
+            if ((string) get_user_meta($user_id, $key, true) !== '') $found[] = $id;
+        }
+        return array_values(array_unique($found));
     }
 
     /**

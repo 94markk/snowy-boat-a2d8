@@ -882,7 +882,7 @@ final class DIP_Two_Factor {
             'disabled'=>__('2FA désactivée. Les autres sessions ont été révoquées.', 'delicat-google-login'),
             'invalid_setup_code'=>__('Le code de l’application Authenticator est incorrect.', 'delicat-google-login'),
             'invalid_factor'=>__('Le code de sécurité est incorrect.', 'delicat-google-login'),
-            'rate_limited'=>__('Trop de tentatives de code. Réessayez dans quelques minutes.', 'delicat-google-login'),
+            'rate_limited'=>$status === 'rate_limited' && self::failures_exhausted($user_id) ? self::rate_limited_message($user_id) : __('Trop de tentatives de code. Réessayez dans quelques minutes.', 'delicat-google-login'),
             'https_required'=>__('HTTPS est requis avant de configurer ou utiliser 2FA.', 'delicat-google-login'),
             'crypto_unavailable'=>__('Le chiffrement serveur requis pour stocker le secret 2FA n’est pas disponible.', 'delicat-google-login'),
             'setup_failed'=>__('Impossible de préparer 2FA de façon sécurisée.', 'delicat-google-login'),

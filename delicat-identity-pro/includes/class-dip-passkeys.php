@@ -1123,6 +1123,7 @@ final class DIP_Passkeys {
                 'emailRequired'=>__('Entrez d’abord votre adresse e-mail.','delicat-google-login'),
                 'cancelled'=>__('Vérification Passkey annulée ou indisponible.','delicat-google-login'),
                 'cancelledLogin'=>__('Vérification annulée, ou aucune Passkey de ce compte sur cet appareil. Réessayez ou utilisez une autre méthode.','delicat-google-login'),
+                'cancelledNoEmail'=>__('Vérification annulée, ou aucune Passkey trouvée. Si votre Passkey est sur une clé de sécurité, saisissez d’abord votre e-mail, puis réessayez.','delicat-google-login'),
                 'exists'=>__('Cet appareil possède déjà une Passkey pour ce compte.','delicat-google-login'),
                 'origin'=>__('Les Passkeys fonctionnent uniquement sur l’adresse officielle du site.','delicat-google-login'),
                 'expired'=>__('Vérification Passkey expirée. Réessayez.','delicat-google-login'),

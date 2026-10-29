@@ -237,8 +237,10 @@ final class DIP_Mobile_API {
      * longer stop session renewal for every customer behind it. Without a
      * valid installation ID, and for the other gates, the ceiling still
      * refuses up front. The all-attempts address ceiling ($address_limit) is
-     * counted before any per-installation bucket, so rotated installation IDs
-     * stop adding counter rows once it is reached.
+     * read before any per-installation bucket and counted after it: once it
+     * is reached, rotated installation IDs add no counter row, and an
+     * installation its own flood guard already refuses (one looping phone)
+     * does not use up the share of the other customers behind the address.
      *
      * Returns the gate to pass to proof_failed(), or the 429 WP_Error.
      *
@@ -265,10 +267,8 @@ final class DIP_Mobile_API {
         if ($blocked && (!$failures_only || $installation === '')) {
             return self::rate_limited($gate, 'address_failures', $gate['failures']);
         }
-        if ($address_limit > 0) {
-            $key = $prefix . 'all_' . $address;
-            if (DIP_Lockout::counter_hit($key, $window) > (int) $address_limit) return self::rate_limited($gate, 'address', $key);
-        }
+        $all = $address_limit > 0 ? $prefix . 'all_' . $address : '';
+        if ($all !== '' && DIP_Lockout::counter_peek($all)['count'] >= (int) $address_limit) return self::rate_limited($gate, 'address', $all);
         if ($installation === '') {
             $key = $prefix . 'noinst_' . $address;
             return DIP_Lockout::counter_hit($key, $window) <= $limit ? $gate : self::rate_limited($gate, 'address', $key);
@@ -284,19 +284,22 @@ final class DIP_Mobile_API {
                 // Nothing is written for this request until it proves possession.
                 $gate['address_blocked'] = true;
                 $gate['deferred_flood'] = $key;
+                if ($all !== '') $gate['deferred_address'] = [$all, (int) $address_limit];
                 return $gate;
             }
             if (DIP_Lockout::counter_hit($key, $window) > self::SESSION_FLOOD_LIMIT) return self::rate_limited($gate, 'installation', $key);
         } elseif (DIP_Lockout::counter_hit($key, $window) > $limit) {
             return self::rate_limited($gate, 'installation', $key);
         }
+        if ($all !== '' && DIP_Lockout::counter_hit($all, $window) > (int) $address_limit) return self::rate_limited($gate, 'address', $all);
         return $gate;
     }
 
     /**
      * 6.11.1: the request proved possession (valid refresh token, verified
      * Google token, valid signature or assertion, enrolled installation):
-     * counts the installation flood guard that throttle() deferred while the
+     * counts the installation flood guard (and the all-attempts address
+     * ceiling, when the gate has one) that throttle() deferred while the
      * address failure ceiling holds. Returns the 429 or null.
      *
      * @internal public for DIP_Mobile_Passkeys.
@@ -304,7 +307,12 @@ final class DIP_Mobile_API {
     public static function proof_accepted($gate) {
         if (!is_array($gate) || empty($gate['deferred_flood'])) return null;
         $key = (string) $gate['deferred_flood'];
-        return DIP_Lockout::counter_hit($key, (int) $gate['window']) > self::SESSION_FLOOD_LIMIT ? self::rate_limited($gate, 'installation', $key) : null;
+        if (DIP_Lockout::counter_hit($key, (int) $gate['window']) > self::SESSION_FLOOD_LIMIT) return self::rate_limited($gate, 'installation', $key);
+        if (!empty($gate['deferred_address']) && is_array($gate['deferred_address'])) {
+            list($all, $address_limit) = $gate['deferred_address'];
+            if (DIP_Lockout::counter_hit((string) $all, (int) $gate['window']) > (int) $address_limit) return self::rate_limited($gate, 'address', (string) $all);
+        }
+        return null;
     }
 
     /**
@@ -965,13 +973,15 @@ final class DIP_Mobile_API {
         $user_id = absint($user_id);
         if (!$user_id) return 0;
         global $wpdb;
-        $updated = $wpdb->query($wpdb->prepare(
-            'UPDATE '.self::table().' SET revoked_at=UTC_TIMESTAMP() WHERE user_id=%d AND revoked_at IS NULL',
-            $user_id
-        ));
+        $sql = $wpdb->prepare('UPDATE '.self::table().' SET revoked_at=UTC_TIMESTAMP() WHERE user_id=%d AND revoked_at IS NULL', $user_id);
+        $updated = $wpdb->query($sql);
         self::forget_sessions();
         if ($updated === false) return 0;
         $keys = self::revoke_keys_where('user_id=%d', [$user_id], $reason);
+        // 6.11.1: a quick sign-in that read its key before it was revoked
+        // checks it again once its session exists (biometric_verify()); a
+        // session it inserted after the first UPDATE is ended by this one.
+        if ($keys > 0) { $updated += (int) $wpdb->query($sql); self::forget_sessions(); }
         if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_sessions_revoked', 'warning', $user_id, [
             'reason'=>sanitize_key($reason),
             'count'=>(int) $updated,
@@ -1161,7 +1171,12 @@ final class DIP_Mobile_API {
         $uid = (int) $session->user_id;
         $user = get_userdata($uid);
         $password = self::scalar($r->get_param('password'));
-        if (!$user || $password === '' || strlen($password) > 4096 || !wp_check_password($password, (string) $user->user_pass, $uid)) {
+        // 6.11.1: WordPress and WooCommerce forms hash the password as posted
+        // (magic-quote slashes: « l\'été »), the app sends the typed text:
+        // both forms are tried, as on the website (DIP_Reauth, DIP_Native_Auth).
+        $slashed = wp_slash($password);
+        if (!$user || $password === '' || strlen($password) > 4096
+            || (!wp_check_password($password, (string) $user->user_pass, $uid) && ($slashed === $password || !wp_check_password($slashed, (string) $user->user_pass, $uid)))) {
             return self::reauth_refused($gate, $session, 'password', 'password', new WP_Error('invalid_password', 'Mot de passe incorrect.', ['status' => 401]));
         }
         $factor = self::second_factor($uid, $r, 'mobile_reauth');

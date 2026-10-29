@@ -85,8 +85,14 @@ final class DIP_Customer_Dashboard {
         wp_dequeue_style('dip-customer-dashboard');
     }
 
+    /** The « Application » tab only makes sense while the mobile API is switched on. */
+    private static function app_available() {
+        return class_exists('DIP_Mobile_API') && method_exists('DIP_Mobile_API', 'enabled') && DIP_Mobile_API::enabled();
+    }
+
     private static function tab() {
-        $allowed = ['overview','accounts','security','app','orders','profile'];
+        $allowed = ['overview','accounts','security','orders','profile'];
+        if (self::app_available()) $allowed[] = 'app';
         if (class_exists('DIP_Access_Guard') && DIP_Access_Guard::can_manage_identity()) $allowed[] = 'admin';
         $tab = isset($_GET['dip_tab']) && is_string($_GET['dip_tab']) ? sanitize_key(wp_unslash($_GET['dip_tab'])) : 'overview';
         return in_array($tab, $allowed, true) ? $tab : 'overview';
@@ -107,7 +113,12 @@ final class DIP_Customer_Dashboard {
     /** One device query for the overview (count and approved ones). */
     private static function device_counts($uid) {
         if (!class_exists('DIP_Devices')) return [0, 0];
-        try { $rows = (array) DIP_Devices::user_devices($uid); } catch (Throwable $e) { return [0, 0]; }
+        try {
+            // The Security Center's per-request list (already read for the score) when available.
+            $rows = class_exists('DIP_Security_Center') && method_exists('DIP_Security_Center', 'devices')
+                ? (array) DIP_Security_Center::devices($uid)
+                : (array) DIP_Devices::user_devices($uid);
+        } catch (Throwable $e) { return [0, 0]; }
         $trusted = 0;
         foreach ($rows as $row) if (!empty($row['trusted'])) $trusted++;
         return [count($rows), $trusted];
@@ -143,8 +154,8 @@ final class DIP_Customer_Dashboard {
             'overview' => __('Vue d’ensemble', 'delicat-google-login'),
             'accounts' => __('Comptes liés', 'delicat-google-login'),
             'security' => __('Sécurité', 'delicat-google-login'),
-            'app' => __('Application', 'delicat-google-login'),
         ];
+        if (self::app_available()) $nav_tabs['app'] = __('Application', 'delicat-google-login');
         if (!$integrated) {
             $nav_tabs['orders'] = __('Commandes', 'delicat-google-login');
             $nav_tabs['profile'] = __('Profil', 'delicat-google-login');
@@ -183,7 +194,7 @@ final class DIP_Customer_Dashboard {
             <div class="dip-id-grid dip-id-actions">
               <a href="<?php echo self::tab_url('security'); ?>"><strong><?php echo esc_html($security['passkey'] ? __('Renforcer ma sécurité', 'delicat-google-login') : __('Ajouter une Passkey', 'delicat-google-login')); ?></strong><span><?php echo esc_html($security['passkey'] ? __('Sessions, appareils et historique', 'delicat-google-login') : __('Face ID, empreinte ou Windows Hello : connexion sans mot de passe', 'delicat-google-login')); ?></span></a>
               <a href="<?php echo self::tab_url('accounts'); ?>"><strong><?php esc_html_e('Gérer mes connexions', 'delicat-google-login'); ?></strong><span><?php esc_html_e('Google, Microsoft et futurs fournisseurs', 'delicat-google-login'); ?></span></a>
-              <a href="<?php echo self::tab_url('app'); ?>"><strong><?php esc_html_e('Connecter l’application', 'delicat-google-login'); ?></strong><span><?php esc_html_e('Association sécurisée web et mobile', 'delicat-google-login'); ?></span></a>
+              <?php if (self::app_available()) : ?><a href="<?php echo self::tab_url('app'); ?>"><strong><?php esc_html_e('Connecter l’application', 'delicat-google-login'); ?></strong><span><?php esc_html_e('Association sécurisée web et mobile', 'delicat-google-login'); ?></span></a><?php endif; ?>
             </div>
           <?php elseif ($tab === 'accounts'): echo do_shortcode('[delicat_connected_accounts]');
                 elseif ($tab === 'security'): echo do_shortcode('[delicat_security_center]');

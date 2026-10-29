@@ -83,6 +83,31 @@ html.dark .dip-passkeys-card,body.dipma-scheme-dark .dip-passkeys-card{--dip-pk-
 .dip-id-empty{padding:30px;border:1px solid var(--dip-line);border-radius:20px;background:var(--dip-card);text-align:center}
 .dip-id-empty h3{margin-top:0;color:var(--dip-ink)}
 .dip-id-empty p{color:var(--dip-ink-2)}
+/* Panels of other modules shown in the tabs (Comptes liés, Application): basic layout for stand-alone
+   pages (login.css is not loaded there) and the same tokens, so they stay readable on the dark Identity Center. */
+.dip-id-dashboard .dip-connected-accounts{max-width:none;margin:0;padding:20px;border:1px solid var(--dip-line);border-radius:20px;background:var(--dip-card);box-shadow:var(--dip-shadow);color:var(--dip-ink)}
+.dip-id-dashboard .dip-connected-head h3{margin:0 0 4px;font-size:20px;font-weight:800}
+.dip-id-dashboard .dip-connected-head p{margin:0 0 16px}
+.dip-id-dashboard .dip-connected-list{display:grid;gap:10px}
+.dip-id-dashboard .dip-connected-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:13px;border:1px solid var(--dip-line);border-radius:15px}
+.dip-id-dashboard .dip-provider-mark{display:grid;flex:0 0 38px;place-items:center;width:38px;height:38px;border-radius:12px;font-weight:800}
+.dip-id-dashboard .dip-connected-copy{display:flex;flex:1 1 160px;flex-direction:column;min-width:0}
+.dip-id-dashboard .dip-provider-action{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:9px 14px;border:0;border-radius:10px;background:var(--dip-primary);color:#fff;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
+.dip-id-dashboard .dip-connected-notice{padding:12px;border-radius:12px}
+.dip-id-dashboard .dip-connected-head h3,.dip-id-dashboard .dip-connected-copy strong{color:var(--dip-ink)}
+.dip-id-dashboard .dip-connected-head p,.dip-id-dashboard .dip-connected-copy small{color:var(--dip-muted)}
+.dip-id-dashboard .dip-connected-row{border-color:var(--dip-line);background:var(--dip-card-2)}
+.dip-id-dashboard .dip-connected-row.is-connected .dip-connected-copy small{color:var(--dip-ok-ink)}
+.dip-id-dashboard .dip-provider-mark{background:var(--dip-accent-soft);color:var(--dip-accent-ink)}
+.dip-id-dashboard .dip-connected-notice{background:var(--dip-warn-soft);color:var(--dip-warn-ink)}
+.dip-id-dashboard .dip-connected-notice.is-success{background:var(--dip-ok-soft);color:var(--dip-ok-ink)}
+.dip-id-dashboard .dip-provider-action.is-danger{background:var(--dip-danger-soft);color:var(--dip-danger-ink)}
+.dip-id-dashboard .dip-app-panel{--dap-ink:var(--dip-ink);--dap-muted:var(--dip-muted);--dap-line:var(--dip-line);--dap-soft:var(--dip-card-2);--dap-accent:var(--dip-accent-ink);max-width:none;background:var(--dip-card);box-shadow:var(--dip-shadow)}
+.dip-id-dashboard .dip-app-panel :is(h3,h4){color:var(--dip-ink)}
+.dip-id-dashboard .dip-app-panel__notice{background:var(--dip-ok-soft);color:var(--dip-ok-ink)}
+.dip-id-dashboard .dip-app-panel__notice.is-error{background:var(--dip-danger-soft);color:var(--dip-danger-ink)}
+.dip-id-dashboard .dip-app-panel__device em{background:var(--dip-accent-soft);color:var(--dip-accent-ink)}
+.dip-id-dashboard .dip-app-panel__danger{border-color:color-mix(in srgb,var(--dip-danger-ink) 35%,transparent);background:var(--dip-danger-soft);color:var(--dip-danger-ink)}
 .dip-id-dashboard--integrated{max-width:none;margin:0}
 .dip-id-dashboard--integrated .dip-id-tabs{padding-top:2px}
 .dip-id-dashboard--integrated .dip-id-content{padding-top:8px}
@@ -131,6 +156,8 @@ body.dip-account-modern .dip-security-center,:root .dip-id-dashboard .dip-securi
 .dip-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .dip-actions form{margin:0}
 .dip-btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 14px;border:1px solid var(--dip-line-strong);border-radius:12px;background:var(--dip-card);color:var(--dip-ink-2);font:inherit;font-size:13px;font-weight:750;line-height:1.2;text-decoration:none;cursor:pointer}
+/* Links styled as buttons: beat the theme's « :root :where(a…) » colour (unreadable in dark mode). */
+a.dip-btn{color:var(--dip-ink-2)}
 .dip-btn:hover{border-color:var(--dip-accent)}
 .dip-btn.primary{min-height:44px;padding:0 16px;border:0;background:var(--dip-primary);color:#fff;box-shadow:0 8px 20px rgba(55,77,203,.18)}
 .dip-btn.danger{border-color:color-mix(in srgb,var(--dip-danger-ink) 30%,transparent);background:var(--dip-danger-soft);color:var(--dip-danger-ink)}

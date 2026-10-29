@@ -36,11 +36,27 @@ final class DIP_Session_Router {
         parse_str($parts['query'] ?? '', $query);
         $action = is_string($query['action'] ?? '') ? strtolower($query['action'] ?? '') : '';
         $wc_logout = trim((string)get_option('woocommerce_logout_endpoint', 'customer-logout'), '/');
+        $blocked = ['dip_logout_confirm','dip_logout','loginSocial','dip_auth_error','dip_verified','key','dip_2fa_challenge'];
+        // The order key of a WooCommerce order-pay / order-received page is
+        // not a credential: the customer must come back there after signing
+        // in to pay. Any other key (password reset links) stays refused.
+        if (isset($query['key']) && self::is_order_page($path, $query)) $blocked = array_diff($blocked, ['key']);
         if (preg_match('~(?:^|/)(?:wp-admin|wp-login\.php|customer-logout|lost-password)(?:/|$)~i', $path) ||
             ($wc_logout !== '' && preg_match('~(?:^|/)' . preg_quote($wc_logout, '~') . '(?:/|$)~i', $path)) ||
             in_array($action, ['login','logout','lostpassword','retrievepassword','resetpass','rp','register','reauth'], true) ||
-            array_intersect(['dip_logout_confirm','dip_logout','loginSocial','dip_auth_error','dip_verified','key','dip_2fa_challenge'], array_keys($query))) return $fallback;
+            array_intersect($blocked, array_keys($query))) return $fallback;
         return $url;
+    }
+
+    /** A WooCommerce order-pay or order-received address carrying its own order key (wc_order_…). */
+    private static function is_order_page($path, array $query) {
+        if (!is_string($query['key'] ?? null) || !preg_match('/^wc_order_[A-Za-z0-9]{1,64}$/D', $query['key'])) return false;
+        foreach (['woocommerce_checkout_pay_endpoint'=>'order-pay', 'woocommerce_checkout_order_received_endpoint'=>'order-received'] as $option => $default) {
+            $endpoint = trim((string) get_option($option, $default), '/');
+            if ($endpoint === '') continue;
+            if (isset($query[$endpoint]) || preg_match('~(?:^|/)' . preg_quote($endpoint, '~') . '/\d+(?:/|$)~i', $path)) return true;
+        }
+        return false;
     }
 
     /**

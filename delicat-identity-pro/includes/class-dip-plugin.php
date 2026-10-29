@@ -919,6 +919,7 @@ final class DIP_Plugin {
         if (!self::is_navigation_request()) {
             status_header(403);
             header('Content-Type: text/plain; charset=UTF-8');
+            echo 'Ouvrez ce lien directement dans votre navigateur pour vous connecter.';
             exit;
         }
         $this->canonicalize_login_request();
@@ -997,8 +998,13 @@ final class DIP_Plugin {
         $provider = $this->provider($provider_id, $s);
         if (!$provider) $this->fail('Fournisseur d’identité indisponible.', 'provider_unavailable');
         $profile = $provider->authenticate($code, $flow);
-        if (is_array($profile) && !empty($flow['tracker'])) $profile['_tracker'] = sanitize_text_field((string) $flow['tracker']);
         if (is_wp_error($profile)) $this->fail($profile->get_error_message(), $profile->get_error_code());
+        if (!is_array($profile)) $this->fail('Identité du fournisseur incomplète.', 'identity_invalid', false);
+        // The profile belongs to the provider that ran this flow: a module
+        // registered through dip_register_identity_providers cannot present
+        // its identities as Google's (Google sub, Gmail e-mail authority).
+        $profile['provider'] = $provider_id;
+        if (!empty($flow['tracker'])) $profile['_tracker'] = sanitize_text_field((string) $flow['tracker']);
         $policy = DIP_Policy::enforce_profile($profile, $s);
         if (is_wp_error($policy)) $this->fail($policy->get_error_message(), $policy->get_error_code());
         $identity = new DIP_Identity($s);
@@ -1652,7 +1658,7 @@ final class DIP_Plugin {
         $raw['social_login_maintenance_explicit'] = 'yes';
         $raw['social_login_maintenance_changed_at'] = time();
         $raw['social_login_maintenance_changed_by'] = get_current_user_id();
-        update_option(self::OPTION, wp_parse_args($raw, self::defaults()), false);
+        update_option(self::OPTION, wp_parse_args($raw, self::defaults()), true);
         do_action('litespeed_purge_all');
         if (class_exists('DIP_Audit')) DIP_Audit::record('social_login_maintenance_disabled', 'notice', get_current_user_id(), ['source'=>'admin_repair']);
         wp_safe_redirect(add_query_arg(['page'=>'delicat-identity','dip_google_reenabled'=>'1'], admin_url('options-general.php')));
@@ -2321,8 +2327,7 @@ final class DIP_Plugin {
         elseif ($operation === 'forget') DIP_Devices::forget($uid, $device_id);
         else wp_die('Action invalide.');
         $this->event('device_' . $operation, $uid, 'notice');
-        $redirect = function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url(DIP_WooCommerce::ENDPOINT) : home_url('/');
-        wp_safe_redirect($redirect); exit;
+        wp_safe_redirect($this->security_tab_url(['trust' => 'device_trusted', 'untrust' => 'device_untrusted', 'forget' => 'device_forgotten'][$operation])); exit;
     }
 
     public function handle_revoke_other_sessions() {
@@ -2340,8 +2345,13 @@ final class DIP_Plugin {
         }
         $mobile_revoked = class_exists('DIP_Mobile_API') ? DIP_Mobile_API::revoke_all_for_user($uid, 'user_revoke_other_sessions') : 0;
         $this->event('other_sessions_revoked', $uid, 'warning', ['mobile_revoked'=>(int)$mobile_revoked]);
-        $redirect = function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url(DIP_WooCommerce::ENDPOINT) : home_url('/');
-        wp_safe_redirect(add_query_arg('dip_sessions', 'revoked', $redirect)); exit;
+        wp_safe_redirect($this->security_tab_url('sessions')); exit;
+    }
+
+    /** « Sécurité » tab of the Identity Center with the result of the action (the old endpoint only redirected there). */
+    private function security_tab_url($status) {
+        if (!function_exists('wc_get_account_endpoint_url')) return home_url('/');
+        return add_query_arg(['dip_tab' => 'security', 'dip_security_status' => sanitize_key($status)], wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
     }
 
     private function render_phase6(array $s) {

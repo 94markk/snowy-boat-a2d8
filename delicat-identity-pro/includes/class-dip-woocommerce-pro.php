@@ -184,6 +184,15 @@ final class DIP_WooCommerce_Pro {
         return $dest !== '' && $dest !== 'document';
     }
 
+    /** « /path » → absolute URL on this site's host (a path is not relative to a sub-directory home). */
+    private static function absolute_url($url) {
+        $url = (string) $url;
+        if ($url === '' || $url[0] !== '/' || substr($url, 0, 2) === '//') return $url;
+        $home = wp_parse_url(home_url('/'));
+        if (!is_array($home) || empty($home['host'])) return home_url($url);
+        return ($home['scheme'] ?? 'https') . '://' . $home['host'] . (isset($home['port']) ? ':' . (int) $home['port'] : '') . $url;
+    }
+
     private static function path_of($url) {
         return strtolower(trailingslashit(rawurldecode((string) wp_parse_url((string) $url, PHP_URL_PATH))));
     }
@@ -195,8 +204,7 @@ final class DIP_WooCommerce_Pro {
     private static function clean_return_url($url, $from_referer = false) {
         $url = trim((string) $url);
         if ($url === '' || strlen($url) > 2000) return '';
-        if ($url[0] === '/' && substr($url, 0, 2) !== '//') $url = home_url($url);
-        $url = wp_validate_redirect(esc_url_raw($url), '');
+        $url = wp_validate_redirect(esc_url_raw(self::absolute_url($url)), '');
         if ($url === '') return '';
         $parts = wp_parse_url($url);
         $home = wp_parse_url(home_url('/'));
@@ -237,8 +245,7 @@ final class DIP_WooCommerce_Pro {
         foreach ($candidates as $raw) {
             $raw = trim($raw);
             if ($raw === '' || strlen($raw) > 2048) continue;
-            if ($raw[0] === '/' && substr($raw, 0, 2) !== '//') $raw = home_url($raw);
-            $url = wp_validate_redirect(esc_url_raw($raw), '');
+            $url = wp_validate_redirect(esc_url_raw(self::absolute_url($raw)), '');
             if ($url === '') continue;
             $path = self::path_of($url);
             if ($path === self::path_of(admin_url()) && (string) wp_parse_url($url, PHP_URL_QUERY) === '') continue;
@@ -289,7 +296,8 @@ final class DIP_WooCommerce_Pro {
         $s = self::settings();
         $remembered = self::take_return_cookie();
         $explicit = self::explicit_destination($requested);
-        if ($explicit !== '') return ($requested !== null && is_string($fallback) && $fallback !== '') ? $fallback : $explicit;
+        // wp-login.php already turned its own redirect_to into $fallback; any other named destination is returned as is.
+        if ($explicit !== '') return (is_string($requested) && trim($requested) !== '' && is_string($fallback) && $fallback !== '') ? $fallback : $explicit;
         if (!empty($s['preserve_return_url']) && $remembered !== '' && !self::is_staff($user)) return $remembered;
         $roles = (array) $user->roles;
         $target = '';

@@ -90,7 +90,8 @@ final class DIP_WooCommerce {
         if (class_exists('DIP_Account_Sync') && method_exists('DIP_Account_Sync', 'internal_password_rotation') && DIP_Account_Sync::internal_password_rotation($user_id)) return;
         if ($old_user_data instanceof WP_User) {
             $old_hash = (string) $old_user_data->user_pass;
-            if ($old_hash !== '' && (string) $password !== '' && wp_check_password((string) $password, $old_hash, $user_id)) return;
+            // No user id: wp_check_password() must not re-hash (and re-fire this hook) here.
+            if ($old_hash !== '' && (string) $password !== '' && wp_check_password((string) $password, $old_hash)) return;
         } elseif (doing_filter('authenticate')) {
             return;
         }

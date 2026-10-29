@@ -66,7 +66,8 @@ final class DIP_Provider_Manager {
             ['google', 'microsoft']
         )));
         $raw['provider_order'] = implode(',', $order ?: ['google', 'microsoft']);
-        update_option(DIP_Plugin::OPTION, $raw, false);
+        // Read on every request: stays autoloaded (DIP_Plugin::ensure_autoloaded()).
+        update_option(DIP_Plugin::OPTION, $raw, true);
         $rejected = [];
         if (class_exists('DIP_Headless_Google') && isset($_POST['headless_origins'])) {
             $before = DIP_Headless_Google::settings();

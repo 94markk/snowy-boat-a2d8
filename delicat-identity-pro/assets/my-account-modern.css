@@ -330,6 +330,7 @@ body.dip-account-modern .dip-connected-notice{background:var(--dipma-warn-soft);
 body.dip-account-modern .dip-connected-notice.is-success{background:var(--dipma-green-soft);color:var(--dipma-green)}
 body.dip-account-modern .dip-id-content :is(h2,h3,h4){font-family:inherit}
 body.dip-account-modern .dip-app-panel{--dap-ink:var(--dipma-text);--dap-muted:var(--dipma-muted);--dap-line:var(--dipma-line);--dap-soft:var(--dipma-card-2);--dap-accent:var(--dipma-blue);max-width:none;background:var(--dipma-card);box-shadow:var(--dipma-shadow)}
+body.dip-account-modern .dip-app-panel :is(h3,h4),body.dip-account-modern .dip-app-pairing h3{color:var(--dipma-text)!important}
 body.dip-account-modern .dip-app-panel__notice{background:var(--dipma-green-soft);color:var(--dipma-green)}
 body.dip-account-modern .dip-app-panel__notice.is-error{background:var(--dipma-danger-soft);color:var(--dipma-danger)}
 body.dip-account-modern .dip-app-panel__device em{background:var(--dipma-accent-soft);color:var(--dipma-accent-ink)}

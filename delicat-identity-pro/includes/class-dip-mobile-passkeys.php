@@ -60,7 +60,7 @@ final class DIP_Mobile_Passkeys {
         add_filter('dip_mobile_rest_rules', [__CLASS__, 'firewall_rules']);
     }
 
-    /** Strict REST firewall: the removal route accepts every credential id length (the built-in pattern stops at 160 characters). */
+    /** Strict REST firewall: the removal route accepts every credential id length (the route's own bound, whatever the built-in list says). */
     public static function firewall_rules($rules) {
         $rules = is_array($rules) ? $rules : [];
         $rules[] = ['#^/delicat-identity/v1/mobile/passkeys/' . self::CREDENTIAL_ID_PATTERN . '$#', ['DELETE']];

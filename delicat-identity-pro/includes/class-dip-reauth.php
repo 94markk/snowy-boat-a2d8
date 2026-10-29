@@ -247,6 +247,14 @@ final class DIP_Reauth {
         }
     }
 
+    /**
+     * The daily cap of wrong 2FA codes is reached: signing in again would
+     * need that code too, so the card must not suggest logging out.
+     */
+    private static function factor_locked($user_id) {
+        return self::two_factor_enabled($user_id) && method_exists('DIP_Two_Factor', 'failures_exhausted') && DIP_Two_Factor::failures_exhausted($user_id);
+    }
+
     private static function clear_failures($user_id) {
         if (!class_exists('DIP_Lockout') || !method_exists('DIP_Lockout', 'counter_clear')) return;
         DIP_Lockout::counter_clear(self::failure_key($user_id));
@@ -361,11 +369,15 @@ final class DIP_Reauth {
         $exhausted = self::failures_exhausted($user_id);
         if ($exhausted !== '' || !self::rate_allowed($user_id)) {
             if (class_exists('DIP_Audit')) DIP_Audit::record('reauth_rate_limited', 'warning', $user_id);
-            self::redirect($exhausted === 'locked' ? 'locked' : 'rate_limited', $return);
+            self::redirect(self::factor_locked($user_id) ? 'factor_locked' : ($exhausted === 'locked' ? 'locked' : 'rate_limited'), $return);
         }
 
         $user = get_userdata($user_id);
-        $password = (string) wp_unslash($_POST['current_password'] ?? '');
+        // WordPress and WooCommerce forms hash and check the password exactly
+        // as posted (with magic-quote slashes); the typed text is tried too for
+        // passwords set through an unslashed path (REST, app, passwordless).
+        $posted_password = isset($_POST['current_password']) && is_string($_POST['current_password']) ? $_POST['current_password'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- passwords are never altered.
+        $password = (string) wp_unslash($posted_password);
         $factor = sanitize_text_field(wp_unslash($_POST['factor_code'] ?? ''));
         $email_code = preg_replace('/\D+/', '', sanitize_text_field(wp_unslash($_POST['email_code'] ?? '')));
         $ok = false;
@@ -379,7 +391,7 @@ final class DIP_Reauth {
             if ($factor === '') self::redirect('factor_required', $return);
             if (!DIP_Two_Factor::factor_attempt_allowed($user_id)) {
                 if (class_exists('DIP_Audit')) DIP_Audit::record('reauth_two_factor_rate_limited', 'warning', $user_id);
-                self::redirect('rate_limited', $return);
+                self::redirect(self::factor_locked($user_id) ? 'factor_locked' : 'rate_limited', $return);
             }
             $method = 'totp_or_recovery';
             $ok = DIP_Two_Factor::verify_factor($user_id, $factor, true);
@@ -395,7 +407,7 @@ final class DIP_Reauth {
             elseif (!$ok) $failure = 'code_invalid';
         } elseif ($password !== '' && $user instanceof WP_User) {
             $method = 'password';
-            $ok = wp_check_password($password, $user->user_pass, $user_id);
+            $ok = strlen($posted_password) <= 4096 && (wp_check_password($posted_password, $user->user_pass, $user_id) || ($password !== $posted_password && wp_check_password($password, $user->user_pass, $user_id)));
         } else {
             self::redirect('failed', $return);
         }
@@ -571,6 +583,7 @@ final class DIP_Reauth {
             'code_replayed' => __('Ce code vient déjà d’être utilisé. Attendez le code suivant de votre application (30 secondes).', 'delicat-google-login'),
             'rate_limited' => __('Trop de tentatives. Réessayez dans quelques minutes.', 'delicat-google-login'),
             'locked' => __('Trop de confirmations échouées aujourd’hui. Pour continuer, déconnectez-vous puis reconnectez-vous : une connexion récente confirme aussi votre identité.', 'delicat-google-login'),
+            'factor_locked' => $passkey ? __('Trop de codes 2FA incorrects aujourd’hui : confirmez avec votre Passkey ci-dessous, ou réinitialisez votre mot de passe pour débloquer la vérification.', 'delicat-google-login') : __('Trop de codes 2FA incorrects aujourd’hui. Réinitialisez votre mot de passe (« Mot de passe oublié ») pour débloquer la vérification.', 'delicat-google-login'),
             'success' => __('Identité confirmée. Les actions sensibles sont autorisées temporairement.', 'delicat-google-login'),
             'code_sent' => sprintf(__('Un code à 6 chiffres vient d’être envoyé à %s. Il expire dans 10 minutes.', 'delicat-google-login'), $masked),
             'code_cooldown' => __('Un code vient déjà d’être envoyé. Vérifiez votre boîte de réception (et les indésirables) ou patientez une minute avant d’en demander un autre.', 'delicat-google-login'),
@@ -648,15 +661,17 @@ final class DIP_Reauth {
     public static function card_styles() {
         if (self::$styles_printed) return '';
         self::$styles_printed = true;
+        // Account design tokens (they switch in dark mode), with light fallbacks
+        // for a card rendered outside the Identity / Security Center.
         return '<style id="dip-security-cards-css">'
-            . '.dip-security-notice.is-error{border-color:#f3c9cf;background:#fff4f5;color:#a52a3c}'
+            . '.dip-security-notice.is-error{border-color:#f3c9cf;border-color:color-mix(in srgb,var(--dip-danger-ink,#b3263c) 30%,transparent);background:var(--dip-danger-soft,#fdeef1);color:var(--dip-danger-ink,#b3263c)}'
             . '.dip-reauth-card input,.dip-2fa-card input{box-sizing:border-box;max-width:100%}.dip-reauth-card a.dip-btn,.dip-2fa-card a.dip-btn{text-decoration:none}'
             . '.dip-2fa-card .dip-2fa-open{text-align:center}@media (hover:hover) and (pointer:fine){.dip-2fa-card .dip-2fa-open{display:none}}'
-            . '.dip-reauth-card .dip-reauth-lead{margin:10px 0 2px!important;font-size:11.5px!important;line-height:1.5;color:#46506a!important}'
-            . '.dip-reauth-card .dip-reauth-passkey{display:grid;gap:8px;margin-top:12px}.dip-reauth-card .dip-reauth-passkey .dip-btn,.dip-reauth-card form .dip-btn{min-height:44px;font-size:11px}'
+            . '.dip-reauth-card .dip-reauth-lead{margin:10px 0 2px!important;font-size:13px!important;line-height:1.5;color:var(--dip-ink-2,#3a4563)!important}'
+            . '.dip-reauth-card .dip-reauth-passkey{display:grid;gap:8px;margin-top:12px}.dip-reauth-card .dip-reauth-passkey .dip-btn,.dip-reauth-card form .dip-btn{min-height:44px;font-size:13px}'
             . '.dip-reauth-card .dip-reauth-or{margin:12px 0 0}.dip-reauth-card .dip-reauth-send{margin-top:10px}'
-            . '.dip-reauth-card .dip-reauth-more{margin-top:12px;font-size:10.5px;color:#68748e}.dip-reauth-card .dip-reauth-more summary{cursor:pointer;font-weight:800}'
-            . '.dip-reauth-card .dip-reauth-hint{margin:12px 0 0!important;font-size:10.5px!important;line-height:1.55;color:#7d879c!important}.dip-reauth-card .dip-reauth-hint a{font-weight:800}'
+            . '.dip-reauth-card .dip-reauth-more{margin-top:12px;font-size:13px;color:var(--dip-muted,#596480)}.dip-reauth-card .dip-reauth-more summary{cursor:pointer;font-weight:800}'
+            . '.dip-reauth-card .dip-reauth-hint{margin:12px 0 0!important;font-size:13px!important;line-height:1.55;color:var(--dip-muted,#596480)!important}.dip-reauth-card .dip-reauth-hint a{font-weight:800;color:var(--dip-accent-ink,#2a44b6)}'
             . '</style>';
     }
 }

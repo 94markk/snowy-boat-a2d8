@@ -38,7 +38,10 @@
     if(err.code==='rest_cookie_invalid_nonce')return str('stale','Cette page a expiré. Actualisez-la puis réessayez.');
     if(err.status&&err.code&&err.message)return err.message; // WP_Error messages are French.
     switch(err.name){
-      case 'NotAllowedError':return kind==='login'?str('cancelledLogin','Vérification annulée, ou aucune Passkey de ce compte sur cet appareil.'):str('cancelled','Vérification Passkey annulée ou indisponible.');
+      case 'NotAllowedError':
+        // No e-mail typed: a security key enrolled without a discoverable passkey needs the e-mail first.
+        if(kind==='loginNoEmail')return str('cancelledNoEmail','Vérification annulée, ou aucune Passkey trouvée. Si votre Passkey est sur une clé de sécurité, saisissez d’abord votre e-mail, puis réessayez.');
+        return kind==='login'?str('cancelledLogin','Vérification annulée, ou aucune Passkey de ce compte sur cet appareil.'):str('cancelled','Vérification Passkey annulée ou indisponible.');
       case 'InvalidStateError':return str('exists','Cet appareil possède déjà une Passkey pour ce compte.');
       case 'SecurityError':return str('origin','Les Passkeys fonctionnent uniquement sur l’adresse officielle du site.');
       case 'NotSupportedError':return str('unsupported','Ce navigateur ne prend pas en charge les Passkeys.');
@@ -320,7 +323,7 @@
       });
     }
     flow.then(function(){/* navigating: stay busy */}).catch(function(err){
-      setStatus(errorMessage(err,'login'),'error',root);
+      setStatus(errorMessage(err,(!value&&input)?'loginNoEmail':'login'),'error',root);
       if(root.removeAttribute)root.removeAttribute('data-passkey-busy');
       if(auto)wakeAutofill(auto);
     }).finally(function(){setBusy(button,false);});

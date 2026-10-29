@@ -410,10 +410,12 @@ final class DIP_Native_Auth {
     public static function record_failed_login($username, $error = null) {
         $username = sanitize_text_field((string) $username);
         // Policy failures are not password guesses and must not punish a real
-        // customer by advancing the brute-force lockout counter.
+        // customer by advancing the brute-force lockout counter. A valid but
+        // blocked application password (2FA account, XML-RPC/REST) is not one
+        // either: it is only reported after the credential matched.
         if ($error instanceof WP_Error) {
             $codes = $error->get_error_codes();
-            if (array_intersect($codes, ['dip_email_not_verified','account_pending_approval','delicat_locked','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required'])) return;
+            if (array_intersect($codes, ['dip_email_not_verified','account_pending_approval','delicat_locked','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required','dip_2fa_application_password_blocked'])) return;
         }
         // Do not turn an already-active lock into another failed attempt.
         if (self::is_locked($username)) return;
@@ -562,7 +564,8 @@ final class DIP_Native_Auth {
     public static function ajax_login() {
         nocache_headers();
         if (is_user_logged_in()) {
-            wp_send_json_success(['message'=>__('✅ Vous êtes déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect(self::login_redirect())]);
+            $return = self::posted_return();
+            wp_send_json_success(['message'=>__('✅ Vous êtes déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect($return !== '' ? $return : self::login_redirect())]);
         }
         if (!self::verify_browser_nonce('delicat_login_action')) {
             self::json_error(__('Session expirée. Nouvelle tentative…', 'delicat-google-login'), 'bad_nonce');
@@ -607,7 +610,7 @@ final class DIP_Native_Auth {
 
         wp_set_current_user($user->ID);
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user->ID);
-        $return = self::checkout_return(self::posted('redirect'));
+        $return = self::posted_return();
         wp_send_json_success([
             'message' => __('✅ Connexion réussie. Redirection…', 'delicat-google-login'),
             'redirect' => self::auth_transition_redirect($return !== '' ? $return : self::login_redirect()),
@@ -660,7 +663,8 @@ final class DIP_Native_Auth {
     public static function ajax_register() {
         nocache_headers();
         if (is_user_logged_in()) {
-            wp_send_json_success(['message'=>__('✅ Votre compte est déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect(self::register_redirect())]);
+            $return = self::posted_return();
+            wp_send_json_success(['message'=>__('✅ Votre compte est déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect($return !== '' ? $return : self::register_redirect())]);
         }
         if (!self::verify_browser_nonce('delicat_register_action')) {
             self::json_error(__('Session expirée. Nouvelle tentative…', 'delicat-google-login'), 'bad_nonce');
@@ -702,7 +706,11 @@ final class DIP_Native_Auth {
         $names = preg_split('/\s+/', trim($name), 2);
         $role = get_role('customer') ? 'customer' : 'subscriber';
         $profile = ['provider'=>'native','email'=>$email,'name'=>$name];
-        $user_id = DIP_Account_Sync::create_customer($email, $username, $pass, [
+        // Stored as WordPress and WooCommerce forms store it (the posted,
+        // slashed value), so WooCommerce's own current-password check in
+        // « Détails du compte » accepts it too. Accounts registered before
+        // 6.11.1 keep the typed form: password_slash_compat() covers both.
+        $user_id = DIP_Account_Sync::create_customer($email, $username, wp_slash($pass), [
             'display_name' => $name,
             'first_name' => $names[0] ?? $name,
             'last_name' => $names[1] ?? '',
@@ -739,7 +747,7 @@ final class DIP_Native_Auth {
             do_action('dip_login_success', $user_id, ['provider'=>'native_registration']);
         }
         DIP_Account_Sync::after_login($user_id);
-        $return = self::checkout_return(self::posted('redirect'));
+        $return = self::posted_return();
 
         wp_send_json_success([
             'message' => __('✅ Compte créé avec succès. Redirection…', 'delicat-google-login'),
@@ -863,9 +871,51 @@ final class DIP_Native_Auth {
         foreach ([wc_get_checkout_url(), function_exists('wc_get_cart_url') ? wc_get_cart_url() : ''] as $page) {
             $page_path = untrailingslashit((string) wp_parse_url((string) $page, PHP_URL_PATH));
             if ($page_path === '' || $page_path === untrailingslashit((string) wp_parse_url(home_url('/'), PHP_URL_PATH))) continue;
-            if ($path === $page_path || strpos($path . '/', $page_path . '/') === 0) return remove_query_arg('dip_auth_sync', $safe);
+            if ($path === $page_path || strpos($path . '/', $page_path . '/') === 0) return remove_query_arg(self::ONE_SHOT_ARGS, $safe);
         }
         return '';
+    }
+
+    /**
+     * Cart actions and markers that must not run again when the customer is
+     * sent back to a page after signing in (« ?add-to-cart= » would add the
+     * product a second time).
+     */
+    const ONE_SHOT_ARGS = ['add-to-cart', 'quantity', 'variation_id', 'remove_item', 'undo_item', 'removed_item', 'order_again', 'apply_coupon', 'remove_coupon', 'cancel_order', 'add-to-wishlist', 'remove_from_wishlist', '_wpnonce', '_wp_http_referer', 'redirect', 'redirect_to', 'dip_auth_sync', 'dip_identity_open', 'dip_identity_eager'];
+
+    /**
+     * A destination the customer asked for (?redirect_to= on the account page,
+     * as the checkout panel's « Email ou mot de passe » and protected pages
+     * send it), limited to same-site storefront pages by
+     * DIP_Session_Router::destination(); '' when refused.
+     */
+    private static function requested_return($url) {
+        if (!is_string($url) || trim($url) === '' || strlen($url) > 2048) return '';
+        $safe = DIP_Session_Router::destination($url, '');
+        // destination() answers the home page for a refused address.
+        if ($safe === '' || untrailingslashit($safe) === untrailingslashit(home_url('/'))) return '';
+        return remove_query_arg(self::ONE_SHOT_ARGS, $safe);
+    }
+
+    /**
+     * Where a modal sign-in opened on this page returns instead of the
+     * configured landing page ('' = landing page): its checkout/cart page, or
+     * the page its address names with ?redirect_to=.
+     */
+    private static function return_target($page_url) {
+        $checkout = self::checkout_return($page_url);
+        if ($checkout !== '') return $checkout;
+        $query = (string) wp_parse_url((string) $page_url, PHP_URL_QUERY);
+        if ($query === '') return '';
+        parse_str($query, $args);
+        return isset($args['redirect_to']) && is_string($args['redirect_to']) ? self::requested_return($args['redirect_to']) : '';
+    }
+
+    /** The return target the modal form posted back (only ever rendered by return_target()), validated again. */
+    private static function posted_return() {
+        $posted = self::posted('redirect');
+        $checkout = self::checkout_return($posted);
+        return $checkout !== '' ? $checkout : self::requested_return($posted);
     }
 
     public static function render_modal() {
@@ -915,8 +965,9 @@ final class DIP_Native_Auth {
         $pass_min = min(64, max(8, absint($s['native_password_min'] ?? 8)));
         $pass_max = min(256, max($pass_min, absint($s['native_password_max'] ?? 100)));
         $registration_enabled = self::registration_allowed();
-        // Checkout/cart only; read by the password forms and passkeys.js.
-        $return_to = self::checkout_return($redirect_url);
+        // Checkout/cart or an explicit ?redirect_to= only; read by the password
+        // forms and passkeys.js, and given to Google too.
+        $return_to = self::return_target($redirect_url);
         $return_field = $return_to !== '' ? '<input type="hidden" name="redirect" value="' . esc_url($return_to) . '">' : '';
 
         $google = '';
@@ -929,7 +980,7 @@ final class DIP_Native_Auth {
                 'layout' => 'row',
                 'align' => 'stretch',
                 'tracker' => 'native_modal',
-                'redirect' => $redirect_url,
+                'redirect' => $return_to !== '' ? $return_to : $redirect_url,
                 'suppress_divider' => true,
             ]);
         }

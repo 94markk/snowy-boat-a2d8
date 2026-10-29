@@ -56,7 +56,7 @@
       var rows=Array.prototype.slice.call(document.querySelectorAll('table.woocommerce-orders-table tbody tr'));
       var normalize=function(value){
         value=(value||'').toString().toLowerCase().trim();
-        try{return value.normalize('NFD').replace(/[̀-ͯ]/g,'');}catch(e){return value;}
+        try{return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'');}catch(e){return value;}
       };
       var texts=rows.map(function(row){return normalize(row.textContent);});
       var filter=function(){

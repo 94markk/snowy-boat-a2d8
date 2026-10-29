@@ -292,12 +292,16 @@ final class DIP_Identity {
 
     /**
      * Current address never proven: still waiting for its verification link,
-     * or changed since the last proof (login_guard refuses both).
+     * changed since the last proof (login_guard refuses both), or registered
+     * while verification was switched off ('unproven': usable for sign-in,
+     * but no proof marker was ever recorded). Accounts older than these
+     * markers (no dip_email_verified at all) keep today's behaviour.
      */
     private static function email_unproven($user_id) {
-        if (get_user_meta($user_id, 'dip_email_verified', true) === 'no') return true;
+        $state = (string) get_user_meta($user_id, 'dip_email_verified', true);
+        if ($state === 'no') return true;
         $fingerprint = (string) get_user_meta($user_id, '_dip_verified_email_fingerprint', true);
-        if ($fingerprint === '') return false;
+        if ($fingerprint === '') return $state === 'yes' && (string) get_user_meta($user_id, '_dip_verified_email_proof_v2', true) === '';
         $user = get_userdata($user_id);
         $current = $user ? hash('sha256', strtolower(sanitize_email($user->user_email))) : '';
         return $current === '' || !hash_equals($fingerprint, $current);
@@ -334,8 +338,8 @@ final class DIP_Identity {
             if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user_id, ['provider'=>$provider, 'credentials'=>implode(',', array_unique($foreign))]);
             return new WP_Error('email_exists', 'Un compte dont l’adresse n’est pas encore confirmée utilise déjà cette adresse. Confirmez-la avec le lien reçu par e-mail ou connectez-vous à ce compte, puis reliez ce fournisseur.');
         }
-        // A stale proof counts as unverified for login_guard; record it the
-        // same way so the credential reset applies to it too.
+        // A stale proof (or an 'unproven' address) is recorded as unverified
+        // so the credential reset of after_verified_registration() applies.
         update_user_meta($user_id, 'dip_email_verified', 'no');
         self::clear_pending_provider_link($user_id);
         delete_user_meta($user_id, '_dip_email_verify_hash');
@@ -383,8 +387,31 @@ final class DIP_Identity {
         return $ok;
     }
 
+    /** The pending-link secret this browser carries ('' when none). */
+    private static function pending_cookie_secret($user_id) {
+        $cookie = $_COOKIE[self::pending_cookie_name($user_id)] ?? '';
+        $cookie = is_string($cookie) ? sanitize_text_field(wp_unslash($cookie)) : '';
+        return preg_match('/^[a-f0-9]{64}$/D', $cookie) ? $cookie : '';
+    }
+
+    private static function browser_known(array $pending, $secret) {
+        if ($secret === '') return false;
+        $hash = self::hash_browser($secret);
+        foreach ((array) ($pending['browsers'] ?? []) as $known) {
+            if (is_string($known) && hash_equals($known, $hash)) return true;
+        }
+        return false;
+    }
+
     /** Remember this browser for the pending link (at most three browsers). */
     private static function bind_pending_browser($user_id, array $pending, $expires) {
+        // A browser that is already bound keeps its secret and its slot, so
+        // repeated sign-ins never push the other bound browsers out.
+        $current = self::pending_cookie_secret($user_id);
+        if (self::browser_known($pending, $current)) {
+            self::set_pending_cookie($user_id, $current, $expires);
+            return $pending;
+        }
         $secret = self::random_secret();
         if ($secret === '' || !self::set_pending_cookie($user_id, $secret, $expires)) return null;
         $browsers = array_values(array_filter((array) ($pending['browsers'] ?? []), 'is_string'));
@@ -439,7 +466,9 @@ final class DIP_Identity {
         }
         $expires = max((int) $pending['expires'], $verify_expires);
         $pending['expires'] = $expires;
-        $bound = self::bind_pending_browser($user_id, $pending, $expires);
+        // An app (REST) sign-in has no browser to bind; it must not take one
+        // of the three slots of the browsers that can confirm the address.
+        $bound = defined('REST_REQUEST') && REST_REQUEST ? null : self::bind_pending_browser($user_id, $pending, $expires);
         update_user_meta($user_id, self::META_PENDING_LINK, $bound ?: $pending);
         return new WP_Error('dip_email_not_verified', 'Confirmez d’abord votre adresse e-mail avec le lien que nous vous avons envoyé.');
     }
@@ -451,16 +480,7 @@ final class DIP_Identity {
         if (!$user) return 'user_missing';
         if (class_exists('DIP_Account_Sync') && DIP_Account_Sync::privileged_mobile_blocked($user_id)) return 'privileged';
         if (empty($pending['email']) || !hash_equals((string) $pending['email'], self::hash_email($user->user_email))) return 'email_changed';
-        $cookie = $_COOKIE[self::pending_cookie_name($user_id)] ?? '';
-        $cookie = is_string($cookie) ? sanitize_text_field(wp_unslash($cookie)) : '';
-        $same_browser = false;
-        if (preg_match('/^[a-f0-9]{64}$/D', $cookie)) {
-            $hash = self::hash_browser($cookie);
-            foreach ((array) ($pending['browsers'] ?? []) as $known) {
-                if (is_string($known) && hash_equals($known, $hash)) { $same_browser = true; break; }
-            }
-        }
-        if (!$same_browser) return 'other_browser';
+        if (!self::browser_known($pending, self::pending_cookie_secret($user_id))) return 'other_browser';
         $provider = sanitize_key((string) ($pending['provider'] ?? ''));
         $sub = (string) ($pending['sub'] ?? '');
         if (!$provider || $sub === '' || strlen($sub) > 255) return 'invalid';
