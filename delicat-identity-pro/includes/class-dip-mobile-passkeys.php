@@ -42,6 +42,14 @@ final class DIP_Mobile_Passkeys {
      */
     const ACCOUNT_FAILURE_LIMIT = 18;
     const ACCOUNT_FAILURE_PREFIX = 'dip_mob_passkey_login_verify_user_';
+    /**
+     * 6.11.1: every login/options call stores a ceremony, so the address
+     * keeps an all-attempts flood ceiling (disk-filling guard, as /mobile/google's
+     * 500 and the website's 600), far above a carrier NAT address's human use.
+     */
+    const LOGIN_OPTIONS_ADDRESS_FLOOD = 1000;
+    /** WebAuthn credential ids reach 1023 bytes: 1366 base64url characters (as the website's route). */
+    const CREDENTIAL_ID_PATTERN = '[A-Za-z0-9_-]{20,1366}';
 
     private static $initialized = false;
 
@@ -49,6 +57,14 @@ final class DIP_Mobile_Passkeys {
         if (self::$initialized) return;
         self::$initialized = true;
         add_action('rest_api_init', [__CLASS__, 'routes']);
+        add_filter('dip_mobile_rest_rules', [__CLASS__, 'firewall_rules']);
+    }
+
+    /** Strict REST firewall: the removal route accepts every credential id length (the built-in pattern stops at 160 characters). */
+    public static function firewall_rules($rules) {
+        $rules = is_array($rules) ? $rules : [];
+        $rules[] = ['#^/delicat-identity/v1/mobile/passkeys/' . self::CREDENTIAL_ID_PATTERN . '$#', ['DELETE']];
+        return $rules;
     }
 
     public static function routes() {
@@ -58,7 +74,7 @@ final class DIP_Mobile_Passkeys {
         register_rest_route(self::NS, '/mobile/passkeys/register/options', ['methods' => 'POST', 'callback' => [__CLASS__, 'register_options'], 'permission_callback' => $session]);
         register_rest_route(self::NS, '/mobile/passkeys/register/verify', ['methods' => 'POST', 'callback' => [__CLASS__, 'register_verify'], 'permission_callback' => $session]);
         register_rest_route(self::NS, '/mobile/passkeys', ['methods' => 'GET', 'callback' => [__CLASS__, 'list_passkeys'], 'permission_callback' => $session]);
-        register_rest_route(self::NS, '/mobile/passkeys/(?P<credential>[A-Za-z0-9_-]{20,160})', ['methods' => 'DELETE', 'callback' => [__CLASS__, 'remove'], 'permission_callback' => $session]);
+        register_rest_route(self::NS, '/mobile/passkeys/(?P<credential>' . self::CREDENTIAL_ID_PATTERN . ')', ['methods' => 'DELETE', 'callback' => [__CLASS__, 'remove'], 'permission_callback' => $session]);
         register_rest_route(self::NS, '/mobile/reauth/passkey/options', ['methods' => 'POST', 'callback' => [__CLASS__, 'reauth_options'], 'permission_callback' => $session]);
         register_rest_route(self::NS, '/mobile/reauth/passkey/verify', ['methods' => 'POST', 'callback' => [__CLASS__, 'reauth_verify'], 'permission_callback' => $session]);
     }
@@ -118,11 +134,14 @@ final class DIP_Mobile_Passkeys {
      * on the atomic counter table, then read-and-delete. The ceremony must be
      * a mobile one for $purpose, unexpired, and finished by the SAME
      * installation and device that opened it. WP_Error otherwise.
+     * 6.11.1: an id with no stored ceremony is refused before any write (no
+     * lock option, no counter row for random ids).
      */
     private static function consume_ceremony($id, $purpose, WP_REST_Request $r) {
-        $id = trim((string) $id);
+        $id = is_string($id) ? trim($id) : '';
         $invalid = new WP_Error('passkey_ceremony_invalid', 'Cette vérification a expiré. Réessayez.', ['status' => 400]);
         if (!preg_match('/^[A-Za-z0-9_-]{20,160}$/D', $id)) return $invalid;
+        if (!is_array(get_transient(self::ceremony_key($id)))) return $invalid;
         $lock = self::LOCK_PREFIX . substr(hash_hmac('sha256', $id, wp_salt('secure_auth')), 0, 40);
         $now = time();
         if (!add_option($lock, $now, '', false)) {
@@ -171,7 +190,7 @@ final class DIP_Mobile_Passkeys {
             $raw = is_array($decoded) ? $decoded : null;
         }
         if (!is_array($raw)) return null;
-        if (isset($raw['type']) && (string) $raw['type'] !== 'public-key') return null;
+        if (isset($raw['type']) && $raw['type'] !== 'public-key') return null;
         $response = isset($raw['response']) && is_array($raw['response']) ? $raw['response'] : $raw;
         $transports = isset($response['transports']) && is_array($response['transports']) ? $response['transports'] : [];
         $flat = [
@@ -227,12 +246,15 @@ final class DIP_Mobile_Passkeys {
     public static function login_options(WP_REST_Request $r) {
         // Failures only (owner rule, 2026-10-24): 10 per installation, 100 per
         // address; every request counts only against the flood guard
-        // (DIP_Mobile_API::SESSION_FLOOD_LIMIT per installation).
-        $gate = DIP_Mobile_API::throttle('passkey_login_options', 10, 10 * MINUTE_IN_SECONDS, $r, 0, null, true);
+        // (DIP_Mobile_API::SESSION_FLOOD_LIMIT per installation) and, since
+        // each call stores a ceremony, the address flood ceiling (6.11.1).
+        $gate = DIP_Mobile_API::throttle('passkey_login_options', 10, 10 * MINUTE_IN_SECONDS, $r, self::LOGIN_OPTIONS_ADDRESS_FLOOD, null, true);
         if (is_wp_error($gate)) return $gate;
         $ok = self::gate();
         if (is_wp_error($ok)) return $ok;
-        if (!DIP_Mobile_API::valid_device_request($r)) { DIP_Mobile_API::proof_failed($gate, 'device_required'); return new WP_Error('device_required', 'A valid device and installation identifier are required.', ['status' => 400]); }
+        if (!DIP_Mobile_API::valid_device_request($r)) { if ($e = DIP_Mobile_API::proof_failed($gate, 'device_required')) return $e; return new WP_Error('device_required', 'A valid device and installation identifier are required.', ['status' => 400]); }
+        $limited = DIP_Mobile_API::proof_accepted($gate);
+        if ($limited) return $limited;
         $ceremony = self::create_ceremony('login', $r);
         return new WP_REST_Response(['ceremony_id' => $ceremony['id'], 'publicKey' => [
             'challenge' => $ceremony['challenge'],
@@ -247,18 +269,30 @@ final class DIP_Mobile_Passkeys {
      * Every refused sign-in: counted against the address, one generic 401.
      * Once the account is known (its user handle resolved), the refusal also
      * counts against that account's failure bucket (ACCOUNT_FAILURE_LIMIT).
+     * 6.11.1: while the address failure ceiling holds, the 429 at once and
+     * nothing written.
      */
     private static function login_failed($gate, $reason, $user_id = 0) {
-        DIP_Mobile_API::proof_failed($gate, $reason);
-        if ($user_id > 0) DIP_Lockout::counter_hit(self::ACCOUNT_FAILURE_PREFIX . absint($user_id), 10 * MINUTE_IN_SECONDS);
+        $blocked = DIP_Mobile_API::proof_failed($gate, $reason);
+        if ($blocked) return $blocked;
+        if ($user_id > 0) DIP_Lockout::counter_hit(self::account_failure_key($user_id), 10 * MINUTE_IN_SECONDS);
         if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_passkey_login_failed', 'warning', absint($user_id), ['reason' => sanitize_key($reason)]);
         return new WP_Error('authentication_failed', 'Mobile authentication failed.', ['status' => 401]);
+    }
+
+    /**
+     * 6.11.1: the account's failure bucket is per account AND address, as on
+     * the website: a third party holding a customer's user handle can no
+     * longer lock that customer's app passkey sign-in everywhere.
+     */
+    private static function account_failure_key($user_id) {
+        return self::ACCOUNT_FAILURE_PREFIX . substr(hash_hmac('sha256', DIP_Native_Auth::throttle_ip() . '|uid:' . absint($user_id), wp_salt('nonce')), 0, 32);
     }
 
     /** POST /mobile/passkeys/login/verify {ceremony_id, credential}. */
     public static function login_verify(WP_REST_Request $r) {
         // Failures only: 10 per installation, 100 per address, 18 per account
-        // (below); every request counts only against the flood guard.
+        // and address (below); every request counts only against the flood guard.
         $gate = DIP_Mobile_API::throttle('passkey_login_verify', 10, 10 * MINUTE_IN_SECONDS, $r, 0, null, true);
         if (is_wp_error($gate)) return $gate;
         $ok = self::gate();
@@ -275,7 +309,7 @@ final class DIP_Mobile_Passkeys {
         // Read here, counted by login_failed() only: successful sign-ins never
         // touch it. Like the address ceiling, requests already in flight when
         // it is reached still finish.
-        $account_key = self::ACCOUNT_FAILURE_PREFIX . $uid;
+        $account_key = self::account_failure_key($uid);
         if (DIP_Lockout::counter_peek($account_key)['count'] >= self::ACCOUNT_FAILURE_LIMIT) return DIP_Mobile_API::rate_limited($gate, 'account', $account_key);
         $credential_id = DIP_Passkeys::request_credential_id($credential);
         list($entry) = DIP_Passkeys::find_credential($uid, $credential_id);
@@ -285,6 +319,8 @@ final class DIP_Mobile_Passkeys {
         $result = DIP_Passkeys::verify_assertion($credential, $state);
         if (is_wp_error($result)) return self::login_failed($gate, $result->get_error_code(), $uid);
         if (!DIP_Mobile_API::mobile_user_allowed($uid)) return DIP_Mobile_API::denied('mobile_account_not_allowed');
+        $limited = DIP_Mobile_API::proof_accepted($gate);
+        if ($limited) return $limited;
         // UV was required and verified: the assertion satisfies the second factor (see issue_for_user()).
         $issued = DIP_Mobile_API::issue_for_user($uid, $r, 'passkey');
         if (is_wp_error($issued)) return $issued;
@@ -316,7 +352,8 @@ final class DIP_Mobile_Passkeys {
         $credentials = DIP_Passkeys::credentials($uid);
         $max = DIP_Passkeys::max_per_user();
         if (count($credentials) >= $max) return new WP_Error('passkey_limit', sprintf('Vous avez déjà %d clés d’accès. Supprimez-en une d’abord.', $max), ['status' => 409]);
-        $label = sanitize_text_field((string) $r->get_param('label'));
+        $label = $r->get_param('label');
+        $label = is_string($label) ? sanitize_text_field($label) : '';
         if ($label === '') $label = sanitize_text_field((string) $session->device_name);
         if ($label === '') $label = 'Mon téléphone';
         $label = function_exists('mb_substr') ? mb_substr($label, 0, 60) : substr($label, 0, 60);
@@ -343,6 +380,9 @@ final class DIP_Mobile_Passkeys {
         if (is_wp_error($ok)) return $ok;
         $session = self::session_or_error($r);
         if (is_wp_error($session)) return $session;
+        // 6.11.1: flood guard only (a ceremony claim per call), as register/options.
+        $limited = DIP_Mobile_API::session_route_limit('passkey_register_verify', (int) $session->id);
+        if ($limited) return $limited;
         $uid = (int) $session->user_id;
         $state = self::consume_ceremony($r->get_param('ceremony_id'), 'register', $r);
         if (is_wp_error($state)) return $state;
@@ -409,7 +449,10 @@ final class DIP_Mobile_Passkeys {
         $proof = DIP_Mobile_API::require_recent_proof($session);
         if ($proof) return $proof;
         $uid = (int) $session->user_id;
-        $id = sanitize_text_field((string) $r->get_param('credential'));
+        // The path only: a body field « credential » never picks another passkey.
+        $url = $r->get_url_params();
+        $id = isset($url['credential']) && is_string($url['credential']) ? sanitize_text_field($url['credential']) : '';
+        if ($id === '') return new WP_Error('passkey_not_found', 'Cette clé d’accès n’existe plus.', ['status' => 404]);
         if (!DIP_Passkeys::acquire_user_lock($uid, 10)) return new WP_Error('passkey_busy', 'Une autre modification de sécurité est en cours. Réessayez.', ['status' => 409]);
         try {
             $kept = [];

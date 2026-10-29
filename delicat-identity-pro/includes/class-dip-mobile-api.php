@@ -27,12 +27,21 @@ final class DIP_Mobile_API {
     const ISSUE_METHODS = ['google', 'passkey', 'biometric', 'password_upgrade'];
     private static $settings_cb;
     private static $revoking = [];
+    /** 6.11.1: sessions resolved in this request (one lookup and one last_used_at write per request). */
+    private static $sessions = [];
+    /** 6.11.1: the account a mobile token made current in this request: ['user' => id, 'prior' => id before, 'request' => the WP_REST_Request it was granted for, or null]. */
+    private static $granted = null;
 
     public static function init($settings_cb) {
         self::$settings_cb = $settings_cb;
         add_action('rest_api_init', [__CLASS__, 'routes']);
         add_filter('rest_post_dispatch', [__CLASS__, 'secure_rest_response'], 10, 3);
         add_filter('determine_current_user', [__CLASS__, 'authenticate_bearer'], 25);
+        // 6.11.1: a mobile identity only ever serves the routes it was granted
+        // for, checked on the route WordPress really dispatches (batch
+        // sub-requests included), before the firewall and the callbacks.
+        add_filter('rest_pre_dispatch', [__CLASS__, 'guard_dispatch'], 0, 3);
+        add_filter('rest_request_before_callbacks', [__CLASS__, 'guard_callbacks'], 0, 3);
         add_action('dip_mobile_cleanup', [__CLASS__, 'cleanup']);
         // 6.11.0: the App API's account events reach the quick sign-in keys too.
         add_action('delicat_app_revoke_all_external_sessions', [__CLASS__, 'on_app_revoke_all'], 10, 1);
@@ -128,8 +137,20 @@ final class DIP_Mobile_API {
     public static function logged_in($request = null) {
         $session = self::current_session_for_request($request instanceof WP_REST_Request ? $request : null);
         if (!$session || !self::mobile_user_allowed((int) $session->user_id)) return false;
+        self::grant_identity((int) $session->user_id, get_current_user_id(), $request instanceof WP_REST_Request ? $request : null);
         wp_set_current_user((int) $session->user_id);
         return true;
+    }
+
+    /** The {id} of the route path: a body field of the same name never overrides it. */
+    private static function route_id(WP_REST_Request $r) {
+        $url = $r->get_url_params();
+        return absint(isset($url['id']) ? self::scalar($url['id']) : self::scalar($r->get_param('id')));
+    }
+
+    /** A request value as a string: '' for arrays and objects (no PHP warning on hostile JSON). */
+    private static function scalar($value) {
+        return is_scalar($value) ? (string) $value : '';
     }
     /** @internal 6.11.0: also read by DIP_Mobile_Passkeys. */
     public static function settings() { return is_callable(self::$settings_cb) ? (array) call_user_func(self::$settings_cb) : []; }
@@ -148,7 +169,9 @@ final class DIP_Mobile_API {
     }
 
     public static function secure_rest_response($response, $server, $request) {
-        if ((strpos((string) $request->get_route(), '/delicat-identity/v1/mobile/') === 0 || strpos((string) $request->get_route(), '/delicat-identity/v1/pairing/') === 0) && $response instanceof WP_REST_Response) {
+        // 6.11.1: WordPress matches routes case-insensitively, so do the no-store headers.
+        $route = (string) $request->get_route();
+        if ((stripos($route, '/delicat-identity/v1/mobile/') === 0 || stripos($route, '/delicat-identity/v1/pairing/') === 0) && $response instanceof WP_REST_Response) {
             $response->header('Cache-Control', 'no-store, no-cache, must-revalidate, private');
             $response->header('Pragma', 'no-cache');
             $response->header('X-Content-Type-Options', 'nosniff');
@@ -203,6 +226,20 @@ final class DIP_Mobile_API {
      * flight when it is reached still finish: the overshoot is at most the
      * number of requests a caller has running at that moment, once a window.
      *
+     * 6.11.1 (closes the 6.10.2 open question, owner rule of 2026-10-24): for
+     * a $failures_only gate with a valid installation ID, a full address
+     * failure ceiling no longer refuses the request before it is looked at.
+     * The gate comes back with 'address_blocked': the handler checks the
+     * proof as usual; a request that fails gets the same 429 at once, with
+     * nothing written (proof_failed()); a request that proves possession goes
+     * on, and the installation flood guard it skipped is counted then
+     * (proof_accepted()). So one device behind a carrier NAT address can no
+     * longer stop session renewal for every customer behind it. Without a
+     * valid installation ID, and for the other gates, the ceiling still
+     * refuses up front. The all-attempts address ceiling ($address_limit) is
+     * counted before any per-installation bucket, so rotated installation IDs
+     * stop adding counter rows once it is reached.
+     *
      * Returns the gate to pass to proof_failed(), or the 429 WP_Error.
      *
      * @internal 6.11.0: public so that DIP_Mobile_Passkeys uses the same buckets.
@@ -224,8 +261,13 @@ final class DIP_Mobile_API {
             'address' => substr($address, 0, 12),
             'installation' => $installation === '' ? 'none' : substr(self::device_hash($installation), 0, 12),
         ];
-        if (DIP_Lockout::counter_peek($gate['failures'])['count'] >= $gate['failure_limit']) {
+        $blocked = DIP_Lockout::counter_peek($gate['failures'])['count'] >= $gate['failure_limit'];
+        if ($blocked && (!$failures_only || $installation === '')) {
             return self::rate_limited($gate, 'address_failures', $gate['failures']);
+        }
+        if ($address_limit > 0) {
+            $key = $prefix . 'all_' . $address;
+            if (DIP_Lockout::counter_hit($key, $window) > (int) $address_limit) return self::rate_limited($gate, 'address', $key);
         }
         if ($installation === '') {
             $key = $prefix . 'noinst_' . $address;
@@ -238,15 +280,31 @@ final class DIP_Mobile_API {
             if (DIP_Lockout::counter_peek($gate['installation_failures'])['count'] >= (int) $limit) {
                 return self::rate_limited($gate, 'installation_failures', $gate['installation_failures']);
             }
+            if ($blocked) {
+                // Nothing is written for this request until it proves possession.
+                $gate['address_blocked'] = true;
+                $gate['deferred_flood'] = $key;
+                return $gate;
+            }
             if (DIP_Lockout::counter_hit($key, $window) > self::SESSION_FLOOD_LIMIT) return self::rate_limited($gate, 'installation', $key);
         } elseif (DIP_Lockout::counter_hit($key, $window) > $limit) {
             return self::rate_limited($gate, 'installation', $key);
         }
-        if ($address_limit > 0) {
-            $key = $prefix . 'all_' . $address;
-            if (DIP_Lockout::counter_hit($key, $window) > (int) $address_limit) return self::rate_limited($gate, 'address', $key);
-        }
         return $gate;
+    }
+
+    /**
+     * 6.11.1: the request proved possession (valid refresh token, verified
+     * Google token, valid signature or assertion, enrolled installation):
+     * counts the installation flood guard that throttle() deferred while the
+     * address failure ceiling holds. Returns the 429 or null.
+     *
+     * @internal public for DIP_Mobile_Passkeys.
+     */
+    public static function proof_accepted($gate) {
+        if (!is_array($gate) || empty($gate['deferred_flood'])) return null;
+        $key = (string) $gate['deferred_flood'];
+        return DIP_Lockout::counter_hit($key, (int) $gate['window']) > self::SESSION_FLOOD_LIMIT ? self::rate_limited($gate, 'installation', $key) : null;
     }
 
     /**
@@ -256,10 +314,16 @@ final class DIP_Mobile_API {
      * remember which installations failed (first 10 per window) so the
      * lockout audit can name them.
      *
+     * 6.11.1: returns null, or — while the address failure ceiling holds
+     * (throttle()'s 'address_blocked') — the 429 the request must answer
+     * instead of its own error, without writing anything (the ceiling is
+     * already reached). Callers: `if ($e = proof_failed(...)) return $e;`.
+     *
      * @internal 6.11.0: public for DIP_Mobile_Passkeys.
      */
     public static function proof_failed($gate, $reason = '') {
-        if (!is_array($gate) || empty($gate['failures'])) return;
+        if (!is_array($gate) || empty($gate['failures'])) return null;
+        if (!empty($gate['address_blocked'])) return self::rate_limited($gate, 'address_failures', $gate['failures']);
         DIP_Lockout::counter_hit($gate['failures'], $gate['window']);
         if (!empty($gate['installation_failures'])) DIP_Lockout::counter_hit($gate['installation_failures'], $gate['window']);
         $now = time();
@@ -274,6 +338,7 @@ final class DIP_Mobile_API {
             $suspects['other']++;
         }
         set_transient($gate['suspects'], $suspects, max(1, (int) $suspects['until'] - $now));
+        return null;
     }
 
     /**
@@ -338,17 +403,23 @@ final class DIP_Mobile_API {
      * one throttle bucket exactly when they bind to the same session.
      */
     private static function canonical_installation($value) {
-        $installation = trim(sanitize_text_field((string) $value));
+        $installation = trim(sanitize_text_field(self::scalar($value)));
         return strlen($installation) >= 16 && strlen($installation) <= 255 ? $installation : '';
     }
 
+    /** A header, else the same value as a body/query parameter (scalar only), as `header ?: param` always read it. */
+    private static function header_or_param(WP_REST_Request $r, $header, $param) {
+        $value = $r->get_header($header);
+        return $value ? (string) $value : self::scalar($r->get_param($param));
+    }
+
     private static function installation_id(WP_REST_Request $r) {
-        return self::canonical_installation($r->get_header('X-Installation-ID') ?: $r->get_param('installation_id'));
+        return self::canonical_installation(self::header_or_param($r, 'X-Installation-ID', 'installation_id'));
     }
 
     /** @internal 6.11.0: public for DIP_Mobile_Passkeys. */
     public static function valid_device_request(WP_REST_Request $r) {
-        $device = trim(sanitize_text_field((string) ($r->get_header('X-Device-ID') ?: $r->get_param('device_id'))));
+        $device = trim(sanitize_text_field(self::header_or_param($r, 'X-Device-ID', 'device_id')));
         return strlen($device) >= 8 && strlen($device) <= 255 && self::installation_id($r) !== '';
     }
 
@@ -386,24 +457,78 @@ final class DIP_Mobile_API {
         return (int) $row->user_id;
     }
 
-    private static function automatic_bearer_route_allowed() {
-        if (!defined('REST_REQUEST') || !REST_REQUEST) return false;
-        $route = '';
-        if (isset($_GET['rest_route'])) {
-            $route = (string) wp_unslash($_GET['rest_route']);
-        } elseif (!empty($_SERVER['REQUEST_URI'])) {
-            $path = (string) wp_parse_url(wp_unslash($_SERVER['REQUEST_URI']), PHP_URL_PATH);
-            $marker = '/wp-json/';
-            $pos = strpos($path, $marker);
-            if ($pos !== false) $route = '/' . ltrim(substr($path, $pos + strlen($marker)), '/');
-        }
-        $route = '/' . ltrim(sanitize_text_field($route), '/');
+    /** A REST route a mobile identity may serve: the Identity namespace (and prefixes added by the filter). */
+    private static function bearer_route_allowed($route) {
+        if (!is_string($route) || $route === '') return false;
+        $route = '/' . ltrim($route, '/');
         $prefixes = apply_filters('dip_mobile_bearer_auto_auth_prefixes', ['/delicat-identity/v1/']);
         foreach ((array) $prefixes as $prefix) {
-            $prefix = '/' . ltrim((string) $prefix, '/');
+            if (!is_string($prefix)) continue;
+            $prefix = '/' . ltrim($prefix, '/');
             if ($prefix !== '/' && strpos($route, $prefix) === 0) return true;
         }
         return false;
+    }
+
+    /**
+     * 6.11.1: the route is the one WordPress will dispatch —
+     * $wp->query_vars['rest_route'], which rest_api_loaded() hands to the
+     * REST server — never the URL path: a form body `rest_route=…` overrides
+     * the path, and the token used to follow the path to a core route.
+     * Anything else (no WP object yet, no or a non-string route) fails closed.
+     */
+    private static function automatic_bearer_route_allowed() {
+        if (!defined('REST_REQUEST') || !REST_REQUEST) return false;
+        $wp = isset($GLOBALS['wp']) ? $GLOBALS['wp'] : null;
+        if (!is_object($wp) || !isset($wp->query_vars) || !is_array($wp->query_vars)) return false;
+        $route = $wp->query_vars['rest_route'] ?? '';
+        return is_string($route) && self::bearer_route_allowed(untrailingslashit($route));
+    }
+
+    /**
+     * Remember that a mobile session made $user_id current in this request
+     * (the first grant keeps the identity it replaced). $request: the REST
+     * request logged_in() checked, kept by reference (its object id cannot be
+     * reused), or null for the Bearer bridge.
+     */
+    private static function grant_identity($user_id, $prior, $request = null) {
+        $user_id = absint($user_id);
+        if (!$user_id) return;
+        if (self::$granted === null) self::$granted = ['user' => $user_id, 'prior' => absint($prior), 'request' => $request];
+        else { self::$granted['user'] = $user_id; self::$granted['request'] = $request; }
+    }
+
+    /**
+     * 6.11.1 defence in depth: a mobile identity (Bearer, or a session route's
+     * permission check / REST firewall calling logged_in()) is only valid for
+     * the routes bearer_route_allowed() names. When any other route is about
+     * to run with it — a mismatch between the URL and the dispatched route, a
+     * batch request whose earlier sub-request was a mobile route — the
+     * identity the request had before is restored. A sibling plugin that
+     * called logged_in() for this very request object keeps its decision.
+     */
+    private static function guard_route($request) {
+        if (self::$granted === null || !$request instanceof WP_REST_Request) return;
+        $route = (string) $request->get_route();
+        if (self::bearer_route_allowed($route)) return;
+        if (self::$granted['request'] !== null && self::$granted['request'] === $request) return;
+        $granted = (int) self::$granted['user'];
+        $prior = (int) self::$granted['prior'];
+        if ($granted === $prior || get_current_user_id() !== $granted) return;
+        wp_set_current_user($prior);
+        if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_identity_route_refused', 'critical', $granted, ['route' => substr(sanitize_text_field($route), 0, 120)]);
+    }
+
+    /** rest_pre_dispatch, priority 0 (before the REST firewall). */
+    public static function guard_dispatch($result, $server = null, $request = null) {
+        self::guard_route($request);
+        return $result;
+    }
+
+    /** rest_request_before_callbacks, priority 0 (right before permission callbacks). */
+    public static function guard_callbacks($response, $handler = null, $request = null) {
+        self::guard_route($request);
+        return $response;
     }
 
     public static function authenticate_bearer($user_id) {
@@ -423,7 +548,9 @@ final class DIP_Mobile_API {
         if ($device !== '') $request->set_header('X-Device-ID', $device);
         if ($installation !== '') $request->set_header('X-Installation-ID', $installation);
         $session = self::current_session_for_request($request, true);
-        return $session ? (int) $session->user_id : $user_id;
+        if (!$session) return $user_id;
+        self::grant_identity((int) $session->user_id, 0);
+        return (int) $session->user_id;
     }
 
     /** Google sign-in on the app is fully configured (also the condition for « Utiliser Google » in a reauth). */
@@ -490,9 +617,9 @@ final class DIP_Mobile_API {
         if (is_wp_error($gate)) return $gate;
         if (!self::enabled()) return new WP_Error('mobile_api_disabled','Mobile authentication is disabled.',['status'=>403]);
         if (!is_ssl()) return new WP_Error('https_required','HTTPS is required.',['status'=>403]);
-        if (!self::valid_device_request($request)) { self::proof_failed($gate, 'device_required'); return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]); }
-        $id_token=trim((string)$request->get_param('id_token'));
-        if (strlen($id_token)<100 || strlen($id_token)>65536) { self::proof_failed($gate, 'invalid_token'); return new WP_Error('invalid_token','Invalid Google token.',['status'=>400]); }
+        if (!self::valid_device_request($request)) { if ($e = self::proof_failed($gate, 'device_required')) return $e; return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]); }
+        $id_token=trim(self::scalar($request->get_param('id_token')));
+        if (strlen($id_token)<100 || strlen($id_token)>65536) { if ($e = self::proof_failed($gate, 'invalid_token')) return $e; return new WP_Error('invalid_token','Invalid Google token.',['status'=>400]); }
         $s=self::settings();
         if (($s['enabled']??'no')!=='yes') return self::denied('mobile_google_disabled');
         // Native Google Sign-In is configured with the Web/server client ID.
@@ -507,11 +634,14 @@ final class DIP_Mobile_API {
             // Verifier outages (keys unreachable or unusable, OpenSSL missing)
             // are not the caller's failure and must not lock out the shared
             // address. google_key_missing still counts: a forged kid causes it.
+            // While the address failure ceiling holds, an unverified token
+            // gets the 429 at once (nothing proven, nothing written).
+            if (!empty($gate['address_blocked'])) return self::proof_failed($gate, $p->get_error_code());
             if (!in_array($p->get_error_code(), self::google_outage_codes(), true)) self::proof_failed($gate, $p->get_error_code());
             if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_google_token_rejected','critical',0,['reason'=>sanitize_key($p->get_error_code())]);
             return self::denied('google_token_rejected');
         }
-        $platform=sanitize_key((string)($request->get_header('X-Platform')?:$request->get_param('platform')?:'unknown'));
+        $platform=self::request_platform($request);
         $platform_client_id = $platform==='android'
             ? self::oauth_client_id($s['android_client_id']??'')
             : ($platform==='ios' ? self::oauth_client_id($s['ios_client_id']??'') : '');
@@ -519,8 +649,10 @@ final class DIP_Mobile_API {
         // When Google supplies azp (authorized party), it must identify this
         // exact native client. This prevents another native OAuth client in the
         // same project from reusing a token against the Delicat mobile route.
-        $azp=trim((string)($p['azp']??''));
-        if ($azp!=='' && !hash_equals($platform_client_id,$azp)) { self::proof_failed($gate, 'azp_mismatch'); return self::denied('mobile_google_authorized_party_mismatch'); }
+        $azp=trim(self::scalar($p['azp']??''));
+        if ($azp!=='' && !hash_equals($platform_client_id,$azp)) { if ($e = self::proof_failed($gate, 'azp_mismatch')) return $e; return self::denied('mobile_google_authorized_party_mismatch'); }
+        $limited = self::proof_accepted($gate);
+        if ($limited) return $limited;
         $profile=[
             'provider'=>'google',
             'sub'=>(string)($p['sub']??''),
@@ -543,6 +675,10 @@ final class DIP_Mobile_API {
         $factor_error = self::second_factor((int) $resolved, $request, 'mobile');
         if ($factor_error) return $factor_error;
         if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled((int)$resolved)) $profile['two_factor'] = 1;
+        // 6.11.1: the sign-in comes from the app (no browser, no device cookie):
+        // browser-device listeners can tell it apart. The app's new-device
+        // alert is dip_mobile_session_issued (first installation only).
+        $profile['channel'] = 'mobile';
         do_action('dip_login_success',(int)$resolved,$profile);
         if (class_exists('DIP_Audit')) DIP_Audit::record('login_success','info',(int)$resolved,['method'=>'mobile_google']);
         return self::issue_for_user((int)$resolved,$request,'google');
@@ -563,7 +699,7 @@ final class DIP_Mobile_API {
         $user_id = absint($user_id);
         if (!class_exists('DIP_Two_Factor') || !DIP_Two_Factor::is_enabled($user_id)) return null;
         $prefix = sanitize_key($audit);
-        $factor = sanitize_text_field((string)$request->get_param('two_factor_code'));
+        $factor = sanitize_text_field(self::scalar($request->get_param('two_factor_code')));
         if ($factor === '') {
             if (class_exists('DIP_Audit')) DIP_Audit::record($prefix . '_two_factor_required', 'notice', $user_id);
             return new WP_Error('two_factor_required','Two-factor verification is required.',['status'=>428]);
@@ -591,33 +727,52 @@ final class DIP_Mobile_API {
 
     /** @internal 6.11.0: public for DIP_Mobile_Passkeys (ceremony binding). */
     public static function request_device(WP_REST_Request $r) {
-        $id=sanitize_text_field((string)($r->get_header('X-Device-ID')?:$r->get_param('device_id')));
-        $install=sanitize_text_field((string)($r->get_header('X-Installation-ID')?:$r->get_param('installation_id')));
-        $platform=sanitize_key((string)($r->get_header('X-Platform')?:$r->get_param('platform')?:'unknown'));
+        $id=sanitize_text_field(self::header_or_param($r,'X-Device-ID','device_id'));
+        $install=sanitize_text_field(self::header_or_param($r,'X-Installation-ID','installation_id'));
+        $platform=self::request_platform($r);
         if(!in_array($platform,['android','ios','web','unknown'],true))$platform='unknown';
         return [
             'device_hash'=>self::device_hash($id?:'anonymous'),
             'installation_hash'=>self::device_hash($install?:($id?:'anonymous')),
-            'device_name'=>substr(sanitize_text_field((string)($r->get_header('X-Device-Name')?:$r->get_param('device_name'))),0,100),
+            'device_name'=>substr(sanitize_text_field(self::header_or_param($r,'X-Device-Name','device_name')),0,100),
             'platform'=>$platform,
-            'app_version'=>substr(sanitize_text_field((string)($r->get_header('X-App-Version')?:$r->get_param('app_version'))),0,32),
-            'locale'=>substr(sanitize_text_field((string)($r->get_header('X-Locale')?:$r->get_param('locale'))),0,16),
+            'app_version'=>substr(sanitize_text_field(self::header_or_param($r,'X-App-Version','app_version')),0,32),
+            'locale'=>substr(sanitize_text_field(self::header_or_param($r,'X-Locale','locale')),0,16),
         ];
+    }
+
+    /** X-Platform header or platform param, sanitized ('unknown' when absent). */
+    private static function request_platform(WP_REST_Request $r) {
+        $platform = self::header_or_param($r, 'X-Platform', 'platform');
+        return sanitize_key($platform ?: 'unknown');
     }
 
     /**
      * Write a session row: a new one, or (refresh) the row being rotated.
      * Returns [access, refresh, device, row_id] or a WP_Error.
+     *
+     * 6.11.1: the rotation only updates a row that is still live
+     * (revoked_at IS NULL) and never writes revoked_at: a revocation that
+     * lands between refresh()'s read and this write (password change,
+     * « déconnecter les autres »…) can no longer be undone by the refresh.
      */
     private static function issue_row($user_id,WP_REST_Request $request,$replace_id=0,$expected_refresh_hash='') {
         global $wpdb; $access=self::random_token(); $refresh=self::random_token(); $d=self::request_device($request); $now=current_time('mysql',true);
         $data=array_merge($d,['user_id'=>$user_id,'token_hash'=>self::hash_token($access),'refresh_hash'=>self::hash_token($refresh),'created_at'=>$now,'last_used_at'=>$now,'access_expires_at'=>gmdate('Y-m-d H:i:s',time()+self::access_ttl()),'refresh_expires_at'=>gmdate('Y-m-d H:i:s',time()+self::refresh_ttl()),'revoked_at'=>null]);
         if($replace_id){
-            unset($data['created_at']);
-            $where=['id'=>$replace_id];
+            unset($data['created_at'], $data['revoked_at']);
+            $where=['id'=>$replace_id,'revoked_at'=>null];
             if($expected_refresh_hash!=='') $where['refresh_hash']=$expected_refresh_hash;
             $ok=$wpdb->update(self::table(),$data,$where);
-            if($expected_refresh_hash!=='' && $ok!==1) return new WP_Error('refresh_replayed','Refresh token has already been rotated.',['status'=>401]);
+            self::forget_sessions();
+            if($ok!==1){
+                // Revoked meanwhile (same refresh token, row now revoked): not a replay.
+                $now_row = $wpdb->get_row($wpdb->prepare('SELECT refresh_hash,revoked_at FROM '.self::table().' WHERE id=%d LIMIT 1', (int) $replace_id));
+                if ($now_row && $now_row->revoked_at !== null && ($expected_refresh_hash === '' || hash_equals((string) $now_row->refresh_hash, (string) $expected_refresh_hash))) {
+                    return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]);
+                }
+                if($expected_refresh_hash!=='') return new WP_Error('refresh_replayed','Refresh token has already been rotated.',['status'=>401]);
+            }
         }
         else { $ok=$wpdb->insert(self::table(),$data); }
         if($ok===false) return new WP_Error('token_issue_failed','Unable to create a mobile session.',['status'=>500]);
@@ -675,6 +830,7 @@ final class DIP_Mobile_API {
                 'UPDATE '.self::table().' SET revoked_at=UTC_TIMESTAMP() WHERE user_id=%d AND installation_hash=%s AND id<>%d AND revoked_at IS NULL',
                 $user_id, $d['installation_hash'], $row_id
             ));
+            if ($replaced) self::forget_sessions();
         }
         if ($interactive && $row_id > 0) self::mark_proven($row_id);
         if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_session_issued','info',$user_id,['method'=>$method,'new_installation'=>$prior === 0 ? 1 : 0,'replaced'=>$replaced]);
@@ -691,25 +847,30 @@ final class DIP_Mobile_API {
         // installation and, once the token is valid, per session. Password
         // customers upgraded to Identity sessions (quick sign-in, passkeys) all
         // renew here, so a valid refresh must never meet a usage limit.
+        // 6.11.1: a valid refresh token renews even while the address failure
+        // ceiling holds (carrier NAT, see throttle()); failures still get the 429.
         $gate = self::throttle('refresh', 20, 10 * MINUTE_IN_SECONDS, $request, 0, null, true);
         if (is_wp_error($gate)) return $gate;
-        if (!self::valid_device_request($request)) { self::proof_failed($gate, 'device_required'); return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]); }
+        if (!self::valid_device_request($request)) { if ($e = self::proof_failed($gate, 'device_required')) return $e; return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]); }
         if(!self::enabled()||!is_ssl())return new WP_Error('forbidden','Request denied.',['status'=>403]);
-        $token=trim((string)$request->get_param('refresh_token'));
-        if(!preg_match('/^[A-Za-z0-9\-_]{40,512}$/',$token)){ self::proof_failed($gate, 'malformed_refresh'); return new WP_Error('invalid_refresh','Invalid refresh token.',['status'=>401]); }
+        $token=trim(self::scalar($request->get_param('refresh_token')));
+        if(!preg_match('/^[A-Za-z0-9\-_]{40,512}$/',$token)){ if ($e = self::proof_failed($gate, 'malformed_refresh')) return $e; return new WP_Error('invalid_refresh','Invalid refresh token.',['status'=>401]); }
         global $wpdb; $row=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE refresh_hash=%s AND revoked_at IS NULL AND refresh_expires_at > UTC_TIMESTAMP() LIMIT 1',self::hash_token($token)));
-        if(!$row){ self::proof_failed($gate, 'invalid_refresh'); return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]); }
+        if(!$row){ if ($e = self::proof_failed($gate, 'invalid_refresh')) return $e; return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]); }
         $d=self::request_device($request);
         if(!hash_equals((string)$row->installation_hash,(string)$d['installation_hash']) || !hash_equals((string)$row->device_hash,(string)$d['device_hash'])){
             $wpdb->update(self::table(),['revoked_at'=>current_time('mysql',true)],['id'=>(int)$row->id]);
+            self::forget_sessions();
             self::proof_failed($gate, 'device_mismatch');
             return self::denied('mobile_refresh_device_mismatch');
         }
-        if (!self::mobile_user_allowed((int) $row->user_id)) { $wpdb->update(self::table(), ['revoked_at'=>current_time('mysql',true)], ['id'=>(int)$row->id]); return self::denied('mobile_account_not_allowed'); }
+        if (!self::mobile_user_allowed((int) $row->user_id)) { $wpdb->update(self::table(), ['revoked_at'=>current_time('mysql',true)], ['id'=>(int)$row->id]); self::forget_sessions(); return self::denied('mobile_account_not_allowed'); }
+        $limited = self::proof_accepted($gate);
+        if ($limited) return $limited;
         $limited = self::session_throttle($gate, (int) $row->id, self::SESSION_FLOOD_LIMIT);
         if ($limited) return $limited;
         $issued = self::issue((int)$row->user_id,$request,(int)$row->id,self::hash_token($token));
-        if (is_wp_error($issued) && $issued->get_error_code() === 'refresh_replayed') self::proof_failed($gate, 'refresh_replayed');
+        if (is_wp_error($issued) && $issued->get_error_code() === 'refresh_replayed' && ($e = self::proof_failed($gate, 'refresh_replayed'))) return $e;
         return $issued;
     }
 
@@ -728,24 +889,52 @@ final class DIP_Mobile_API {
             if (preg_match('/^Bearer\s+([A-Za-z0-9\-_]{40,512})$/i', $auth, $m)) $token = $m[1];
         }
         if (!preg_match('/^[A-Za-z0-9\-_]{40,512}$/', $token)) return null;
+        $token_hash = self::hash_token($token);
+        // 6.11.1 (C5): one resolution per request. The REST firewall, the
+        // determine_current_user bridge, the permission callback and the
+        // handler used to look the row up (and write last_used_at) 4 times,
+        // and a device mismatch was audited twice. The memo is keyed on what
+        // the result depends on (token, binding, the request's device and
+        // installation) and dropped whenever this class revokes a row.
+        $bound = $require_device_binding && $request instanceof WP_REST_Request;
+        $device = null;
+        $memo = $token_hash . '|' . ($bound ? '1' : '0');
+        if ($bound) {
+            if (!self::valid_device_request($request)) return null;
+            $device = self::request_device($request);
+            $memo .= '|' . $device['installation_hash'] . '|' . $device['device_hash'];
+        }
+        if (isset(self::$sessions[$memo]) && self::$sessions[$memo][0] >= time() - 30) {
+            $cached = self::$sessions[$memo][1];
+            return is_object($cached) ? clone $cached : null;
+        }
         global $wpdb;
-        $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE token_hash=%s AND revoked_at IS NULL AND access_expires_at > UTC_TIMESTAMP() LIMIT 1', self::hash_token($token)));
-        if (!$row || !self::mobile_user_allowed((int) $row->user_id)) return null;
+        $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE token_hash=%s AND revoked_at IS NULL AND access_expires_at > UTC_TIMESTAMP() LIMIT 1', $token_hash));
+        if (!$row || !self::mobile_user_allowed((int) $row->user_id)) return self::remember_session($memo, null);
 
         // Protected Identity endpoints are bound to the app installation that
         // received the token. A copied access token alone is therefore not
         // sufficient to use profile/session/push/biometric/pairing endpoints.
-        if ($require_device_binding && $request instanceof WP_REST_Request) {
-            if (!self::valid_device_request($request)) return null;
-            $device = self::request_device($request);
+        if ($bound) {
             if (!hash_equals((string) $row->installation_hash, (string) $device['installation_hash'])
                 || !hash_equals((string) $row->device_hash, (string) $device['device_hash'])) {
                 if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_access_device_mismatch', 'critical', (int) $row->user_id, ['session_id'=>(int) $row->id]);
-                return null;
+                return self::remember_session($memo, null);
             }
         }
         $wpdb->update(self::table(), ['last_used_at'=>current_time('mysql',true)], ['id'=>(int)$row->id], ['%s'], ['%d']);
-        return $row;
+        return self::remember_session($memo, $row);
+    }
+
+    private static function remember_session($memo, $row) {
+        if (count(self::$sessions) >= 16) self::$sessions = [];
+        self::$sessions[$memo] = [time(), $row];
+        return is_object($row) ? clone $row : null;
+    }
+
+    /** Drop the per-request session memo (a row was revoked or rotated). */
+    private static function forget_sessions() {
+        self::$sessions = [];
     }
 
     /** Check a previously authenticated mobile session by internal ID/user. */
@@ -763,7 +952,7 @@ final class DIP_Mobile_API {
     }
 
     /** Signing out ends the session only: the phone's quick sign-in key stays (signing out is not forgetting the phone). */
-    public static function logout(WP_REST_Request $request) { $row=self::current_session_for_request($request); if($row){global $wpdb;$wpdb->update(self::table(),['revoked_at'=>current_time('mysql',true)],['id'=>(int)$row->id]);} return new WP_REST_Response(['logged_out'=>true],200); }
+    public static function logout(WP_REST_Request $request) { $row=self::current_session_for_request($request); if($row){global $wpdb;$wpdb->update(self::table(),['revoked_at'=>current_time('mysql',true)],['id'=>(int)$row->id]);self::forget_sessions();} return new WP_REST_Response(['logged_out'=>true],200); }
 
     /**
      * Revoke every Delicat mobile refresh/access session for an account.
@@ -780,6 +969,7 @@ final class DIP_Mobile_API {
             'UPDATE '.self::table().' SET revoked_at=UTC_TIMESTAMP() WHERE user_id=%d AND revoked_at IS NULL',
             $user_id
         ));
+        self::forget_sessions();
         if ($updated === false) return 0;
         $keys = self::revoke_keys_where('user_id=%d', [$user_id], $reason);
         if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_sessions_revoked', 'warning', $user_id, [
@@ -855,11 +1045,13 @@ final class DIP_Mobile_API {
     public static function revoke_session(WP_REST_Request $r){
         global $wpdb;
         $uid = get_current_user_id();
-        $id = absint($r['id']);
+        $id = self::route_id($r);
         $row = $id ? $wpdb->get_row($wpdb->prepare('SELECT id,installation_hash FROM '.self::table().' WHERE id=%d AND user_id=%d AND revoked_at IS NULL LIMIT 1', $id, $uid)) : null;
+        // The caller is resolved before the revocation (it may be its own session).
+        $caller = $row ? self::current_session_for_request($r) : null;
         $updated = $wpdb->update(self::table(),['revoked_at'=>current_time('mysql',true)],['id'=>$id,'user_id'=>$uid]);
+        if ($updated) self::forget_sessions();
         if ($updated && $row) {
-            $caller = self::current_session_for_request($r);
             if ($caller && (int) $caller->user_id === (int) $uid && !hash_equals((string) $caller->installation_hash, (string) $row->installation_hash)) {
                 self::revoke_installation_keys($uid, (string) $row->installation_hash, 'remote_revoke');
             }
@@ -873,7 +1065,7 @@ final class DIP_Mobile_API {
     public static function register_push(WP_REST_Request $r){
         if((self::settings()['mobile_push_enabled']??'no')!=='yes')return new WP_Error('push_disabled','Push registration is disabled.',['status'=>403]);
         $row=self::current_session_for_request($r);if(!$row)return new WP_Error('session_not_found','Mobile session not found.',['status'=>401]);
-        $token=trim((string)$r->get_param('push_token'));$provider=sanitize_key((string)$r->get_param('provider'));
+        $token=trim(self::scalar($r->get_param('push_token')));$provider=sanitize_key(self::scalar($r->get_param('provider')));
         if(!in_array($provider,['fcm','apns'],true)||strlen($token)<20||strlen($token)>4096)return new WP_Error('invalid_push','Invalid push registration.',['status'=>400]);
         $encrypted = DIP_Crypto::encrypt($token);
         if ($encrypted === '') return new WP_Error('encryption_unavailable','Secure encryption is unavailable.',['status'=>503]);
@@ -968,7 +1160,7 @@ final class DIP_Mobile_API {
         if (is_wp_error($gate)) return $gate;
         $uid = (int) $session->user_id;
         $user = get_userdata($uid);
-        $password = (string) $r->get_param('password');
+        $password = self::scalar($r->get_param('password'));
         if (!$user || $password === '' || strlen($password) > 4096 || !wp_check_password($password, (string) $user->user_pass, $uid)) {
             return self::reauth_refused($gate, $session, 'password', 'password', new WP_Error('invalid_password', 'Mot de passe incorrect.', ['status' => 401]));
         }
@@ -988,7 +1180,7 @@ final class DIP_Mobile_API {
         if (is_wp_error($gate)) return $gate;
         if (!self::google_mobile_enabled() || !class_exists('DIP_Google')) return new WP_Error('reauth_method_unavailable', 'Cette méthode de confirmation n’est pas disponible.', ['status' => 403]);
         $uid = (int) $session->user_id;
-        $id_token = trim((string) $r->get_param('id_token'));
+        $id_token = trim(self::scalar($r->get_param('id_token')));
         if (strlen($id_token) < 100 || strlen($id_token) > 65536) return self::reauth_refused($gate, $session, 'google', 'invalid_token', new WP_Error('invalid_token','Invalid Google token.',['status'=>400]));
         $s = self::settings();
         $p = DIP_Google::verify_id_token($id_token, [self::oauth_client_id($s['client_id'] ?? '')], '');
@@ -996,9 +1188,9 @@ final class DIP_Mobile_API {
             if (in_array($p->get_error_code(), self::google_outage_codes(), true)) return new WP_Error('google_unavailable', 'Google est momentanément indisponible. Réessayez.', ['status' => 503]);
             return self::reauth_refused($gate, $session, 'google', $p->get_error_code(), self::denied('mobile_reauth_google_rejected'));
         }
-        $platform = sanitize_key((string) ($r->get_header('X-Platform') ?: $r->get_param('platform') ?: 'unknown'));
+        $platform = self::request_platform($r);
         $platform_client_id = $platform === 'android' ? self::oauth_client_id($s['android_client_id'] ?? '') : ($platform === 'ios' ? self::oauth_client_id($s['ios_client_id'] ?? '') : '');
-        $azp = trim((string) ($p['azp'] ?? ''));
+        $azp = trim(self::scalar($p['azp'] ?? ''));
         if ($platform_client_id === '' || ($azp !== '' && !hash_equals($platform_client_id, $azp))) return self::reauth_refused($gate, $session, 'google', 'azp_mismatch', self::denied('mobile_reauth_google_party_mismatch'));
         $meta_sub = class_exists('DIP_Identity') ? DIP_Identity::META_SUB : '_dglp_google_sub';
         $linked = (string) get_user_meta($uid, $meta_sub, true);
@@ -1126,10 +1318,13 @@ final class DIP_Mobile_API {
      * Atomic one-time use of a quick sign-in ceremony: the add_option lock
      * (as for the website's passkeys), a one-time claim on the atomic counter
      * table, then the transient is read and deleted whatever happens next.
+     * 6.11.1: an id with no stored ceremony is refused before any write (no
+     * lock option, no counter row for random ids).
      */
     private static function bio_consume_ceremony($id, $purpose) {
-        $id = trim((string) $id);
+        $id = trim(self::scalar($id));
         if (!preg_match('/^[A-Za-z0-9_-]{20,128}$/D', $id)) return null;
+        if (!is_array(get_transient(self::bio_ceremony_key($id)))) return null;
         $lock = 'dip_bio_lock_' . substr(hash_hmac('sha256', $id, wp_salt('secure_auth')), 0, 40);
         $now = time();
         if (!add_option($lock, $now, '', false)) {
@@ -1269,7 +1464,7 @@ final class DIP_Mobile_API {
         if (is_wp_error($ready)) return $ready;
         $session = self::current_session_for_request($r);
         if (!$session) return new WP_Error('session_not_found','Mobile session not found.',['status'=>401]);
-        $challenge_id = trim((string) $r->get_param('challenge_id'));
+        $challenge_id = trim(self::scalar($r->get_param('challenge_id')));
         $signature_raw = $r->get_param('signature');
         if ($challenge_id === '' || !is_string($signature_raw) || trim($signature_raw) === '') {
             return new WP_Error('biometric_proof_required', 'Mettez l’application à jour pour activer la connexion rapide.', ['status' => 400]);
@@ -1299,7 +1494,7 @@ final class DIP_Mobile_API {
         $uid = (int) $session->user_id;
         $now = self::now_ts();
         // Optional label (the phone's name); else the session's device name.
-        $label = sanitize_text_field((string) $r->get_param('label'));
+        $label = sanitize_text_field(self::scalar($r->get_param('label')));
         if ($label === '') $label = sanitize_text_field((string) ($session->device_name !== '' ? $session->device_name : self::request_device($r)['device_name']));
         $label = function_exists('mb_substr') ? mb_substr($label, 0, 100) : substr($label, 0, 100);
         if ($label === '') $label = 'Téléphone';
@@ -1333,15 +1528,17 @@ final class DIP_Mobile_API {
         $requested = self::canonical_installation($r->get_param('installation_id'));
         $gate = self::throttle('biometric_challenge', 10, 10 * MINUTE_IN_SECONDS, $r, 0, $requested, true);
         if (is_wp_error($gate)) return $gate;
-        if ($requested === '') { self::proof_failed($gate, 'invalid_installation'); return new WP_Error('invalid_installation','Invalid installation.',['status'=>400]); }
+        if ($requested === '') { if ($e = self::proof_failed($gate, 'invalid_installation')) return $e; return new WP_Error('invalid_installation','Invalid installation.',['status'=>400]); }
         $header = trim((string) $r->get_header('X-Installation-ID'));
-        if ($header !== '' && !hash_equals($requested, self::canonical_installation($header))) { self::proof_failed($gate, 'installation_mismatch'); return new WP_Error('invalid_installation','Invalid installation.',['status'=>400]); }
+        if ($header !== '' && !hash_equals($requested, self::canonical_installation($header))) { if ($e = self::proof_failed($gate, 'installation_mismatch')) return $e; return new WP_Error('invalid_installation','Invalid installation.',['status'=>400]); }
         $ready = self::biometric_gate();
         if (is_wp_error($ready)) return $ready;
         $installation=self::device_hash($requested);
         // 6.11.0: the key table, not a live session: quick sign-in works after sign-out.
         global $wpdb;$row=$wpdb->get_row($wpdb->prepare('SELECT id,user_id FROM '.self::biometric_table().' WHERE installation_hash=%s AND '.self::active_key_clause().' ORDER BY id DESC LIMIT 1',$installation,self::mysql_at(self::now_ts())));
-        if(!$row){ self::proof_failed($gate, 'biometric_not_enrolled'); return new WP_Error('biometric_not_enrolled','La connexion rapide n’est plus active sur ce téléphone.',['status'=>404]); }
+        if(!$row){ if ($e = self::proof_failed($gate, 'biometric_not_enrolled')) return $e; return new WP_Error('biometric_not_enrolled','La connexion rapide n’est plus active sur ce téléphone.',['status'=>404]); }
+        $limited = self::proof_accepted($gate);
+        if ($limited) return $limited;
         $id = self::random_token(24);
         $challenge = self::random_token(32);
         $message = implode('|', [self::BIOMETRIC_MESSAGE_PREFIX, 'login', $challenge, $requested, self::rp_id()]);
@@ -1355,28 +1552,42 @@ final class DIP_Mobile_API {
         // against the flood guard (SESSION_FLOOD_LIMIT). Owner rule, 2026-10-24.
         $gate = self::throttle('biometric_verify', 10, 10 * MINUTE_IN_SECONDS, $r, 0, null, true);
         if (is_wp_error($gate)) return $gate;
-        if (!self::valid_device_request($r)) { self::proof_failed($gate, 'device_required'); return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]); }
+        if (!self::valid_device_request($r)) { if ($e = self::proof_failed($gate, 'device_required')) return $e; return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]); }
         $ready = self::biometric_gate();
         if (is_wp_error($ready)) return $ready;
-        $challenge_id = trim((string) $r->get_param('challenge_id'));
+        $challenge_id = trim(self::scalar($r->get_param('challenge_id')));
         $signature = self::decode_b64($r->get_param('signature'));
-        if (!preg_match('/^[A-Za-z0-9_-]{20,128}$/D', $challenge_id) || $signature === false || strlen($signature) < 8 || strlen($signature) > 2048) { self::proof_failed($gate, 'invalid_biometric'); return new WP_Error('invalid_biometric','Invalid biometric proof.',['status'=>400]); }
+        if (!preg_match('/^[A-Za-z0-9_-]{20,128}$/D', $challenge_id) || $signature === false || strlen($signature) < 8 || strlen($signature) > 2048) { if ($e = self::proof_failed($gate, 'invalid_biometric')) return $e; return new WP_Error('invalid_biometric','Invalid biometric proof.',['status'=>400]); }
         $state = self::bio_consume_ceremony($challenge_id, 'login');
-        if (!is_array($state)) { self::proof_failed($gate, 'challenge_expired'); return new WP_Error('challenge_expired','Biometric challenge expired.',['status'=>401]); }
+        if (!is_array($state)) { if ($e = self::proof_failed($gate, 'challenge_expired')) return $e; return new WP_Error('challenge_expired','Biometric challenge expired.',['status'=>401]); }
         $request_device = self::request_device($r);
-        if (!hash_equals((string) $state['installation_hash'], (string) $request_device['installation_hash'])) { self::proof_failed($gate, 'installation_mismatch'); return self::denied('mobile_biometric_installation_mismatch'); }
+        if (!hash_equals((string) $state['installation_hash'], (string) $request_device['installation_hash'])) { if ($e = self::proof_failed($gate, 'installation_mismatch')) return $e; return self::denied('mobile_biometric_installation_mismatch'); }
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::biometric_table().' WHERE id=%d AND '.self::active_key_clause().' LIMIT 1', absint($state['key_id'] ?? 0), self::mysql_at(self::now_ts())));
-        if (!$row) { self::proof_failed($gate, 'biometric_not_enrolled'); return new WP_Error('biometric_not_enrolled','La connexion rapide n’est plus active sur ce téléphone.',['status'=>404]); }
-        if (!hash_equals((string) $row->installation_hash, (string) $request_device['installation_hash']) || !hash_equals((string) $row->device_hash, (string) $request_device['device_hash'])) { self::proof_failed($gate, 'device_mismatch'); return self::denied('mobile_biometric_device_mismatch'); }
-        if (openssl_verify((string) $state['message'], $signature, (string) $row->public_key, OPENSSL_ALGO_SHA256) !== 1) { self::proof_failed($gate, 'biometric_failed'); return self::denied('mobile_biometric_failed'); }
+        if (!$row) { if ($e = self::proof_failed($gate, 'biometric_not_enrolled')) return $e; return new WP_Error('biometric_not_enrolled','La connexion rapide n’est plus active sur ce téléphone.',['status'=>404]); }
+        if (!hash_equals((string) $row->installation_hash, (string) $request_device['installation_hash']) || !hash_equals((string) $row->device_hash, (string) $request_device['device_hash'])) { if ($e = self::proof_failed($gate, 'device_mismatch')) return $e; return self::denied('mobile_biometric_device_mismatch'); }
+        if (openssl_verify((string) $state['message'], $signature, (string) $row->public_key, OPENSSL_ALGO_SHA256) !== 1) { if ($e = self::proof_failed($gate, 'biometric_failed')) return $e; return self::denied('mobile_biometric_failed'); }
         if (!self::mobile_user_allowed((int) $row->user_id)) return self::denied('mobile_account_not_allowed');
+        $limited = self::proof_accepted($gate);
+        if ($limited) return $limited;
         $limited = self::session_throttle($gate, (int) $row->id, self::SESSION_FLOOD_LIMIT, 'key');
         if ($limited) return $limited;
         $issued = self::issue_for_user((int) $row->user_id, $r, 'biometric');
         if (is_wp_error($issued)) return $issued;
         $now = self::now_ts();
-        $wpdb->update(self::biometric_table(), ['last_used_at' => self::mysql_at($now), 'expires_at' => self::mysql_at($now + self::BIOMETRIC_KEY_TTL)], ['id' => (int) $row->id]);
+        $wpdb->update(self::biometric_table(), ['last_used_at' => self::mysql_at($now), 'expires_at' => self::mysql_at($now + self::BIOMETRIC_KEY_TTL)], ['id' => (int) $row->id, 'revoked_at' => null]);
+        // 6.11.1: the key must still be live once the session exists: a
+        // revocation that landed after the key was read (password change,
+        // « déconnecter les autres ») ends the new session too.
+        $live = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM '.self::biometric_table().' WHERE id=%d AND revoked_at IS NULL', (int) $row->id));
+        if ($live < 1) {
+            $data = $issued instanceof WP_REST_Response ? (array) $issued->get_data() : [];
+            if (!empty($data['access_token'])) {
+                $wpdb->update(self::table(), ['revoked_at' => current_time('mysql', true)], ['token_hash' => self::hash_token((string) $data['access_token'])]);
+                self::forget_sessions();
+            }
+            return new WP_Error('biometric_not_enrolled','La connexion rapide n’est plus active sur ce téléphone.',['status'=>404]);
+        }
         if (class_exists('DIP_Audit')) {
             DIP_Audit::record('mobile_biometric_login', 'info', (int) $row->user_id, ['key_id' => (int) $row->id]);
             DIP_Audit::record('login_success', 'info', (int) $row->user_id, ['method' => 'mobile_biometric']);
@@ -1421,7 +1632,7 @@ final class DIP_Mobile_API {
         if (!$session) return new WP_Error('session_not_found','Mobile session not found.',['status'=>401]);
         $proof = self::require_recent_proof($session);
         if ($proof) return $proof;
-        $count = self::revoke_keys_where('id=%d AND user_id=%d', [absint($r['id']), (int) $session->user_id], 'user_remote');
+        $count = self::revoke_keys_where('id=%d AND user_id=%d', [self::route_id($r), (int) $session->user_id], 'user_remote');
         if ($count < 1) return new WP_Error('biometric_key_not_found', 'Cette connexion rapide n’existe plus.', ['status' => 404]);
         return new WP_REST_Response(['removed' => true, 'count' => $count], 200);
     }

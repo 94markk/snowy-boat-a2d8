@@ -49,9 +49,12 @@ final class DIP_Android_App {
      * Upper-case hex, 32 bytes separated by colons, or '' when the line is not
      * a SHA-256 fingerprint. Accepted input: AA:BB:… or 64 hex digits, any
      * case, optionally followed by a note after a space (« … (clé d’envoi) »).
+     * 6.11.1: a « SHA256: » / « SHA-256: » prefix (keytool, Play Console) is
+     * accepted too.
      */
     public static function normalize_fingerprint($line) {
-        $line = trim((string) $line);
+        $line = trim(is_scalar($line) ? (string) $line : '');
+        $line = (string) preg_replace('/^SHA-?256\s*:\s*/i', '', $line);
         if (!preg_match('/^((?:[0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}|[0-9A-Fa-f]{64})(?:\s.*)?$/sD', $line, $m)) return '';
         $hex = strtoupper(str_replace(':', '', $m[1]));
         return implode(':', str_split($hex, 2));
@@ -174,7 +177,15 @@ final class DIP_Android_App {
             $found = self::fingerprints_in_file(is_string($raw) ? json_decode($raw, true) : null, self::package());
             return !array_diff($expected, $found);
         }
+        // 6.11.1: Android only reads https://<host>/.well-known/assetlinks.json.
+        // With the site's address in a sub-folder, WordPress cannot answer there.
+        if (!self::served_at_host_root()) return false;
         return self::enabled();
+    }
+
+    /** The plugin's answer is at the host's own /.well-known/assetlinks.json (the site's address is not in a sub-folder). */
+    public static function served_at_host_root() {
+        return self::served_path() === self::PATH;
     }
 
     /**
@@ -209,7 +220,10 @@ final class DIP_Android_App {
         if (!headers_sent()) {
             status_header((int) $response['status']);
             foreach ($response['headers'] as $name => $value) header($name . ': ' . $value, true);
+            // 6.11.1: LiteSpeed (server and LSCWP) keeps it one hour, not its default public TTL.
+            header('X-LiteSpeed-Cache-Control: public,max-age=3600', true);
         }
+        do_action('litespeed_control_set_ttl', 3600);
         if ($response['body'] !== '') echo $response['body']; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON document.
         exit;
     }
@@ -227,8 +241,25 @@ final class DIP_Android_App {
         return $origin;
     }
 
+    /**
+     * 6.11.1: the directory the web server serves https://<host>/ from. With
+     * WordPress in its own directory (site address …/wp, ABSPATH …/wp/) that
+     * is the parent of ABSPATH, not ABSPATH: the site URL's path is taken off
+     * ABSPATH; when ABSPATH does not end with it, DOCUMENT_ROOT, else ABSPATH.
+     */
+    public static function web_root() {
+        $abspath = rtrim(wp_normalize_path((string) ABSPATH), '/');
+        $site_path = trim((string) wp_parse_url(site_url('/'), PHP_URL_PATH), '/');
+        if ($site_path === '') return $abspath;
+        $suffix = '/' . $site_path;
+        if (strlen($abspath) > strlen($suffix) && substr($abspath, -strlen($suffix)) === $suffix) return substr($abspath, 0, -strlen($suffix));
+        $document_root = isset($_SERVER['DOCUMENT_ROOT']) && is_string($_SERVER['DOCUMENT_ROOT']) ? rtrim(wp_normalize_path(wp_unslash($_SERVER['DOCUMENT_ROOT'])), '/') : '';
+        return ($document_root !== '' && @is_dir($document_root)) ? $document_root : $abspath;
+    }
+
+    /** A file the web server would serve at https://<host>/.well-known/assetlinks.json before WordPress. */
     public static function physical_file() {
-        return rtrim((string) ABSPATH, '/\\') . '/.well-known/assetlinks.json';
+        return self::web_root() . '/.well-known/assetlinks.json';
     }
 
     private static function on_settings_screen() {
@@ -253,6 +284,9 @@ final class DIP_Android_App {
         }
         if (!self::enabled() && self::fingerprints() && !file_exists(self::physical_file())) {
             echo '<div class="notice notice-warning"><p><strong>Delicat Identity — assetlinks.json :</strong> « Publier assetlinks.json » est décoché. Android ne trouve pas les empreintes de l’application : les clés d’accès de l’application sont désactivées tant que le fichier n’est pas publié.</p></div>';
+        }
+        if (self::fingerprints() && !self::served_at_host_root() && !file_exists(self::physical_file())) {
+            echo '<div class="notice notice-warning"><p><strong>Delicat Identity — assetlinks.json :</strong> l’adresse du site est dans un sous-dossier. Android lit seulement <code>' . esc_html(self::site_origin() . self::PATH) . '</code>, que WordPress ne peut pas servir d’ici : placez ce fichier à la racine du domaine (<code>' . esc_html(self::physical_file()) . '</code>) avec les empreintes de la carte « Application Android ». En attendant, les clés d’accès de l’application sont désactivées.</p></div>';
         }
         if (self::enabled() && !self::fingerprints()) {
             echo '<div class="notice notice-warning"><p><strong>Delicat Identity — Application Android :</strong> aucune empreinte valide. <code>/.well-known/assetlinks.json</code> n’est pas publié et les clés d’accès de l’application sont désactivées.</p></div>';
@@ -369,8 +403,21 @@ final class DIP_Android_App {
     public static function sanitize_settings(array $input, array $out) {
         // A form that does not carry a field (an older admin page) keeps the stored value.
         if (array_key_exists('mobile_android_package', $input)) {
-            $package = self::valid_package(sanitize_text_field((string) $input['mobile_android_package']));
-            $out['mobile_android_package'] = $package !== '' ? $package : self::DEFAULT_PACKAGE;
+            $raw = trim(sanitize_text_field(is_scalar($input['mobile_android_package']) ? (string) $input['mobile_android_package'] : ''));
+            $package = self::valid_package($raw);
+            if ($raw === '') {
+                $out['mobile_android_package'] = self::DEFAULT_PACKAGE;
+            } elseif ($package !== '') {
+                $out['mobile_android_package'] = $package;
+            } else {
+                // 6.11.1: a typo no longer silently becomes the default package:
+                // the previous value stays and the administrator is told.
+                $previous = self::valid_package($out['mobile_android_package'] ?? '');
+                $out['mobile_android_package'] = $previous !== '' ? $previous : self::DEFAULT_PACKAGE;
+                if (function_exists('add_settings_error')) {
+                    add_settings_error(DIP_Plugin::OPTION, 'dip_android_package', esc_html(sprintf('Nom de paquet Android invalide (« %s ») : %s est conservé.', function_exists('mb_substr') ? mb_substr($raw, 0, 80) : substr($raw, 0, 80), $out['mobile_android_package'])), 'error');
+                }
+            }
         }
         foreach (['mobile_android_cert_sha256', 'mobile_android_test_cert_sha256'] as $key) {
             if (!array_key_exists($key, $input)) continue;
@@ -383,6 +430,23 @@ final class DIP_Android_App {
             // Raw lines are kept (invalid ones too) so the notice can show them.
             $out[$key] = implode("\n", array_slice($kept, 0, self::MAX_FINGERPRINTS));
         }
+        self::maybe_purge_cache($out);
         return $out;
+    }
+
+    /**
+     * 6.11.1: when what /.well-known/assetlinks.json says changes (package,
+     * fingerprints, test build, publication), page caches drop the old copy
+     * (LiteSpeed Cache; a no-op without it). Google keeps its own answer
+     * cached for a while (see « Tester »).
+     */
+    private static function maybe_purge_cache(array $out) {
+        $stored = self::settings();
+        foreach (['mobile_android_package', 'mobile_android_cert_sha256', 'mobile_android_test_cert_sha256', 'mobile_android_test_cert_enabled', 'assetlinks_enabled'] as $key) {
+            if ((string) ($stored[$key] ?? '') !== (string) ($out[$key] ?? '')) {
+                do_action('litespeed_purge_url', home_url(self::PATH));
+                return;
+            }
+        }
     }
 }
