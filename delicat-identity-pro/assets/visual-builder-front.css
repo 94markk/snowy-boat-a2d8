@@ -7,3 +7,39 @@
 .dip-auth-card input[type=text],.dip-auth-card input[type=password],.dip-auth-card input[type=email]{display:block;max-width:none!important}
 .dip-auth-links a{font-size:var(--dipb-link-font-size)}
 @media(max-width:600px){.dip-auth-shell{min-height:min(var(--dipb-shell-height),100vh)}.dip-auth-card{width:100%;max-width:100%}.dip-auth-provider,.dip-auth-primary{font-size:min(var(--dipb-button-font-size),16px)}}
+
+/* 6.11.1 panel sign-in (native endpoints, Passkey, 2FA) driven by the builder variables */
+.dip-auth-providers .dip-login-wrap{max-width:none;margin:var(--dipb-provider-gap) 0}
+.dip-auth-card .dip-google-button{width:100%;min-height:var(--dipb-button-height);gap:12px;border:var(--dipb-provider-border-width) solid var(--dipb-input-border)!important;border-radius:var(--dipb-button-radius);background:var(--dipb-provider-bg)!important;color:var(--dipb-provider-text)!important;font-size:var(--dipb-button-font-size);font-weight:700;box-shadow:none}
+.dip-auth-card .dip-google-button:hover{border-color:var(--dipb-accent)!important}
+.dip-auth-card .dip-google-button .dip-g{width:calc(var(--dipb-provider-icon-size) + 6px);height:calc(var(--dipb-provider-icon-size) + 6px)}
+.dip-auth-card .dip-google-button .dip-g svg{width:var(--dipb-provider-icon-size);height:var(--dipb-provider-icon-size)}
+.dip-auth-form{display:flex;flex-direction:column;margin:0}
+.dip-auth-field{display:flex;flex-direction:column;margin:calc(var(--dipb-field-gap)/2) 0}
+.dip-auth-field>label{margin:0 0 5px;color:var(--dipb-text);font-size:13px;font-weight:700;line-height:1.3}
+.dip-auth-card .dip-auth-field input{margin:0}
+.dip-auth-2fa small{margin-top:6px;color:var(--dipb-muted);font-size:12.5px;line-height:1.45}
+.dip-auth-card .dip-auth-2fa[hidden],.dip-auth-card [data-dip-auth-message][hidden],.dip-auth-card .dip-auth-resend[hidden],.dip-auth-card .dipx-passkey-login[hidden]{display:none!important}
+.dip-auth-remember{display:flex;align-items:center;gap:8px;margin:calc(var(--dipb-field-gap)/2) 0;color:var(--dipb-muted);font-size:13px;cursor:pointer}
+.dip-auth-card input[type=checkbox]{width:18px;height:18px;min-height:0;margin:0;flex:0 0 auto;accent-color:var(--dipb-accent)}
+.dip-auth-form .dip-auth-primary{margin-top:var(--dipb-field-gap)}
+.dip-auth-form[data-password-busy="1"] .dip-auth-primary{opacity:.72;cursor:progress}
+.dip-auth-hp{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important;opacity:0!important}
+.dip-auth-card [data-dip-auth-message]{margin:calc(var(--dipb-field-gap)/2) 0;padding:11px 13px;border:0;border-radius:var(--dipb-input-radius);background:rgba(21,94,239,.1);box-shadow:inset 3px 0 0 var(--dipb-accent);color:var(--dipb-text);font-size:13px;font-weight:650;line-height:1.45}
+.dip-auth-card [data-dip-auth-message].is-error{background:rgba(217,45,32,.12);box-shadow:inset 3px 0 0 #d92d20}
+.dip-auth-card [data-dip-auth-message].is-success{background:rgba(18,183,106,.14);box-shadow:inset 3px 0 0 #12b76a}
+.dip-auth-card [data-dip-auth-message].is-warning{background:rgba(247,144,9,.14);box-shadow:inset 3px 0 0 #f79009}
+.dip-auth-resend{align-self:flex-start;margin:0 0 6px;padding:0;border:0;background:none;color:var(--dipb-accent);font:inherit;font-size:13px;font-weight:700;text-decoration:underline;cursor:pointer}
+.dip-auth-card .dipx-passkey-login{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;column-gap:10px;row-gap:1px;width:100%;min-height:var(--dipb-button-height);margin:var(--dipb-provider-gap) 0;padding:8px 14px;box-sizing:border-box;border:var(--dipb-provider-border-width) solid var(--dipb-input-border);border-radius:var(--dipb-button-radius);background:var(--dipb-provider-bg);color:var(--dipb-provider-text);font:inherit;font-size:var(--dipb-button-font-size);font-weight:700;line-height:1.2;cursor:pointer;transition:border-color .16s ease,transform .16s ease}
+.dip-auth-card .dipx-passkey-login:hover{transform:translateY(-1px);border-color:var(--dipb-accent)}
+.dip-auth-card .dipx-passkey-login:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.dip-auth-card .dipx-passkey-login>span{display:block;width:var(--dipb-provider-icon-size);height:var(--dipb-provider-icon-size);background:var(--dipb-accent);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7a5 5 0 0 1 4.58 3H22v4h-2v3h-3v-3h-5.42A5 5 0 1 1 7 7Zm0 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7a5 5 0 0 1 4.58 3H22v4h-2v3h-3v-3h-5.42A5 5 0 1 1 7 7Zm0 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'/%3E%3C/svg%3E") center/contain no-repeat}
+.dip-auth-card .dipx-passkey-login strong{font-weight:inherit}
+.dip-auth-card .dipx-passkey-login small{flex-basis:100%;color:var(--dipb-muted);font-size:11.5px;font-weight:600;text-align:center}
+.dip-auth-card .dip-google-button:focus-visible,.dip-auth-card .dipx-passkey-login:focus-visible,.dip-auth-card .dip-auth-primary:focus-visible,.dip-auth-resend:focus-visible{outline:3px solid rgba(21,94,239,.35);outline-offset:2px}
+.dip-auth-card input:focus{box-shadow:0 0 0 3px rgba(21,94,239,.16)}
+.dipb-shadow-glow{box-shadow:0 25px 80px rgba(21,94,239,.28)}
+/* color-mix() only where supported: with var() inside, an unsupported declaration is not skipped at parse time and would erase the rgba fallback */
+@supports (color:color-mix(in srgb,red 50%,blue)){.dip-auth-card [data-dip-auth-message]{background:color-mix(in srgb,var(--dipb-accent) 12%,transparent)}.dip-auth-card .dip-google-button:focus-visible,.dip-auth-card .dipx-passkey-login:focus-visible,.dip-auth-card .dip-auth-primary:focus-visible,.dip-auth-resend:focus-visible{outline-color:color-mix(in srgb,var(--dipb-accent) 45%,transparent)}.dip-auth-card input:focus{box-shadow:0 0 0 3px color-mix(in srgb,var(--dipb-accent) 16%,transparent)}.dipb-shadow-glow{box-shadow:0 25px 80px color-mix(in srgb,var(--dipb-accent) 28%,transparent)}}
+@media(prefers-reduced-motion:reduce){.dip-auth-card .dipx-passkey-login{transition:none!important}}
+@media(max-width:600px){.dip-auth-shell.dipb-mobile-sheet{min-height:100vh;padding:0}}

@@ -31,18 +31,22 @@ final class DIP_Stability_Patch {
         return false;
     }
 
+    /**
+     * Checkout is no longer listed: there the file only restyled the theme's
+     * WooCommerce notices (the Google button has its own stylesheet), and an
+     * identity shortcode placed on the checkout page is still detected above.
+     */
     private static function should_load_front_assets() {
         if (self::page_has_identity_shortcode()) return true;
         if (function_exists('is_account_page') && is_account_page()) return true;
-        if (function_exists('is_checkout') && is_checkout()) return true;
         if (get_query_var('identite-securite')) return true;
         return false;
     }
 
     public static function front_assets() {
         if (is_admin() || !self::should_load_front_assets()) return;
+        // stability-patch.css is merged into ui-front.css (one render-blocking request).
         wp_enqueue_style('dip-ui-front', DIP_URL . 'assets/ui-front.css', [], DIP_VERSION);
-        wp_enqueue_style('dip-stability-patch', DIP_URL . 'assets/stability-patch.css', ['dip-ui-front'], DIP_VERSION);
     }
 
     public static function enforce_verified_email($user, $username, $password) {
@@ -55,6 +59,10 @@ final class DIP_Stability_Patch {
         if (!current_user_can('manage_options') || empty($_GET['page'])) return;
         $page = sanitize_key(wp_unslash($_GET['page']));
         if (strpos($page, 'dip-') !== 0 && strpos($page, 'delicat-identity') !== 0) return;
+        // The Visual Builder and the main settings page print WordPress' own
+        // « Settings saved. » (settings_errors() after an options.php save):
+        // there, only the builder's import/reset redirects need this one.
+        if (in_array($page, ['delicat-identity', 'delicat-identity-builder'], true) && get_transient('settings_errors')) return;
         if (!empty($_GET['settings-updated'])) {
             echo '<div class="notice notice-success is-dismissible"><p><strong>Delicat Identity:</strong> ' . esc_html__('réglages enregistrés.', 'delicat-google-login') . '</p></div>';
         }

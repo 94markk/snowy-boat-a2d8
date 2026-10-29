@@ -196,7 +196,7 @@
             if (logo) {
                 var img = document.createElement('img');
                 img.src = logo;
-                img.alt = '';
+                img.alt = shell.getAttribute('data-site-name') || '';
                 img.addEventListener('error', function () {
                     brand.classList.remove('has-image');
                     brand.textContent = 'D';
@@ -208,7 +208,7 @@
         }
 
         var nativeVisible = value('show_native') === 'yes';
-        shell.querySelectorAll('.dip-auth-divider, input[type="email"], input[type="password"], .dip-auth-primary').forEach(function (el) {
+        shell.querySelectorAll('.dip-auth-divider, .dip-auth-field, .dip-auth-primary').forEach(function (el) {
             el.hidden = !nativeVisible;
         });
         var remember = shell.querySelector('.dipb-preview-remember');
@@ -236,10 +236,21 @@
         window.requestAnimationFrame(draw);
     }
 
+    var dirty = false;
+    function markDirty() { dirty = true; scheduleDraw(); }
+
     allFields().forEach(function (el) {
         initialState[el.name] = el.type === 'checkbox' ? el.checked : el.value;
-        el.addEventListener('input', scheduleDraw);
-        el.addEventListener('change', scheduleDraw);
+        el.addEventListener('input', markDirty);
+        el.addEventListener('change', markDirty);
+    });
+
+    // Unsaved design: warn before leaving the page (as the settings page does).
+    form.addEventListener('submit', function () { dirty = false; });
+    window.addEventListener('beforeunload', function (e) {
+        if (!dirty) return;
+        e.preventDefault();
+        e.returnValue = '';
     });
 
     var presetField = field('preset');
@@ -258,9 +269,19 @@
             var panelName = button.getAttribute('data-builder-tab');
             document.querySelectorAll('[data-builder-tab]').forEach(function (item) { item.classList.remove('is-active'); });
             document.querySelectorAll('[data-builder-panel]').forEach(function (panel) { panel.classList.remove('is-active'); });
+            document.querySelectorAll('[data-builder-tab]').forEach(function (item) { item.setAttribute('aria-selected', item === button ? 'true' : 'false'); item.tabIndex = item === button ? 0 : -1; });
             button.classList.add('is-active');
             var target = document.querySelector('[data-builder-panel="' + panelName + '"]');
             if (target) target.classList.add('is-active');
+        });
+        button.addEventListener('keydown', function (e) {
+            if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+            var tabs = Array.prototype.slice.call(document.querySelectorAll('[data-builder-tab]'));
+            var next = tabs[(tabs.indexOf(button) + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+            if (!next) return;
+            e.preventDefault();
+            next.click();
+            next.focus();
         });
     });
 
@@ -298,21 +319,34 @@
 
     var copy = document.querySelector('.dipb-copy-shortcode');
     if (copy) {
+        var copyLabel = copy.textContent;
+        var copying = false;
+        var legacyCopy = function () {
+            var textarea = document.createElement('textarea');
+            textarea.value = '[delicat_auth_panel]';
+            textarea.setAttribute('readonly', '');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            var ok = false;
+            try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+            textarea.remove();
+            return ok;
+        };
         copy.addEventListener('click', function () {
-            var done = function () {
-                var original = copy.textContent;
-                copy.textContent = 'Copié';
-                setTimeout(function () { copy.textContent = original; }, 1200);
+            if (copying) return;
+            copying = true;
+            // The label is read once: a second click within the delay no longer
+            // records « Copié » as the label to restore.
+            var finish = function (ok) {
+                copy.textContent = ok ? 'Copié' : 'Copie impossible';
+                setTimeout(function () { copy.textContent = copyLabel; copying = false; }, 1200);
             };
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText('[delicat_auth_panel]').then(done).catch(function () {});
+            if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+                navigator.clipboard.writeText('[delicat_auth_panel]').then(function () { finish(true); }, function () { finish(legacyCopy()); });
             } else {
-                var textarea = document.createElement('textarea');
-                textarea.value = '[delicat_auth_panel]';
-                document.body.appendChild(textarea);
-                textarea.select();
-                try { document.execCommand('copy'); done(); } catch (e) {}
-                textarea.remove();
+                finish(legacyCopy());
             }
         });
     }
@@ -325,6 +359,7 @@
                 if (el.type === 'checkbox') el.checked = !!initialState[el.name];
                 else el.value = initialState[el.name];
             });
+            dirty = false;
             scheduleDraw();
         });
     }

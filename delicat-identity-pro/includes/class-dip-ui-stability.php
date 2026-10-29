@@ -53,6 +53,34 @@ final class DIP_UI_Stability {
         foreach (['delicat-identity','delicat-identity-providers','delicat-identity-builder','dip-security-center','dip-woocommerce-pro','dip-app-sync-v2','dip-auth-methods'] as $slug) {
             remove_submenu_page('options-general.php', $slug);
         }
+        self::canonical_route();
+    }
+
+    /**
+     * The Settings → … entries now live in the Delicat Identity menu, so the
+     * historical options-general.php?page=… URLs (links, redirects of save
+     * handlers, bookmarks) had no registered title any more: empty <title>,
+     * « strip_tags(): Passing null » from admin-header.php on PHP 8.1+ and the
+     * settings notices printed twice. A GET moves to the admin.php route with
+     * the same query (the #fragment is kept by the browser); any other method
+     * keeps rendering in place with the page title restored.
+     */
+    private static function canonical_route() {
+        global $pagenow, $submenu, $title;
+        if (($pagenow ?? '') !== 'options-general.php' || !isset($_GET['page']) || !is_string($_GET['page'])) return;
+        $page = sanitize_key(wp_unslash($_GET['page']));
+        $label = '';
+        foreach ((array) ($submenu[self::PAGE] ?? []) as $item) {
+            if (isset($item[2]) && $item[2] === $page) { $label = (string) ($item[3] ?? $item[0]); break; }
+        }
+        if ($label === '') return; // Not one of ours, or the user may not open it.
+        $method = isset($_SERVER['REQUEST_METHOD']) ? strtoupper((string) $_SERVER['REQUEST_METHOD']) : 'GET';
+        if (in_array($method, ['GET', 'HEAD'], true) && !headers_sent()) {
+            $query = isset($_SERVER['QUERY_STRING']) ? (string) $_SERVER['QUERY_STRING'] : '';
+            wp_safe_redirect(admin_url('admin.php?' . ($query !== '' ? $query : 'page=' . rawurlencode($page))));
+            exit;
+        }
+        if (empty($title)) $title = $label;
     }
 
     private static function plugin_pages() {
@@ -76,6 +104,7 @@ final class DIP_UI_Stability {
         wp_enqueue_script('dip-ui-stability', DIP_URL . 'assets/ui-stability.js', [], DIP_VERSION, true);
         wp_localize_script('dip-ui-stability', 'dipUiStability', [
             'copied' => __('Copié', 'delicat-google-login'),
+            'copyFailed' => __('Copie impossible', 'delicat-google-login'),
         ]);
     }
 
@@ -132,10 +161,25 @@ final class DIP_UI_Stability {
         $checks[] = ['HTTPS', is_ssl(), 'HTTPS est requis en production pour OAuth et les sessions.'];
         $checks[] = ['REST API', !empty(get_option('permalink_structure')), 'Des permaliens lisibles sont recommandés pour les routes API.'];
 
-        $tables = [DIP_Audit::table(), DIP_Devices::table()];
-        foreach ($tables as $table) {
-            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) === $table;
-            $checks[] = ['Table ' . str_replace($wpdb->prefix, '', $table), $exists, 'Table requise pour les journaux ou appareils.'];
+        // Every module table (the counter table backs login throttling:
+        // without it the throttle silently falls back to transients).
+        $tables = [
+            DIP_Audit::table() => 'Journal de sécurité.',
+            DIP_Devices::table() => 'Appareils de confiance.',
+        ];
+        if (class_exists('DIP_Lockout')) $tables[$wpdb->prefix . DIP_Lockout::COUNTER_TABLE] = 'Compteurs atomiques du blocage des tentatives de connexion.';
+        if (class_exists('DIP_Mobile_API')) {
+            $tables[$wpdb->prefix . DIP_Mobile_API::TABLE_SUFFIX] = 'Sessions de l’application mobile.';
+            if (method_exists('DIP_Mobile_API', 'biometric_table')) $tables[DIP_Mobile_API::biometric_table()] = 'Clés biométriques de l’application.';
+        }
+        if (class_exists('DIP_App_Sync_V2')) $tables[$wpdb->prefix . DIP_App_Sync_V2::TABLE_SUFFIX] = 'Appairage web et application.';
+        if (class_exists('DIP_Analytics')) $tables[$wpdb->prefix . 'dip_analytics_daily'] = 'Statistiques de connexion.';
+        foreach ($tables as $table => $help) {
+            $exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table))) === $table;
+            $checks[] = ['Table ' . str_replace($wpdb->prefix, '', $table), $exists, $help];
+        }
+        if (class_exists('DIP_Lockout')) {
+            $checks[] = ['Blocage des tentatives', get_option(DIP_Lockout::COUNTER_OPTION) === '1', 'Le compteur atomique doit être actif (sinon : « Réparer automatiquement »).'];
         }
         return $checks;
     }
@@ -219,9 +263,17 @@ final class DIP_UI_Stability {
     public static function repair() {
         if (!current_user_can('manage_options')) wp_die(esc_html__('Permission refusée.', 'delicat-google-login'), 403);
         check_admin_referer('dip_ui_repair');
-        if (class_exists('DIP_Audit')) DIP_Audit::install();
-        if (class_exists('DIP_Devices')) DIP_Devices::install();
-        if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::install();
+        // Audit, devices, mobile and the login-throttle counter table (it also
+        // re-arms the counter, which stays off while its table is missing).
+        if (class_exists('DIP_Plugin') && method_exists('DIP_Plugin', 'install_runtime_schema')) {
+            DIP_Plugin::install_runtime_schema();
+        } else {
+            if (class_exists('DIP_Audit')) DIP_Audit::install();
+            if (class_exists('DIP_Devices')) DIP_Devices::install();
+            if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::install();
+            if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'install')) DIP_Lockout::install();
+        }
+        if (class_exists('DIP_Headless_Google') && method_exists('DIP_Headless_Google', 'activate')) DIP_Headless_Google::activate();
         if (class_exists('DIP_App_Sync_V2')) DIP_App_Sync_V2::install();
         if (class_exists('DIP_Customer_Dashboard')) DIP_Customer_Dashboard::activate();
         if (class_exists('DIP_Analytics')) DIP_Analytics::install();
