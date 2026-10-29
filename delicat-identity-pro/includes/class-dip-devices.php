@@ -4,6 +4,7 @@ defined('ABSPATH') || exit;
 final class DIP_Devices {
     const CRON_HOOK = 'dip_device_cleanup';
     const COOKIE = 'dip_device_id';
+    private static $cookie_sent = false;
 
     public static function table() {
         global $wpdb;
@@ -45,14 +46,20 @@ final class DIP_Devices {
     }
 
     private static function browser_device_id($create = false) {
-        $value = isset($_COOKIE[self::COOKIE]) ? trim((string) wp_unslash($_COOKIE[self::COOKIE])) : '';
-        if (preg_match('/^[A-Za-z0-9_-]{32,128}$/', $value)) return $value;
-        if (!$create || headers_sent()) return '';
-        try {
-            $value = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-        } catch (Throwable $e) {
-            $value = wp_generate_password(48, false, false);
+        $value = isset($_COOKIE[self::COOKIE]) && is_string($_COOKIE[self::COOKIE]) ? trim((string) wp_unslash($_COOKIE[self::COOKIE])) : '';
+        $valid = (bool) preg_match('/^[A-Za-z0-9_-]{32,128}$/', $value);
+        if ($valid && (!$create || self::$cookie_sent)) return $value;
+        if (!$create || headers_sent()) return $valid ? $value : '';
+        self::$cookie_sent = true;
+        if (!$valid) {
+            try {
+                $value = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+            } catch (Throwable $e) {
+                $value = wp_generate_password(48, false, false);
+            }
         }
+        // (Re)issued at each sign-in so a browser used at least once a year
+        // keeps the same identity instead of turning into a « new device ».
         $secure = is_ssl();
         setcookie(self::COOKIE, $value, [
             'expires' => time() + YEAR_IN_SECONDS,
@@ -66,10 +73,42 @@ final class DIP_Devices {
         return $value;
     }
 
+    /**
+     * Device identity. With the first-party device cookie it is the cookie
+     * alone (v2): browser and OS updates change the User-Agent every few
+     * weeks and must not turn the same browser into a « new device » with a
+     * new alert. The User-Agent is kept for the browser/platform columns only.
+     * Without the cookie, the historical HMAC(User-Agent | marker) is used.
+     */
     public static function current_hash($create_cookie = false) {
         $device_id = self::browser_device_id((bool) $create_cookie);
+        if ($device_id !== '') return hash_hmac('sha256', 'v2|' . $device_id, wp_salt('secure_auth'));
+        return self::legacy_hash('');
+    }
+
+    /** Hash used up to 6.11.0: HMAC(full User-Agent | device cookie). */
+    private static function legacy_hash($device_id) {
         $material = self::raw_ua() . '|' . ($device_id !== '' ? $device_id : 'legacy-no-device-cookie');
         return hash_hmac('sha256', $material, wp_salt('secure_auth'));
+    }
+
+    /** {browser, platform} labels for a User-Agent string (also used by App Sync's pairing preview). */
+    public static function describe_user_agent($ua) {
+        $ua = substr(sanitize_text_field((string) $ua), 0, 500);
+        return ['browser' => self::browser($ua), 'platform' => self::platform($ua)];
+    }
+
+    /**
+     * The Delicat app signs in over REST with its installation header or a
+     * Bearer token and never keeps the browser device cookie: its new-device
+     * alert comes from the App API (first installation only), not from here.
+     */
+    private static function is_app_request() {
+        if (!(defined('REST_REQUEST') && REST_REQUEST)) return false;
+        if (!empty($_SERVER['HTTP_X_INSTALLATION_ID'])) return true;
+        if (strpos(rawurldecode((string) ($_SERVER['REQUEST_URI'] ?? '')), 'delicat-identity/v1/mobile/') !== false) return true;
+        $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? ($_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? ''));
+        return (bool) preg_match('/^Bearer\s+/i', $auth);
     }
 
     private static function ip_hash() {
@@ -93,19 +132,30 @@ final class DIP_Devices {
 
     public static function is_known($user_id) {
         global $wpdb;
-        $count = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . self::table() . ' WHERE user_id=%d AND device_hash=%s', absint($user_id), self::current_hash()));
+        $hashes = array_values(array_unique([self::current_hash(), self::legacy_hash(self::browser_device_id(false))]));
+        $count = (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . self::table() . ' WHERE user_id=%d AND device_hash IN (%s,%s)', absint($user_id), $hashes[0], $hashes[1] ?? $hashes[0]));
         return $count > 0;
     }
 
     public static function register_login($user_id, array $settings = []) {
         global $wpdb;
         $user_id = absint($user_id);
-        if (!$user_id) return;
+        if (!$user_id || self::is_app_request()) return false;
         $hash = self::current_hash(true);
         $existing = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . self::table() . ' WHERE user_id=%d AND device_hash=%s', $user_id, $hash), ARRAY_A);
         $ua = self::raw_ua();
         $now = current_time('mysql', true);
         $data = ['browser'=>self::browser($ua), 'platform'=>self::platform($ua), 'last_seen'=>$now, 'ip_hash'=>self::ip_hash()];
+        $device_id = self::browser_device_id(false);
+        if (!$existing && $device_id !== '') {
+            // A row recorded by 6.11.0 or earlier for this browser: move it to
+            // the v2 identity (keeping trust and history), without an alert.
+            $legacy = $wpdb->get_row($wpdb->prepare('SELECT * FROM ' . self::table() . ' WHERE user_id=%d AND device_hash=%s', $user_id, self::legacy_hash($device_id)), ARRAY_A);
+            if ($legacy) {
+                $wpdb->update(self::table(), array_merge($data, ['device_hash'=>$hash]), ['id'=>(int) $legacy['id']], ['%s','%s','%s','%s','%s'], ['%d']);
+                return false;
+            }
+        }
         if ($existing) {
             $wpdb->update(self::table(), $data, ['id'=>(int)$existing['id']], ['%s','%s','%s','%s'], ['%d']);
             return false;
@@ -130,7 +180,15 @@ final class DIP_Devices {
 
     public static function user_devices($user_id) {
         global $wpdb;
-        return $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . self::table() . ' WHERE user_id=%d ORDER BY last_seen DESC', absint($user_id)), ARRAY_A);
+        return $wpdb->get_results($wpdb->prepare('SELECT * FROM ' . self::table() . ' WHERE user_id=%d ORDER BY last_seen DESC LIMIT 50', absint($user_id)), ARRAY_A);
+    }
+
+    /** Account deletion / privacy erasure. Returns the number of rows removed. */
+    public static function delete_for_user($user_id) {
+        global $wpdb;
+        $user_id = absint($user_id);
+        if (!$user_id) return 0;
+        return (int) $wpdb->delete(self::table(), ['user_id'=>$user_id], ['%d']);
     }
 
     public static function set_trusted($user_id, $device_id, $trusted) {
@@ -147,7 +205,9 @@ final class DIP_Devices {
         global $wpdb;
         $days = min(365, max(30, absint($days)));
         $cutoff = gmdate('Y-m-d H:i:s', time() - $days * DAY_IN_SECONDS);
-        $wpdb->query($wpdb->prepare('DELETE FROM ' . self::table() . ' WHERE trusted=0 AND last_seen < %s', $cutoff));
+        // Trusted devices unused for a year are forgotten too.
+        $trusted_cutoff = gmdate('Y-m-d H:i:s', time() - YEAR_IN_SECONDS);
+        $wpdb->query($wpdb->prepare('DELETE FROM ' . self::table() . ' WHERE (trusted=0 AND last_seen < %s) OR (trusted=1 AND last_seen < %s)', $cutoff, $trusted_cutoff));
     }
 
     public static function summary($days = 30) {

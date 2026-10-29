@@ -6,6 +6,13 @@ final class DIP_Passwordless_Registration {
     const OTP_META = '_dip_email_otp';
     const MAGIC_META = '_dip_magic_login';
     const RATE_PREFIX = 'dip_auth_rate_';
+    // Guesses allowed per e-mailed code, counted atomically across workers.
+    const OTP_MAX_ATTEMPTS = 5;
+    // Wrong codes per account (any browser or address): 1 hour and 24 hours.
+    const OTP_ACCOUNT_FAILURES_HOUR = 10;
+    const OTP_ACCOUNT_FAILURES_DAY = 30;
+    // Wrong codes per visitor address in 10 minutes (shared carrier addresses).
+    const OTP_ADDRESS_FAILURES = 100;
 
     public static function install() {
         $defaults = self::defaults();
@@ -28,6 +35,53 @@ final class DIP_Passwordless_Registration {
         add_action('admin_post_dip_register_customer', [__CLASS__, 'register_customer']);
         add_shortcode('delicat_passwordless_login', [__CLASS__, 'passwordless_shortcode']);
         add_shortcode('delicat_registration_form', [__CLASS__, 'registration_shortcode']);
+        add_action('template_redirect', [__CLASS__, 'protect_transitional_pages'], 0);
+    }
+
+    /**
+     * Pages reached through ?dip_auth= / ?dip_register= show a per-visitor
+     * notice and may pre-fill the address a code was sent to: never let a
+     * page cache store them for the next visitor.
+     */
+    public static function protect_transitional_pages() {
+        if (!isset($_GET['dip_auth']) && !isset($_GET['dip_register'])) return; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only presentation flags.
+        self::mark_uncacheable();
+        if (!headers_sent()) nocache_headers();
+    }
+
+    private static function mark_uncacheable() {
+        if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+        do_action('litespeed_control_set_nocache', 'delicat passwordless state');
+    }
+
+    /** Scalar request field (arrays are ignored instead of raising notices). */
+    private static function posted($key) {
+        $value = $_POST[$key] ?? ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- callers verify the browser-bound nonce.
+        return is_scalar($value) ? (string) wp_unslash($value) : '';
+    }
+
+    private static function email_hash($email) {
+        if (class_exists('DIP_Account_Sync') && method_exists('DIP_Account_Sync', 'email_hash')) return DIP_Account_Sync::email_hash($email);
+        return hash_hmac('sha256', strtolower(trim((string) $email)), wp_salt('auth'));
+    }
+
+    private static function passwordless_allowed($user) {
+        if (!($user instanceof WP_User)) return false;
+        if (class_exists('DIP_Account_Sync') && method_exists('DIP_Account_Sync', 'passwordless_login_allowed')) return DIP_Account_Sync::passwordless_login_allowed($user->ID);
+        return !user_can($user, 'manage_options') && !user_can($user, 'manage_woocommerce') && !user_can($user, 'edit_posts');
+    }
+
+    /**
+     * A staff address asked for a code or link: nothing that signs in is
+     * sent. The mailbox owner is told why (the page itself stays generic, so
+     * it never reveals which addresses belong to staff).
+     */
+    private static function notify_privileged_request($user, $method) {
+        if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_request_refused', 'notice', $user->ID, ['method'=>sanitize_key($method)]);
+        $subject = __('Connexion par e-mail indisponible pour ce compte', 'delicat-google-login');
+        $body = '<p>' . esc_html__('Une demande de connexion par code ou lien e-mail a été reçue pour votre compte. Ce mode de connexion est réservé aux comptes clients : connectez-vous avec votre mot de passe et la vérification en deux étapes.', 'delicat-google-login') . '</p><p>' . esc_html__('Si vous n’êtes pas à l’origine de cette demande, aucune action n’est nécessaire.', 'delicat-google-login') . '</p>';
+        if (class_exists('DIP_Email_Hub')) DIP_Email_Hub::send_access_email($user->user_email, $subject, __('Connexion sécurisée requise', 'delicat-google-login'), $body, '', '', ['badge'=>__('Compte protégé', 'delicat-google-login'), 'accent'=>'#d97706']);
+        else wp_mail($user->user_email, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
     }
 
     public static function defaults() {
@@ -83,7 +137,7 @@ final class DIP_Passwordless_Registration {
             delete_user_meta($user_id, '_dip_email_verify_hash');
             delete_user_meta($user_id, '_dip_email_verify_email_hash');
             delete_user_meta($user_id, '_dip_email_verify_expires');
-            if (class_exists('DIP_Audit')) DIP_Audit::record('registration_verification_email_failed', 'warning', $user_id, ['email_hash'=>hash('sha256', strtolower($email))]);
+            if (class_exists('DIP_Audit')) DIP_Audit::record('registration_verification_email_failed', 'warning', $user_id, ['email_hash'=>self::email_hash($email)]);
         }
         return (bool) $sent;
     }
@@ -234,15 +288,25 @@ final class DIP_Passwordless_Registration {
         if (!self::verify_form_nonce('dip_request_otp')) self::redirect(['dip_auth'=>'confirmation_failed']);
         $s = self::settings();
         if ($s['otp_enabled'] !== 'yes') self::redirect(['dip_auth'=>'disabled']);
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
+        $email = sanitize_email(self::posted('email'));
         if (!$email || !is_email($email)) self::redirect(['dip_auth'=>'invalid_email']);
         if (!self::throttle($email, 'otp', 60)) self::redirect(['dip_auth'=>'wait']);
+        // While wrong codes keep this address locked, no new code is mailed.
+        if (self::otp_verify_blocked($email)) self::redirect(['dip_auth'=>'otp_locked']);
+        if (wp_rand(1, 20) === 1) self::otp_collect_garbage();
         $user = get_user_by('email', $email);
-        if (!$user && ($s['allow_new_passwordless_users'] !== 'yes' || !self::new_accounts_allowed())) self::redirect(['dip_auth'=>'sent']);
+        $no_code = !$user && ($s['allow_new_passwordless_users'] !== 'yes' || !self::new_accounts_allowed());
+        if ($user && !self::passwordless_allowed($user)) {
+            $no_code = true;
+            self::notify_privileged_request($user, 'email_otp');
+        }
+        // Unknown and staff addresses get a code nobody receives, so the
+        // verify step answers exactly as for a customer (no account probing).
         $code = (string) random_int(100000, 999999);
-        $payload = ['hash'=>wp_hash_password($code), 'expires'=>time() + absint($s['otp_expiry']) * 60, 'attempts'=>0, 'client'=>self::client_key()];
+        $payload = ['hash'=>wp_hash_password($no_code ? wp_generate_password(32, true, true) : $code), 'expires'=>time() + absint($s['otp_expiry']) * 60, 'attempts'=>0, 'client'=>self::client_key()];
         set_transient(self::otp_key($email), $payload, absint($s['otp_expiry']) * 60);
         self::remember_otp_email($email, absint($s['otp_expiry']) * 60);
+        if ($no_code) self::redirect(['dip_auth'=>'sent']);
         $subject = 'Votre code de connexion Delicat';
         $body = '<p>Votre code de connexion est :</p><p style="font-size:30px;font-weight:900;letter-spacing:6px;text-align:center">'.esc_html($code).'</p><p>Il expire dans <strong>'.absint($s['otp_expiry']).' minutes</strong>. Ne partagez jamais ce code.</p>';
         $sent = class_exists('DIP_Email_Hub')
@@ -250,11 +314,86 @@ final class DIP_Passwordless_Registration {
             : wp_mail($email, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
         if (!$sent) {
             delete_transient(self::otp_key($email));
-            if (class_exists('DIP_Audit')) DIP_Audit::log('passwordless_otp_email_failed', 0, ['email_hash'=>hash('sha256', strtolower($email))]);
+            if (class_exists('DIP_Audit')) DIP_Audit::log('passwordless_otp_email_failed', 0, ['email_hash'=>self::email_hash($email)]);
             self::redirect(['dip_auth'=>'email_failed']);
         }
-        if (class_exists('DIP_Audit')) DIP_Audit::log('passwordless_otp_requested', 0, ['email_hash'=>hash('sha256', strtolower($email))]);
+        if (class_exists('DIP_Audit')) DIP_Audit::log('passwordless_otp_requested', 0, ['email_hash'=>self::email_hash($email)]);
         self::redirect(['dip_auth'=>'sent']);
+    }
+
+    private static function otp_failure_keys($email) {
+        $account = substr(hash_hmac('sha256', strtolower((string) $email), wp_salt('nonce')), 0, 40);
+        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::throttle_ip() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        return [
+            ['key'=>'dip_otp_fail_h_' . $account, 'window'=>HOUR_IN_SECONDS, 'limit'=>self::OTP_ACCOUNT_FAILURES_HOUR],
+            ['key'=>'dip_otp_fail_d_' . $account, 'window'=>DAY_IN_SECONDS, 'limit'=>self::OTP_ACCOUNT_FAILURES_DAY],
+            ['key'=>'dip_otp_fail_ip_' . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 40), 'window'=>10 * MINUTE_IN_SECONDS, 'limit'=>self::OTP_ADDRESS_FAILURES],
+        ];
+    }
+
+    /** Verify-side guessing guard: only wrong codes count (a success never does). */
+    private static function otp_verify_blocked($email) {
+        if (!class_exists('DIP_Lockout')) return false;
+        foreach (self::otp_failure_keys($email) as $bucket) {
+            if (DIP_Lockout::counter_peek($bucket['key'])['count'] >= $bucket['limit']) return true;
+        }
+        return false;
+    }
+
+    private static function record_otp_failure($email) {
+        if (!class_exists('DIP_Lockout')) return;
+        foreach (self::otp_failure_keys($email) as $bucket) DIP_Lockout::counter_hit($bucket['key'], $bucket['window']);
+        if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_otp_failed', 'warning', 0, ['email_hash'=>self::email_hash($email)]);
+    }
+
+    const OTP_TRY_PREFIX = 'dip_otp_try_';
+
+    /** Options row holding one code's guess count; the code's own salted hash names it (a new code starts a new count). */
+    private static function otp_try_row($key, array $payload) {
+        return self::OTP_TRY_PREFIX . substr(hash_hmac('sha256', $key . '|' . (string) ($payload['hash'] ?? ''), wp_salt('nonce')), 0, 40) . '_' . absint($payload['expires'] ?? 0);
+    }
+
+    /**
+     * Claim one of the code's OTP_MAX_ATTEMPTS guesses. INSERT IGNORE creates
+     * the counter once, then a single conditional UPDATE takes a guess only
+     * while some remain: concurrent requests can never evaluate more guesses
+     * than allowed. Raw SQL on purpose (like DIP_Flow_Store): transients may
+     * live in an object cache whose get-then-set loses increments.
+     * Returns the guess number (1..max), 0 when none is left, or -1 when the
+     * database refused the statement (the guess is then not evaluated).
+     */
+    private static function otp_claim_attempt($row) {
+        global $wpdb;
+        $suppress = $wpdb->suppress_errors(true);
+        $created = $wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '0', 'no')", $row));
+        $cases = ''; $open = [];
+        for ($i = 0; $i < self::OTP_MAX_ATTEMPTS; $i++) { $cases .= " WHEN '" . $i . "' THEN '" . ($i + 1) . "'"; $open[] = "'" . $i . "'"; }
+        $claimed = $created === false ? false : $wpdb->query($wpdb->prepare(
+            "UPDATE {$wpdb->options} SET option_value = CASE option_value{$cases} END WHERE option_name = %s AND option_value IN (" . implode(',', $open) . ')',
+            $row
+        ));
+        $count = $claimed ? $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", $row)) : null;
+        $wpdb->suppress_errors($suppress);
+        wp_cache_delete($row, 'options');
+        if ($claimed === false) return -1;
+        if ((int) $claimed !== 1) return 0;
+        return max(1, min(self::OTP_MAX_ATTEMPTS, (int) $count));
+    }
+
+    private static function otp_forget_attempts($row) {
+        global $wpdb;
+        $wpdb->delete($wpdb->options, ['option_name' => $row]);
+        wp_cache_delete($row, 'options');
+    }
+
+    /** Drop guess counters of codes that expired without being used (oldest first, bounded). */
+    private static function otp_collect_garbage() {
+        global $wpdb;
+        $rows = $wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s ORDER BY option_id ASC LIMIT 200", $wpdb->esc_like(self::OTP_TRY_PREFIX) . '%'));
+        foreach ((array) $rows as $name) {
+            $expires = (int) substr((string) strrchr((string) $name, '_'), 1);
+            if ($expires + 60 < time()) self::otp_forget_attempts((string) $name);
+        }
     }
 
     public static function verify_otp() {
@@ -262,18 +401,42 @@ final class DIP_Passwordless_Registration {
         if (!self::verify_form_nonce('dip_verify_otp')) self::redirect(['dip_auth'=>'confirmation_failed']);
         if (is_user_logged_in()) self::redirect(['dip_auth'=>'already_logged_in']);
         $s = self::settings();
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
-        $code = preg_replace('/\D+/', '', (string) ($_POST['code'] ?? ''));
+        if ($s['otp_enabled'] !== 'yes') self::redirect(['dip_auth'=>'disabled']);
+        $email = sanitize_email(self::posted('email'));
+        $code = preg_replace('/\D+/', '', self::posted('code'));
+        if (!$email || !is_email($email)) self::redirect(['dip_auth'=>'expired']);
+        if (self::otp_verify_blocked($email)) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_otp_verify_throttled', 'warning', 0, ['email_hash'=>self::email_hash($email)]);
+            self::redirect(['dip_auth'=>'otp_locked']);
+        }
         $key = self::otp_key($email);
         $payload = get_transient($key);
-        if (!$payload || empty($payload['expires']) || time() > $payload['expires'] || !hash_equals((string)$payload['client'], self::client_key())) self::redirect(['dip_auth'=>'expired']);
-        $payload['attempts'] = absint($payload['attempts'] ?? 0) + 1;
-        if ($payload['attempts'] > 5 || !wp_check_password($code, $payload['hash'])) {
-            set_transient($key, $payload, max(1, $payload['expires'] - time()));
-            self::redirect(['dip_auth'=>'invalid_code']);
+        if (!is_array($payload) || empty($payload['expires']) || time() > (int) $payload['expires'] || !hash_equals((string) ($payload['client'] ?? ''), self::client_key())) {
+            self::redirect(['dip_auth'=>'expired']);
+        }
+        $row = self::otp_try_row($key, $payload);
+        $attempt = self::otp_claim_attempt($row);
+        if ($attempt < 0) self::redirect(['dip_auth'=>'wait']);
+        if ($attempt === 0) {
+            delete_transient($key);
+            self::redirect(['dip_auth'=>'otp_exhausted']);
+        }
+        // The counter row stays until the code has expired (garbage sweep):
+        // deleting it early would let a request still holding the payload
+        // start a fresh count.
+        if (strlen($code) !== 6 || !wp_check_password($code, (string) ($payload['hash'] ?? ''))) {
+            self::record_otp_failure($email);
+            if ($attempt < self::OTP_MAX_ATTEMPTS) self::redirect(['dip_auth'=>'invalid_code']);
+            // The last allowed guess burns the code: it cannot be probed further.
+            delete_transient($key);
+            self::redirect(['dip_auth'=>'otp_exhausted']);
         }
         delete_transient($key);
         $user = get_user_by('email', $email);
+        if ($user && !self::passwordless_allowed($user)) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_blocked', 'warning', $user->ID, ['method'=>'email_otp']);
+            self::redirect(['dip_auth'=>'privileged_passwordless_blocked']);
+        }
         $created = false;
         if (!$user && $s['allow_new_passwordless_users'] === 'yes' && self::new_accounts_allowed()) {
             if (class_exists('DIP_Native_Auth') && DIP_Native_Auth::registration_rate_limited()) self::redirect(['dip_register'=>'registration_rate_limited']);
@@ -285,15 +448,16 @@ final class DIP_Passwordless_Registration {
                 $created = true;
                 update_user_meta($id, DIP_Identity::META_PASSWORD_MANAGED, 'yes');
                 if (class_exists('DIP_Native_Auth')) DIP_Native_Auth::record_registration();
-                if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email); else update_user_meta($id, 'dip_email_verified', 'yes');
+                if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email, 'otp'); else update_user_meta($id, 'dip_email_verified', 'yes');
                 do_action('dip_user_created', $id, ['provider'=>'email_otp','email'=>$email]);
                 $user = get_user_by('id', $id);
             }
         }
         if (!$user) self::redirect(['dip_auth'=>'account_required']);
-        // A valid OTP proves mailbox ownership even for a pre-existing unverified account.
+        // A valid OTP proves mailbox ownership even for a pre-existing unverified
+        // account; credentials set up before that proof are reset (pre-hijacking).
         if (get_user_meta($user->ID, 'dip_email_verified', true) === 'no') {
-            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user->ID, $email); else update_user_meta($user->ID, 'dip_email_verified', 'yes');
+            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user->ID, $email, 'otp'); else update_user_meta($user->ID, 'dip_email_verified', 'yes');
         }
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user->ID) : true;
         if (is_wp_error($guard)) self::redirect(['dip_auth'=>$guard->get_error_code()]);
@@ -307,11 +471,15 @@ final class DIP_Passwordless_Registration {
         if (!self::verify_form_nonce('dip_request_magic')) self::redirect(['dip_auth'=>'confirmation_failed']);
         $s = self::settings();
         if ($s['magic_enabled'] !== 'yes') self::redirect(['dip_auth'=>'disabled']);
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
+        $email = sanitize_email(self::posted('email'));
         if (!$email || !is_email($email)) self::redirect(['dip_auth'=>'invalid_email']);
         if (!self::throttle($email, 'magic', 90)) self::redirect(['dip_auth'=>'wait']);
         $user = get_user_by('email', $email);
         if (!$user && ($s['allow_new_passwordless_users'] !== 'yes' || !self::new_accounts_allowed())) self::redirect(['dip_auth'=>'sent']);
+        if ($user && !self::passwordless_allowed($user)) {
+            self::notify_privileged_request($user, 'magic_link');
+            self::redirect(['dip_auth'=>'sent']);
+        }
         $token = wp_generate_password(48, false, false);
         $email_enc = class_exists('DIP_Crypto') ? DIP_Crypto::encrypt($email) : '';
         $record = [
@@ -333,10 +501,10 @@ final class DIP_Passwordless_Registration {
             : wp_mail($email, 'Votre lien de connexion Delicat', $body . '<p><a href="'.esc_url($url).'">Se connecter</a></p>', ['Content-Type: text/html; charset=UTF-8']);
         if (!$sent) {
             delete_transient(self::magic_key($token));
-            if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_email_failed', 0, ['email_hash'=>hash('sha256', strtolower($email))]);
+            if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_email_failed', 0, ['email_hash'=>self::email_hash($email)]);
             self::redirect(['dip_auth'=>'email_failed']);
         }
-        if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_requested', 0, ['email_hash'=>hash('sha256', strtolower($email))]);
+        if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_requested', 0, ['email_hash'=>self::email_hash($email)]);
         self::redirect(['dip_auth'=>'sent']);
     }
 
@@ -367,10 +535,12 @@ final class DIP_Passwordless_Registration {
         if (!$confirm && (empty($_GET['dip_magic']) || empty($_GET['token']))) return;
         nocache_headers();
         $s = self::settings();
-        $token = sanitize_text_field(wp_unslash($confirm ? ($_POST['token'] ?? '') : ($_GET['token'] ?? '')));
+        $raw_token = $confirm ? ($_POST['token'] ?? '') : ($_GET['token'] ?? '');
+        $raw_email = $confirm ? ($_POST['email'] ?? '') : ($_GET['email'] ?? '');
+        $token = is_scalar($raw_token) ? sanitize_text_field(wp_unslash((string) $raw_token)) : '';
         $key = self::magic_key($token);
         $record = get_transient($key);
-        $fallback_email = sanitize_email(wp_unslash($confirm ? ($_POST['email'] ?? '') : ($_GET['email'] ?? '')));
+        $fallback_email = is_scalar($raw_email) ? sanitize_email(wp_unslash((string) $raw_email)) : '';
         $email = '';
         if (is_array($record) && !empty($record['email_enc']) && class_exists('DIP_Crypto')) {
             $email = sanitize_email(DIP_Crypto::decrypt((string) $record['email_enc']));
@@ -413,14 +583,18 @@ final class DIP_Passwordless_Registration {
             if (!is_wp_error($id)) {
                 update_user_meta($id, DIP_Identity::META_PASSWORD_MANAGED, 'yes');
                 if (class_exists('DIP_Native_Auth')) DIP_Native_Auth::record_registration();
-                if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email); else update_user_meta($id, 'dip_email_verified', 'yes');
+                if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email, 'magic'); else update_user_meta($id, 'dip_email_verified', 'yes');
                 do_action('dip_user_created', $id, ['provider'=>'magic_link','email'=>$email]);
                 $user = get_user_by('id', $id);
             }
         }
         if (!$user) { wp_safe_redirect(add_query_arg('dip_auth','account_required',home_url('/'))); exit; }
+        if (!self::passwordless_allowed($user)) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_blocked', 'warning', $user->ID, ['method'=>'magic_link']);
+            wp_safe_redirect(add_query_arg('dip_auth','privileged_passwordless_blocked',home_url('/'))); exit;
+        }
         if (get_user_meta($user->ID, 'dip_email_verified', true) === 'no') {
-            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user->ID, $email); else update_user_meta($user->ID, 'dip_email_verified', 'yes');
+            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user->ID, $email, 'magic'); else update_user_meta($user->ID, 'dip_email_verified', 'yes');
         }
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user->ID) : true;
         if (is_wp_error($guard)) { wp_safe_redirect(add_query_arg('dip_auth',$guard->get_error_code(),home_url('/'))); exit; }
@@ -441,8 +615,8 @@ final class DIP_Passwordless_Registration {
             : ((bool) get_option('users_can_register') || 'yes' === get_option('woocommerce_enable_myaccount_registration') || 'yes' === get_option('woocommerce_enable_signup_and_login_from_checkout'));
         if ($s['registration_enabled'] !== 'yes' || !$platform_registration) self::redirect(['dip_register'=>'disabled']);
         if (class_exists('DIP_Native_Auth') && DIP_Native_Auth::registration_rate_limited()) self::redirect(['dip_register'=>'registration_rate_limited']);
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
-        $password = (string) wp_unslash($_POST['password'] ?? '');
+        $email = sanitize_email(self::posted('email'));
+        $password = self::posted('password');
         [$min, $max] = self::password_limits();
         $password_len = function_exists('mb_strlen') ? mb_strlen($password, 'UTF-8') : strlen($password);
         if (!is_email($email) || strlen($password) > 1024 || $password_len < $min || $password_len > $max || !preg_match('/\p{L}/u', $password) || !preg_match('/\p{N}/u', $password)) self::redirect(['dip_register'=>'invalid']);
@@ -473,7 +647,9 @@ final class DIP_Passwordless_Registration {
             if (class_exists('DIP_Audit')) DIP_Audit::record('custom_registration_pending_verification', 'notice', $id);
             self::redirect(['dip_register'=>'verify_sent']);
         }
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email);
+        // Verification is switched off: the address is usable for sign-in but is
+        // not proven, so it neither becomes proof nor claims guest orders.
+        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email, 'unproven');
         $user = get_user_by('id',$id);
         self::login_user($user, 'custom_registration');
         if (class_exists('DIP_Audit')) DIP_Audit::record('custom_registration', 'info', $id);
@@ -517,8 +693,13 @@ final class DIP_Passwordless_Registration {
         delete_user_meta($uid, '_dip_email_verify_hash');
         delete_user_meta($uid, '_dip_email_verify_email_hash');
         delete_user_meta($uid, '_dip_email_verify_expires');
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($uid, $user->user_email);
-        if (class_exists('DIP_Audit')) DIP_Audit::log('registration_email_verified', $uid, []);
+        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($uid, $user->user_email, 'email_link');
+        // A provider identity kept pending at sign-up is bound only now, and
+        // only for the browser that started that sign-up (DIP_Identity checks).
+        $provider_linked = class_exists('DIP_Identity') && method_exists('DIP_Identity', 'promote_pending_provider_link')
+            ? (bool) DIP_Identity::promote_pending_provider_link($uid)
+            : false;
+        if (class_exists('DIP_Audit')) DIP_Audit::log('registration_email_verified', $uid, $provider_linked ? ['provider_link'=>'promoted'] : []);
 
         // Verification proves mailbox ownership but does not silently replace
         // the visitor's current WordPress identity. The customer explicitly
@@ -532,6 +713,12 @@ final class DIP_Passwordless_Registration {
 
     private static function login_user($user, $method = 'passwordless') {
         if (!($user instanceof WP_User)) return;
+        // Every session this class opens is a customer one (OTP, magic link,
+        // storefront registration); staff never get one from a mailbox alone.
+        if (!self::passwordless_allowed($user)) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_blocked', 'warning', $user->ID, ['method'=>sanitize_key($method)]);
+            self::redirect(['dip_auth'=>'privileged_passwordless_blocked']);
+        }
         if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user->ID)) {
             $s = self::settings();
             $destination = self::safe_redirect($s['redirect_after_login'] ?? '/my-account/');
@@ -568,7 +755,7 @@ final class DIP_Passwordless_Registration {
     private static function notice() {
         $code = sanitize_key($_GET['dip_auth'] ?? $_GET['dip_register'] ?? '');
         [$pass_min] = self::password_limits();
-        $map = ['sent'=>'Si ce compte existe, un message a été envoyé.','wait'=>'Veuillez attendre avant de réessayer.','invalid_email'=>'Adresse email invalide.','invalid_code'=>'Code incorrect.','expired'=>'Le code ou lien a expiré.','account_required'=>'Créez d’abord un compte.','terms'=>'Vous devez accepter les conditions.','invalid'=>sprintf('Vérifiez les champs et utilisez un mot de passe d’au moins %d caractères avec une lettre et un chiffre.', $pass_min),'failed'=>'Inscription impossible.','verify_sent'=>'Compte créé. Vérifiez votre email pour l’activer.','verify_expired'=>'Le lien de vérification est invalide ou expiré.','email_failed'=>'L’e-mail n’a pas pu être envoyé. Vérifiez la configuration SMTP du site.','already_logged_in'=>'Vous êtes déjà connecté. Déconnectez-vous avant de créer un autre compte.','registration_rate_limited'=>'Limite d’inscriptions atteinte. Réessayez dans une heure.','registration_attempt_rate_limited'=>'Trop de demandes d’inscription. Réessayez dans quelques minutes.','account_pending_approval'=>'Votre compte attend l’approbation de l’administrateur.','dip_email_not_verified'=>'Vérifiez votre adresse e-mail avant de vous connecter.','confirmation_failed'=>'La confirmation sécurisée a expiré. Ouvrez de nouveau le lien.','two_factor_challenge_failed'=>'Impossible de démarrer la vérification en deux étapes. Réessayez.'];
+        $map = ['sent'=>'Si ce compte existe, un message a été envoyé.','wait'=>'Veuillez attendre avant de réessayer.','invalid_email'=>'Adresse email invalide.','invalid_code'=>'Code incorrect.','expired'=>'Le code ou lien a expiré.','account_required'=>'Créez d’abord un compte.','terms'=>'Vous devez accepter les conditions.','invalid'=>sprintf('Vérifiez les champs et utilisez un mot de passe d’au moins %d caractères avec une lettre et un chiffre.', $pass_min),'failed'=>'Inscription impossible.','verify_sent'=>'Compte créé. Vérifiez votre email pour l’activer.','verify_expired'=>'Le lien de vérification est invalide ou expiré.','email_failed'=>'L’e-mail n’a pas pu être envoyé. Vérifiez la configuration SMTP du site.','already_logged_in'=>'Vous êtes déjà connecté. Déconnectez-vous avant de créer un autre compte.','registration_rate_limited'=>'Limite d’inscriptions atteinte. Réessayez dans une heure.','registration_attempt_rate_limited'=>'Trop de demandes d’inscription. Réessayez dans quelques minutes.','account_pending_approval'=>'Votre compte attend l’approbation de l’administrateur.','dip_email_not_verified'=>'Vérifiez votre adresse e-mail avant de vous connecter.','confirmation_failed'=>'La confirmation sécurisée a expiré. Ouvrez de nouveau le lien.','two_factor_challenge_failed'=>'Impossible de démarrer la vérification en deux étapes. Réessayez.','disabled'=>'Cette méthode de connexion est désactivée.','otp_exhausted'=>'Trop d’essais pour ce code. Demandez un nouveau code.','otp_locked'=>'Trop de codes incorrects. Réessayez plus tard ou utilisez le lien de connexion par e-mail.','privileged_passwordless_blocked'=>'La connexion par code ou lien e-mail est réservée aux comptes clients. Connectez-vous avec votre mot de passe.'];
         return isset($map[$code]) ? '<div class="dip-auth-notice">'.esc_html($map[$code]).'</div>' : '';
     }
 
@@ -579,10 +766,14 @@ final class DIP_Passwordless_Registration {
     public static function passwordless_shortcode() {
         if (is_user_logged_in()) return '<div class="dip-auth-box">Vous êtes déjà connecté.</div>';
         $s = self::settings();
+        // The address a code was just sent to is pre-filled only on the
+        // ?dip_auth= page that follows the request, which is never cached.
+        $remembered = isset($_GET['dip_auth']) ? self::remembered_otp_email() : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only presentation flag.
+        if ($remembered !== '') self::mark_uncacheable();
         ob_start(); echo self::style(); ?>
         <div class="dip-auth-box"><h3>Connexion sans mot de passe</h3><p>Recevez un code ou un lien sécurisé par email.</p><?php echo self::notice(); ?>
         <?php if ($s['otp_enabled']==='yes'): ?><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_request_otp"><?php echo self::nonce_input('dip_request_otp','otp_request'); ?><label class="screen-reader-text" for="dip-otp-request-email">Adresse email</label><input id="dip-otp-request-email" type="email" name="email" maxlength="254" autocomplete="email" placeholder="Adresse email" required><button type="submit">Envoyer un code</button></form>
-        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_verify_otp"><?php echo self::nonce_input('dip_verify_otp','otp_verify'); ?><label class="screen-reader-text" for="dip-otp-verify-email">Adresse email</label><input id="dip-otp-verify-email" type="email" name="email" maxlength="254" autocomplete="email" value="<?php echo esc_attr(self::remembered_otp_email()); ?>" placeholder="Adresse email" required><label class="screen-reader-text" for="dip-otp-code">Code à 6 chiffres</label><input id="dip-otp-code" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" name="code" placeholder="Code à 6 chiffres" required><button type="submit">Vérifier et se connecter</button></form><?php endif; ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_verify_otp"><?php echo self::nonce_input('dip_verify_otp','otp_verify'); ?><label class="screen-reader-text" for="dip-otp-verify-email">Adresse email</label><input id="dip-otp-verify-email" type="email" name="email" maxlength="254" autocomplete="email" value="<?php echo esc_attr($remembered); ?>" placeholder="Adresse email" required><label class="screen-reader-text" for="dip-otp-code">Code à 6 chiffres</label><input id="dip-otp-code" type="text" inputmode="numeric" pattern="[0-9]{6}" minlength="6" maxlength="6" autocomplete="one-time-code" name="code" placeholder="Code à 6 chiffres" required><button type="submit">Vérifier et se connecter</button></form><?php endif; ?>
         <?php if ($s['magic_enabled']==='yes'): ?><form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_request_magic"><?php echo self::nonce_input('dip_request_magic','magic_request'); ?><label class="screen-reader-text" for="dip-magic-email">Adresse email</label><input id="dip-magic-email" type="email" name="email" maxlength="254" autocomplete="email" placeholder="Adresse email" required><button type="submit">Envoyer un lien magique</button></form><?php endif; ?>
         </div><?php echo self::nonce_refresh_script(); return ob_get_clean();
     }

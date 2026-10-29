@@ -10,6 +10,49 @@ final class DIP_Migration {
     const AUTO_OPTION = 'dip_migration_auto_v1';
     const CRON_HOOK = 'dip_automatic_migration_tick';
     const FINAL_OPTION = 'dip_migration_final_v1';
+    const LOCK_OPTION = 'dip_migration_batch_lock';
+
+    /** @var bool true while a migrate() batch is writing links */
+    private static $running = false;
+
+    /**
+     * C10: true while a migration batch links accounts. Listeners of
+     * dip_account_linked (e-mail alerts) skip their message meanwhile: the
+     * customer already used this Google account through Nextend.
+     */
+    public static function is_running() {
+        return self::$running;
+    }
+
+    /**
+     * One batch at a time (admin button, cron tick, fallback): concurrent
+     * batches would both rewrite the migration state and lose 'migrated'
+     * entries that rollback relies on. INSERT IGNORE is atomic; a lock older
+     * than 5 minutes is stale (crashed request) and taken over.
+     */
+    private static function acquire_batch_lock() {
+        global $wpdb;
+        $suppress = $wpdb->suppress_errors(true);
+        $now = time();
+        $sql = "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')";
+        $got = (int) $wpdb->query($wpdb->prepare($sql, self::LOCK_OPTION, (string) $now)) === 1;
+        if (!$got) {
+            $held = (int) $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::LOCK_OPTION));
+            if ($held > 0 && $held + 300 < $now) {
+                $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s", self::LOCK_OPTION, (string) $held));
+                $got = (int) $wpdb->query($wpdb->prepare($sql, self::LOCK_OPTION, (string) $now)) === 1;
+            }
+        }
+        $wpdb->suppress_errors($suppress);
+        wp_cache_delete(self::LOCK_OPTION, 'options');
+        return $got;
+    }
+
+    private static function release_batch_lock() {
+        global $wpdb;
+        $wpdb->delete($wpdb->options, ['option_name' => self::LOCK_OPTION]);
+        wp_cache_delete(self::LOCK_OPTION, 'options');
+    }
 
     public static function plugin_status() {
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
@@ -166,10 +209,25 @@ final class DIP_Migration {
     public static function state() { $s=get_option(self::STATE_OPTION,[]); return is_array($s)?$s:[]; }
 
     public static function migrate(array $selected_user_ids = [], $batch_size = 25) {
-        global $wpdb;
         $dry=self::dry_run_report(); if (!$dry || empty($dry['created_at'])) return new WP_Error('dry_run_required','Exécutez d’abord la simulation.');
         if (!self::backups()) return new WP_Error('backup_required','Créez une sauvegarde de configuration avant la migration.');
+        if (!self::acquire_batch_lock()) return new WP_Error('migration_busy','Un lot de migration est déjà en cours. Réessayez dans un instant.');
+        self::$running = true;
+        try {
+            return self::migrate_batch($dry, $selected_user_ids, $batch_size);
+        } finally {
+            self::$running = false;
+            self::release_batch_lock();
+        }
+    }
+
+    private static function migrate_batch(array $dry, array $selected_user_ids, $batch_size) {
+        global $wpdb;
         $rows=self::nextend_rows(); $selected=array_values(array_filter(array_map('absint',$selected_user_ids)));
+        // Same ambiguity rule as dry_run(): one Google subject on two Nextend
+        // users goes to manual review for both, never to the lowest user ID.
+        $identifier_counts=[];
+        foreach ($rows as $count_row) { $id=trim((string)($count_row['identifier'] ?? '')); if ($id !== '') $identifier_counts[$id]=($identifier_counts[$id] ?? 0)+1; }
         $state=self::state(); if (!$state) $state=['started_at'=>time(),'migrated'=>[],'skipped'=>[],'mode'=>$selected?'test':'bulk','completed'=>false];
         $processed=0;
         foreach ($rows as $row) {
@@ -181,19 +239,25 @@ final class DIP_Migration {
             $reason='';
             if (!$uid || !get_userdata($uid)) $reason='missing_user';
             elseif ($identifier==='') $reason='missing_identifier';
+            elseif (($identifier_counts[$identifier] ?? 0) > 1) $reason='duplicate_identifier';
             elseif (self::is_privileged($uid)) $reason='privileged';
             else {
                 $current=(string)get_user_meta($uid,DIP_Identity::META_SUB,true);
                 if ($current!=='' && $current!==$identifier) $reason='conflicting_link';
-                $other=(int)$wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key=%s AND meta_value=%s AND user_id<>%d LIMIT 1",DIP_Identity::META_SUB,$identifier,$uid));
-                if ($other) $reason='duplicate_identifier';
+                else {
+                    $other=(int)$wpdb->get_var($wpdb->prepare("SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key=%s AND meta_value=%s AND user_id<>%d LIMIT 1",DIP_Identity::META_SUB,$identifier,$uid));
+                    if ($other) $reason='duplicate_identifier';
+                }
             }
             if ($reason) { $state['skipped'][$uid]=['reason'=>$reason,'at'=>time()]; continue; }
             $previous=(string)get_user_meta($uid,DIP_Identity::META_SUB,true);
             update_user_meta($uid,DIP_Identity::META_SUB,$identifier);
             if (!get_user_meta($uid,DIP_Identity::META_LINKED_AT,true)) update_user_meta($uid,DIP_Identity::META_LINKED_AT,time());
             $state['migrated'][$uid]=['identifier_hash'=>hash_hmac('sha256',$identifier,wp_salt('auth')),'previous'=>$previous,'at'=>time()];
-            do_action('dip_account_linked',$uid,'google');
+            // A provider profile (not a bare 'google'): listeners such as the
+            // headless subject sync need the subject, and 'source' tells the
+            // e-mail alerts this is a migration, not a new connection.
+            do_action('dip_account_linked',$uid,['provider'=>'google','sub'=>$identifier,'source'=>'migration']);
         }
         $eligible_total=(int)($dry['ready']??0);
         $terminal=0;
@@ -232,7 +296,7 @@ final class DIP_Migration {
             'total'=>(int)($dry['total']??0),'ready'=>(int)($dry['ready']??0),'already_linked'=>(int)($dry['already_linked']??0),
             'manual_review'=>(int)($dry['manual_review']??0),'last_error'=>'','completed_at'=>0,
         ];
-        update_option(self::AUTO_OPTION,$auto,false);
+        update_option(self::AUTO_OPTION,$auto,true);
         self::schedule_tick(10);
         do_action('dip_automatic_migration_started',$auto);
         return $auto;
@@ -241,7 +305,7 @@ final class DIP_Migration {
     public static function pause_automatic($reason='Paused by administrator') {
         $auto=self::automatic_state();
         $auto['status']='paused'; $auto['updated_at']=time(); $auto['pause_reason']=sanitize_text_field($reason);
-        update_option(self::AUTO_OPTION,$auto,false);
+        update_option(self::AUTO_OPTION,$auto,true);
         $timestamp=wp_next_scheduled(self::CRON_HOOK);
         if ($timestamp) wp_unschedule_event($timestamp,self::CRON_HOOK);
         do_action('dip_automatic_migration_paused',$auto);
@@ -253,18 +317,33 @@ final class DIP_Migration {
         if (!$auto) return self::start_automatic(25);
         if (($auto['status']??'')==='completed') return new WP_Error('already_completed','La migration automatique est déjà terminée.');
         $auto['status']='running'; $auto['updated_at']=time(); $auto['last_error']=''; unset($auto['pause_reason']);
-        update_option(self::AUTO_OPTION,$auto,false); self::schedule_tick(10);
+        update_option(self::AUTO_OPTION,$auto,true); self::schedule_tick(10);
         return $auto;
     }
 
+    /**
+     * Runs on every init: it must cost nothing once the migration is over.
+     * The state option is autoloaded (moved there once for older installs),
+     * and a late batch never runs inside a visitor's storefront request:
+     * only an administrator's page load runs it inline, otherwise WP-Cron is
+     * spawned in the background.
+     */
     public static function maybe_run_automatic_fallback() {
+        $all = wp_load_alloptions();
+        if (!is_array($all) || !array_key_exists(self::AUTO_OPTION, $all)) {
+            $stored = get_option(self::AUTO_OPTION, null);
+            if ($stored === null) add_option(self::AUTO_OPTION, [], '', true);
+            elseif (function_exists('wp_set_option_autoload')) wp_set_option_autoload(self::AUTO_OPTION, true);
+            else { delete_option(self::AUTO_OPTION); add_option(self::AUTO_OPTION, $stored, '', true); }
+        }
         $auto=self::automatic_state();
         if (($auto['status']??'')!=='running') return;
         if (!wp_next_scheduled(self::CRON_HOOK)) self::schedule_tick(20);
         if ((time()-(int)($auto['updated_at']??0)) < 120) return;
         if (get_transient('dip_auto_migration_request_gate')) return;
         set_transient('dip_auto_migration_request_gate',1,90);
-        self::automatic_tick();
+        if (wp_doing_cron() || (is_admin() && !wp_doing_ajax() && current_user_can('manage_options'))) { self::automatic_tick(); return; }
+        if (function_exists('spawn_cron')) spawn_cron();
     }
 
     public static function automatic_tick() {
@@ -276,14 +355,15 @@ final class DIP_Migration {
             $report=self::report();
             if (!$report || !empty($report['critical_issues']) || empty($report['nextend_table_found'])) {
                 $auto['status']='paused'; $auto['last_error']='Security pre-flight checks are no longer healthy.'; $auto['updated_at']=time();
-                update_option(self::AUTO_OPTION,$auto,false);
+                update_option(self::AUTO_OPTION,$auto,true);
                 do_action('dip_automatic_migration_blocked',$auto);
                 return;
             }
             $result=self::migrate([],max(5,min(50,absint($auto['batch_size']??25))));
+            if (is_wp_error($result) && $result->get_error_code() === 'migration_busy') { self::schedule_tick(60); return; }
             if (is_wp_error($result)) {
                 $auto['status']='paused'; $auto['last_error']=$result->get_error_message(); $auto['updated_at']=time();
-                update_option(self::AUTO_OPTION,$auto,false);
+                update_option(self::AUTO_OPTION,$auto,true);
                 do_action('dip_automatic_migration_blocked',$auto);
                 return;
             }
@@ -294,10 +374,10 @@ final class DIP_Migration {
             $auto['total']=(int)($result['source_total']??($auto['total']??0));
             if (!empty($result['completed'])) {
                 $auto['status']='completed'; $auto['completed_at']=time();
-                update_option(self::AUTO_OPTION,$auto,false);
+                update_option(self::AUTO_OPTION,$auto,true);
                 do_action('dip_automatic_migration_completed',$auto);
             } else {
-                update_option(self::AUTO_OPTION,$auto,false);
+                update_option(self::AUTO_OPTION,$auto,true);
                 self::schedule_tick(45);
             }
         } finally { delete_transient('dip_auto_migration_lock'); }

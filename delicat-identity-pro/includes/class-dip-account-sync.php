@@ -212,14 +212,36 @@ final class DIP_Account_Sync {
         }
     }
 
+    /** Keyed hash of an e-mail address for audit context (not reversible without the site salt). */
+    public static function email_hash($email) {
+        return hash_hmac('sha256', strtolower(trim((string) $email)), wp_salt('auth'));
+    }
+
+    /**
+     * E-mail OTP and magic-link sign-in are a storefront-customer convenience.
+     * Staff accounts keep password + two-step verification (and, for Google,
+     * Secure Mode): a mailbox alone never opens a privileged session.
+     */
+    public static function passwordless_login_allowed($user_id) {
+        $user_id = absint($user_id);
+        return $user_id > 0 && self::is_customer_account($user_id) && !self::privileged_mobile_blocked($user_id);
+    }
+
     /**
      * Run synchronization that is only safe once ownership of the exact current
      * email address is known (OIDC proof, OTP/magic, or verification link).
+     *
+     * $source: 'email_link' (the account's own verification link, default),
+     * 'oidc', 'otp', 'magic', or 'unproven' (verification switched off: the
+     * address only becomes usable for sign-in, it is never recorded as proof
+     * and never claims guest orders).
      */
-    public static function after_verified_registration($user_id, $verified_email = '') {
+    public static function after_verified_registration($user_id, $verified_email = '', $source = 'email_link') {
         $user_id = absint($user_id);
         $user = $user_id ? get_userdata($user_id) : false;
         if (!$user) return false;
+        $source = sanitize_key((string) $source);
+        if (!in_array($source, ['email_link', 'oidc', 'otp', 'magic', 'unproven'], true)) $source = 'email_link';
 
         $local_email = sanitize_email($user->user_email);
         $verified_email = sanitize_email($verified_email ?: $local_email);
@@ -229,13 +251,28 @@ final class DIP_Account_Sync {
                 delete_user_meta($user_id, '_dip_verified_email_fingerprint');
             }
             if (class_exists('DIP_Audit')) DIP_Audit::record('verified_email_mismatch', 'warning', $user_id, [
-                'local_email_hash'=>hash('sha256', strtolower($local_email)),
-                'proof_email_hash'=>hash('sha256', strtolower($verified_email)),
+                'local_email_hash'=>self::email_hash($local_email),
+                'proof_email_hash'=>self::email_hash($verified_email),
             ]);
             return false;
         }
 
         if (!self::is_customer_account($user_id)) return true;
+
+        if ($source === 'unproven') {
+            update_user_meta($user_id, 'dip_email_verified', 'yes');
+            return true;
+        }
+
+        // Account pre-hijacking: whoever created this unverified account (and
+        // chose its password, or changed its e-mail to this address) never
+        // proved the mailbox. When the real owner proves it through Google,
+        // an e-mail code or a magic link, nothing set up before that proof may
+        // keep working. The account's own verification link is different: it
+        // was sent to that mailbox for the registrant who set the password.
+        if (get_user_meta($user_id, 'dip_email_verified', true) === 'no' && in_array($source, ['oidc', 'otp', 'magic'], true)) {
+            self::reset_pre_verification_credentials($user_id, $source);
+        }
 
         update_user_meta($user_id, 'dip_email_verified', 'yes');
         $email_fingerprint = hash('sha256', strtolower($local_email));
@@ -271,6 +308,107 @@ final class DIP_Account_Sync {
     }
 
     /**
+     * Replace every credential that existed before the mailbox was proven:
+     * the password becomes a random managed one, WordPress and app sessions
+     * end, quick sign-in keys and application passwords go, and a provider
+     * link still pending from sign-up is dropped. The customer is told that a
+     * password can be chosen again through « Mot de passe oublié ».
+     */
+    private static function reset_pre_verification_credentials($user_id, $source) {
+        $user_id = absint($user_id);
+        $managed_key = class_exists('DIP_Identity') ? DIP_Identity::META_PASSWORD_MANAGED : '_dglp_password_managed';
+        $had_own_password = get_user_meta($user_id, $managed_key, true) !== 'yes';
+
+        // Revoke first under this reason; the wp_set_password hook below then
+        // finds the per-request guard already set and does not repeat it.
+        self::revoke_app_credentials_once($user_id, 'pre_verification_credentials');
+        self::$rotating_password = $user_id;
+        try {
+            wp_set_password(wp_generate_password(64, true, true), $user_id);
+        } finally {
+            self::$rotating_password = 0;
+        }
+        update_user_meta($user_id, $managed_key, 'yes');
+        if (class_exists('WP_Session_Tokens')) {
+            try { WP_Session_Tokens::get_instance($user_id)->destroy_all(); } catch (Throwable $e) {}
+        }
+        if (class_exists('WP_Application_Passwords') && method_exists('WP_Application_Passwords', 'delete_all_application_passwords')) {
+            WP_Application_Passwords::delete_all_application_passwords($user_id);
+        }
+        if (class_exists('DIP_Identity') && method_exists('DIP_Identity', 'clear_pending_provider_link')) {
+            DIP_Identity::clear_pending_provider_link($user_id);
+        }
+        if (class_exists('DIP_Audit')) DIP_Audit::record('pre_verification_credentials_reset', 'warning', $user_id, [
+            'source' => sanitize_key($source),
+            'password_replaced' => $had_own_password ? 1 : 0,
+        ]);
+        if (!$had_own_password) return;
+
+        $subject = __('Votre adresse e-mail est confirmée', 'delicat-google-login');
+        $message = __('Votre adresse e-mail vient d’être confirmée. Par sécurité, le mot de passe défini avant cette confirmation ne fonctionne plus et les sessions ouvertes ont été fermées.', 'delicat-google-login');
+        $advice = __('Pour utiliser un mot de passe, choisissez « Mot de passe oublié » sur la page de connexion. Vous pouvez aussi continuer avec Google ou un code reçu par e-mail.', 'delicat-google-login');
+        if (class_exists('DIP_Email_Hub')) {
+            DIP_Email_Hub::send_user_security($user_id, $subject, $message, ['title'=>__('Adresse e-mail confirmée', 'delicat-google-login'), 'badge'=>__('Sécurité du compte', 'delicat-google-login'), 'accent'=>'#2563eb', 'advice'=>$advice]);
+        } else {
+            $user = get_userdata($user_id);
+            if ($user && is_email($user->user_email)) wp_mail($user->user_email, $subject, $message . "\n\n" . $advice);
+        }
+    }
+
+    /** @var int user whose password Delicat is replacing by a random managed one */
+    private static $rotating_password = 0;
+
+    /**
+     * True while Delicat itself replaces a password with a random managed one
+     * (pre-verification reset): wp_set_password listeners can skip their
+     * « mot de passe modifié » alert, the customer gets a dedicated e-mail.
+     */
+    public static function internal_password_rotation($user_id = 0) {
+        return self::$rotating_password > 0 && (!$user_id || absint($user_id) === self::$rotating_password);
+    }
+
+    /** @var array<int,string> users whose app credentials were revoked in this request */
+    private static $credentials_revoked = [];
+
+    /**
+     * One revocation of the customer's app sessions and quick sign-in keys per
+     * request, whichever password hook fires first (core reset fires
+     * password_reset, wp_set_password and after_password_reset; WooCommerce's
+     * reset only the first two).
+     */
+    private static function revoke_app_credentials_once($user_id, $reason) {
+        $user_id = absint($user_id);
+        if (!$user_id || isset(self::$credentials_revoked[$user_id])) return false;
+        self::$credentials_revoked[$user_id] = sanitize_key($reason);
+        if (!self::is_customer_account($user_id)) return false;
+        if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::revoke_all_for_user($user_id, $reason);
+        return true;
+    }
+
+    /**
+     * wp_set_password (WordPress 6.2+): every password reset or programmatic
+     * change, including WooCommerce's « Mot de passe oublié », which never
+     * fires after_password_reset. A re-hash of the same password at sign-in
+     * (WordPress 6.8+ bcrypt upgrade, legacy MD5 hashes) is not a change.
+     */
+    public static function password_set($password, $user_id, $old_user_data = null) {
+        $user_id = absint($user_id);
+        if (!$user_id) return;
+        if ($old_user_data instanceof WP_User) {
+            $old_hash = (string) $old_user_data->user_pass;
+            if ($old_hash !== '' && (string) $password !== '' && wp_check_password((string) $password, $old_hash)) return;
+        } elseif (doing_filter('authenticate')) {
+            return;
+        }
+        if (class_exists('DIP_Identity') && method_exists('DIP_Identity', 'clear_pending_provider_link')) {
+            DIP_Identity::clear_pending_provider_link($user_id);
+        }
+        if (self::revoke_app_credentials_once($user_id, 'password_reset') && class_exists('DIP_Audit')) {
+            DIP_Audit::record('password_reset_mobile_sessions_revoked', 'warning', $user_id);
+        }
+    }
+
+    /**
      * Bring accounts created by native WordPress/WooCommerce forms into the
      * same Delicat verification state. Delicat-managed creations are skipped.
      */
@@ -282,7 +420,7 @@ final class DIP_Account_Sync {
 
         $requires = class_exists('DIP_Passwordless_Registration') && DIP_Passwordless_Registration::requires_email_verification();
         if (!$requires) {
-            self::after_verified_registration($user_id, $user->user_email);
+            self::after_verified_registration($user_id, $user->user_email, 'unproven');
             return;
         }
 
@@ -332,7 +470,7 @@ final class DIP_Account_Sync {
      * wc_set_customer_auth_cookie() directly without wp_signon(); this filter
      * ensures those paths cannot bypass verification/pending-approval policy.
      */
-    public static function filter_auth_cookies($send, $expire, $expiration, $user_id, $scheme, $token) {
+    public static function filter_auth_cookies($send, $expire = 0, $expiration = 0, $user_id = 0, $scheme = '', $token = '') {
         if (!$send || !absint($user_id)) return $send;
         $guard = self::login_guard(absint($user_id));
         if (is_wp_error($guard)) {
@@ -361,8 +499,9 @@ final class DIP_Account_Sync {
         $old_pass_hash = (string) $old_user_data->user_pass;
         $new_pass_hash = (string) $current->user_pass;
         if ($old_pass_hash !== '' && $new_pass_hash !== '' && !hash_equals($old_pass_hash, $new_pass_hash)) {
-            if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::revoke_all_for_user($user_id, 'password_changed');
-            if (class_exists('DIP_Audit')) DIP_Audit::record('account_password_changed_mobile_revoked', 'warning', $user_id);
+            if (self::revoke_app_credentials_once($user_id, 'password_changed') && class_exists('DIP_Audit')) {
+                DIP_Audit::record('account_password_changed_mobile_revoked', 'warning', $user_id);
+            }
         }
 
         $old = strtolower(sanitize_email($old_user_data->user_email));
@@ -378,7 +517,7 @@ final class DIP_Account_Sync {
         delete_user_meta($user_id, '_dip_email_verify_email_hash');
 
         if (!$requires) {
-            self::after_verified_registration($user_id, $new);
+            self::after_verified_registration($user_id, $new, 'unproven');
             return;
         }
 
@@ -396,18 +535,40 @@ final class DIP_Account_Sync {
             ? DIP_Passwordless_Registration::send_email_verification($user_id, $new)
             : false;
         if (class_exists('DIP_Audit')) DIP_Audit::record('account_email_changed_verification_required', 'warning', $user_id, [
-            'old_email_hash'=>hash('sha256', $old),
-            'new_email_hash'=>hash('sha256', $new),
+            'old_email_hash'=>self::email_hash($old),
+            'new_email_hash'=>self::email_hash($new),
             'verification_sent'=>$sent ? 1 : 0,
             'sessions_revoked'=>1,
         ]);
+
+        // The customer's own session ended with the others: say why on the
+        // page WooCommerce shows next (its login form) and what to do.
+        if ($sent && get_current_user_id() === $user_id && !wp_doing_ajax() && !(defined('REST_REQUEST') && REST_REQUEST)) {
+            self::woocommerce_notice(sprintf(__('Adresse e-mail modifiée. Ouvrez le lien envoyé à %s pour confirmer la nouvelle adresse, puis reconnectez-vous.', 'delicat-google-login'), self::masked_email($new)));
+        }
+    }
+
+    private static function woocommerce_notice($message) {
+        if (!function_exists('wc_add_notice') || !function_exists('WC') || !did_action('woocommerce_init')) return;
+        $wc = WC();
+        if (!$wc || empty($wc->session)) return;
+        wc_add_notice($message, 'notice');
+    }
+
+    private static function masked_email($email) {
+        $email = sanitize_email($email);
+        if (!$email || strpos($email, '@') === false) return '';
+        list($local, $domain) = explode('@', $email, 2);
+        $first = function_exists('mb_substr') ? mb_substr($local, 0, 1) : substr($local, 0, 1);
+        return $first . str_repeat('•', min(5, max(3, strlen($local) - 1))) . '@' . $domain;
     }
 
     /** Password reset endpoint bypasses profile_update; keep mobile sessions synchronized. */
     public static function password_reset($user, $new_pass = '') {
         if (!($user instanceof WP_User) || !self::is_customer_account($user->ID)) return;
-        if (class_exists('DIP_Mobile_API')) DIP_Mobile_API::revoke_all_for_user($user->ID, 'password_reset');
-        if (class_exists('DIP_Audit')) DIP_Audit::record('password_reset_mobile_sessions_revoked', 'warning', $user->ID);
+        if (self::revoke_app_credentials_once($user->ID, 'password_reset') && class_exists('DIP_Audit')) {
+            DIP_Audit::record('password_reset_mobile_sessions_revoked', 'warning', $user->ID);
+        }
     }
 
     public static function login_guard($user_id) {
