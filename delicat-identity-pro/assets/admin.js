@@ -5,8 +5,10 @@
     if(!target) return;
     var text=(target.textContent||'').trim();
     if(!text) return;
-    var old=button.textContent;
-    var done=function(){button.textContent='Copié ✓';button.classList.add('is-copied');setTimeout(function(){button.textContent=old;button.classList.remove('is-copied');},1500);};
+    // The label is read once: a second click during the confirmation used to keep « Copié ✓ » for good.
+    var old=button.getAttribute('data-dip-label');
+    if(old===null){old=button.textContent;button.setAttribute('data-dip-label',old);}
+    var done=function(){button.textContent='Copié ✓';button.classList.add('is-copied');clearTimeout(button._dipCopyTimer);button._dipCopyTimer=setTimeout(function(){button.textContent=old;button.classList.remove('is-copied');},1500);};
     if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(text).then(done).catch(function(){});return;}
     var area=document.createElement('textarea');area.value=text;area.setAttribute('readonly','');area.style.cssText='position:fixed;left:-9999px;opacity:0';document.body.appendChild(area);area.select();try{document.execCommand('copy');done();}catch(e){}document.body.removeChild(area);
   }

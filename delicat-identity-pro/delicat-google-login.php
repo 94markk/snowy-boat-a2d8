@@ -53,6 +53,7 @@ register_deactivation_hook(__FILE__, ['DIP_Headless_Google', 'deactivate']);
 add_action('plugins_loaded', ['DIP_Plugin', 'instance']);
 add_action('profile_update', ['DIP_Account_Sync', 'profile_email_changed'], 5, 2);
 add_action('after_password_reset', ['DIP_Account_Sync', 'password_reset'], 5, 2);
+add_action('wp_set_password', ['DIP_Account_Sync', 'password_set'], 5, 3);
 add_action('user_register', ['DIP_Account_Sync', 'external_user_registered'], 20, 2);
 add_filter('woocommerce_registration_auth_new_customer', ['DIP_Account_Sync', 'woocommerce_registration_auth'], 20, 2);
 add_filter('send_auth_cookies', ['DIP_Account_Sync', 'filter_auth_cookies'], 20, 6);
@@ -84,9 +85,9 @@ if (is_admin() && !wp_doing_ajax()) {
 }
 add_action('plugins_loaded', ['DIP_SDK', 'init'], 18);
 add_action('plugins_loaded', ['DIP_WooCommerce', 'init'], 20);
-add_action('plugins_loaded', function () { DIP_Nextend_Parity::init(function () { return wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults()); }); }, 22);
-add_action('plugins_loaded', function () { DIP_Performance::init(function () { return wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults()); }); }, 19);
-add_action('plugins_loaded', function () { DIP_Mobile_API::init(function () { return wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults()); }); }, 21);
+add_action('plugins_loaded', function () { DIP_Nextend_Parity::init(['DIP_Plugin', 'runtime_settings']); }, 22);
+add_action('plugins_loaded', function () { DIP_Performance::init(['DIP_Plugin', 'runtime_settings']); }, 19);
+add_action('plugins_loaded', function () { DIP_Mobile_API::init(['DIP_Plugin', 'runtime_settings']); }, 21);
 
 add_action('plugins_loaded', array('DIP_Delicat_App_Sync','init'), 30);
 // 6.11.0: app passkeys (Credential Manager) and the site's Android app link (assetlinks.json).
