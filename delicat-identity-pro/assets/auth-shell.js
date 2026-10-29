@@ -73,10 +73,17 @@
     script.onerror = function(){if(attempt===loadId)error();};
     assetTimer = setTimeout(function(){if(attempt===loadId)error();}, 12000); doc.body.appendChild(script);
   }
+  // The dialog, its frame and the frame scripts are built on the first sign of
+  // intent (pointer/touch/hover/focus on a trigger) or on opening, no longer
+  // on every page view: most visitors never open the modal.
+  var intents=['pointerdown','touchstart','mouseover','focusin'];
+  function prepare(e) { var t=e.target; if (t && t.closest && t.closest(selector)) build(); }
+  function stopPreparing() { intents.forEach(function (name) { document.removeEventListener(name, prepare, true); }); }
   function build() {
     if (shell && shell.isConnected) return true;
     if(shell){restore();shell=null;frame=null;opened=false;ready=false;}
     var old = document.getElementById('dip-identity-modal'); if (!old) return false;
+    stopPreparing();
     source = old.innerHTML; old.remove();
     shell = document.createElement('dialog'); shell.id = 'dip-auth-shell'; shell.setAttribute('aria-label','Connexion Delicat Store');
     shell.setAttribute('data-dip-engine','6.10.1');
@@ -89,7 +96,8 @@
     frame = document.createElement('iframe');frame.title='Connexion et inscription Delicat Store';shell.appendChild(frame);
     document.body.appendChild(shell);
     shell.addEventListener('cancel', function (e) { e.preventDefault(); closeModal(); });
-    shell.addEventListener('close', function () { if (opened) { opened=false;restore(); } });
+    // Closed by the browser itself (e.g. repeated Escape): finish the same way.
+    shell.addEventListener('close', function () { if (!opened) return; if (ready) frame.contentWindow.DIPAuthFrame.close(); finishClose(); });
     loadFrame(); return true;
   }
   function open(tab, trigger) {
@@ -121,10 +129,20 @@
   function closeModal() {
     if (!opened) return;
     if (ready && !frame.contentWindow.DIPAuthFrame.close()) return;
+    finishClose();
+  }
+  function finishClose() {
     opened=false; restore();
-    if (typeof shell.close==='function' && shell.open) shell.close(); else shell.removeAttribute('open');
+    if (typeof shell.close==='function') { if (shell.open) shell.close(); } else shell.removeAttribute('open');
     if (focusBefore && focusBefore.focus) { try { focusBefore.focus({preventScroll:true}); } catch(e) {} }
-    if (/^#(delicat-login|dip-identity-modal)$/.test(location.hash)) history.replaceState(null,'',location.pathname+location.search);
+    // The opening hash and one-shot states (error, verified) would reopen the
+    // modal with a stale message on reload or when the address is shared.
+    try {
+      var url=new URL(location.href), changed=false;
+      ['dip_auth_error','dip_verified','dip_identity_open','dip_identity_eager'].forEach(function (k) { if (url.searchParams.has(k)) { url.searchParams.delete(k); changed=true; } });
+      if (/^#(delicat-login|dip-identity-modal)$/.test(url.hash)) { url.hash=''; changed=true; }
+      if (changed) history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+    } catch(e) {}
   }
   window.DIPAuthShell = true;
   window.DIPIdentityModalAPI = {open:open,close:closeModal,isOpen:function(){return opened;},resize:sizeTo};
@@ -135,9 +153,10 @@
   },true);
   ['dip:identity-open','dip:identity-open-request'].forEach(function(name){document.addEventListener(name,function(e){var d=e.detail||{};open(d.tab,d.trigger);});});
   function boot() {
-    if (!build()) return;
+    if (!document.getElementById('dip-identity-modal')) return;
     var p=new URLSearchParams(location.search);
     if (/^#(delicat-login|dip-identity-modal)$/.test(location.hash)||p.has('dip_auth_error')||p.get('dip_verified')==='1'||p.get('dip_identity_open')==='1') open('login');
+    else intents.forEach(function (name) { document.addEventListener(name, prepare, {capture:true, passive:true}); });
     document.dispatchEvent(new CustomEvent('dip:identity-ready',{detail:{modalId:'dip-auth-shell'}}));
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot,{once:true});else boot();

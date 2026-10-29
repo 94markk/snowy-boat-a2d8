@@ -50,6 +50,9 @@ final class DIP_Native_Auth {
             add_action('wp_loaded', [__CLASS__, 'detach_legacy_ajax_handlers'], PHP_INT_MAX);
         }
 
+        // Right after WordPress' own password check (20), before the
+        // verification (35), 2FA and lockout gates, which all still apply.
+        add_filter('authenticate', [__CLASS__, 'password_slash_compat'], 21, 3);
         // Run after WordPress' password authenticators so a lockout cannot be
         // replaced by a later authentication callback.
         add_filter('authenticate', [__CLASS__, 'enforce_lockout'], PHP_INT_MAX, 3);
@@ -176,8 +179,10 @@ final class DIP_Native_Auth {
      * from a Cloudflare edge, the visitor address from CF-Connecting-IP is
      * used instead. IPv6 addresses are grouped by /64 (one subscriber), so
      * rotating addresses inside a prefix does not create fresh buckets.
-     * Password protections keep client_ip(), which trusts the header only on
-     * explicit opt-in. Define DIP_TRUST_CLOUDFLARE_HEADERS as false to disable.
+     * The password lockout, registration caps and verification resend use it
+     * too (bucket_ip()). Policy and audit keep client_ip(), which trusts the
+     * header only on explicit opt-in. Define DIP_TRUST_CLOUDFLARE_HEADERS as
+     * false to disable.
      */
     public static function throttle_ip() {
         $ip = self::client_ip();
@@ -204,9 +209,23 @@ final class DIP_Native_Auth {
         return $user instanceof WP_User ? 'uid:' . (int) $user->ID : 'login:' . $login;
     }
 
+    /**
+     * Address of the lockout/registration/resend buckets. 6.11.1: the
+     * visitor address (throttle_ip()) instead of the connection address.
+     * Behind Cloudflare the connection address is a shared edge: 20 wrong
+     * passwords from any visitor locked every customer routed through it,
+     * and three sign-ups an hour closed registration for all of them. IPv6
+     * is grouped per /64, so rotating inside one prefix no longer opens a
+     * fresh bucket. A forged CF-Connecting-IP sent straight to the origin is
+     * still ignored (only honoured from Cloudflare's published ranges).
+     */
+    private static function bucket_ip() {
+        return self::throttle_ip();
+    }
+
     private static function key($scope, $login = '') {
         $scope = sanitize_key($scope);
-        $material = self::client_ip();
+        $material = self::bucket_ip();
         if ($login !== '') $material .= '|' . self::account_identity($login);
         return 'dip_native_' . $scope . '_' . substr(hash_hmac('sha256', $material, wp_salt('auth')), 0, 40);
     }
@@ -286,18 +305,46 @@ final class DIP_Native_Auth {
         return max(1, (int) ceil(($remaining ?: self::base_lock_minutes() * MINUTE_IN_SECONDS) / MINUTE_IN_SECONDS));
     }
 
+    /**
+     * One failure in a bucket, returning the new total. 6.11.1: counted by
+     * DIP_Lockout::counter_hit() (one atomic statement, 24 h window) where
+     * the transient read-then-write lost most of a burst of simultaneous
+     * guesses, so the lock and its escalation never engaged.
+     */
+    private static function count_failure($key) {
+        if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_hit')) return (int) DIP_Lockout::counter_hit($key, DAY_IN_SECONDS);
+        $count = (int) get_transient($key) + 1;
+        set_transient($key, $count, DAY_IN_SECONDS);
+        return $count;
+    }
+
+    private static function clear_count($key) {
+        if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_clear')) DIP_Lockout::counter_clear($key);
+        else delete_transient($key);
+    }
+
+    /** Lock one bucket and escalate its strike once, even when several failures reach the threshold together. */
+    private static function engage_lock(array $scope) {
+        $mutex = class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'mutex_acquire');
+        $name = 'dip_native_lockm_' . substr(md5((string) $scope['lock']), 0, 24);
+        // Another request is locking this bucket right now.
+        if ($mutex && !DIP_Lockout::mutex_acquire($name, 5)) return;
+        try {
+            if ((int) get_transient($scope['lock']) > time()) return;
+            $strike = (int) get_transient($scope['strikes']) + 1;
+            $minutes = self::lock_minutes_for_strike($strike);
+            set_transient($scope['strikes'], $strike, DAY_IN_SECONDS);
+            set_transient($scope['lock'], time() + ($minutes * MINUTE_IN_SECONDS), $minutes * MINUTE_IN_SECONDS);
+            self::clear_count($scope['fails']);
+        } finally {
+            if ($mutex) DIP_Lockout::mutex_release($name);
+        }
+    }
+
     public static function record_failure($login = '', $reason = 'password') {
         foreach (self::scopes($login) as $scope) {
             $threshold = max(3, absint($scope['threshold'] ?? self::threshold()));
-            $count = (int) get_transient($scope['fails']) + 1;
-            set_transient($scope['fails'], $count, DAY_IN_SECONDS);
-            if ($count >= $threshold) {
-                $strike = (int) get_transient($scope['strikes']) + 1;
-                $minutes = self::lock_minutes_for_strike($strike);
-                set_transient($scope['strikes'], $strike, DAY_IN_SECONDS);
-                set_transient($scope['lock'], time() + ($minutes * MINUTE_IN_SECONDS), $minutes * MINUTE_IN_SECONDS);
-                delete_transient($scope['fails']);
-            }
+            if (self::count_failure($scope['fails']) >= $threshold) self::engage_lock($scope);
         }
         if (class_exists('DIP_Audit')) {
             DIP_Audit::record('login_failed', 'warning', 0, ['method'=>'password','reason'=>sanitize_key($reason)]);
@@ -307,7 +354,7 @@ final class DIP_Native_Auth {
     public static function clear_failures($login = '', $include_ip = false) {
         foreach (self::scopes($login) as $scope) {
             if (!$include_ip && ($scope['type'] ?? '') === 'ip') continue;
-            delete_transient($scope['fails']);
+            self::clear_count($scope['fails']);
             delete_transient($scope['lock']);
             delete_transient($scope['strikes']);
         }
@@ -329,6 +376,33 @@ final class DIP_Native_Auth {
         if ($user instanceof WP_User && class_exists('DIP_Account_Sync')) {
             $guard = DIP_Account_Sync::login_guard($user->ID);
             if (is_wp_error($guard)) return $guard;
+        }
+        return $user;
+    }
+
+    /**
+     * WordPress and WooCommerce forms hash and check the password exactly as
+     * posted, i.e. with magic-quote slashes (« l\'été »); this modal (before
+     * 6.11.1), REST, the app and passwordless sign-up stored the typed text.
+     * A password with ' " or \ set on one side was therefore refused on the
+     * other. When WordPress' own check failed, try the other form of the
+     * same typed password for that account only. The verification, 2FA and
+     * lockout gates run after this filter as usual.
+     */
+    public static function password_slash_compat($user, $username, $password) {
+        if (!is_wp_error($user) || $user->get_error_code() !== 'incorrect_password' || !is_string($password) || $password === '') return $user;
+        $candidates = [];
+        foreach ([wp_unslash($password), wp_slash($password)] as $candidate) {
+            if (is_string($candidate) && $candidate !== '' && $candidate !== $password) $candidates[] = $candidate;
+        }
+        if (!$candidates || strlen($password) > 4096) return $user;
+        $login = is_string($username) ? trim($username) : '';
+        if ($login === '') return $user;
+        $account = get_user_by('login', $login);
+        if (!$account && is_email($login)) $account = get_user_by('email', $login);
+        if (!($account instanceof WP_User)) return $user;
+        foreach (array_unique($candidates) as $candidate) {
+            if (wp_check_password($candidate, $account->user_pass, $account->ID)) return $account;
         }
         return $user;
     }
@@ -385,9 +459,14 @@ final class DIP_Native_Auth {
         return sanitize_key($base) . '|' . $binding;
     }
 
+    /** One posted text field, unslashed; arrays/objects read as '' (sanitize_email() of an array was a fatal TypeError). */
+    private static function posted($field) {
+        return isset($_POST[$field]) && is_scalar($_POST[$field]) ? (string) wp_unslash($_POST[$field]) : '';
+    }
+
     public static function verify_browser_nonce($base, $field = 'nonce') {
         $token = self::browser_token(false);
-        $nonce = isset($_POST[$field]) ? sanitize_text_field(wp_unslash($_POST[$field])) : '';
+        $nonce = sanitize_text_field(self::posted($field));
         $action = self::browser_nonce_action($base, $token);
         return $token !== '' && $nonce !== '' && $action !== '' && (bool) wp_verify_nonce($nonce, $action);
     }
@@ -419,14 +498,16 @@ final class DIP_Native_Auth {
         if (!self::verify_browser_nonce('delicat_resend_verification_action')) {
             self::json_error(__('Session expirée. Nouvelle tentative…', 'delicat-google-login'), 'bad_nonce');
         }
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
+        $email = sanitize_email(self::posted('email'));
         if (!is_email($email)) self::json_error(__('Adresse email invalide.', 'delicat-google-login'), 'invalid_email');
 
-        // Per-address+IP cooldown plus a wider IP bucket prevents mail bombing.
-        $cooldown_key = self::key('verify_resend_pair', $email);
-        if (get_transient($cooldown_key)) {
-            wp_send_json_success(['message'=>__('Un e-mail a déjà été demandé récemment. Vérifiez votre boîte de réception et les indésirables.', 'delicat-google-login')]);
-        }
+        // Mail-bombing guards. The cooldown and the hourly cap belong to the
+        // mailbox, whatever the sender's address (6.11.1: they were per
+        // address, so rotating addresses sent one e-mail per request); the
+        // per-address bucket still caps one sender across many mailboxes.
+        $recent = ['message'=>__('Un e-mail a déjà été demandé récemment. Vérifiez votre boîte de réception et les indésirables.', 'delicat-google-login')];
+        $cooldown_key = self::account_key('verify_resend_cooldown', $email);
+        if (get_transient($cooldown_key)) wp_send_json_success($recent);
         $global_key = self::key('verify_resend_ip');
         $state = get_transient($global_key);
         if (!is_array($state) || empty($state['reset']) || (int) $state['reset'] <= time()) $state = ['count'=>0,'reset'=>time() + 10 * MINUTE_IN_SECONDS];
@@ -434,6 +515,9 @@ final class DIP_Native_Auth {
         $state['count'] = (int) ($state['count'] ?? 0) + 1;
         set_transient($global_key, $state, max(1, (int)$state['reset'] - time()));
         set_transient($cooldown_key, 1, 90);
+        $hourly_key = self::account_key('verify_resend_hour', $email);
+        $hourly = class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_hit') ? (int) DIP_Lockout::counter_hit($hourly_key, HOUR_IN_SECONDS) : 0;
+        if ($hourly > 5) wp_send_json_success($recent);
 
         $sent = false;
         $user = get_user_by('email', $email);
@@ -487,8 +571,12 @@ final class DIP_Native_Auth {
             self::record_failure('', 'honeypot');
             self::json_error(__('Erreur de validation.', 'delicat-google-login'));
         }
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
-        $pass = (string) wp_unslash($_POST['password'] ?? '');
+        $email = sanitize_email(self::posted('email'));
+        // Typed text for the checks below; WordPress itself (wp-login.php,
+        // WooCommerce) authenticates the posted, slashed value, so wp_signon()
+        // gets that one (see password_slash_compat()).
+        $pass = self::posted('password');
+        $posted_pass = isset($_POST['password']) && is_string($_POST['password']) ? $_POST['password'] : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- passwords are never altered.
         $remember = !empty($_POST['remember']);
         $s = self::settings();
         $max = min(256, max(32, absint($s['native_password_max'] ?? 100)));
@@ -503,7 +591,7 @@ final class DIP_Native_Auth {
 
         $user = wp_signon([
             'user_login' => $email,
-            'user_password' => $pass,
+            'user_password' => $posted_pass,
             'remember' => $remember,
         ], is_ssl());
         if (is_wp_error($user)) {
@@ -519,9 +607,10 @@ final class DIP_Native_Auth {
 
         wp_set_current_user($user->ID);
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user->ID);
+        $return = self::checkout_return(self::posted('redirect'));
         wp_send_json_success([
             'message' => __('✅ Connexion réussie. Redirection…', 'delicat-google-login'),
-            'redirect' => self::auth_transition_redirect(self::login_redirect()),
+            'redirect' => self::auth_transition_redirect($return !== '' ? $return : self::login_redirect()),
         ]);
     }
 
@@ -586,9 +675,9 @@ final class DIP_Native_Auth {
         if (self::registration_rate_limited()) self::json_error(__('Limite d’inscriptions atteinte. Réessayez dans une heure.', 'delicat-google-login'), 'registration_rate_limited');
 
         $s = self::settings();
-        $name = sanitize_text_field(wp_unslash($_POST['name'] ?? ''));
-        $email = sanitize_email(wp_unslash($_POST['email'] ?? ''));
-        $pass = (string) wp_unslash($_POST['password'] ?? '');
+        $name = sanitize_text_field(self::posted('name'));
+        $email = sanitize_email(self::posted('email'));
+        $pass = self::posted('password');
         $name_len = function_exists('mb_strlen') ? mb_strlen($name) : strlen($name);
         $min = min(64, max(8, absint($s['native_password_min'] ?? 8)));
         $max = min(256, max($min, absint($s['native_password_max'] ?? 100)));
@@ -639,7 +728,9 @@ final class DIP_Native_Auth {
             ]);
         }
 
-        DIP_Account_Sync::after_verified_registration($user_id, $email);
+        // Verification is switched off: the mailbox was never proven, so this
+        // only allows the login (no proof marker, no guest-order linking).
+        DIP_Account_Sync::after_verified_registration($user_id, $email, 'unproven');
         wp_set_current_user($user_id);
         wp_set_auth_cookie($user_id, true, is_ssl());
         $user = get_user_by('id', $user_id);
@@ -648,10 +739,11 @@ final class DIP_Native_Auth {
             do_action('dip_login_success', $user_id, ['provider'=>'native_registration']);
         }
         DIP_Account_Sync::after_login($user_id);
+        $return = self::checkout_return(self::posted('redirect'));
 
         wp_send_json_success([
             'message' => __('✅ Compte créé avec succès. Redirection…', 'delicat-google-login'),
-            'redirect' => self::auth_transition_redirect(self::register_redirect()),
+            'redirect' => self::auth_transition_redirect($return !== '' ? $return : self::register_redirect()),
         ]);
     }
 
@@ -741,15 +833,39 @@ final class DIP_Native_Auth {
         $s = self::settings();
         if (($s['native_modal_enabled'] ?? 'yes') !== 'yes') self::json_error(__('Connexion modale désactivée.', 'delicat-google-login'), 'modal_disabled');
         if (!self::verify_browser_nonce('dip_native_modal_fragment_action')) self::json_error(__('Session de présentation expirée. Actualisez la page.', 'delicat-google-login'), 'modal_nonce_failed');
-        $redirect = self::safe_fragment_redirect(wp_unslash($_POST['redirect'] ?? ''));
+        $redirect = self::safe_fragment_redirect(self::posted('redirect'));
         wp_send_json_success(['html' => self::modal_markup($redirect)]);
     }
 
     private static function current_page_url() {
         $uri = (string) wp_unslash($_SERVER['REQUEST_URI'] ?? '/');
         if ($uri === '' || strpos($uri, '/') !== 0 || strpos($uri, '//') === 0 || strlen($uri) > 4096) $uri = '/';
-        $url = wp_validate_redirect(home_url($uri), home_url('/'));
+        // REQUEST_URI already holds the install sub-folder: home_url($uri)
+        // doubled it (/shop/shop/...) on sites installed below the root.
+        $home = wp_parse_url(home_url('/'));
+        $origin = ($home['scheme'] ?? 'https') . '://' . ($home['host'] ?? '') . (isset($home['port']) ? ':' . (int) $home['port'] : '');
+        $url = wp_validate_redirect($origin . $uri, home_url('/'));
         return remove_query_arg(array('dip_identity_eager', 'dip_identity_open'), $url);
+    }
+
+    /**
+     * The checkout or cart page the modal was opened on, so a buyer who signs
+     * in there goes back to pay (« paiement → retour au paiement », as the
+     * Google flow does); '' anywhere else, where the configured landing page
+     * applies. Same-site storefront URLs only (DIP_Session_Router::destination).
+     */
+    private static function checkout_return($url) {
+        if (!is_string($url) || $url === '' || strlen($url) > 2048 || !function_exists('wc_get_checkout_url')) return '';
+        $safe = DIP_Session_Router::destination($url, '');
+        $path = untrailingslashit((string) wp_parse_url($safe, PHP_URL_PATH));
+        $received = trim((string) get_option('woocommerce_checkout_order_received_endpoint', 'order-received'), '/');
+        if ($received !== '' && preg_match('~/' . preg_quote($received, '~') . '(?:/|$)~i', $path . '/')) return '';
+        foreach ([wc_get_checkout_url(), function_exists('wc_get_cart_url') ? wc_get_cart_url() : ''] as $page) {
+            $page_path = untrailingslashit((string) wp_parse_url((string) $page, PHP_URL_PATH));
+            if ($page_path === '' || $page_path === untrailingslashit((string) wp_parse_url(home_url('/'), PHP_URL_PATH))) continue;
+            if ($path === $page_path || strpos($path . '/', $page_path . '/') === 0) return remove_query_arg('dip_auth_sync', $safe);
+        }
+        return '';
     }
 
     public static function render_modal() {
@@ -799,6 +915,9 @@ final class DIP_Native_Auth {
         $pass_min = min(64, max(8, absint($s['native_password_min'] ?? 8)));
         $pass_max = min(256, max($pass_min, absint($s['native_password_max'] ?? 100)));
         $registration_enabled = self::registration_allowed();
+        // Checkout/cart only; read by the password forms and passkeys.js.
+        $return_to = self::checkout_return($redirect_url);
+        $return_field = $return_to !== '' ? '<input type="hidden" name="redirect" value="' . esc_url($return_to) . '">' : '';
 
         $google = '';
         $google_state = 'ok';
@@ -873,6 +992,7 @@ final class DIP_Native_Auth {
               <input type="text" name="dl_hp" class="dipx-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
               <input type="hidden" name="action" value="<?php echo esc_attr(self::AJAX_LOGIN_ACTION); ?>">
               <input type="hidden" name="nonce" class="dipx-nonce-login" value="">
+              <?php echo $return_field; // Escaped above. ?>
               <button type="submit" class="dipx-submit"><span class="dipx-i dipx-i-lock" aria-hidden="true"></span><span class="dipx-submit-label"><?php echo esc_html__('Connexion', 'delicat-google-login'); ?></span><span class="dipx-spinner" hidden aria-hidden="true"></span></button>
             </form>
 
@@ -893,6 +1013,7 @@ final class DIP_Native_Auth {
               <input type="text" name="dl_hp" class="dipx-hp" tabindex="-1" autocomplete="off" aria-hidden="true">
               <input type="hidden" name="action" value="<?php echo esc_attr(self::AJAX_REGISTER_ACTION); ?>">
               <input type="hidden" name="nonce" class="dipx-nonce-register" value="">
+              <?php echo $return_field; // Escaped above. ?>
               <button type="submit" class="dipx-submit"><span class="dipx-i dipx-i-user-plus" aria-hidden="true"></span><span class="dipx-submit-label"><?php echo esc_html__('Créer mon compte', 'delicat-google-login'); ?></span><span class="dipx-spinner" hidden aria-hidden="true"></span></button>
             </form>
             <?php endif; ?>

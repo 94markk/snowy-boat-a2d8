@@ -137,12 +137,20 @@ final class DIP_Session_Router {
         if (isset($_REQUEST['interim-login']) || isset($_REQUEST['dip_admin_login']) || isset($_REQUEST['loginSocial'])) return;
         $action = $_REQUEST['action'] ?? 'login';
         if ($action !== 'login') return;
-        $user = get_user_by('login', $username);
+        $code = $error instanceof WP_Error ? (string) $error->get_error_code() : '';
+        // The password was right and the second step belongs on this form:
+        // WordPress shows the message and opens the code field (DIP_Two_Factor).
+        if (strpos($code, 'dip_2fa_') === 0) return;
+        $user = get_user_by('login', (string) $username);
         if (!$user && is_email($username)) $user = get_user_by('email', $username);
         if ($user && (user_can($user, 'manage_options') || user_can($user, 'edit_posts') || user_can($user, 'manage_woocommerce'))) return;
         self::private_response();
+        // Name the reasons the modal names too: account-policy refusals (only
+        // after a correct password) and an active lockout (any password, any
+        // identifier: reveals no account), instead of « Identifiants incorrects ».
+        $reasons = ['dip_email_not_verified'=>'dip_email_not_verified', 'account_pending_approval'=>'account_pending_approval', 'delicat_locked'=>'temporarily_locked'];
         // No submitted identifiers, passwords, provider tokens or raw errors in URLs.
-        wp_safe_redirect(add_query_arg('dip_auth_error', 'invalid_credentials', home_url('/')) . '#delicat-login'); exit;
+        wp_safe_redirect(add_query_arg('dip_auth_error', $reasons[$code] ?? 'invalid_credentials', home_url('/')) . '#delicat-login'); exit;
     }
     public static function assets() {
         if (is_admin()) return;

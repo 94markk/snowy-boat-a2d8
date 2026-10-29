@@ -61,10 +61,17 @@
     show('');if(resend)resend.hidden=true;requestSize();
   }
   function navigate(value){
-    var url=new URL(value||cfg.redirectUrl||'/',window.parent.location.href);
-    if(url.origin!==window.parent.location.origin||!/^https?:$/.test(url.protocol))throw new Error('Adresse de retour invalide.');
-    try{if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.controller.postMessage({type:'dbv9-clear-docs'});localStorage.setItem('dip-session-change',String(Date.now()));}catch(e){}
-    window.parent.location.assign(url.href);
+    var top=window.parent,url=new URL(value||cfg.redirectUrl||'/',top.location.href);
+    if(url.origin!==top.location.origin||!/^https?:$/.test(url.protocol))throw new Error('Adresse de retour invalide.');
+    // The session change is written through the storefront page's own storage:
+    // written from this frame, it fired a "storage" event in that page, whose
+    // session-router.js reloaded it and cancelled this navigation (the customer
+    // stayed on the same page, without the dip_auth_sync landing). Other tabs
+    // are still told.
+    try{top.__DIP_AUTH_NAVIGATING__=true;}catch(e){}
+    try{var sw=top.navigator.serviceWorker;if(sw&&sw.controller)sw.controller.postMessage({type:'dbv9-clear-docs'});}catch(e){}
+    try{top.localStorage.setItem('dip-session-change',String(Date.now()));}catch(e){}
+    top.location.assign(url.href);
     setTimeout(function(){if(active){state(false);show('Connexion réussie. Actualisez la page pour continuer.',true);}},10000);
   }
   window.DIPAuthNavigate=navigate;
@@ -124,7 +131,7 @@
       active=true;select(tab);
       fresh(false).catch(function(){/* Submit retries; Google remains a native link. */});
       var params=new URLSearchParams(window.parent.location.search),error=params.get('dip_auth_error');
-      if(error)show(errorMessages[error]||'La connexion Google a échoué. Réessayez.');
+      if(error)show(Object.prototype.hasOwnProperty.call(errorMessages,error)?errorMessages[error]:'La connexion Google a échoué. Réessayez.');
       else if(params.get('dip_verified')==='1')show('Adresse e-mail vérifiée. Vous pouvez vous connecter.',true);
     },
     close:function(){
