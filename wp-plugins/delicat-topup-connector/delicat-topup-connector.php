@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Delicat Top-Up Connector
  * Description:       Sell game top-ups, vouchers and gift cards from your wholesale supplier through WooCommerce. Imports the catalog as variable products, validates player IDs, places signed supplier orders on payment and keeps catalog + order status synchronized automatically (webhooks, background catalog sync and pending-order sweeps).
- * Version:           1.8.0
+ * Version:           1.8.1
  * Author:            Delicat Store
  * License:           GPL-2.0-or-later
  * Text Domain:       delicat-topup-connector
@@ -27,7 +27,8 @@ if (defined('FTR_VERSION')) {
     return;
 }
 
-define('FTR_VERSION', '1.8.0');
+define('FTR_VERSION', '1.8.1');
+define('FTR_DEFAULT_BASE_URL', 'https://flashtopup.com/api/reseller/v2');
 define('FTR_FILE', __FILE__);
 define('FTR_DIR', plugin_dir_path(__FILE__));
 define('FTR_URL', plugin_dir_url(__FILE__));
@@ -88,7 +89,7 @@ function ftr_default_settings()
     return array(
         'api_id'              => '',
         'api_key'             => '',
-        'base_url'            => 'https://api.flashtopup.com/api/reseller/v2',
+        'base_url'            => FTR_DEFAULT_BASE_URL,
         'sandbox'             => 0,
         'check_id'            => 1,
         'markup'              => 0,         // % added on top of provider price (display only)
@@ -153,8 +154,20 @@ function ftr_maybe_upgrade()
         $settings = array();
     }
     $settings = wp_parse_args($settings, ftr_default_settings());
+    $dirty = false;
     if (empty($settings['webhook_token'])) {
         $settings['webhook_token'] = ftr_generate_token();
+        $dirty = true;
+    }
+    // v1.8.1: the supplier's documented base URL is flashtopup.com, not the
+    // api. subdomain earlier builds shipped as default (requests to it fail
+    // with "Connection failed").
+    $host = strtolower((string) wp_parse_url((string) $settings['base_url'], PHP_URL_HOST));
+    if ($host === 'api.flashtopup.com' || trim((string) $settings['base_url']) === '') {
+        $settings['base_url'] = FTR_DEFAULT_BASE_URL;
+        $dirty = true;
+    }
+    if ($dirty) {
         update_option(FTR_OPTION, $settings, false);
     }
     FTR_Sync::schedule();

@@ -68,8 +68,13 @@ class FTR_Admin
             case 'connection':
                 $s['api_id']   = isset($_POST['api_id']) ? trim(sanitize_text_field(wp_unslash($_POST['api_id']))) : '';
                 $s['api_key']  = isset($_POST['api_key']) ? trim((string) wp_unslash($_POST['api_key'])) : '';
-                $base          = isset($_POST['base_url']) ? untrailingslashit(trim(esc_url_raw(wp_unslash($_POST['base_url'])))) : '';
-                $s['base_url'] = $base !== '' ? $base : ftr_default_settings()['base_url'];
+                $base = isset($_POST['base_url']) ? untrailingslashit(trim(esc_url_raw(wp_unslash($_POST['base_url'])))) : '';
+                // Requests are signed over the full /api/reseller/v2/... path,
+                // so a base URL without it can never authenticate.
+                if ($base !== '' && untrailingslashit((string) wp_parse_url($base, PHP_URL_PATH)) === '') {
+                    $base .= '/api/reseller/v2';
+                }
+                $s['base_url'] = $base !== '' ? $base : FTR_DEFAULT_BASE_URL;
                 $s['sandbox']  = isset($_POST['sandbox']) ? 1 : 0;
                 $s['check_id'] = isset($_POST['check_id']) ? 1 : 0;
                 break;
@@ -222,7 +227,10 @@ class FTR_Admin
                 <tr>
                     <th><label for="base_url">API Base URL</label></th>
                     <td>
-                        <input name="base_url" id="base_url" type="url" class="regular-text" value="<?php echo esc_attr($s['base_url']); ?>" />
+                        <input name="base_url" id="base_url" type="url" class="regular-text" value="<?php echo esc_attr($s['base_url']); ?>" placeholder="<?php echo esc_attr(FTR_DEFAULT_BASE_URL); ?>" />
+                        <?php if (untrailingslashit($s['base_url']) !== FTR_DEFAULT_BASE_URL) : ?>
+                            <p class="description"><strong class="ftr-bad">The supplier documents <code><?php echo esc_html(FTR_DEFAULT_BASE_URL); ?></code></strong> — use it unless support gave you another one.</p>
+                        <?php endif; ?>
                         <p class="description">Server IP to whitelist in the supplier panel (if it asks for one): <code><?php echo esc_html(isset($_SERVER['SERVER_ADDR']) ? (string) $_SERVER['SERVER_ADDR'] : 'unknown'); ?></code> — your host may use a different outbound IP; check the Diagnostics tab.</p>
                     </td>
                 </tr>
@@ -342,10 +350,12 @@ class FTR_Admin
             <?php wp_nonce_field('ftr_settings'); ?>
             <h2 class="ftr-card-title">Automatic synchronization</h2>
             <p class="ftr-muted">
-                Orders: supplier webhooks update WooCommerce instantly, and every placed order that is not final yet
-                is re-checked with the supplier <strong>every minute</strong>. Catalog: prices, stock, packages and
-                fields of every imported product are refreshed in the background, and instantly when the supplier
-                sends a product webhook. New supplier products are never published automatically.
+                Orders: the supplier's <code>order.updated</code> webhook updates WooCommerce instantly, every placed
+                order that is not final yet is re-checked <strong>every minute</strong>, and placements that failed for
+                a temporary reason (network, balance, rate limit) are retried automatically. Catalog: prices, stock,
+                packages and fields of every imported product are refreshed in the background, and products in a
+                customer's cart are re-checked live before payment. New supplier products are never published
+                automatically. The sync stays within the supplier's rate limits.
             </p>
             <table class="form-table" role="presentation">
                 <tr>

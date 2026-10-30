@@ -38,6 +38,74 @@ class FTR_Woo
         add_action('ftr_reconcile_order', array($this, 'reconcile_order'), 10, 1);
         add_action('ftr_repair_completed_orders', array($this, 'repair_completed_orders'), 10, 0);
         add_action('wp_enqueue_scripts', array($this, 'assets'));
+        // The supplier asks resellers to refresh package prices before
+        // showing checkout pricing: re-check stale cart products live.
+        add_action('woocommerce_check_cart_items', array($this, 'refresh_cart_prices'), 5);
+    }
+
+    /** Seconds a product's supplier data is trusted before a live re-check at checkout. */
+    const CART_FRESHNESS = 120;
+
+    /**
+     * Refresh supplier packages for cart products that were not synchronized
+     * in the last CART_FRESHNESS seconds. When a price or availability
+     * changed, the customer is told and, during checkout processing, the
+     * order is stopped so they never pay a stale price.
+     */
+    public function refresh_cart_prices()
+    {
+        if (!function_exists('WC') || !WC()->cart || (is_admin() && !wp_doing_ajax())) {
+            return;
+        }
+        $processing = did_action('woocommerce_before_checkout_process') > 0;
+        $store = get_option(FTR_PRODUCTS, array());
+        if (!is_array($store)) {
+            return;
+        }
+
+        $refreshed = array();
+        foreach (WC()->cart->get_cart() as $cart_item) {
+            $vid = !empty($cart_item['variation_id']) ? (int) $cart_item['variation_id'] : 0;
+            $pid = !empty($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+            if (!$vid || !get_post_meta($vid, '_ftr_service_code', true)) {
+                continue;
+            }
+            $code = (string) get_post_meta($pid, '_ftr_product_code', true);
+            if ($code === '' || isset($refreshed[$code]) || !isset($store[$code])) {
+                continue;
+            }
+            $last = (int) get_post_meta($pid, '_ftr_last_synced_at', true);
+            $guard = 'ftr_live_' . md5($code);
+            if ($last > time() - self::CART_FRESHNESS || get_transient($guard)) {
+                continue;
+            }
+            set_transient($guard, 1, 30); // one live refresh per product per 30s, whatever the traffic
+            $refreshed[$code] = true;
+            FTR_Sync::sync_codes(array($code));
+        }
+        if (empty($refreshed)) {
+            return;
+        }
+
+        foreach (WC()->cart->get_cart() as $cart_item) {
+            $pid = !empty($cart_item['product_id']) ? (int) $cart_item['product_id'] : 0;
+            $vid = !empty($cart_item['variation_id']) ? (int) $cart_item['variation_id'] : 0;
+            if (!$vid || !isset($refreshed[(string) get_post_meta($pid, '_ftr_product_code', true)])) {
+                continue;
+            }
+            $fresh = wc_get_product($vid);
+            $name = isset($cart_item['data']) && is_object($cart_item['data']) ? $cart_item['data']->get_name() : '';
+            if (!$fresh || !$fresh->is_purchasable() || !$fresh->is_in_stock()) {
+                wc_add_notice(sprintf('« %s » n’est plus disponible. Retirez-le du panier pour continuer.', $name), 'error');
+                continue;
+            }
+            $old = isset($cart_item['data']) && is_object($cart_item['data']) ? (float) $cart_item['data']->get_price() : 0.0;
+            $new = (float) $fresh->get_price();
+            if (abs($new - $old) > 0.0001) {
+                $cart_item['data']->set_price($new);
+                wc_add_notice(sprintf('Le prix de « %s » a été mis à jour : %s. Vérifiez votre commande.', $name, wp_strip_all_tags(wc_price($new))), $processing ? 'error' : 'notice');
+            }
+        }
     }
 
     public static function active()
@@ -699,8 +767,9 @@ class FTR_Woo
 
     /* ---------------- Fulfillment ---------------- */
 
-    public function fulfill($order_id)
+    public function fulfill($order_id, $from_reconcile = false)
     {
+        $from_reconcile = ($from_reconcile === true);
         $order = wc_get_order($order_id);
         if (!$order) {
             return;
@@ -774,14 +843,17 @@ class FTR_Woo
                         do_action('ftr_provider_item_status_updated', $order_id, $item_id, $provider_status);
                     }
                 } else {
-                    // A JSON 4xx is a definitive rejection (no order created
-                    // upstream). Transport errors/5xx are left open so the
-                    // reconciliation can discover an order that did go through.
-                    $definitive = $res['status'] >= 400 && $res['status'] < 500 && !empty($res['raw']);
+                    // Documented rejection codes mean nothing was created
+                    // upstream and a retry cannot succeed (bad player ID,
+                    // unknown package...). Anything else (network, auth,
+                    // rate limit, insufficient balance) is retried
+                    // automatically by the reconciliation with the same
+                    // reference_id, which the API treats idempotently.
+                    $definitive = in_array(isset($res['error_code']) ? $res['error_code'] : '', FTR_API::REJECTION_CODES, true);
                     if ($definitive) {
                         wc_update_order_item_meta($item_id, '_ftr_status', 'failed');
                     }
-                    $order->add_order_note('Supplier fulfillment FAILED for "' . $item->get_name() . '": ' . $res['message'] . ($definitive ? '' : ' The order status will be re-checked automatically.'));
+                    $order->add_order_note('Supplier fulfillment FAILED for "' . $item->get_name() . '": ' . $res['message'] . ($definitive ? ' Not retried — fix the order data, then set the order back to Processing to retry.' : ' It will be retried automatically.'));
                     self::log('Fulfillment FAILED for order #' . $order_id . ' item ' . $item_id . ': ' . $res['message'], 'error');
                 }
                 delete_option($lock);
@@ -801,7 +873,7 @@ class FTR_Woo
         // reconciliation prevents orders being stuck in Processing when a
         // callback is delayed, blocked by cache/firewall, or not delivered.
         $order = wc_get_order($order_id);
-        if ($order && $order->get_status() !== 'completed' && self::order_contains_ftr_items($order)) {
+        if (!$from_reconcile && $order && $order->get_status() !== 'completed' && self::order_contains_ftr_items($order)) {
             self::schedule_reconciliation($order_id, 15);
         }
     }
@@ -917,6 +989,7 @@ class FTR_Woo
 
         $api = new FTR_API();
         $has_pending = false;
+        $needs_placement = false;
 
         foreach ($order->get_items() as $item_id => $item) {
             $product = $item->get_product();
@@ -931,6 +1004,14 @@ class FTR_Woo
             $provider_id = (string) wc_get_order_item_meta($item_id, '_ftr_order_id', true);
             $reference   = 'wc_' . $order_id . '_' . $item_id;
             $res = $api->order_status($provider_id, $reference);
+            if (empty($res['ok']) && !wc_get_order_item_meta($item_id, '_ftr_fulfilled', true)
+                && ($res['error_code'] === 'ORDER_NOT_FOUND' || $res['status'] === 404)) {
+                // The placement never reached the supplier (network/auth/
+                // balance error): place it again with the same reference.
+                $has_pending = true;
+                $needs_placement = true;
+                continue;
+            }
             if (empty($res['ok'])) {
                 $has_pending = true;
                 self::log('Status reconciliation failed for order #' . $order_id . ' item ' . $item_id . ': ' . (isset($res['message']) ? $res['message'] : 'unknown error'), 'error');
@@ -946,6 +1027,10 @@ class FTR_Woo
             if (!in_array($status, array('completed', 'failed'), true)) {
                 $has_pending = true;
             }
+        }
+
+        if ($needs_placement) {
+            $this->fulfill($order_id, true);
         }
 
         // Reload so HPOS/order-item caches cannot hide the status just saved.

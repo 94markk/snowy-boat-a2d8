@@ -9,7 +9,14 @@ if (!defined('ABSPATH')) {
  * Auth: HMAC-SHA256 over a canonical request, sent as headers:
  *   X-FT-API-ID, X-FT-Timestamp, X-FT-Nonce, X-FT-Signature
  *   canonical = METHOD \n PATH \n TIMESTAMP \n NONCE \n sha256(rawBody)
- * Every call is POST with a signed JSON body (endpoints accept POST).
+ * PATH is the full API path (/api/reseller/v2/...), without query string.
+ * Every call is POST with a signed JSON body (the documented GET endpoints
+ * /profile, /balance and /products keep POST as a compatibility alias).
+ *
+ * Orders are idempotent by reference_id: re-sending the same reference
+ * returns the existing order, so placement can be retried safely.
+ * Rate limits: 1800 req / 10 min general, 600 for /order and /check-id,
+ * 60 for /products. Remaining quota is tracked from X-RateLimit-* headers.
  */
 class FTR_API
 {
@@ -17,6 +24,12 @@ class FTR_API
     private $apiKey;
     private $baseUrl;
     private $sandbox;
+
+    /** Last seen X-RateLimit-Remaining / Reset (per request, all instances). */
+    private static $rate = array('remaining' => null, 'reset' => null);
+
+    /** Error codes that mean the order was rejected and nothing was created. */
+    const REJECTION_CODES = array('VALIDATION_FAILED', 'PRODUCT_NOT_FOUND', 'SERVICE_NOT_FOUND', 'SERVICE_PRODUCT_MISMATCH', 'INVALID_PLAYER_ID', 'REFERENCE_ID_ALREADY_USED_FOR_ANOTHER_ORDER');
 
     public function __construct($settings = null)
     {
@@ -132,10 +145,9 @@ class FTR_API
             'reference_id' => (string) $reference_id,
             'quantity'     => (int) $quantity,
         ), is_array($extra) ? $extra : array());
-        // Never retry an order placement automatically: a timeout may still
-        // have created the order upstream. Reconciliation by reference_id
-        // picks up the real outcome instead.
-        return $this->request('/order', $body, array('retries' => 0, 'timeout' => 45));
+        // Safe to retry: the API is idempotent by reference_id and returns
+        // the existing order for a repeated reference.
+        return $this->request('/order', $body, array('retries' => 1, 'timeout' => 45));
     }
 
     /** Order status by order id or reference id. */
@@ -199,8 +211,10 @@ class FTR_API
         $attempt = 0;
         do {
             $res = $this->send($endpoint, $body, $timeout);
-            // Retry only transport failures and 5xx/429 responses.
-            $transient = empty($res['ok']) && ($res['status'] === 0 || $res['status'] === 429 || $res['status'] >= 500);
+            // Retry transport failures, 5xx, nonce collisions and short 429s.
+            $transient = empty($res['ok']) && ($res['status'] === 0 || $res['status'] >= 500
+                || $res['error_code'] === 'REPLAY_DETECTED'
+                || ($res['status'] === 429 && $res['retry_after'] <= 3));
             if (!$transient || $attempt >= $retries) {
                 return $res;
             }
@@ -249,11 +263,19 @@ class FTR_API
 
         $code = (int) wp_remote_retrieve_response_code($response);
         $rawText = (string) wp_remote_retrieve_body($response);
+        $remaining = wp_remote_retrieve_header($response, 'x-ratelimit-remaining');
+        if ($remaining !== '' && is_numeric($remaining)) {
+            self::$rate = array('remaining' => (int) $remaining, 'reset' => (int) wp_remote_retrieve_header($response, 'x-ratelimit-reset'));
+        }
+        $retryAfter = (int) wp_remote_retrieve_header($response, 'retry-after');
         $json = json_decode($rawText, true);
         if (!is_array($json)) {
             $hint = $code === 404 ? ' Check the API Base URL.' : ($code >= 500 ? ' The API server had an error.' : '');
             if ($code >= 200 && $code < 300 && stripos($rawText, '<html') !== false) {
                 $hint = ' The server returned an HTML page instead of JSON — check the API Base URL.';
+            }
+            if ($code === 0 || $code >= 300 && $code < 400) {
+                $hint = ' Check the API Base URL (expected ' . FTR_DEFAULT_BASE_URL . ').';
             }
             return $this->fail('Unexpected response from the API (HTTP ' . $code . ').' . $hint, $code);
         }
@@ -282,27 +304,61 @@ class FTR_API
             if ($msg === '') {
                 $msg = 'Request failed';
             }
-            $suffix = trim(($errCode !== '' ? $errCode . ', ' : '') . 'HTTP ' . $code);
-            if ($code === 401 || $code === 403) {
-                $msg .= ' — verify the API ID / API Secret, that this server\'s IP is whitelisted in the supplier panel, and that the server clock is correct';
-            }
+            $requestId = isset($json['meta']['request_id']) && is_scalar($json['meta']['request_id']) ? (string) $json['meta']['request_id'] : '';
+            $suffix = trim(($errCode !== '' ? $errCode . ', ' : '') . 'HTTP ' . $code . ($requestId !== '' ? ', ' . $requestId : ''));
+            $hint = self::hint($errCode, $code);
             return array(
-                'ok'      => false,
-                'status'  => $code,
-                'data'    => isset($json['data']) ? $json['data'] : null,
-                'message' => $msg . ' (' . $suffix . ').',
-                'raw'     => $json,
+                'ok'          => false,
+                'status'      => $code,
+                'error_code'  => $errCode,
+                'retry_after' => $retryAfter,
+                'data'        => isset($json['data']) ? $json['data'] : null,
+                'message'     => $msg . ' (' . $suffix . ')' . ($hint !== '' ? ' — ' . $hint : '') . '.',
+                'raw'         => $json,
             );
         }
 
         return array(
             'ok'      => true,
             'status'  => $code,
+            'error_code' => '',
+            'retry_after' => 0,
             'data'    => array_key_exists('data', $json) ? $json['data'] : $json,
             'message' => isset($json['message']) && is_string($json['message']) ? $json['message'] : 'OK',
             'meta'    => isset($json['meta']) ? $json['meta'] : null,
             'raw'     => $json,
         );
+    }
+
+    /** What to do about a documented error code (admin-facing). */
+    private static function hint($errCode, $status)
+    {
+        switch ($errCode) {
+            case 'INVALID_CREDENTIALS':
+            case 'AUTH_FIELDS_MISSING':
+                return 'check the API ID and API Secret on the Connection tab';
+            case 'INVALID_SIGNATURE':
+                return 'check the API Secret, and that the API Base URL is exactly ' . FTR_DEFAULT_BASE_URL;
+            case 'STALE_REQUEST':
+            case 'INVALID_NONCE':
+                return 'the server clock is wrong; ask your host to enable NTP time sync';
+            case 'IP_NOT_ALLOWED':
+                return 'add this server\'s outbound IP (Diagnostics tab) to the IP whitelist in the supplier panel';
+            case 'RATE_LIMITED':
+                return 'too many requests; this resolves itself within 10 minutes';
+            case 'INSUFFICIENT_BALANCE':
+                return 'top up the supplier wallet; paid orders are retried automatically';
+        }
+        if ($status === 401 || $status === 403) {
+            return 'verify the API ID / API Secret, the supplier IP whitelist and the server clock';
+        }
+        return '';
+    }
+
+    /** Remaining request quota reported by the last API response (null = unknown). */
+    public static function rate_remaining()
+    {
+        return self::$rate['remaining'];
     }
 
     private function nonce()
@@ -315,6 +371,6 @@ class FTR_API
 
     private function fail($message, $status = 0)
     {
-        return array('ok' => false, 'status' => $status, 'data' => null, 'message' => $message, 'raw' => array());
+        return array('ok' => false, 'status' => $status, 'error_code' => '', 'retry_after' => 0, 'data' => null, 'message' => $message, 'raw' => array());
     }
 }

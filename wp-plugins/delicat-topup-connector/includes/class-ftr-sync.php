@@ -10,8 +10,11 @@ if (!defined('ABSPATH')) {
  *  - Catalog: a recurring background pass (default every 5 minutes) refreshes
  *    prices, stock, packages and fields of every imported product. Large
  *    catalogs are processed in time-boxed slices that resume on the next run.
- *  - Catalog webhooks: product/service/price/stock events from the supplier
- *    trigger an immediate refresh of the affected product(s).
+ *  - Checkout: products in the cart are re-checked live before payment when
+ *    their data is older than two minutes (FTR_Woo::refresh_cart_prices).
+ *  - Catalog webhooks: the supplier currently documents only order.updated;
+ *    product/service/price/stock events, if ever sent, trigger an immediate
+ *    refresh of the affected product(s).
  *  - Orders: a sweep every minute polls the bulk status endpoint for every
  *    placed-but-not-final supplier order, on top of webhooks and per-order
  *    reconciliation, so WooCommerce reflects delivery within about a minute
@@ -388,6 +391,12 @@ class FTR_Sync
             $start = microtime(true);
             $total = count($state['queue']);
             while ($state['pos'] < $total && (microtime(true) - $start) < $budget) {
+                // Keep a reserve of the 1800-requests/10-min quota for order
+                // status checks; the pass resumes on the next run.
+                $remaining = FTR_API::rate_remaining();
+                if ($remaining !== null && $remaining < 300) {
+                    break;
+                }
                 $r = self::sync_item($state['queue'][$state['pos']], $api);
                 $state['pos']++;
                 if (!empty($r['error'])) {

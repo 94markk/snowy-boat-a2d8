@@ -2,7 +2,7 @@
 Requires at least: 5.6
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.8.0
+Stable tag: 1.8.1
 License: GPLv2 or later
 
 Sell game top-ups, vouchers and gift cards from your wholesale supplier
@@ -37,6 +37,26 @@ synchronization, and no supplier branding visible to customers.
 5. Top-Up -> Settings -> Sync: add the suggested server cron job for exact timing.
 
 == Changelog ==
+
+= 1.8.1 =
+Aligned with the supplier's Reseller API v2 documentation.
+* FIX (likely cause of "Connection failed"): the default API Base URL was
+  https://api.flashtopup.com/api/reseller/v2; the documented one is
+  https://flashtopup.com/api/reseller/v2. Existing settings using the api.
+  subdomain are migrated automatically on update.
+* A base URL without the /api/reseller/v2 path is completed on save (the
+  signature covers that full path).
+* Error messages now show the documented error code, the request_id for
+  support, and the specific fix (credentials, signature/base URL, clock,
+  IP whitelist, rate limit, balance).
+* Order placement is retried safely (the API is idempotent by reference_id).
+  Placements that failed for a temporary reason, including insufficient
+  balance, are retried automatically until they reach the supplier;
+  documented rejections (invalid player ID, unknown package...) are not.
+* Prices of products in the cart are re-checked live before payment when
+  older than 2 minutes, as the API documentation requires.
+* Background sync respects the documented rate limits (X-RateLimit-*,
+  Retry-After) and keeps quota in reserve for order status checks.
 
 = 1.8.0 =
 * SECURITY: the storefront shortcode's direct-order AJAX endpoint was open to
