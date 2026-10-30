@@ -1,0 +1,136 @@
+/* FlashTopup Reseller — admin UI. Brand: dark ink + FlashTopup gold (#f6ac37).
+   NOTE: class names here are referenced by ft-admin.js (modal, progress, log,
+   balance, report) and class-ftr-admin.php — keep them stable. */
+.ftr-wrap {
+  --ftr-gold: #f6ac37;
+  --ftr-gold-2: #e0911a;
+  --ftr-ink: #14110a;
+  --ftr-bd: #e4e7ec;
+  --ftr-soft: #f7f8fa;
+  --ftr-muted: #667085;
+  max-width: 1120px;
+  margin: 16px 20px 48px 2px;
+}
+.ftr-wrap * { box-sizing: border-box; }
+
+/* ---- Hero ---- */
+.ftr-hero {
+  display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  background: radial-gradient(1100px 220px at 0% 0%, rgba(246,172,55,.20), transparent 60%), linear-gradient(135deg, #1b1813, #0f0d09);
+  border-radius: 16px; padding: 22px 26px; margin: 10px 0 18px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.18);
+}
+.ftr-hero h1 { margin: 0; font-size: 23px; line-height: 1.15; color: #fff; font-weight: 800; letter-spacing: -.2px; }
+.ftr-hero-sub { margin: 5px 0 0; color: rgba(255,255,255,.68); font-size: 13px; }
+.ftr-hero-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---- Status pills ---- */
+.ftr-pill {
+  display: inline-flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; letter-spacing: .01em; line-height: 1;
+  background: rgba(255,255,255,.1); color: #e9edf2;
+}
+.ftr-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.ftr-pill-ok { background: rgba(16,185,129,.18); color: #34d399; }
+.ftr-pill-bad { background: rgba(239,68,68,.18); color: #f87171; }
+.ftr-pill-warn { background: rgba(246,172,55,.20); color: var(--ftr-gold); }
+
+/* ---- Tabs ---- */
+.ftr-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
+  margin: 14px 0 18px; padding: 5px;
+  background: #fff; border: 1px solid var(--ftr-bd); border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+.ftr-tab { display: inline-block; padding: 9px 15px; color: #475569; font-weight: 600; font-size: 13px; text-decoration: none; border-radius: 8px; }
+.ftr-tab:hover { background: var(--ftr-soft); color: var(--ftr-ink); }
+.ftr-tab-active, .ftr-tab-active:hover {
+  background: linear-gradient(135deg, var(--ftr-gold), var(--ftr-gold-2));
+  color: #1a1305 !important; box-shadow: 0 2px 8px rgba(246,172,55,.4);
+}
+.ftr-tabs-flex { flex: 1; }
+.ftr-tabs .button { margin-left: 4px; }
+
+/* ---- Cards ---- */
+.ftr-card {
+  background: #fff; border: 1px solid var(--ftr-bd); border-radius: 14px;
+  padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+}
+.ftr-card-title {
+  margin: 0 0 14px; font-size: 15px; font-weight: 800; color: var(--ftr-ink);
+  display: flex; align-items: center; gap: 9px;
+}
+.ftr-card-title::before { content: ""; width: 4px; height: 16px; border-radius: 3px; background: linear-gradient(180deg, var(--ftr-gold), var(--ftr-gold-2)); }
+.ftr-card .form-table th { padding-left: 0; }
+.ftr-card input[type="text"], .ftr-card input[type="url"],
+.ftr-card input[type="password"], .ftr-card input[type="number"] { border-radius: 8px; }
+.ftr-card .button-primary, .ftr-card .button-hero {
+  background: var(--ftr-gold-2); border-color: var(--ftr-gold-2);
+  color: #1a1305; text-shadow: none; box-shadow: none; font-weight: 700;
+}
+.ftr-card .button-primary:hover, .ftr-card .button-hero:hover { background: var(--ftr-gold); border-color: var(--ftr-gold); }
+
+/* ---- Text helpers ---- */
+.ftr-muted { color: var(--ftr-muted); }
+.ftr-small { font-size: 12px; }
+.ftr-ok { color: #059669; font-weight: 700; }
+.ftr-bad { color: #dc2626; font-weight: 700; }
+.ftr-warn { color: var(--ftr-gold-2); font-weight: 700; }
+
+/* ---- Copy field (webhook URL) ---- */
+.ftr-copy { display: flex; gap: 8px; align-items: center; max-width: 720px; }
+.ftr-copy input {
+  flex: 1; padding: 9px 12px; border: 1px solid var(--ftr-bd); border-radius: 8px;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; font-size: 13px; background: var(--ftr-soft); color: var(--ftr-ink);
+}
+.ftr-copy input:focus { background: #fff; border-color: var(--ftr-gold); outline: none; box-shadow: 0 0 0 3px rgba(246,172,55,.2); }
+
+/* ---- Tables ---- */
+table.ftr-log code { font-size: 11px; word-break: break-word; }
+.ftr-thumb { width: 34px; height: 34px; object-fit: cover; border-radius: 8px; vertical-align: middle; margin-right: 10px; border: 1px solid var(--ftr-bd); }
+.widefat.striped { border-radius: 10px; overflow: hidden; }
+
+/* ===== Modal (built by ft-admin.js: balance, self-test, import progress) ===== */
+.ftr-modal-overlay { position: fixed; inset: 0; background: rgba(15,13,9,.55); display: flex; align-items: center; justify-content: center; z-index: 100000; padding: 16px; }
+.ftr-modal { background: #fff; border-radius: 16px; width: min(640px, 94vw); max-height: 88vh; overflow: auto; box-shadow: 0 24px 70px rgba(0,0,0,.4); }
+.ftr-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--ftr-bd); }
+.ftr-modal-head h2 { margin: 0; font-size: 17px; color: var(--ftr-ink); font-weight: 800; }
+.ftr-modal-x { border: 0; background: transparent; font-size: 26px; line-height: 1; cursor: pointer; color: #9aa1ab; padding: 0 4px; }
+.ftr-modal-x:hover { color: var(--ftr-ink); }
+.ftr-modal-body { padding: 20px 22px; }
+.ftr-modal-actions { margin-top: 18px; text-align: right; display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.ftr-spin { color: var(--ftr-muted); }
+.ftr-spin::before { content: ""; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px; border: 2px solid var(--ftr-bd); border-top-color: var(--ftr-gold-2); border-radius: 50%; animation: ftr-spin .7s linear infinite; }
+@keyframes ftr-spin { to { transform: rotate(360deg); } }
+.ftr-err { color: #dc2626; font-weight: 600; }
+.ftr-ok-msg { color: #059669; }
+
+/* Balance popup */
+.ftr-balance { text-align: center; padding: 14px 0 6px; }
+.ftr-balance-amt { font-size: 38px; font-weight: 800; color: var(--ftr-ink); line-height: 1; }
+.ftr-balance-cur { margin-top: 6px; color: var(--ftr-muted); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.ftr-tag { display: inline-block; margin-top: 12px; padding: 4px 12px; border-radius: 999px; background: rgba(246,172,55,.16); color: var(--ftr-gold-2); font-weight: 700; font-size: 12px; }
+
+/* Self-test report table */
+.ftr-report { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.ftr-report th { text-align: left; padding: 8px 10px; width: 46%; color: var(--ftr-muted); font-weight: 600; border-bottom: 1px solid var(--ftr-bd); font-size: 13px; }
+.ftr-report td { padding: 8px 10px; border-bottom: 1px solid var(--ftr-bd); font-weight: 700; font-size: 13px; }
+
+/* Import progress */
+.ftr-progress { height: 10px; border-radius: 999px; background: #eef0f3; overflow: hidden; margin-bottom: 12px; }
+.ftr-progress-bar { height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, var(--ftr-gold), var(--ftr-gold-2)); transition: width .3s ease; }
+.ftr-progress-label { margin: 0 0 12px; color: var(--ftr-muted); font-size: 13px; }
+ul.ftr-log { list-style: none; margin: 0; padding: 10px 12px; max-height: 300px; overflow: auto; border: 1px solid var(--ftr-bd); border-radius: 10px; background: var(--ftr-soft); font-size: 13px; }
+ul.ftr-log li { padding: 5px 0; border-bottom: 1px dashed #e7e9ee; }
+ul.ftr-log li:last-child { border-bottom: 0; }
+.ftr-log-ok { color: #047857; }
+.ftr-log-warn { color: var(--ftr-gold-2); }
+.ftr-log-err { color: #dc2626; }
+
+@media (max-width: 782px) {
+  .ftr-wrap { margin-right: 10px; }
+  .ftr-hero { padding: 18px; }
+  .ftr-card { padding: 16px; }
+  .ftr-tab { padding: 8px 11px; font-size: 12px; }
+  .ftr-balance-amt { font-size: 30px; }
+}
