@@ -4,12 +4,12 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * WooCommerce integration. When WooCommerce is active, imported FlashTopup
+ * WooCommerce integration. When WooCommerce is active, imported supplier
  * products become native WooCommerce VARIABLE products (one virtual/digital
  * product per game, with each service package as a "Package" variation),
  * grouped by game category — so they appear in the shop automatically with no
  * shortcode. The auto-generated order fields (text/select) + Check-ID render on
- * the product page, travel through cart → order, and the FlashTopup order is
+ * the product page, travel through cart → order, and the supplier order is
  * placed automatically when the WooCommerce order is paid.
  */
 class FTR_Woo
@@ -48,15 +48,15 @@ class FTR_Woo
     /**
      * Log to PHP error_log (wp-content/debug.log when WP_DEBUG_LOG is on) AND to
      * the WooCommerce logger — viewable under WooCommerce → Status → Logs,
-     * source "flashtopup-reseller". Used so import failures are never silent.
+     * source "topup-connector". Used so import failures are never silent.
      */
     public static function log($message, $level = 'info')
     {
-        error_log('[FlashTopup Reseller] ' . $message);
+        error_log('[Top-Up Connector] ' . $message);
         if (function_exists('wc_get_logger')) {
             $logger = wc_get_logger();
             if ($logger) {
-                $logger->log($level === 'error' ? 'error' : 'info', (string) $message, array('source' => 'flashtopup-reseller'));
+                $logger->log($level === 'error' ? 'error' : 'info', (string) $message, array('source' => FTR_AS_GROUP));
             }
         }
     }
@@ -84,7 +84,7 @@ class FTR_Woo
     /* ---------------- Sync (import → Woo products) ---------------- */
 
     /**
-     * Create/update WooCommerce products from the imported FlashTopup store.
+     * Create/update WooCommerce products from the imported supplier store.
      * One virtual VARIABLE product per game; each service becomes a variation
      * (idempotent, matched on _ftr_service_code). Returns variations synced.
      */
@@ -233,7 +233,7 @@ class FTR_Woo
                     $var->set_status('publish');
                     $var->set_virtual(true);
                     $var->set_regular_price((string) self::markup_price(isset($svc['price']) ? $svc['price'] : 0));
-                    $var->set_stock_status((isset($svc['in_stock']) && $svc['in_stock'] === false) ? 'outofstock' : 'instock');
+                    $var->set_stock_status(FTR_Sync::to_bool(isset($svc['in_stock']) ? $svc['in_stock'] : null) ? 'instock' : 'outofstock');
                     $var_id = (int) $var->save();
                     if ($var_id) {
                         if ($old_service_code !== '' && $old_service_code !== $svc_code) {
@@ -320,7 +320,7 @@ class FTR_Woo
         }
     }
 
-    /** Count of FlashTopup parent products currently in WooCommerce. */
+    /** Count of supplier parent products currently in WooCommerce. */
     public static function ft_product_count()
     {
         if (!self::active()) {
@@ -337,6 +337,40 @@ class FTR_Woo
     }
 
     /**
+     * Make every supplier-managed variation of an imported product
+     * unavailable (the supplier no longer lists it). The next successful sync
+     * of the product restores stock from the supplier's package data.
+     */
+    public static function disable_supplier_product($product_code)
+    {
+        $parent_id = self::find_variable_by_code((string) $product_code);
+        if (!$parent_id) {
+            return 0;
+        }
+        $n = 0;
+        foreach (self::existing_variation_records($parent_id)['all'] as $vid) {
+            try {
+                $v = new WC_Product_Variation((int) $vid);
+                if ($v->get_stock_status() !== 'outofstock') {
+                    $v->set_stock_status('outofstock');
+                    $v->save();
+                    $n++;
+                }
+                update_post_meta((int) $vid, '_ftr_sync_orphaned', 1);
+            } catch (\Throwable $e) {
+                self::log('Could not disable variation #' . $vid . ': ' . $e->getMessage(), 'error');
+            }
+        }
+        if (class_exists('WC_Product_Variable')) {
+            WC_Product_Variable::sync($parent_id);
+        }
+        if (function_exists('wc_delete_product_transients')) {
+            wc_delete_product_transients($parent_id);
+        }
+        return $n;
+    }
+
+    /**
      * Create a real test product from hard-coded data (no API call) to prove the
      * WooCommerce creation path end-to-end. Returns a full diagnostic report.
      */
@@ -344,7 +378,7 @@ class FTR_Woo
     {
         $fake = array(
             'product_code'    => 'FTR-SELFTEST',
-            'name'            => 'FlashTopup Self-Test (safe to delete)',
+            'name'            => 'Top-Up Self-Test (safe to delete)',
             'image_url'       => '',
             'product_type'    => 'topup',
             'validation_code' => '',
@@ -466,7 +500,7 @@ class FTR_Woo
             $sc = trim((string) get_post_meta($vid, '_ftr_service_code', true));
             $was_managed = ($sc !== '') || (bool) get_post_meta($vid, '_ftr_sync_orphaned', true);
             if (!$was_managed) {
-                // Never alter manually-added/non-FlashTopup variations.
+                // Never alter manually-added/non-supplier variations.
                 continue;
             }
             $records['all'][] = $vid;
@@ -507,14 +541,32 @@ class FTR_Woo
             require_once ABSPATH . 'wp-admin/includes/media.php';
             require_once ABSPATH . 'wp-admin/includes/file.php';
             require_once ABSPATH . 'wp-admin/includes/image.php';
-            if (!function_exists('media_sideload_image')) {
+            if (!function_exists('download_url') || !function_exists('media_handle_sideload')) {
                 return;
             }
-            $att = media_sideload_image($url, $product_id, null, 'id');
-            if (is_wp_error($att)) {
-                self::log('Image skipped for #' . $product_id . ': ' . $att->get_error_message());
+            // Save under a neutral file name/title derived from the product,
+            // never the supplier's file name (which can reveal the supplier
+            // in the public /wp-content/uploads/ URL and the media library).
+            $ext = strtolower((string) pathinfo((string) wp_parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
+            if (!in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp'), true)) {
+                $ext = 'png';
+            }
+            $title = get_the_title($product_id);
+            $tmp = download_url($url, 20);
+            if (is_wp_error($tmp)) {
+                self::log('Image skipped for #' . $product_id . ': ' . $tmp->get_error_message());
             } else {
-                set_post_thumbnail($product_id, (int) $att);
+                $file = array(
+                    'name'     => sanitize_file_name(sanitize_title($title !== '' ? $title : 'product-' . $product_id) . '.' . $ext),
+                    'tmp_name' => $tmp,
+                );
+                $att = media_handle_sideload($file, $product_id, $title);
+                if (is_wp_error($att)) {
+                    @unlink($tmp);
+                    self::log('Image skipped for #' . $product_id . ': ' . $att->get_error_message());
+                } else {
+                    set_post_thumbnail($product_id, (int) $att);
+                }
             }
         } catch (\Throwable $e) {
             self::log('Image error for #' . $product_id . ': ' . $e->getMessage());
@@ -539,7 +591,7 @@ class FTR_Woo
         }
         $id = $product->get_id();
         if (!get_post_meta($id, '_ftr_product_code', true)) {
-            return; // not a FlashTopup product
+            return; // not a supplier product
         }
         $fields = $this->fields_for($id);
         $check  = (int) get_post_meta($id, '_ftr_check_id', true) && !empty(ftr_settings()['check_id']);
@@ -566,8 +618,10 @@ class FTR_Woo
             }
             if (($f['type'] ?? 'text') === 'select' && !empty($f['options'])) {
                 echo '<select id="ftr-field-' . esc_attr($name) . '" class="ftr-wc-input" data-name="' . esc_attr($name) . '" name="ftr_field[' . esc_attr($name) . ']">';
-                foreach ($f['options'] as $opt) {
-                    echo '<option value="' . esc_attr($opt['value']) . '">' . esc_html(isset($opt['label']) ? $opt['label'] : $opt['value']) . '</option>';
+                foreach ((array) $f['options'] as $opt) {
+                    $value = is_array($opt) ? (isset($opt['value']) ? $opt['value'] : '') : $opt;
+                    $text = is_array($opt) && isset($opt['label']) ? $opt['label'] : $value;
+                    echo '<option value="' . esc_attr((string) $value) . '">' . esc_html((string) $text) . '</option>';
                 }
                 echo '</select>';
             } else {
@@ -669,6 +723,22 @@ class FTR_Woo
                 if (wc_get_order_item_meta($item_id, '_ftr_fulfilled', true)) {
                     continue; // already done — never double-charge
                 }
+                // Atomic per-item lock: payment callbacks, the thank-you page
+                // and status changes can run fulfill() concurrently. add_option
+                // is a single INSERT that fails if the row exists, so only one
+                // request can place the supplier order.
+                $lock = 'ftr_fulfill_lock_' . (int) $item_id;
+                if (!add_option($lock, time(), '', 'no')) {
+                    $held = (int) get_option($lock);
+                    if ($held && (time() - $held) < 300) {
+                        continue;
+                    }
+                    update_option($lock, time(), false); // stale lock from a crashed request
+                }
+                if (wc_get_order_item_meta($item_id, '_ftr_fulfilled', true)) {
+                    delete_option($lock);
+                    continue;
+                }
 
                 // Gather the saved order field values.
                 $fields = array();
@@ -681,41 +751,161 @@ class FTR_Woo
 
                 $reference = 'wc_' . $order_id . '_' . $item_id;
                 $qty = max(1, (int) $item->get_quantity());
+                // Recorded before the call so the order sweep also checks
+                // placements that timed out but may exist upstream.
+                wc_update_order_item_meta($item_id, '_ftr_placed_at', time());
                 $res = $api->order($service, $reference, $qty, $fields);
 
                 if (!empty($res['ok'])) {
                     $d = is_array($res['data']) ? $res['data'] : array();
                     wc_update_order_item_meta($item_id, '_ftr_fulfilled', 1);
-                    wc_update_order_item_meta($item_id, '_ftr_order_id', isset($d['order_id']) ? $d['order_id'] : '');
+                    wc_update_order_item_meta($item_id, '_ftr_order_id', isset($d['order_id']) ? sanitize_text_field((string) $d['order_id']) : '');
                     $provider_status = self::extract_provider_status($d);
                     wc_update_order_item_meta($item_id, '_ftr_status', $provider_status);
-                    $note = 'FlashTopup order placed for "' . $item->get_name() . '" — ID ' . (isset($d['order_id']) ? $d['order_id'] : '?') . ', status ' . ($provider_status !== '' ? $provider_status : '?') . '.';
-                    if (!empty($res['raw']['data']['codes']) && is_array($res['raw']['data']['codes'])) {
-                        $codes = implode(', ', $res['raw']['data']['codes']);
-                        wc_update_order_item_meta($item_id, '_ftr_codes', $codes);
-                        $note .= ' Codes: ' . $codes;
+                    $note = 'Supplier order placed for "' . $item->get_name() . '" — ID ' . (isset($d['order_id']) ? $d['order_id'] : '?') . ', status ' . ($provider_status !== '' ? $provider_status : '?') . '.';
+                    $codes = self::normalize_codes(isset($d['codes']) ? $d['codes'] : array());
+                    if (!empty($codes)) {
+                        wc_update_order_item_meta($item_id, '_ftr_codes', implode(', ', $codes));
+                        $note .= ' Codes: ' . implode(', ', $codes);
                     }
                     $order->add_order_note($note);
                     self::log('Fulfilled order #' . $order_id . ' item ' . $item_id . ' (' . $service . ').');
+                    if ($provider_status !== '') {
+                        do_action('ftr_provider_item_status_updated', $order_id, $item_id, $provider_status);
+                    }
                 } else {
-                    $order->add_order_note('FlashTopup fulfillment FAILED for "' . $item->get_name() . '": ' . $res['message']);
+                    // A JSON 4xx is a definitive rejection (no order created
+                    // upstream). Transport errors/5xx are left open so the
+                    // reconciliation can discover an order that did go through.
+                    $definitive = $res['status'] >= 400 && $res['status'] < 500 && !empty($res['raw']);
+                    if ($definitive) {
+                        wc_update_order_item_meta($item_id, '_ftr_status', 'failed');
+                    }
+                    $order->add_order_note('Supplier fulfillment FAILED for "' . $item->get_name() . '": ' . $res['message'] . ($definitive ? '' : ' The order status will be re-checked automatically.'));
                     self::log('Fulfillment FAILED for order #' . $order_id . ' item ' . $item_id . ': ' . $res['message'], 'error');
                 }
+                delete_option($lock);
             } catch (\Throwable $e) {
+                if (isset($lock)) {
+                    delete_option($lock);
+                }
                 self::log('Fulfillment EXCEPTION for order #' . $order_id . ' item ' . $item_id . ': ' . $e->getMessage(), 'error');
             }
         }
 
         // The placement response may already be final. Complete immediately
-        // when every FlashTopup line item is confirmed completed server-side.
+        // when every supplier line item is confirmed completed server-side.
         self::maybe_complete_order($order);
 
         // Webhooks remain the primary sync method, but a short server-side
         // reconciliation prevents orders being stuck in Processing when a
         // callback is delayed, blocked by cache/firewall, or not delivered.
-        if ($order->get_status() !== 'completed') {
-            self::schedule_reconciliation($order_id, 60);
+        $order = wc_get_order($order_id);
+        if ($order && $order->get_status() !== 'completed' && self::order_contains_ftr_items($order)) {
+            self::schedule_reconciliation($order_id, 15);
         }
+    }
+
+    /** Delay (seconds) before the n-th reconciliation attempt of an order. */
+    private static function reconcile_delay($attempt)
+    {
+        $steps = array(15, 30, 45, 60, 120, 180, 300);
+        return isset($steps[$attempt]) ? $steps[$attempt] : 600;
+    }
+
+    /** Flatten supplier delivery codes (strings or objects) to strings. */
+    public static function normalize_codes($codes)
+    {
+        if (is_string($codes) && $codes !== '') {
+            $codes = array($codes);
+        }
+        $out = array();
+        foreach ((array) $codes as $c) {
+            if (is_array($c)) {
+                $parts = array();
+                foreach ($c as $k => $v) {
+                    if (is_scalar($v) && (string) $v !== '') {
+                        $parts[] = (is_string($k) ? $k . ': ' : '') . $v;
+                    }
+                }
+                $c = implode(' / ', $parts);
+            }
+            if (is_scalar($c) && (string) $c !== '') {
+                $out[] = sanitize_text_field((string) $c);
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Apply a supplier status payload (webhook, reconciliation or sweep) to
+     * one order line. Writes item meta, adds an order note and fires the
+     * update action only when something actually changed, then completes the
+     * WooCommerce order when every supplier line is completed.
+     *
+     * @return bool true when the item's status or codes changed.
+     */
+    public static function apply_provider_update($order_id, $item_id, array $payload, $source = 'webhook')
+    {
+        $order_id = (int) $order_id;
+        $item_id = (int) $item_id;
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return false;
+        }
+
+        $status = self::extract_provider_status($payload);
+        $old_status = (string) wc_get_order_item_meta($item_id, '_ftr_status', true);
+        $provider_order_id = isset($payload['order_id']) && is_scalar($payload['order_id']) ? sanitize_text_field((string) $payload['order_id']) : '';
+        $codes = self::normalize_codes(isset($payload['codes']) ? $payload['codes'] : array());
+        $codes_str = implode(', ', $codes);
+        $old_codes = (string) wc_get_order_item_meta($item_id, '_ftr_codes', true);
+        $note = isset($payload['note']) && is_scalar($payload['note']) ? sanitize_text_field((string) $payload['note']) : '';
+
+        if ($provider_order_id !== '') {
+            wc_update_order_item_meta($item_id, '_ftr_order_id', $provider_order_id);
+        }
+        // The supplier knows this order, so it was placed even if the
+        // placement response was lost: never place it a second time.
+        if ($status !== '' || $provider_order_id !== '') {
+            wc_update_order_item_meta($item_id, '_ftr_fulfilled', 1);
+        }
+        if ($status !== '') {
+            wc_update_order_item_meta($item_id, '_ftr_status', $status);
+        }
+        if ($codes_str !== '') {
+            wc_update_order_item_meta($item_id, '_ftr_codes', $codes_str);
+        }
+        if ($note !== '') {
+            wc_update_order_item_meta($item_id, '_ftr_note', $note);
+        }
+
+        $changed = ($status !== '' && $status !== $old_status) || ($codes_str !== '' && $codes_str !== $old_codes);
+        if (!$changed) {
+            return false;
+        }
+
+        $service_name = isset($payload['service_name']) && is_scalar($payload['service_name']) ? (string) $payload['service_name'] : '';
+        $order->add_order_note(sprintf(
+            'Supplier status %s via %s: %s (wc_%d_%d, order_id=%s)%s',
+            $status !== '' ? $status : '?',
+            $source,
+            $service_name,
+            $order_id,
+            $item_id,
+            $provider_order_id,
+            $codes_str !== '' ? ' codes: ' . $codes_str : ''
+        ));
+
+        do_action('ftr_provider_item_status_updated', $order_id, $item_id, $status);
+
+        if ($status === 'completed') {
+            $fresh = wc_get_order($order_id);
+            self::maybe_complete_order($fresh ? $fresh : $order);
+        } elseif ($status === 'failed' && !in_array($order->get_status(), array('failed', 'cancelled', 'refunded'), true)) {
+            $order->add_order_note('Supplier reported FAILED — review and refund manually.');
+        }
+        return true;
     }
 
     public function reconcile_order($order_id)
@@ -733,6 +923,10 @@ class FTR_Woo
             if (!$product || !self::is_ftr_order_item($item)) {
                 continue;
             }
+            $current = self::normalize_provider_status(wc_get_order_item_meta($item_id, '_ftr_status', true));
+            if (in_array($current, array('completed', 'failed'), true)) {
+                continue; // final — nothing left to check
+            }
 
             $provider_id = (string) wc_get_order_item_meta($item_id, '_ftr_order_id', true);
             $reference   = 'wc_' . $order_id . '_' . $item_id;
@@ -747,29 +941,29 @@ class FTR_Woo
             if (isset($d['data']) && is_array($d['data'])) {
                 $d = $d['data'];
             }
-            $status = self::extract_provider_status($d);
-            if ($status !== '') {
-                wc_update_order_item_meta($item_id, '_ftr_status', $status);
-            }
-            if (!empty($d['order_id'])) {
-                wc_update_order_item_meta($item_id, '_ftr_order_id', sanitize_text_field($d['order_id']));
-            }
-            if (!empty($d['codes']) && is_array($d['codes'])) {
-                wc_update_order_item_meta($item_id, '_ftr_codes', implode(', ', array_map('sanitize_text_field', $d['codes'])));
-            }
-            do_action('ftr_provider_item_status_updated', $order_id, $item_id, $status);
-            if ($status !== 'completed') {
+            self::apply_provider_update($order_id, $item_id, $d, 'reconciliation');
+            $status = self::normalize_provider_status(wc_get_order_item_meta($item_id, '_ftr_status', true));
+            if (!in_array($status, array('completed', 'failed'), true)) {
                 $has_pending = true;
             }
         }
 
         // Reload so HPOS/order-item caches cannot hide the status just saved.
-        if (function_exists('wc_get_order')) {
-            $order = wc_get_order($order_id);
+        $order = wc_get_order($order_id);
+        if (!$order) {
+            return;
         }
         self::maybe_complete_order($order);
-        if ($order->get_status() !== 'completed' && $has_pending) {
-            self::schedule_reconciliation($order_id, 300);
+        $order = wc_get_order($order_id);
+        if ($order && $order->get_status() !== 'completed' && $has_pending) {
+            $attempt = (int) $order->get_meta('_ftr_reconcile_attempts');
+            // Give up on per-order polling after ~24h; the minute sweep and
+            // webhooks still cover the order for three days.
+            if ($attempt < 150) {
+                $order->update_meta_data('_ftr_reconcile_attempts', $attempt + 1);
+                $order->save_meta_data();
+                self::schedule_reconciliation($order_id, self::reconcile_delay($attempt + 1));
+            }
         }
     }
 
@@ -822,7 +1016,7 @@ class FTR_Woo
     }
 
     /**
-     * Return true when an order line belongs to FlashTopup. Variation metadata
+     * Return true when an order line belongs to supplier. Variation metadata
      * is checked first, then the parent product, so imported variable products
      * keep working even when WooCommerce returns only one of those objects.
      */
@@ -884,7 +1078,7 @@ class FTR_Woo
         $found = false;
         foreach ($order->get_items() as $item_id => $item) {
             // Security: never auto-complete a mixed order. Every product line
-            // must be a FlashTopup line and must be final on the provider.
+            // must be a supplier line and must be final on the provider.
             if (!self::is_ftr_order_item($item)) {
                 return false;
             }
@@ -901,7 +1095,7 @@ class FTR_Woo
             return false;
         }
 
-        $note = 'Completed automatically: every FlashTopup item is validated/completed on the provider server.';
+        $note = 'Completed automatically: every supplier item is validated/completed on the supplier server.';
         $order->update_status('completed', $note, true);
 
         // Verify the persisted state. This extra save is only a fallback for
@@ -955,7 +1149,7 @@ class FTR_Woo
         return false;
     }
 
-    /** Return true when the order contains at least one FlashTopup line. */
+    /** Return true when the order contains at least one supplier line. */
     private static function order_contains_ftr_items($order)
     {
         if (!$order instanceof WC_Order) {
@@ -1070,8 +1264,8 @@ class FTR_Woo
         $timestamp = time() + max(5, (int) $delay);
         $args = array((int) $order_id);
         if (function_exists('as_next_scheduled_action') && function_exists('as_schedule_single_action')) {
-            if (!as_next_scheduled_action('ftr_wallet_completion_check', $args, 'flashtopup-reseller')) {
-                as_schedule_single_action($timestamp, 'ftr_wallet_completion_check', $args, 'flashtopup-reseller');
+            if (!as_next_scheduled_action('ftr_wallet_completion_check', $args, FTR_AS_GROUP)) {
+                as_schedule_single_action($timestamp, 'ftr_wallet_completion_check', $args, FTR_AS_GROUP);
             }
         } elseif (!wp_next_scheduled('ftr_wallet_completion_check', $args)) {
             wp_schedule_single_event($timestamp, 'ftr_wallet_completion_check', $args);
@@ -1080,24 +1274,28 @@ class FTR_Woo
 
     private static function schedule_reconciliation($order_id, $delay)
     {
-        $timestamp = time() + max(30, (int) $delay);
+        $timestamp = time() + max(10, (int) $delay);
         if (function_exists('as_next_scheduled_action') && function_exists('as_schedule_single_action')) {
-            if (!as_next_scheduled_action('ftr_reconcile_order', array((int) $order_id), 'flashtopup-reseller')) {
-                as_schedule_single_action($timestamp, 'ftr_reconcile_order', array((int) $order_id), 'flashtopup-reseller');
+            if (!as_next_scheduled_action('ftr_reconcile_order', array((int) $order_id), FTR_AS_GROUP)) {
+                as_schedule_single_action($timestamp, 'ftr_reconcile_order', array((int) $order_id), FTR_AS_GROUP);
             }
         } elseif (!wp_next_scheduled('ftr_reconcile_order', array((int) $order_id))) {
             wp_schedule_single_event($timestamp, 'ftr_reconcile_order', array((int) $order_id));
         }
     }
 
+    /**
+     * Product-page assets are printed inline under neutral handles so the
+     * page source never references this plugin's folder or the supplier.
+     */
     public function assets()
     {
         if (function_exists('is_product') && is_product()) {
-            wp_enqueue_style('ftr-woo', FTR_URL . 'assets/ft-woo.css', array(), FTR_VERSION);
-            wp_enqueue_script('ftr-woo', FTR_URL . 'assets/ft-woo.js', array(), FTR_VERSION, true);
-            wp_localize_script('ftr-woo', 'FTRWoo', array(
+            FTR_Privacy::inline_style('topup-fields', 'ft-woo.css');
+            FTR_Privacy::inline_script('topup-fields', 'ft-woo.js', 'TopupFields', array(
                 'ajaxUrl' => admin_url('admin-ajax.php'),
                 'nonce'   => wp_create_nonce('ftr_front'),
+                'action'  => 'topup_verify_player',
             ));
         }
     }

@@ -1,6 +1,5 @@
-/* FlashTopup Reseller — storefront ([flashtopup_reseller]).
-   Self-contained + theme-agnostic: scoped under .ftr, neutral light surface with
-   FlashTopup gold accents, and an automatic dark variant via prefers-color-scheme.
+/* Top-up storefront ([topup_store]). Self-contained, theme-agnostic, scoped under .ftr,
+   with an automatic dark variant via prefers-color-scheme.
    Class names are shared with ft-reseller.js / the shortcode markup — keep stable. */
 .ftr {
   --ftr-gold: #f6ac37;

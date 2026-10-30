@@ -38,8 +38,8 @@ class FTR_Admin
     public function menu()
     {
         add_menu_page(
-            'FlashTopup Reseller',
-            'FlashTopup',
+            'Top-Up Connector',
+            'Top-Up',
             'manage_options',
             'ftr-settings',
             array($this, 'render_settings'),
@@ -58,20 +58,46 @@ class FTR_Admin
             wp_die('Not allowed.');
         }
         $s = ftr_settings();
-        $s['api_id']              = isset($_POST['api_id']) ? sanitize_text_field(wp_unslash($_POST['api_id'])) : '';
-        $s['api_key']             = isset($_POST['api_key']) ? trim((string) wp_unslash($_POST['api_key'])) : '';
-        $s['base_url']            = isset($_POST['base_url']) ? esc_url_raw(wp_unslash($_POST['base_url'])) : $s['base_url'];
-        $s['sandbox']             = isset($_POST['sandbox']) ? 1 : 0;
-        $s['check_id']            = isset($_POST['check_id']) ? 1 : 0;
-        $s['auto_complete']       = isset($_POST['auto_complete']) ? 1 : 0;
-        $s['markup']              = isset($_POST['markup']) ? max(0, (float) $_POST['markup']) : 0;
-        $s['conversion_rate']     = isset($_POST['conversion_rate']) ? max(0, (float) $_POST['conversion_rate']) : 1.0;
-        if ((float) $s['conversion_rate'] <= 0) {
-            $s['conversion_rate'] = 1.0;
+        $tab = isset($_POST['tab']) ? sanitize_key($_POST['tab']) : 'connection';
+
+        // Only touch the fields of the submitted tab. Previously every save
+        // rewrote all checkboxes, so saving "Connection" silently turned off
+        // order auto-completion and saving "WooCommerce" disabled Check-ID
+        // and Sandbox.
+        switch ($tab) {
+            case 'connection':
+                $s['api_id']   = isset($_POST['api_id']) ? trim(sanitize_text_field(wp_unslash($_POST['api_id']))) : '';
+                $s['api_key']  = isset($_POST['api_key']) ? trim((string) wp_unslash($_POST['api_key'])) : '';
+                $base          = isset($_POST['base_url']) ? untrailingslashit(trim(esc_url_raw(wp_unslash($_POST['base_url'])))) : '';
+                $s['base_url'] = $base !== '' ? $base : ftr_default_settings()['base_url'];
+                $s['sandbox']  = isset($_POST['sandbox']) ? 1 : 0;
+                $s['check_id'] = isset($_POST['check_id']) ? 1 : 0;
+                break;
+            case 'woocommerce':
+                $s['auto_complete']   = isset($_POST['auto_complete']) ? 1 : 0;
+                $s['markup']          = isset($_POST['markup']) ? max(0, (float) $_POST['markup']) : 0;
+                $s['conversion_rate'] = isset($_POST['conversion_rate']) ? max(0, (float) $_POST['conversion_rate']) : 1.0;
+                if ((float) $s['conversion_rate'] <= 0) {
+                    $s['conversion_rate'] = 1.0;
+                }
+                $s['conversion_currency'] = isset($_POST['conversion_currency']) ? strtoupper(substr(sanitize_text_field(wp_unslash($_POST['conversion_currency'])), 0, 6)) : 'USD';
+                $s['public_name'] = isset($_POST['public_name']) ? sanitize_text_field(wp_unslash($_POST['public_name'])) : '';
+                break;
+            case 'sync':
+                $s['auto_sync']     = isset($_POST['auto_sync']) ? 1 : 0;
+                $s['sync_interval'] = isset($_POST['sync_interval']) ? max(1, min(1440, (int) $_POST['sync_interval'])) : 5;
+                break;
+            case 'webhook':
+                $s['legacy_webhook'] = isset($_POST['legacy_webhook']) ? 1 : 0;
+                if (!empty($_POST['regenerate_token'])) {
+                    $s['webhook_token'] = ftr_generate_token();
+                }
+                break;
         }
-        $s['conversion_currency'] = isset($_POST['conversion_currency']) ? strtoupper(substr(sanitize_text_field(wp_unslash($_POST['conversion_currency'])), 0, 6)) : 'USD';
-        update_option(FTR_OPTION, $s);
-        wp_safe_redirect(add_query_arg(array('page' => 'ftr-settings', 'tab' => isset($_POST['tab']) ? sanitize_key($_POST['tab']) : 'connection', 'ftr_msg' => 'saved'), admin_url('admin.php')));
+        update_option(FTR_OPTION, $s, false);
+        delete_transient('ftr_conn_check');
+        FTR_Sync::schedule();
+        wp_safe_redirect(add_query_arg(array('page' => 'ftr-settings', 'tab' => $tab, 'ftr_msg' => 'saved'), admin_url('admin.php')));
         exit;
     }
 
@@ -80,21 +106,25 @@ class FTR_Admin
         $s = ftr_settings();
         $msg = isset($_GET['ftr_msg']) ? sanitize_text_field(wp_unslash($_GET['ftr_msg'])) : '';
         $tab = isset($_GET['tab']) ? sanitize_key($_GET['tab']) : 'connection';
-        if (!in_array($tab, array('connection', 'woocommerce', 'webhook', 'diagnostics'), true)) {
+        if (!in_array($tab, array('connection', 'woocommerce', 'sync', 'webhook', 'diagnostics'), true)) {
             $tab = 'connection';
         }
 
         // Live wallet preview (no creds = skip).
         $conn = null;
         if ($s['api_id'] !== '' && $s['api_key'] !== '') {
-            $api = new FTR_API($s);
-            $conn = $api->balance();
+            $conn = get_transient('ftr_conn_check');
+            if (!is_array($conn)) {
+                $api = new FTR_API($s);
+                $conn = $api->balance();
+                set_transient('ftr_conn_check', $conn, 60);
+            }
         }
         ?>
         <div class="wrap ftr-wrap">
             <header class="ftr-hero">
                 <div class="ftr-hero-left">
-                    <h1>FlashTopup Reseller</h1>
+                    <h1>Top-Up Connector</h1>
                     <p class="ftr-hero-sub">Sign, import, sell. Version <?php echo esc_html(FTR_VERSION); ?>.</p>
                 </div>
                 <div class="ftr-hero-right">
@@ -110,6 +140,7 @@ class FTR_Admin
                 <?php foreach (array(
                     'connection'  => 'Connection',
                     'woocommerce' => 'WooCommerce',
+                    'sync'        => 'Sync',
                     'webhook'     => 'Webhook',
                     'diagnostics' => 'Diagnostics',
                 ) as $key => $label) : ?>
@@ -127,6 +158,9 @@ class FTR_Admin
             switch ($tab) {
                 case 'woocommerce':
                     $this->tab_woocommerce($s);
+                    break;
+                case 'sync':
+                    $this->tab_sync($s);
                     break;
                 case 'webhook':
                     $this->tab_webhook($s);
@@ -159,7 +193,7 @@ class FTR_Admin
             return;
         }
         $msg = $conn['message'] ?? 'Unknown error';
-        echo '<span class="ftr-pill ftr-pill-bad">Connection failed</span> <span class="ftr-muted">' . esc_html($msg) . '</span>';
+        echo '<span class="ftr-pill ftr-pill-bad">Connection failed</span> <span class="ftr-hero-error">' . esc_html($msg) . '</span>';
     }
 
     /* ---- TAB: Connection ---- */
@@ -182,12 +216,15 @@ class FTR_Admin
                     <th><label for="api_key">API Secret</label></th>
                     <td>
                         <input name="api_key" id="api_key" type="password" class="regular-text" value="<?php echo esc_attr($s['api_key']); ?>" autocomplete="off" />
-                        <p class="description">From your FlashTopup reseller dashboard → API keys. Stored on your server only.</p>
+                        <p class="description">From your supplier reseller dashboard → API keys. Stored on your server only.</p>
                     </td>
                 </tr>
                 <tr>
                     <th><label for="base_url">API Base URL</label></th>
-                    <td><input name="base_url" id="base_url" type="url" class="regular-text" value="<?php echo esc_attr($s['base_url']); ?>" /></td>
+                    <td>
+                        <input name="base_url" id="base_url" type="url" class="regular-text" value="<?php echo esc_attr($s['base_url']); ?>" />
+                        <p class="description">Server IP to whitelist in the supplier panel (if it asks for one): <code><?php echo esc_html(isset($_SERVER['SERVER_ADDR']) ? (string) $_SERVER['SERVER_ADDR'] : 'unknown'); ?></code> — your host may use a different outbound IP; check the Diagnostics tab.</p>
+                    </td>
                 </tr>
                 <tr>
                     <th>Options</th>
@@ -216,7 +253,7 @@ class FTR_Admin
             <p class="ftr-muted">
                 Imported prices come in <strong>USD</strong>. Apply a conversion rate (e.g. <code>134.50</code> for USD→NPR)
                 and an optional sell markup so prices display in your local currency at your margin.
-                Your FlashTopup wallet is still debited in USD at the wholesale price.
+                Your supplier wallet is still debited in USD at the wholesale price.
             </p>
             <table class="form-table" role="presentation">
                 <tr>
@@ -252,11 +289,18 @@ class FTR_Admin
                     </td>
                 </tr>
                 <tr>
+                    <th><label for="public_name">Name shown to customers</label></th>
+                    <td>
+                        <input name="public_name" id="public_name" type="text" class="regular-text" value="<?php echo esc_attr($s['public_name']); ?>" placeholder="<?php echo esc_attr(get_bloginfo('name')); ?>" />
+                        <p class="description">Any customer-facing message that would mention the supplier uses this name instead. Empty = your site name.</p>
+                    </td>
+                </tr>
+                <tr>
                     <th>Order auto-completion</th>
                     <td>
                         <label><input type="checkbox" name="auto_complete" value="1" <?php checked($s['auto_complete'], 1); ?> />
-                        Mark WooCommerce orders <code>Completed</code> when the FlashTopup API, webhook, or status reconciliation reports Completed</label>
-                        <p class="description"><strong>Enabled by default.</strong> WooCommerce completes the order only after every FlashTopup item is confirmed completed by the provider. Turn it off only for manual review.</p>
+                        Mark WooCommerce orders <code>Completed</code> when the supplier API, webhook, or status sync reports Completed</label>
+                        <p class="description"><strong>Enabled by default.</strong> WooCommerce completes the order only after every supplier item is confirmed completed. Turn it off only for manual review.</p>
                     </td>
                 </tr>
             </table>
@@ -268,12 +312,118 @@ class FTR_Admin
             <p>
                 <?php if (FTR_Woo::active()) : ?>
                     <strong class="ftr-ok">Active</strong><?php echo defined('WC_VERSION') ? ' (v' . esc_html(WC_VERSION) . ')' : ''; ?>
-                    &nbsp;&middot;&nbsp; FlashTopup products in shop: <strong><?php echo (int) FTR_Woo::ft_product_count(); ?></strong>
+                    &nbsp;&middot;&nbsp; Supplier products in shop: <strong><?php echo (int) FTR_Woo::ft_product_count(); ?></strong>
                     &nbsp;&middot;&nbsp; <a href="<?php echo esc_url(admin_url('edit.php?post_type=product')); ?>">View WooCommerce products</a>
                 <?php else : ?>
                     <strong class="ftr-bad">Not active</strong>. Install &amp; activate <a href="<?php echo esc_url(admin_url('plugin-install.php?s=woocommerce&tab=search&type=term')); ?>">WooCommerce</a> first.
                 <?php endif; ?>
             </p>
+        </div>
+        <?php
+    }
+
+    /* ---- TAB: Sync ---- */
+
+    private function tab_sync($s)
+    {
+        $last = get_option(FTR_Sync::LAST, array());
+        $sweep = get_option(FTR_Sync::SWEEP_LAST, array());
+        $state = get_option(FTR_Sync::STATE, array());
+        $next_catalog = wp_next_scheduled(FTR_Sync::CRON_CATALOG);
+        $next_orders = wp_next_scheduled(FTR_Sync::CRON_ORDERS);
+        $fmt = function ($ts) {
+            return $ts ? esc_html(wp_date('Y-m-d H:i:s', (int) $ts)) . ' <span class="ftr-muted">(' . esc_html(human_time_diff((int) $ts)) . ($ts > time() ? ' from now' : ' ago') . ')</span>' : '<span class="ftr-muted">—</span>';
+        };
+        $cron_cmd = 'wget -q -O - ' . site_url('wp-cron.php?doing_wp_cron') . ' >/dev/null 2>&1';
+        ?>
+        <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="ftr-card">
+            <input type="hidden" name="action" value="ftr_save_settings" />
+            <input type="hidden" name="tab" value="sync" />
+            <?php wp_nonce_field('ftr_settings'); ?>
+            <h2 class="ftr-card-title">Automatic synchronization</h2>
+            <p class="ftr-muted">
+                Orders: supplier webhooks update WooCommerce instantly, and every placed order that is not final yet
+                is re-checked with the supplier <strong>every minute</strong>. Catalog: prices, stock, packages and
+                fields of every imported product are refreshed in the background, and instantly when the supplier
+                sends a product webhook. New supplier products are never published automatically.
+            </p>
+            <table class="form-table" role="presentation">
+                <tr>
+                    <th>Background catalog sync</th>
+                    <td><label><input type="checkbox" name="auto_sync" value="1" <?php checked($s['auto_sync'], 1); ?> /> Keep imported products synchronized with the supplier automatically</label></td>
+                </tr>
+                <tr>
+                    <th><label for="sync_interval">Catalog sync every</label></th>
+                    <td>
+                        <select name="sync_interval" id="sync_interval">
+                            <?php foreach (array(1, 2, 5, 10, 15, 30, 60) as $m) : ?>
+                                <option value="<?php echo (int) $m; ?>" <?php selected((int) $s['sync_interval'], $m); ?>><?php echo (int) $m; ?> minute<?php echo $m > 1 ? 's' : ''; ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </td>
+                </tr>
+            </table>
+            <?php submit_button('Save sync settings'); ?>
+        </form>
+
+        <div class="ftr-card">
+            <h2 class="ftr-card-title">Status</h2>
+            <table class="form-table" role="presentation">
+                <tr><th>Next catalog sync</th><td><?php echo $next_catalog ? $fmt($next_catalog) : '<strong class="ftr-bad">not scheduled</strong>'; ?></td></tr>
+                <tr><th>Last catalog sync</th><td>
+                    <?php
+                    if (!empty($last['at'])) {
+                        echo $fmt($last['at']) . '<br />';
+                        if (!empty($last['error'])) {
+                            echo '<strong class="ftr-bad">' . esc_html($last['error']) . '</strong>';
+                        } elseif (isset($last['products'])) {
+                            echo esc_html(sprintf('%d product(s) refreshed, %d error(s), %d missing from the supplier catalog, %ds.', (int) $last['ok'], count((array) $last['errors']), (int) $last['missing'], (int) $last['duration']));
+                            foreach ((array) $last['errors'] as $err) {
+                                echo '<br /><span class="ftr-bad ftr-small">' . esc_html($err) . '</span>';
+                            }
+                        } elseif (!empty($last['message'])) {
+                            echo esc_html($last['message']);
+                        }
+                    } else {
+                        echo '<span class="ftr-muted">never</span>';
+                    }
+                    if (!empty($state['queue'])) {
+                        echo '<br /><em>In progress: ' . (int) $state['pos'] . ' / ' . count($state['queue']) . '</em>';
+                    }
+                    ?>
+                </td></tr>
+                <tr><th>Next order check</th><td><?php echo $next_orders ? $fmt($next_orders) : '<strong class="ftr-bad">not scheduled</strong>'; ?></td></tr>
+                <tr><th>Last order check</th><td>
+                    <?php
+                    if (!empty($sweep['at'])) {
+                        echo $fmt($sweep['at']) . '<br />' . esc_html(sprintf('%d pending order line(s) checked, %d updated.', (int) $sweep['checked'], (int) $sweep['updated']));
+                        if (!empty($sweep['error'])) {
+                            echo '<br /><span class="ftr-bad ftr-small">Bulk status: ' . esc_html($sweep['error']) . ' (fell back to single lookups)</span>';
+                        }
+                    } else {
+                        echo '<span class="ftr-muted">never</span>';
+                    }
+                    ?>
+                </td></tr>
+                <tr><th>WP-Cron</th><td><?php echo (defined('DISABLE_WP_CRON') && DISABLE_WP_CRON) ? 'Disabled in wp-config.php — a server cron job is required (below).' : 'Enabled (runs when the site receives visits).'; ?></td></tr>
+            </table>
+            <p>
+                <button type="button" class="button button-primary" id="ftr-sync-now">Synchronize now</button>
+                <span class="description" id="ftr-sync-now-msg"></span>
+            </p>
+        </div>
+
+        <div class="ftr-card">
+            <h2 class="ftr-card-title">Exact timing (recommended)</h2>
+            <p class="ftr-muted">
+                WordPress only runs scheduled tasks when someone visits the site. For syncs that run on time even at
+                night, add this cron job in your hosting panel (Hostinger: <em>Advanced → Cron Jobs</em>), set to run
+                <strong>every minute</strong>:
+            </p>
+            <div class="ftr-copy">
+                <input id="ftr-cron-cmd" type="text" readonly value="<?php echo esc_attr($cron_cmd); ?>" />
+                <button type="button" class="button" data-copy="ftr-cron-cmd">Copy</button>
+            </div>
         </div>
         <?php
     }
@@ -289,22 +439,32 @@ class FTR_Admin
         }
         ?>
         <div class="ftr-card">
-            <h2 class="ftr-card-title">Receive order-update webhooks</h2>
+            <h2 class="ftr-card-title">Receive order &amp; catalog webhooks</h2>
             <p class="ftr-muted">
-                Copy this URL into the <strong>callback_url</strong> field of your FlashTopup reseller account
-                (Reseller panel → Settings → Webhook). FlashTopup signs every event with HMAC-SHA256 using your
-                API Secret; this plugin verifies the signature, a +/-5 minute timestamp window, and a single-use
-                nonce before applying the update.
+                Copy this <strong>private URL</strong> into the <strong>callback_url</strong> field of your supplier
+                reseller account (Reseller panel → Settings → Webhook). It does not contain the supplier's name and
+                is not listed in the public REST API index. Every event must be signed with HMAC-SHA256 using your
+                API Secret; the signature, a +/-5 minute timestamp window, and a single-use nonce are verified.
+                Order events update WooCommerce instantly; product/price/stock events refresh the product instantly.
             </p>
             <div class="ftr-copy">
                 <input id="ftr-webhook-url" type="text" readonly value="<?php echo esc_attr($url); ?>" />
                 <button type="button" class="button button-primary" data-copy="ftr-webhook-url">Copy</button>
             </div>
-            <p class="ftr-muted ftr-small">
-                <strong>Heads up:</strong> the URL is reachable to the internet, but only requests signed with
-                <em>your</em> API Secret are accepted. Foreign or replayed requests are rejected and counted in
-                the log below.
-            </p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+                <input type="hidden" name="action" value="ftr_save_settings" />
+                <input type="hidden" name="tab" value="webhook" />
+                <?php wp_nonce_field('ftr_settings'); ?>
+                <p>
+                    <label><input type="checkbox" name="legacy_webhook" value="1" <?php checked($s['legacy_webhook'], 1); ?> />
+                    Also accept the old URL <code><?php echo esc_html(ftr_legacy_webhook_url()); ?></code></label><br />
+                    <span class="description">It contains the supplier's name. Keep it on only until you have pasted the new URL in the supplier panel, then turn it off.</span>
+                </p>
+                <p>
+                    <label><input type="checkbox" name="regenerate_token" value="1" /> Generate a new private URL (the current one stops working)</label>
+                </p>
+                <?php submit_button('Save webhook settings', 'secondary'); ?>
+            </form>
         </div>
 
         <div class="ftr-card">
@@ -348,6 +508,8 @@ class FTR_Admin
                 <tr><th>PHP</th><td><code><?php echo esc_html(PHP_VERSION); ?></code></td></tr>
                 <tr><th>cURL</th><td><code><?php echo esc_html(function_exists('curl_version') ? curl_version()['version'] : 'unavailable'); ?></code></td></tr>
                 <tr><th>Webhook URL</th><td><code><?php echo esc_html(ftr_webhook_url()); ?></code></td></tr>
+                <tr><th>Outbound IP (as seen by the internet)</th><td><code><?php echo esc_html($this->outbound_ip()); ?></code> <span class="description">Whitelist this IP in the supplier panel if it restricts API access by IP.</span></td></tr>
+                <tr><th>Server time (UTC)</th><td><code><?php echo esc_html(gmdate('Y-m-d H:i:s')); ?></code> <span class="description">Signed requests fail if this clock is off by more than a few minutes.</span></td></tr>
                 <tr><th>API Base URL</th><td><code><?php echo esc_html($s['base_url']); ?></code></td></tr>
                 <tr><th>API ID configured</th><td><?php echo $s['api_id'] !== '' ? '<strong class="ftr-ok">yes</strong>' : '<strong class="ftr-bad">no</strong>'; ?></td></tr>
                 <tr><th>API Secret configured</th><td><?php echo $s['api_key'] !== '' ? '<strong class="ftr-ok">yes</strong>' : '<strong class="ftr-bad">no</strong>'; ?></td></tr>
@@ -360,6 +522,21 @@ class FTR_Admin
             </p>
         </div>
         <?php
+    }
+
+    /** Public outbound IP of this server (cached for a day). */
+    private function outbound_ip()
+    {
+        $ip = get_transient('ftr_outbound_ip');
+        if ($ip === false) {
+            $r = wp_remote_get('https://api.ipify.org', array('timeout' => 5));
+            $ip = (!is_wp_error($r) && (int) wp_remote_retrieve_response_code($r) === 200) ? trim((string) wp_remote_retrieve_body($r)) : '';
+            if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+                $ip = '';
+            }
+            set_transient('ftr_outbound_ip', $ip, $ip !== '' ? DAY_IN_SECONDS : 10 * MINUTE_IN_SECONDS);
+        }
+        return $ip !== '' ? $ip : 'unknown';
     }
 
     /* ---------------- Import (unchanged behaviour, lighter wrapper) ---------------- */
@@ -384,36 +561,17 @@ class FTR_Admin
             if ($code === '' || !in_array($code, $selected, true)) {
                 continue;
             }
-            $item = array(
-                'product_code'    => $code,
-                'product_id'      => $p['product_id'] ?? null,
-                'name'            => $p['name'] ?? $code,
-                'image_url'       => $p['image_url'] ?? '',
-                'product_type'    => $p['product_type'] ?? 'topup',
-                'validation_code' => $p['validation_code'] ?? '',
-                'check_id_status' => $p['check_id_status'] ?? 'inactive',
-                'fields'          => isset($p['fields']) && is_array($p['fields']) ? $p['fields'] : array(),
-                'server'          => isset($p['server']) && is_array($p['server']) ? $p['server'] : array(),
-                'services'        => array(),
-            );
+            $item = FTR_Sync::catalog_item($p);
             if ($with_services) {
-                $sresp = $api->services($code, $item['product_type'], 1, 500);
-                if (!empty($sresp['ok']) && isset($sresp['data']['service']) && is_array($sresp['data']['service'])) {
-                    foreach ($sresp['data']['service'] as $svc) {
-                        $item['services'][] = array(
-                            'service_code' => $svc['service_code'] ?? '',
-                            'service_name' => $svc['service_name'] ?? '',
-                            'price'        => $svc['price'] ?? '0',
-                            'currency'     => $svc['currency'] ?? 'USD',
-                            'max_quantity' => isset($svc['max_quantity']) ? (int) $svc['max_quantity'] : 1,
-                            'in_stock'     => isset($svc['in_stock']) ? (bool) $svc['in_stock'] : true,
-                        );
-                    }
-                }
+                $services = FTR_Sync::services_from_response($api->services($code, $item['product_type'], 1, 500));
+                $item['services'] = is_array($services) ? $services : array();
             }
             $store[$code] = $item;
         }
-        update_option(FTR_PRODUCTS, $store);
+        // Merge: importing a subset must not forget previously imported products.
+        $existing = get_option(FTR_PRODUCTS, array());
+        $store = array_merge(is_array($existing) ? $existing : array(), $store);
+        update_option(FTR_PRODUCTS, $store, false);
         $synced = FTR_Woo::active() ? FTR_Woo::sync($store) : 0;
         wp_safe_redirect(add_query_arg(array(
             'page' => 'ftr-import',

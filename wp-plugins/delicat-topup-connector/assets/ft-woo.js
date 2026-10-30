@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  if (typeof FTRWoo === "undefined") return;
+  if (typeof TopupFields === "undefined") return;
 
   function setStatus(box, state, text) {
     if (!box) return;
@@ -52,12 +52,12 @@
     setStatus(msg, "loading", "Vérification du compte…");
 
     var body = new URLSearchParams();
-    body.append("action", "ftr_check_id");
-    body.append("nonce", FTRWoo.nonce);
+    body.append("action", TopupFields.action || "topup_verify_player");
+    body.append("nonce", TopupFields.nonce);
     body.append("product_code", product);
     Object.keys(fields).forEach(function (k) { body.append("fields[" + k + "]", fields[k]); });
 
-    fetch(FTRWoo.ajaxUrl, { method: "POST", body: body, credentials: "same-origin" })
+    fetch(TopupFields.ajaxUrl, { method: "POST", body: body, credentials: "same-origin" })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         btn.disabled = false;

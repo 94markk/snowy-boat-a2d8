@@ -23,7 +23,7 @@ final class FTR_Delicat_App_Sync {
   $existing=wp_list_pluck((array)$fields,'key');
   foreach(self::raw_fields($product_id) as $f){
    $name=sanitize_key($f['name']??''); if(!$name||in_array($name,$existing,true)) continue;
-   $fields[]=['key'=>$name,'source'=>'flashtopup','type'=>'text','label'=>sanitize_text_field($f['label']??$name),'required'=>!empty($f['required']),'placeholder'=>sanitize_text_field($f['placeholder']??''),'help'=>'','validation'=>'text'];
+   $fields[]=['key'=>$name,'source'=>'topup','type'=>'text','label'=>sanitize_text_field($f['label']??$name),'required'=>!empty($f['required']),'placeholder'=>sanitize_text_field($f['placeholder']??''),'help'=>'','validation'=>'text'];
   }
   return array_values($fields);
  }
@@ -36,7 +36,7 @@ final class FTR_Delicat_App_Sync {
    $has=true; $status=(string)wc_get_order_item_meta($item_id,'_ftr_status',true);
    if(!in_array(strtolower($status),['completed','success','successful','delivered','validated','approved','confirmed'],true)) $complete=false;
   }
-  if($has) $steps[]=['key'=>'provider_delivery','title'=>'Livraison FlashTopup','done'=>$complete];
+  if($has) $steps[]=['key'=>'provider_delivery','title'=>'Livraison','done'=>$complete];
   return $steps;
  }
  public static function order_changed($order_id,$from,$to,$order){ self::emit($order_id,'order_status',['from'=>$from,'to'=>$to]); }
@@ -45,7 +45,7 @@ final class FTR_Delicat_App_Sync {
  private static function emit($order_id,$type,$extra=[]){
   $order=wc_get_order($order_id); if(!$order) return;
   do_action('delicat_app_order_changed',(int)$order_id,$type,$extra);
-  do_action('delicat_app_content_changed','order_updated',array_merge(['order_id'=>(int)$order_id,'user_id'=>(int)$order->get_user_id(),'source'=>'flashtopup-reseller'],$extra));
+  do_action('delicat_app_content_changed','order_updated',array_merge(['order_id'=>(int)$order_id,'user_id'=>(int)$order->get_user_id(),'source'=>'topup-connector'],$extra));
   if($order->get_user_id()) do_action('delicat_app_push',(int)$order->get_user_id(),'Mise à jour de commande','Votre commande #'.$order->get_order_number().' a été mise à jour.',['type'=>'order','order_id'=>(int)$order_id]);
  }
 }

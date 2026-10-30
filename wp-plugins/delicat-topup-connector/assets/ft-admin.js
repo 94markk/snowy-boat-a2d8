@@ -3,8 +3,7 @@
   if (typeof FTRAdmin === "undefined") return;
 
   // ---- Generic copy-to-clipboard for any [data-copy="<elementId>"] button.
-  // Used by the Webhook tab to copy the webhook URL into the FlashTopup
-  // reseller panel.
+  // Used by the Webhook tab (callback URL) and the Sync tab (cron command).
   document.addEventListener("click", function (e) {
     var btn = e.target.closest("[data-copy]");
     if (!btn) return;
@@ -330,6 +329,25 @@
         label.textContent = "";
         addLog("✕ Network error starting synchronization.", "ftr-log-err");
         m.setClosable(true);
+      });
+    });
+  }
+  /* ---------- Sync tab: run a synchronization now ---------- */
+  var syncNow = document.getElementById("ftr-sync-now");
+  if (syncNow) {
+    syncNow.addEventListener("click", function () {
+      var out = document.getElementById("ftr-sync-now-msg");
+      syncNow.disabled = true;
+      out.textContent = "Synchronizing with the supplier…";
+      post("ftr_sync_now", {}).then(function (res) {
+        syncNow.disabled = false;
+        out.textContent = (res && res.data && res.data.message) || (res && res.success ? "Done." : "Synchronization failed.");
+        out.className = "description " + (res && res.success ? "ftr-ok" : "ftr-bad");
+        if (res && res.success) setTimeout(function () { window.location.reload(); }, 1500);
+      }).catch(function () {
+        syncNow.disabled = false;
+        out.textContent = "Network error.";
+        out.className = "description ftr-bad";
       });
     });
   }

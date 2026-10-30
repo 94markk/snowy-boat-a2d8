@@ -11,10 +11,16 @@ class FTR_Ajax
 {
     public function __construct()
     {
-        add_action('wp_ajax_ftr_check_id', array($this, 'check_id'));
-        add_action('wp_ajax_nopriv_ftr_check_id', array($this, 'check_id'));
+        // Player-ID check (public). The old action name stays registered so
+        // pages cached before the update keep working.
+        foreach (array('topup_verify_player', 'ftr_check_id') as $action) {
+            add_action('wp_ajax_' . $action, array($this, 'check_id'));
+            add_action('wp_ajax_nopriv_' . $action, array($this, 'check_id'));
+        }
+        // Direct supplier orders debit the wallet without any customer
+        // payment, so they are restricted to administrators. Customers buy
+        // through WooCommerce checkout, which places the order once paid.
         add_action('wp_ajax_ftr_order', array($this, 'order'));
-        add_action('wp_ajax_nopriv_ftr_order', array($this, 'order'));
 
         // Admin-only (stepped import + balance preview + diagnostics).
         add_action('wp_ajax_ftr_check_balance', array($this, 'check_balance'));
@@ -23,6 +29,29 @@ class FTR_Ajax
         add_action('wp_ajax_ftr_sync_prepare', array($this, 'sync_prepare'));
         add_action('wp_ajax_ftr_sync_step', array($this, 'sync_step'));
         add_action('wp_ajax_ftr_woo_selftest', array($this, 'woo_selftest'));
+        add_action('wp_ajax_ftr_sync_now', array($this, 'sync_now'));
+    }
+
+    /** Public JSON error with the supplier's name removed. */
+    private function public_error($message)
+    {
+        wp_send_json_error(array('message' => FTR_Privacy::scrub($message)));
+    }
+
+    /**
+     * Basic per-IP throttle for the public check endpoint so bots cannot use
+     * this site to hammer the supplier API (which could get the key blocked).
+     */
+    private function throttle($bucket, $limit, $window)
+    {
+        $ip = isset($_SERVER['REMOTE_ADDR']) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+        $key = 'ftr_rl_' . $bucket . '_' . md5($ip);
+        $hits = (int) get_transient($key);
+        if ($hits >= $limit) {
+            return false;
+        }
+        set_transient($key, $hits + 1, $window);
+        return true;
     }
 
     private function verify()
@@ -70,6 +99,9 @@ class FTR_Ajax
         if (empty($settings['check_id'])) {
             wp_send_json_error(array('message' => 'ID check is disabled.'));
         }
+        if (!current_user_can('manage_options') && !$this->throttle('check', 15, 60)) {
+            wp_send_json_error(array('message' => 'Too many attempts. Please wait a minute and try again.'));
+        }
 
         $code = isset($_POST['product_code']) ? sanitize_text_field(wp_unslash($_POST['product_code'])) : '';
         $product = $this->product($code);
@@ -92,18 +124,34 @@ class FTR_Ajax
         $res = $api->check_id($product['validation_code'], $user_id, $server_id);
 
         if (empty($res['ok'])) {
-            wp_send_json_error(array('message' => $res['message']));
+            // Never forward raw supplier/API diagnostics to visitors.
+            $msg = isset($res['raw']['message']) && is_string($res['raw']['message']) ? $res['raw']['message']
+                : (isset($res['raw']['error']['message']) && is_string($res['raw']['error']['message']) ? $res['raw']['error']['message'] : '');
+            if ($msg === '' || $res['status'] === 0 || $res['status'] >= 500 || $res['status'] === 401 || $res['status'] === 403) {
+                $msg = 'Impossible de vérifier cet ID pour le moment. Réessayez.';
+            }
+            $this->public_error($msg);
         }
-        $name = isset($res['data']['account_name']) ? $res['data']['account_name'] : '';
+        $d = is_array($res['data']) ? $res['data'] : array();
+        $name = '';
+        foreach (array('account_name', 'username', 'nickname', 'name') as $k) {
+            if (!empty($d[$k]) && is_scalar($d[$k])) {
+                $name = sanitize_text_field((string) $d[$k]);
+                break;
+            }
+        }
         wp_send_json_success(array(
             'account_name' => $name,
-            'message'      => $name !== '' ? ('Verified: ' . $name) : 'Account verified.',
+            'message'      => $name !== '' ? ('Vérifié : ' . $name) : 'Compte vérifié.',
         ));
     }
 
     public function order()
     {
         $this->verify();
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Please buy this product through the shop checkout.'));
+        }
         $settings = ftr_settings();
 
         $code = isset($_POST['product_code']) ? sanitize_text_field(wp_unslash($_POST['product_code'])) : '';
@@ -120,8 +168,8 @@ class FTR_Ajax
 
         // Validate required fields client-supplied against the product's field spec.
         $fields = $this->collect_fields($product);
-        foreach ($product['fields'] as $f) {
-            if (!empty($f['required']) && empty($fields[$f['name']])) {
+        foreach ((array) $product['fields'] as $f) {
+            if (!empty($f['required']) && isset($f['name']) && empty($fields[$f['name']])) {
                 wp_send_json_error(array('message' => sprintf('Please fill "%s".', isset($f['label']) ? $f['label'] : $f['name'])));
             }
         }
@@ -198,18 +246,7 @@ class FTR_Ajax
             if ($code === '' || !in_array($code, $selected, true)) {
                 continue;
             }
-            $items[$code] = array(
-                'product_code'    => $code,
-                'product_id'      => isset($p['product_id']) ? $p['product_id'] : null,
-                'name'            => isset($p['name']) ? $p['name'] : $code,
-                'image_url'       => isset($p['image_url']) ? $p['image_url'] : '',
-                'product_type'    => isset($p['product_type']) ? $p['product_type'] : 'topup',
-                'validation_code' => isset($p['validation_code']) ? $p['validation_code'] : '',
-                'check_id_status' => isset($p['check_id_status']) ? $p['check_id_status'] : 'inactive',
-                'fields'          => isset($p['fields']) && is_array($p['fields']) ? $p['fields'] : array(),
-                'server'          => isset($p['server']) && is_array($p['server']) ? $p['server'] : array(),
-                'services'        => array(),
-            );
+            $items[$code] = FTR_Sync::catalog_item($p);
         }
         if (empty($items)) {
             wp_send_json_error(array('message' => 'None of the selected products were found in the catalog.'));
@@ -243,27 +280,14 @@ class FTR_Ajax
             $api   = new FTR_API();
             $sresp = $api->services($code, $item['product_type'], 1, 500);
             $api_msg = isset($sresp['message']) ? (string) $sresp['message'] : '';
-            if (!empty($sresp['ok']) && isset($sresp['data']['service']) && is_array($sresp['data']['service'])) {
-                foreach ($sresp['data']['service'] as $svc) {
-                    if (empty($svc['service_code'])) {
-                        continue;
-                    }
-                    $item['services'][] = array(
-                        'service_code' => $svc['service_code'],
-                        'service_name' => !empty($svc['service_name']) ? $svc['service_name'] : $svc['service_code'],
-                        'price'        => isset($svc['price']) ? $svc['price'] : '0',
-                        'currency'     => isset($svc['currency']) ? $svc['currency'] : 'USD',
-                        'max_quantity' => isset($svc['max_quantity']) ? (int) $svc['max_quantity'] : 1,
-                        'in_stock'     => isset($svc['in_stock']) ? (bool) $svc['in_stock'] : true,
-                    );
-                }
+            $services = FTR_Sync::services_from_response($sresp);
+            if ($services !== null) {
+                $item['services'] = $services;
                 if (empty($item['services'])) {
                     $error = 'The API returned 0 packages for this product — nothing to create.';
                 }
-            } elseif (empty($sresp['ok'])) {
-                $error = 'Could not load packages: ' . ($api_msg !== '' ? $api_msg : 'unknown API error') . '.';
             } else {
-                $error = 'The API returned no packages for this product.';
+                $error = 'Could not load packages: ' . ($api_msg !== '' ? $api_msg : 'unknown API error') . '.';
             }
         } else {
             $error = 'Tick "Import services & auto-create order fields" — packages are required to build the product.';
@@ -277,7 +301,7 @@ class FTR_Ajax
             $store = array();
         }
         $store[$code] = $item;
-        update_option(FTR_PRODUCTS, $store);
+        update_option(FTR_PRODUCTS, $store, false);
 
         // Create/update the WooCommerce variable product + variations.
         $variations = 0;
@@ -304,48 +328,9 @@ class FTR_Ajax
 
     /* ---------------- Admin: supplier catalog reconciliation ---------------- */
 
-    private function catalog_item($p)
-    {
-        $code = isset($p['product_code']) ? trim((string) $p['product_code']) : '';
-        return array(
-            'product_code'    => $code,
-            'product_id'      => isset($p['product_id']) ? $p['product_id'] : null,
-            'name'            => isset($p['name']) ? $p['name'] : $code,
-            'image_url'       => isset($p['image_url']) ? $p['image_url'] : '',
-            'product_type'    => isset($p['product_type']) ? $p['product_type'] : 'topup',
-            'validation_code' => isset($p['validation_code']) ? $p['validation_code'] : '',
-            'check_id_status' => isset($p['check_id_status']) ? $p['check_id_status'] : 'inactive',
-            'fields'          => isset($p['fields']) && is_array($p['fields']) ? $p['fields'] : array(),
-            'server'          => isset($p['server']) && is_array($p['server']) ? $p['server'] : array(),
-            'services'        => array(),
-        );
-    }
-
-    private function identity_value($value)
-    {
-        return is_scalar($value) ? trim((string) $value) : '';
-    }
-
-    private function identity_name($value)
-    {
-        $value = remove_accents(wp_strip_all_tags((string) $value));
-        $value = strtolower(trim($value));
-        $value = preg_replace('/[^a-z0-9]+/', ' ', $value);
-        return trim((string) $value);
-    }
-
-    private function identity_key($item)
-    {
-        $name = $this->identity_name(isset($item['name']) ? $item['name'] : '');
-        $type = sanitize_key(isset($item['product_type']) ? (string) $item['product_type'] : '');
-        return $name !== '' ? ($type . '|' . $name) : '';
-    }
-
     /**
-     * Prepare a full refresh of already-imported products. Matching order:
-     * current product_code -> stored supplier product_id -> unique name+type.
-     * The last match is intentionally uniqueness-guarded to avoid attaching a
-     * Woo product to the wrong supplier item when names are duplicated.
+     * Prepare a full refresh of already-imported products (manual
+     * "Synchronize" button). Matching rules live in FTR_Sync::build_queue().
      */
     public function sync_prepare()
     {
@@ -361,70 +346,12 @@ class FTR_Ajax
             wp_send_json_error(array('message' => !empty($resp['message']) ? $resp['message'] : 'Could not load the supplier catalog.'));
         }
 
-        $by_code = array();
-        $by_id = array();
-        $by_identity = array();
-        foreach ($resp['data'] as $raw) {
-            $item = $this->catalog_item($raw);
-            if ($item['product_code'] === '') {
-                continue;
-            }
-            $by_code[$item['product_code']] = $item;
-            $sid = $this->identity_value($item['product_id']);
-            if ($sid !== '') {
-                if (!isset($by_id[$sid])) $by_id[$sid] = array();
-                $by_id[$sid][] = $item;
-            }
-            $ikey = $this->identity_key($item);
-            if ($ikey !== '') {
-                if (!isset($by_identity[$ikey])) $by_identity[$ikey] = array();
-                $by_identity[$ikey][] = $item;
-            }
-        }
-
-        $queue = array();
-        $missing = array();
-        $remapped_products = 0;
-        foreach ($stored as $old_code => $old_item) {
-            if (!is_array($old_item)) continue;
-            $old_code = (string) $old_code;
-            $match = isset($by_code[$old_code]) ? $by_code[$old_code] : null;
-            $match_reason = $match ? 'product_code' : '';
-
-            if (!$match) {
-                $old_id = $this->identity_value(isset($old_item['product_id']) ? $old_item['product_id'] : '');
-                if ($old_id !== '' && isset($by_id[$old_id]) && count($by_id[$old_id]) === 1) {
-                    $match = $by_id[$old_id][0];
-                    $match_reason = 'product_id';
-                }
-            }
-            if (!$match) {
-                $ikey = $this->identity_key($old_item);
-                if ($ikey !== '' && isset($by_identity[$ikey]) && count($by_identity[$ikey]) === 1) {
-                    $match = $by_identity[$ikey][0];
-                    $match_reason = 'name_type';
-                }
-            }
-
-            if (!$match) {
-                $missing[] = array('code' => $old_code, 'name' => isset($old_item['name']) ? (string) $old_item['name'] : $old_code);
-                continue;
-            }
-
-            $match['_ftr_previous_product_code'] = $old_code;
-            $match['_ftr_previous_product_id'] = isset($old_item['product_id']) ? $old_item['product_id'] : '';
-            $match['_ftr_match_reason'] = $match_reason;
-            if ($old_code !== $match['product_code'] || $this->identity_value(isset($old_item['product_id']) ? $old_item['product_id'] : '') !== $this->identity_value($match['product_id'])) {
-                $remapped_products++;
-            }
-            $queue[] = $match;
-        }
-
-        update_option('ftr_sync_queue_' . get_current_user_id(), array('items' => $queue, 'missing' => $missing), false);
+        $plan = FTR_Sync::build_queue($resp['data'], $stored);
+        update_option('ftr_sync_queue_' . get_current_user_id(), array('items' => $plan['items'], 'missing' => $plan['missing']), false);
         wp_send_json_success(array(
-            'total' => count($queue),
-            'missing' => $missing,
-            'remapped_products' => $remapped_products,
+            'total' => count($plan['items']),
+            'missing' => $plan['missing'],
+            'remapped_products' => $plan['remapped_products'],
             'woo' => FTR_Woo::active(),
         ));
     }
@@ -438,57 +365,32 @@ class FTR_Ajax
             wp_send_json_error(array('message' => 'Synchronization session expired — start Synchronize again.'));
         }
 
-        $item = $queue['items'][$index];
-        $api = new FTR_API();
-        $sresp = $api->services($item['product_code'], $item['product_type'], 1, 500);
-        if (empty($sresp['ok']) || !isset($sresp['data']['service']) || !is_array($sresp['data']['service'])) {
-            wp_send_json_error(array('message' => 'Could not refresh packages for ' . $item['name'] . ': ' . (!empty($sresp['message']) ? $sresp['message'] : 'unknown API error')));
+        $result = FTR_Sync::sync_item($queue['items'][$index]);
+        if (!empty($result['fatal'])) {
+            wp_send_json_error(array('message' => $result['error']));
         }
+        wp_send_json_success($result);
+    }
 
-        foreach ($sresp['data']['service'] as $svc) {
-            if (empty($svc['service_code'])) continue;
-            $item['services'][] = array(
-                'service_code' => $svc['service_code'],
-                'service_name' => !empty($svc['service_name']) ? $svc['service_name'] : $svc['service_code'],
-                'price'        => isset($svc['price']) ? $svc['price'] : '0',
-                'currency'     => isset($svc['currency']) ? $svc['currency'] : 'USD',
-                'max_quantity' => isset($svc['max_quantity']) ? (int) $svc['max_quantity'] : 1,
-                'in_stock'     => isset($svc['in_stock']) ? (bool) $svc['in_stock'] : true,
-            );
+    /** Run one background-sync slice right now (Sync tab button). */
+    public function sync_now()
+    {
+        $this->verify_admin();
+        delete_option(FTR_Sync::STATE);
+        $r = FTR_Sync::run_catalog_sync(25);
+        FTR_Sync::sweep_pending_orders();
+        $last = get_option(FTR_Sync::LAST, array());
+        if (!empty($r['skipped'])) {
+            wp_send_json_error(array('message' => 'A synchronization is already running. Try again in a minute.'));
         }
-        if (empty($item['services'])) {
-            wp_send_json_error(array('message' => 'The supplier returned 0 packages for ' . $item['name'] . '. Existing WooCommerce packages were left untouched.'));
-        }
-
-        $previous_code = isset($item['_ftr_previous_product_code']) ? (string) $item['_ftr_previous_product_code'] : '';
-        $woo_active = FTR_Woo::active();
-        $result = $woo_active ? FTR_Woo::sync_one($item) : array('variations' => 0, 'error' => null);
-
-        // Do not replace a known-good local mapping if Woo synchronization
-        // failed. Without WooCommerce, the plugin can still operate through its
-        // shortcode/API flow, so committing the refreshed supplier store is OK.
-        if (!$woo_active || empty($result['error'])) {
-            $store = get_option(FTR_PRODUCTS, array());
-            if (!is_array($store)) $store = array();
-            if ($previous_code !== '' && $previous_code !== $item['product_code']) {
-                unset($store[$previous_code]);
-            }
-            $clean_store_item = $item;
-            unset($clean_store_item['_ftr_previous_product_code'], $clean_store_item['_ftr_previous_product_id'], $clean_store_item['_ftr_match_reason']);
-            $store[$item['product_code']] = $clean_store_item;
-            update_option(FTR_PRODUCTS, $store, false);
+        if (!empty($r['error'])) {
+            wp_send_json_error(array('message' => isset($last['error']) ? $last['error'] : 'Synchronization failed.'));
         }
         wp_send_json_success(array(
-            'name' => $item['name'],
-            'product_code' => $item['product_code'],
-            'supplier_product_id' => $this->identity_value($item['product_id']),
-            'match_reason' => isset($item['_ftr_match_reason']) ? $item['_ftr_match_reason'] : '',
-            'product_remapped' => ($previous_code !== '' && $previous_code !== $item['product_code']) || ($this->identity_value(isset($item['_ftr_previous_product_id']) ? $item['_ftr_previous_product_id'] : '') !== $this->identity_value($item['product_id'])),
-            'services' => count($item['services']),
-            'variations' => isset($result['variations']) ? (int) $result['variations'] : 0,
-            'remapped_services' => isset($result['remapped_services']) ? (int) $result['remapped_services'] : 0,
-            'orphaned_variations' => isset($result['orphaned_variations']) ? (int) $result['orphaned_variations'] : 0,
-            'error' => isset($result['error']) ? $result['error'] : null,
+            'done'    => !empty($r['done']),
+            'message' => !empty($r['done'])
+                ? sprintf('Synchronized %d product(s), %d error(s), %d missing from the supplier catalog.', isset($last['ok']) ? $last['ok'] : 0, isset($last['errors']) ? count($last['errors']) : 0, isset($last['missing']) ? $last['missing'] : 0)
+                : sprintf('Synchronized %d of %d products; the rest continue in the background.', isset($r['pos']) ? $r['pos'] : 0, isset($r['total']) ? $r['total'] : 0),
         ));
     }
 
@@ -515,6 +417,9 @@ class FTR_Ajax
             $probe['not_configured'] = true;
         } else {
             $presp = $api->products(1, 5);
+            if (!empty($presp['ok'])) {
+                $presp['data'] = FTR_API::list_of($presp['data']);
+            }
             $probe['products_ok'] = !empty($presp['ok']);
             $probe['products_message'] = isset($presp['message']) ? $presp['message'] : '';
             if (!empty($presp['ok']) && is_array($presp['data']) && !empty($presp['data'])) {
@@ -528,8 +433,8 @@ class FTR_Ajax
                     $probe['ran'] = true;
                     $probe['services_ok'] = !empty($sresp['ok']);
                     $probe['services_message'] = isset($sresp['message']) ? $sresp['message'] : '';
-                    $probe['package_count'] = (!empty($sresp['ok']) && isset($sresp['data']['service']) && is_array($sresp['data']['service']))
-                        ? count($sresp['data']['service']) : 0;
+                    $pkgs = FTR_Sync::services_from_response($sresp);
+                    $probe['package_count'] = is_array($pkgs) ? count($pkgs) : 0;
                 }
             } else {
                 $probe['catalog_empty'] = true;

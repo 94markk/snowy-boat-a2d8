@@ -4,7 +4,7 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * Signed client for the FlashTopup Reseller API (v2).
+ * Signed client for the supplier's Reseller API (v2).
  *
  * Auth: HMAC-SHA256 over a canonical request, sent as headers:
  *   X-FT-API-ID, X-FT-Timestamp, X-FT-Nonce, X-FT-Signature
@@ -55,6 +55,10 @@ class FTR_API
      * 500). Returns the same envelope as products(), with 'data' holding all
      * products merged. Without this, large catalogs were silently truncated at
      * the first 200 rows.
+     *
+     * Any failing page fails the whole call: a partial catalog must never be
+     * mistaken for the full one, or synchronization would treat the products
+     * on the missing pages as removed by the supplier.
      */
     public function all_products($per_page = 500, $max_pages = 60)
     {
@@ -66,15 +70,14 @@ class FTR_API
             $resp = $this->request('/products', array('page' => $page, 'per_page' => $per_page));
             $last = $resp;
             if (empty($resp['ok']) || !is_array($resp['data'])) {
-                // First page failing is a hard error; a later page failing just
-                // stops paging and returns what we already have.
-                if ($page === 1) {
-                    return $resp;
+                if ($page > 1) {
+                    $resp['ok'] = false;
+                    $resp['message'] = 'Catalog page ' . $page . ' failed: ' . (isset($resp['message']) ? $resp['message'] : 'unknown error');
                 }
-                break;
+                return $resp;
             }
 
-            $batch = $resp['data'];
+            $batch = self::list_of($resp['data']);
             $all = array_merge($all, $batch);
 
             // Prefer the server's pagination hint; fall back to a short page.
@@ -118,7 +121,7 @@ class FTR_API
         if ($server_id !== '') {
             $body['server_id'] = (string) $server_id;
         }
-        return $this->request('/check-id', $body);
+        return $this->request('/check-id', $body, array('timeout' => 20));
     }
 
     /** Place an order. $extra holds the dynamic field values (user_id, server_id, ...). */
@@ -129,7 +132,10 @@ class FTR_API
             'reference_id' => (string) $reference_id,
             'quantity'     => (int) $quantity,
         ), is_array($extra) ? $extra : array());
-        return $this->request('/order', $body);
+        // Never retry an order placement automatically: a timeout may still
+        // have created the order upstream. Reconciliation by reference_id
+        // picks up the real outcome instead.
+        return $this->request('/order', $body, array('retries' => 0, 'timeout' => 45));
     }
 
     /** Order status by order id or reference id. */
@@ -161,10 +167,49 @@ class FTR_API
     }
 
     /**
+     * Normalize list payloads: the API may return a plain list, a keyed map or
+     * a wrapper such as {items:[...]} / {products:[...]} / {orders:[...]}.
+     */
+    public static function list_of($data)
+    {
+        if (!is_array($data)) {
+            return array();
+        }
+        foreach (array('items', 'products', 'orders', 'list', 'results', 'data') as $key) {
+            if (isset($data[$key]) && is_array($data[$key])) {
+                return self::list_of($data[$key]);
+            }
+        }
+        $values = array_values($data);
+        // A single object (associative array of scalars) is not a list.
+        if (!empty($values) && !is_array($values[0])) {
+            return array($data);
+        }
+        return array_values(array_filter($values, 'is_array'));
+    }
+
+    /**
      * Signed POST request. Returns array:
      *   array('ok' => bool, 'status' => int, 'data' => mixed, 'message' => string, 'raw' => array)
      */
-    public function request($endpoint, $body = array())
+    public function request($endpoint, $body = array(), $opts = array())
+    {
+        $retries = isset($opts['retries']) ? max(0, (int) $opts['retries']) : 1;
+        $timeout = isset($opts['timeout']) ? max(5, (int) $opts['timeout']) : 30;
+        $attempt = 0;
+        do {
+            $res = $this->send($endpoint, $body, $timeout);
+            // Retry only transport failures and 5xx/429 responses.
+            $transient = empty($res['ok']) && ($res['status'] === 0 || $res['status'] === 429 || $res['status'] >= 500);
+            if (!$transient || $attempt >= $retries) {
+                return $res;
+            }
+            $attempt++;
+            usleep(400000 * $attempt);
+        } while (true);
+    }
+
+    private function send($endpoint, $body, $timeout)
     {
         if (!$this->is_configured()) {
             return $this->fail('Plugin is not configured — set your API ID, secret and base URL.');
@@ -195,35 +240,57 @@ class FTR_API
             'method'  => 'POST',
             'headers' => $headers,
             'body'    => $rawBody,
-            'timeout' => 30,
+            'timeout' => $timeout,
         ));
 
         if (is_wp_error($response)) {
-            return $this->fail($response->get_error_message());
+            return $this->fail('Could not reach the API server: ' . $response->get_error_message());
         }
 
         $code = (int) wp_remote_retrieve_response_code($response);
-        $json = json_decode(wp_remote_retrieve_body($response), true);
+        $rawText = (string) wp_remote_retrieve_body($response);
+        $json = json_decode($rawText, true);
         if (!is_array($json)) {
-            return $this->fail('Unexpected response from the API (HTTP ' . $code . ').', $code);
+            $hint = $code === 404 ? ' Check the API Base URL.' : ($code >= 500 ? ' The API server had an error.' : '');
+            if ($code >= 200 && $code < 300 && stripos($rawText, '<html') !== false) {
+                $hint = ' The server returned an HTML page instead of JSON — check the API Base URL.';
+            }
+            return $this->fail('Unexpected response from the API (HTTP ' . $code . ').' . $hint, $code);
         }
 
-        // The API uses two envelope shapes: {success,data,error} and {status,message,data}.
-        $ok = (isset($json['success']) && $json['success'] === true)
-            || (isset($json['status']) && ($json['status'] === true || $json['status'] === 'success'));
+        // The API uses two envelope shapes: {success,data,error} and
+        // {status,message,data}. Treat any 2xx as success unless the envelope
+        // explicitly reports a failure, so responses without a success flag
+        // (or with status:"ok"/200) are not misreported as connection errors.
+        $explicitFail = (array_key_exists('success', $json) && ($json['success'] === false || $json['success'] === 'false' || $json['success'] === 0))
+            || (isset($json['status']) && in_array(is_string($json['status']) ? strtolower($json['status']) : $json['status'], array(false, 'error', 'failed', 'fail', 'false'), true))
+            || (!empty($json['error']) && empty($json['success']) && !isset($json['data']));
+        $ok = $code >= 200 && $code < 300 && !$explicitFail;
 
-        if ($code >= 400 || !$ok) {
+        if (!$ok) {
             $msg = '';
-            if (isset($json['error']['message'])) {
-                $msg = $json['error']['message'];
-            } elseif (isset($json['message']) && is_string($json['message'])) {
+            $errCode = '';
+            if (isset($json['error']) && is_array($json['error'])) {
+                $msg = isset($json['error']['message']) ? (string) $json['error']['message'] : '';
+                $errCode = isset($json['error']['code']) ? (string) $json['error']['code'] : '';
+            } elseif (isset($json['error']) && is_string($json['error'])) {
+                $msg = $json['error'];
+            }
+            if ($msg === '' && isset($json['message']) && is_string($json['message'])) {
                 $msg = $json['message'];
+            }
+            if ($msg === '') {
+                $msg = 'Request failed';
+            }
+            $suffix = trim(($errCode !== '' ? $errCode . ', ' : '') . 'HTTP ' . $code);
+            if ($code === 401 || $code === 403) {
+                $msg .= ' — verify the API ID / API Secret, that this server\'s IP is whitelisted in the supplier panel, and that the server clock is correct';
             }
             return array(
                 'ok'      => false,
                 'status'  => $code,
                 'data'    => isset($json['data']) ? $json['data'] : null,
-                'message' => $msg !== '' ? $msg : ('Request failed (HTTP ' . $code . ').'),
+                'message' => $msg . ' (' . $suffix . ').',
                 'raw'     => $json,
             );
         }
@@ -231,7 +298,7 @@ class FTR_API
         return array(
             'ok'      => true,
             'status'  => $code,
-            'data'    => isset($json['data']) ? $json['data'] : null,
+            'data'    => array_key_exists('data', $json) ? $json['data'] : $json,
             'message' => isset($json['message']) && is_string($json['message']) ? $json['message'] : 'OK',
             'meta'    => isset($json['meta']) ? $json['meta'] : null,
             'raw'     => $json,

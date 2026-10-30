@@ -1,65 +1,65 @@
-=== FlashTopup Reseller ===
-Contributors: flashtopup
-Tags: game topup, gift cards, reseller, woocommerce, vouchers, flashtopup
+=== Delicat Top-Up Connector ===
 Requires at least: 5.6
 Tested up to: 6.7
 Requires PHP: 7.4
-Stable tag: 1.7.1
+Stable tag: 1.8.0
 License: GPLv2 or later
 
-Sell FlashTopup game top-ups, vouchers and gift cards through WooCommerce
-with HMAC-signed API access, auto-import, conversion-rate display, and a
-verified inbound webhook receiver.
+Sell game top-ups, vouchers and gift cards from your wholesale supplier
+through WooCommerce, with signed API access, automatic catalog/order
+synchronization, and no supplier branding visible to customers.
 
 == Description ==
 
-* Connect with your reseller API ID + secret (HMAC-SHA256 signed,
-  server-side only — the secret never reaches the browser).
-* One-click product import that creates one **virtual variable WooCommerce
-  product per game** with one **variation per package**, grouped by game
-  category. No shortcode required.
-* Auto-generated **order fields** (text + select) and Check-ID button on the
-  WooCommerce product page. Required fields are validated on add-to-cart and
-  carried through cart → checkout.
-* **Conversion rate + markup**. Apply a USD→local-currency multiplier and an
-  optional sell markup. Wallet is still debited in USD at the wholesale
-  rate; the customer sees the local price.
-* **Inbound webhook receiver** at
-  `/wp-json/flashtopup/v1/callback`. The URL is shown on the plugin's
-  Webhook tab — paste it into your FlashTopup reseller account's
-  `callback_url`. Every event is verified with HMAC-SHA256, a ±5 minute
-  timestamp window, and a single-use nonce before applying.
-* **Auto-completion**: when the webhook reports a completed order, the
-  matching WooCommerce order is moved to `Completed` automatically. This is enabled by default and remains configurable.
-* **Webhook event log** kept on the plugin's Webhook tab for auditing.
-* **Diagnostics tab** with environment info + a one-click import self-test
-  that creates a synthetic product (no API call) so you can verify
-  WooCommerce variation creation works on this server.
-* **Sandbox mode** for safe testing (no wallet charge, no provider call).
+* Signed (HMAC-SHA256) supplier API access, server-side only.
+* Import: one virtual variable WooCommerce product per game, one variation per
+  package. New products start as Draft for review.
+* Player-ID fields + Check-ID on the product page, carried through checkout.
+* Automatic fulfillment when the WooCommerce order is paid, with a per-item
+  lock so an order is never placed twice.
+* Automatic synchronization (Top-Up -> Settings -> Sync):
+  - order webhooks update WooCommerce instantly;
+  - every placed order that is not final is re-checked every minute;
+  - imported products (prices, stock, packages, fields) are refreshed in the
+    background every 1-60 minutes, and instantly on supplier product webhooks.
+* Supplier name hidden from visitors: neutral plugin folder, private webhook
+  URL hidden from the REST index, inline front-end assets, local product
+  images with neutral file names, scrubbed customer-facing messages.
 
-== Installation ==
+== Installation / upgrade from the supplier-named build ==
 
-1. Plugins → Add New → Upload Plugin → choose `flashtopup-reseller.zip` →
-   Install → Activate. (WooCommerce must be active for the full flow.)
-2. Go to **FlashTopup → Settings → Connection** and paste your API ID +
-   Secret. Save.
-3. On the **WooCommerce** tab, set your conversion rate (e.g. `134.50` for
-   USD→NPR), display currency code (e.g. `NPR`), and an optional sell
-   markup.
-4. On the **Webhook** tab, copy the displayed URL and paste it into your
-   FlashTopup reseller account's `callback_url` field.
-5. Go to **Import Products** and import the games you want to sell.
-
-== WooCommerce ==
-
-Each imported game becomes one virtual variable product. Each package
-becomes a variation under a single "Package" attribute. When the
-WooCommerce order reaches Processing or Completed, the plugin calls the
-FlashTopup Reseller API to place the upstream order, then records the
-order id + status + delivery codes against the line item. The inbound
-webhook keeps the WC order status in sync with the upstream provider.
+1. Deactivate (do NOT delete yet) the old "FlashTopup Reseller" plugin.
+2. Plugins -> Add New -> Upload Plugin -> `delicat-topup-connector.zip` ->
+   Install -> Activate. Settings, imported products and orders are kept.
+3. Delete the old plugin. If WordPress asks, do NOT tick any "delete data" option.
+4. Top-Up -> Settings -> Webhook: copy the new private URL into the supplier
+   panel's callback_url, then untick "Also accept the old URL".
+5. Top-Up -> Settings -> Sync: add the suggested server cron job for exact timing.
 
 == Changelog ==
+
+= 1.8.0 =
+* SECURITY: the storefront shortcode's direct-order AJAX endpoint was open to
+  anonymous visitors, letting anyone place supplier orders that debit the
+  wallet without paying. Direct orders are now administrator-only; visitors
+  are sent to the WooCommerce product page and pay at checkout.
+* FIX: saving one settings tab reset the checkboxes of the other tabs (saving
+  Connection turned off order auto-completion; saving WooCommerce turned off
+  Check-ID and Sandbox). Each tab now only saves its own fields.
+* FIX: the "Connection failed" reason was unreadable on the dark header. It
+  is now shown clearly with the HTTP status / error code and hints (API keys,
+  IP whitelist, server clock).
+* FIX: API responses without an explicit success flag were reported as
+  failures; any 2xx is now success unless the body reports an error.
+* FIX: a failing catalog page no longer yields a silently partial catalog.
+* FIX: stock flags sent as "false"/"0"/"out_of_stock" were treated as in stock.
+* FIX: concurrent payment hooks could place the same supplier order twice.
+* FIX: webhook signatures failed on sites with plain permalinks; nonces are
+  only consumed after a valid signature.
+* FIX: failed supplier orders were re-polled every 5 minutes forever.
+* NEW: automatic catalog sync, one-minute pending-order sweep (bulk status
+  endpoint), catalog webhooks, faster reconciliation back-off, Sync tab.
+* NEW: supplier name hidden from visitors and scanners (see Description).
 
 = 1.7.1 =
 * New WooCommerce products created by Import or Synchronize are saved as **Draft** first for administrator review.
@@ -76,7 +76,7 @@ webhook keeps the WC order status in sync with the upstream provider.
 
 = 1.6.8 =
 * Enables Order auto-completion by default on new and existing installations.
-* Runs the existing safe repair pass after upgrade so provider-completed FlashTopup orders can leave WooCommerce Processing automatically.
+* Runs the existing safe repair pass after upgrade so provider-completed supplier orders can leave WooCommerce Processing automatically.
 * Keeps the setting configurable for stores that require manual fulfillment review.
 * Repairs incomplete settings rows during activation without overwriting other saved settings.
 
@@ -84,15 +84,15 @@ webhook keeps the WC order status in sync with the upstream provider.
 * Adds explicit TeraWallet compatibility using its stable WooCommerce gateway ID `wallet`, even when the visible name is changed to Delicat Wallet.
 * Runs a late status pass after TeraWallet changes an order to Processing/On-hold.
 * Adds a delayed Action Scheduler/WP-Cron verification to prevent wallet or object-cache races from reverting a provider-completed order to Processing.
-* Keeps provider status authoritative: WooCommerce completes only after every FlashTopup item is confirmed completed.
+* Keeps provider status authoritative: WooCommerce completes only after every supplier item is confirmed completed.
 
 
 = 1.6.6 =
-* Fixes WooCommerce orders remaining Processing after FlashTopup already reports Completed.
+* Fixes WooCommerce orders remaining Processing after supplier already reports Completed.
 * Treats WooCommerce Processing as payment confirmation for wallet gateways that do not immediately populate `date_paid`.
 * Adds a late payment/status synchronization hook plus immediate completion after provider item updates.
-* Adds a one-time safe repair for existing stuck Processing orders whose FlashTopup line items are already completed.
-* Improves HPOS/object-cache persistence verification and variation-aware FlashTopup item detection.
+* Adds a one-time safe repair for existing stuck Processing orders whose supplier line items are already completed.
+* Improves HPOS/object-cache persistence verification and variation-aware supplier item detection.
 * Keeps Delicat App order timelines synchronized with provider status changes.
 
 = 1.6.0 =
@@ -100,7 +100,7 @@ webhook keeps the WC order status in sync with the upstream provider.
   first page (200 products), silently truncating large catalogs. It now walks
   every page (per_page 500, following the API's `has_more` hint) so every
   product is available to import.
-* **Refreshed storefront UI** for the `[flashtopup_reseller]` shortcode:
+* **Refreshed storefront UI** for the `[topup_store]` shortcode:
   searchable product grid with a live result count, polished modal with a
   quantity stepper (clamped to each package's max), an order-success card
   showing the order id + reference with copy buttons, and an automatic dark
@@ -113,7 +113,7 @@ webhook keeps the WC order status in sync with the upstream provider.
   `order_status_bulk()` (the `orders/status` endpoint, up to 50 ids at once).
 
 = 1.5.0 =
-* **Inbound webhook receiver** at `/wp-json/flashtopup/v1/callback` with
+* **Inbound webhook receiver** at `/wp-json/<supplier>/v1/callback` with
   HMAC + timestamp + nonce verification. Updates the matching WooCommerce
   order status, records provider order id + delivery codes on the line
   item, and writes an order note.
@@ -123,7 +123,7 @@ webhook keeps the WC order status in sync with the upstream provider.
   with a status pill, copyable webhook URL, environment table, and a
   webhook event log.
 * **Order auto-completion** toggle — automatically mark WC orders Completed
-  when the FlashTopup webhook reports Completed.
+  when the supplier webhook reports Completed.
 * Code optimization: tighter null-safe access, less branching in admin
   save, cleaner CSS using brand-gradient tabs.
 
@@ -150,24 +150,24 @@ webhook keeps the WC order status in sync with the upstream provider.
 = 1.0.0 =
 * Initial release: settings, product import with auto order fields,
   Check-ID, signed order placement, Sandbox mode,
-  `[flashtopup_reseller]` shortcode.
+  `[topup_store]` shortcode.
 
 
 = 1.6.3 =
 * Synchronizes imported products with Delicat Secure Keys using an explicit `api_topup` delivery type.
-* Prevents FlashTopup Free Fire Player-ID products from being treated as stored PIN products.
+* Prevents supplier Free Fire Player-ID products from being treated as stored PIN products.
 * Clears PIN/key redirect flags during every catalog import for parent products and variations.
-* Strengthens WooCommerce auto-completion: mixed orders are never completed by FlashTopup alone.
+* Strengthens WooCommerce auto-completion: mixed orders are never completed by supplier alone.
 
 = 1.6.2 =
-* Synchronizes WooCommerce order completion with confirmed FlashTopup server status.
+* Synchronizes WooCommerce order completion with confirmed supplier server status.
 * Completes immediately when the placement response is already completed.
 * Adds secure server-side status reconciliation when a webhook is delayed or blocked.
 * Supports completed/success/delivered/fulfilled status aliases and wrapped webhook payloads.
-* Prevents mixed or multi-item orders from completing until every FlashTopup line item is completed.
+* Prevents mixed or multi-item orders from completing until every supplier line item is completed.
 
 = 1.6.4 =
 * Treat provider Validated/Approved/Confirmed responses as final completed delivery.
 * Read status safely from nested API/webhook response shapes.
 * Reload WooCommerce orders after item status writes for HPOS/object-cache compatibility.
-* Complete only paid Processing/On-hold orders after every FlashTopup item is final.
+* Complete only paid Processing/On-hold orders after every supplier item is final.

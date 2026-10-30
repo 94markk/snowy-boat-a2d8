@@ -127,6 +127,8 @@
     msg("");
     showSuccess(null);
     updatePrice();
+    var orderBtn = document.getElementById("ftr-order");
+    if (!FTR.canOrder && orderBtn.firstChild) orderBtn.firstChild.nodeValue = "Buy \u00b7 ";
     modal.hidden = false;
     document.body.style.overflow = "hidden";
   }
@@ -224,7 +226,7 @@
     var out = document.getElementById("ftr-checkid-msg");
     out.textContent = "Checking…";
     out.className = "ftr-checkid-msg";
-    post("ftr_check_id", { product_code: current.product_code, fields: collectFields() }, function (res) {
+    post(FTR.checkAction || "topup_verify_player", { product_code: current.product_code, fields: collectFields() }, function (res) {
       btn.disabled = false;
       if (res && res.success) {
         out.textContent = "✓ " + (res.data.message || "Verified");
@@ -236,9 +238,15 @@
     });
   });
 
-  // order
+  // order — visitors buy through the shop (paid checkout); only admins can
+  // place a direct test order from here.
   document.getElementById("ftr-order").addEventListener("click", function () {
     if (!current) return;
+    if (!FTR.canOrder) {
+      if (current.url) { window.location.href = current.url; return; }
+      msg("This product is not available right now.", "error");
+      return;
+    }
     var sel = document.getElementById("ftr-service");
     var service = sel.value;
     if (!service) { msg("Please choose a package.", "error"); return; }

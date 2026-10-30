@@ -4,15 +4,37 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * [flashtopup_reseller] — renders imported products with an order form that
- * auto-builds the required input/select fields, an optional Check-ID button,
- * package selection and order placement.
+ * [topup_store] (legacy alias [flashtopup_reseller]) — renders imported
+ * products with an order form that auto-builds the required input/select
+ * fields, an optional Check-ID button and package selection.
+ *
+ * Visitors are sent to the WooCommerce product page to pay; only
+ * administrators can place direct (wallet-debiting) test orders from here.
+ * Images come from the local media library, never the supplier's servers.
  */
 class FTR_Shortcode
 {
     public function __construct()
     {
+        add_shortcode('topup_store', array($this, 'render'));
         add_shortcode('flashtopup_reseller', array($this, 'render'));
+    }
+
+    /** Published WooCommerce product id for a supplier product code (0 if none). */
+    private function woo_product($code)
+    {
+        if (!FTR_Woo::active()) {
+            return 0;
+        }
+        $ids = get_posts(array(
+            'post_type'   => 'product',
+            'post_status' => 'publish',
+            'numberposts' => 1,
+            'fields'      => 'ids',
+            'meta_key'    => '_ftr_product_code',
+            'meta_value'  => (string) $code,
+        ));
+        return !empty($ids) ? (int) $ids[0] : 0;
     }
 
     public function render($atts = array())
@@ -20,26 +42,57 @@ class FTR_Shortcode
         $settings = ftr_settings();
         $products = get_option(FTR_PRODUCTS, array());
 
-        // Public-safe product data for the browser (no codes/secrets exposed
-        // beyond product/service codes, which are required to place orders).
+        $is_admin = current_user_can('manage_options');
+        if (!is_array($products)) {
+            $products = array();
+        }
+
+        // Public-safe product data for the browser. Supplier image URLs are
+        // replaced by the local WooCommerce image (or nothing).
         $public = array();
         foreach ($products as $code => $p) {
+            if (!is_array($p) || empty($p['product_code'])) {
+                continue;
+            }
+            $wc = $this->woo_product($p['product_code']);
+            if (!$is_admin && FTR_Woo::active() && !$wc) {
+                continue; // not published in the shop — nothing to sell
+            }
+            $image = '';
+            $url = '';
+            if ($wc) {
+                $thumb = get_post_thumbnail_id($wc);
+                $image = $thumb ? (string) wp_get_attachment_image_url($thumb, 'medium') : '';
+                $url = (string) get_permalink($wc);
+            }
+            $services = array();
+            foreach ((array) ($p['services'] ?? array()) as $svc) {
+                $services[] = array(
+                    'service_code' => $svc['service_code'] ?? '',
+                    'service_name' => $svc['service_name'] ?? '',
+                    'price'        => $svc['price'] ?? '0',
+                    'max_quantity' => $svc['max_quantity'] ?? 1,
+                    'in_stock'     => FTR_Sync::to_bool($svc['in_stock'] ?? null),
+                );
+            }
             $public[] = array(
                 'product_code'    => $p['product_code'],
-                'name'            => $p['name'],
-                'image_url'       => $p['image_url'],
-                'product_type'    => $p['product_type'],
+                'name'            => $p['name'] ?? $p['product_code'],
+                'image_url'       => $image,
+                'url'             => $url,
+                'product_type'    => $p['product_type'] ?? '',
                 'check_id'        => !empty($settings['check_id']) && isset($p['check_id_status']) && $p['check_id_status'] === 'active',
-                'fields'          => $p['fields'],
-                'services'        => $p['services'],
+                'fields'          => is_array($p['fields'] ?? null) ? $p['fields'] : array(),
+                'services'        => $services,
             );
         }
 
-        wp_enqueue_style('ftr-front', FTR_URL . 'assets/ft-reseller.css', array(), FTR_VERSION);
-        wp_enqueue_script('ftr-front', FTR_URL . 'assets/ft-reseller.js', array(), FTR_VERSION, true);
-        wp_localize_script('ftr-front', 'FTR', array(
+        FTR_Privacy::inline_style('topup-store', 'ft-reseller.css');
+        FTR_Privacy::inline_script('topup-store', 'ft-reseller.js', 'FTR', array(
             'ajaxUrl'  => admin_url('admin-ajax.php'),
             'nonce'    => wp_create_nonce('ftr_front'),
+            'checkAction' => 'topup_verify_player',
+            'canOrder' => $is_admin,
             'products' => $public,
             'markup'   => (float) $settings['markup'],
             // Display pricing matches the WooCommerce import: USD * rate * (1+markup),
@@ -49,7 +102,7 @@ class FTR_Shortcode
         ));
 
         if (empty($public)) {
-            return '<div class="ftr-empty">No products available yet. (Admin: import products under FlashTopup → Import Products.)</div>';
+            return '<div class="ftr-empty">No products available yet.' . ($is_admin ? ' (Admin: import products under Top-Up → Import Products and publish them.)' : '') . '</div>';
         }
 
         ob_start();

@@ -1,0 +1,14 @@
+# Block direct access to the readme and PHP files: WordPress loads them from
+# disk, and exposing them lets scanners fingerprint the plugin. Front-end
+# assets are printed inline; only the admin CSS/JS are served by URL.
+<IfModule mod_authz_core.c>
+    <FilesMatch "\.(txt|md|php|json)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+    <FilesMatch "\.(txt|md|php|json)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>

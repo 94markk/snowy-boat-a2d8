@@ -1,4 +1,4 @@
-/* FlashTopup Reseller — admin UI. Brand: dark ink + FlashTopup gold (#f6ac37).
+/* Top-Up Connector — admin UI. Brand: dark ink + gold (#f6ac37).
    NOTE: class names here are referenced by ft-admin.js (modal, progress, log,
    balance, report) and class-ftr-admin.php — keep them stable. */
 .ftr-wrap {
@@ -34,6 +34,12 @@
 .ftr-pill-ok { background: rgba(16,185,129,.18); color: #34d399; }
 .ftr-pill-bad { background: rgba(239,68,68,.18); color: #f87171; }
 .ftr-pill-warn { background: rgba(246,172,55,.20); color: var(--ftr-gold); }
+/* Connection error reason on the dark hero: must stay readable (it was
+   rendered in the light-theme muted grey and was nearly invisible). */
+.ftr-hero-error {
+  display: block; flex-basis: 100%; max-width: 640px; margin-top: 6px;
+  color: #fecaca; font-size: 13px; line-height: 1.45; word-break: break-word;
+}
 
 /* ---- Tabs ---- */
 .ftr-tabs {
