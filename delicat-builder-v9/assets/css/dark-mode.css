@@ -1,0 +1,180 @@
+/*
+ * Delicat Builder V9 — dark mode completion (9.3.15). Last file of the chrome
+ * bundle, so it loads on every page before first paint.
+ *
+ * 1. Text logo in dark mode (header and footer) instead of the image, whose
+ *    white background showed as a light box on the dark header.
+ * 2. Product page pieces that kept light colours in dark mode (review cards,
+ *    trust chips, stock pill, selects, delivery badge).
+ * 3. Placeholder colour inside fields darkened by the dark adapter (engine).
+ * No color-mix(), backdrop-filter or relative colours (Android WebView).
+ */
+
+/* 1 ------------------------------------------------------------------ */
+.dsb8-header .dsb8-header__wordmark,
+.dbv9-footer-logo .dbv9-footer-wordmark {
+  display: none;
+}
+html[data-delicat-theme="dark"] .dsb8-header .dsb8-header__logo.has-wordmark img,
+html.dlc-theme-dark .dsb8-header .dsb8-header__logo.has-wordmark img,
+.dsb8-header.dsb8-header--dark .dsb8-header__logo.has-wordmark img {
+  display: none !important;
+}
+html[data-delicat-theme="dark"] .dsb8-header .dsb8-header__logo.has-wordmark .dsb8-header__wordmark,
+html.dlc-theme-dark .dsb8-header .dsb8-header__logo.has-wordmark .dsb8-header__wordmark,
+.dsb8-header.dsb8-header--dark .dsb8-header__logo.has-wordmark .dsb8-header__wordmark {
+  display: flex;
+}
+html[data-delicat-theme="dark"] body .dsb8-header__logo.has-wordmark,
+html.dlc-theme-dark body .dsb8-header__logo.has-wordmark,
+.dsb8-header.dsb8-header--dark .dsb8-header__logo.has-wordmark {
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.dsb8-header__logo.has-wordmark a,
+.dbv9-footer-logo.has-wordmark {
+  text-decoration: none !important;
+}
+/* 9.3.16: the wordmark is an SVG fitted to its box (see wordmark_svg()):
+   it scales like an image, so it never overflows or gets clipped. Smaller
+   than the image logo: about 100px wide on a phone. */
+.dsb8-header__wordmark {
+  flex: 0 0 auto;
+  align-items: center;
+  width: min(var(--dsb8-logo-width, 154px), 26vw, 108px);
+  min-width: 72px;
+  line-height: 0;
+}
+.dlc-wordmark {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.dlc-wordmark text {
+  font-family: inherit;
+  text-rendering: geometricPrecision;
+}
+.dlc-wordmark__top {
+  font-size: 30px;
+  font-weight: 900;
+  fill: #f7f8ff;
+}
+.dlc-wordmark__sub {
+  font-size: 16px;
+  font-weight: 800;
+  fill: #a9b6ff;
+}
+html.delicat-standalone body .dsb8-header.has-back .dsb8-header__wordmark {
+  width: min(var(--dsb8-logo-width, 154px), 24vw, 96px);
+}
+
+html[data-delicat-theme="dark"] .dbv9-footer-logo.has-wordmark img,
+html.dlc-theme-dark .dbv9-footer-logo.has-wordmark img {
+  display: none !important;
+}
+html[data-delicat-theme="dark"] .dbv9-footer-logo.has-wordmark .dbv9-footer-wordmark,
+html.dlc-theme-dark .dbv9-footer-logo.has-wordmark .dbv9-footer-wordmark {
+  display: block;
+  width: 136px;
+  max-width: 50vw;
+  line-height: 0;
+}
+/* fallback markup (header class missing) */
+.dbv9-footer-wordmark b {
+  display: block;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #f7f8ff;
+}
+.dbv9-footer-wordmark small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  line-height: 1.4;
+  color: #a9b6ff;
+}
+
+/* 2 ------------------------------------------------------------------ */
+html[data-delicat-theme="dark"] body .delicat-native-product,
+html.dlc-theme-dark body .delicat-native-product {
+  --dnp-surface: #161b35;
+  --dnp-border: rgba(255, 255, 255, 0.1);
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review,
+html.dlc-theme-dark body .delicat-native-product .dnp-review {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #161b35;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review-id strong,
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review p,
+html.dlc-theme-dark body .delicat-native-product .dnp-review-id strong,
+html.dlc-theme-dark body .delicat-native-product .dnp-review p {
+  color: #eef0f8 !important;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review-meta,
+html.dlc-theme-dark body .delicat-native-product .dnp-review-meta {
+  color: #9aa3c7 !important;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review-verified,
+html.dlc-theme-dark body .delicat-native-product .dnp-review-verified {
+  color: #5fe0a3;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-reviews-stars,
+html.dlc-theme-dark body .delicat-native-product .dnp-reviews-stars {
+  color: #3a3f5c;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-trust span,
+html.dlc-theme-dark body .delicat-native-product .dnp-trust span {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #161b35;
+  color: #d4d7e3;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-stock,
+html.dlc-theme-dark body .delicat-native-product .dnp-stock {
+  background: rgba(66, 213, 156, 0.14);
+  color: #7beab9;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-stock.is-out,
+html.dlc-theme-dark body .delicat-native-product .dnp-stock.is-out {
+  background: rgba(255, 123, 134, 0.14);
+  color: #ff9aa4;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-stock.is-neutral,
+html.dlc-theme-dark body .delicat-native-product .dnp-stock.is-neutral {
+  background: rgba(255, 255, 255, 0.07);
+  color: #d4d7e3;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-purchase select,
+html.dlc-theme-dark body .delicat-native-product .dnp-purchase select {
+  border-color: rgba(255, 255, 255, 0.12);
+  background-color: #0b0f22;
+  color: #f7f8fc;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-more-options,
+html.dlc-theme-dark body .delicat-native-product .dnp-more-options {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #161b35;
+  color: #eef0f8;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-delivery-badge,
+html.dlc-theme-dark body .delicat-native-product .dnp-delivery-badge {
+  border-color: rgba(66, 213, 156, 0.28);
+  background: #10261f;
+  color: #9ff1c4;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-media,
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-related-card img,
+html.dlc-theme-dark body .delicat-native-product .dnp-media,
+html.dlc-theme-dark body .delicat-native-product .dnp-related-card img {
+  background: #161b35;
+}
+
+/* 3 ------------------------------------------------------------------ */
+html.dlc-theme-dark [data-dlc-dk]::placeholder {
+  color: #858da2;
+}

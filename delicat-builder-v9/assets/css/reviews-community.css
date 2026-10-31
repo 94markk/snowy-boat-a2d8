@@ -1,0 +1,532 @@
+/*
+ * Delicat Builder V9 — product review community (9.3.15): helpful votes,
+ * store replies and the "Voir tout" sheet with every review. Product bundles
+ * only (the only pages that print reviews with votes).
+ */
+
+/* Votes ---------------------------------------------------------------- */
+.dlc-votes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.dlc-votes__label {
+  margin-right: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7a8099;
+}
+html .dlc-vote,
+html .dlc-vote:hover,
+html .dlc-vote:focus {
+  -webkit-appearance: none;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: auto;
+  min-width: 0;
+  min-height: 34px;
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid rgba(40, 70, 150, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: #5a6078;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.dlc-vote svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.dlc-vote:active {
+  transform: scale(0.94);
+}
+.dlc-vote:focus-visible {
+  outline: 2px solid #5b7ccc;
+  outline-offset: 2px;
+}
+html .dlc-vote--up[aria-pressed="true"] {
+  border-color: rgba(18, 128, 74, 0.35);
+  background: #e9f8ef;
+  color: #12804a;
+}
+html .dlc-vote--down[aria-pressed="true"] {
+  border-color: rgba(201, 38, 76, 0.3);
+  background: #fdecef;
+  color: #c9264c;
+}
+.dlc-vote[aria-pressed="true"] svg {
+  fill: currentColor;
+  fill-opacity: 0.18;
+}
+.dlc-vote.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.dlc-vote__n:empty {
+  display: none;
+}
+.dlc-votes__note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #c9264c;
+}
+.dlc-votes__note:empty {
+  display: none;
+}
+.dnp-review-reply,
+.dlc-rv-reply {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-left: 3px solid #5b7ccc;
+  border-radius: 4px 12px 12px 4px;
+  background: rgba(91, 124, 204, 0.08);
+}
+.dnp-review-reply strong,
+.dlc-rv-reply strong {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+  color: #3c56a8;
+}
+.dnp-review-reply p,
+.dlc-rv-reply p {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* "Voir tout" button under the product reviews */
+html .dlc-reviews-all-btn,
+html .dlc-reviews-all-btn:hover,
+html .dlc-reviews-all-btn:focus {
+  -webkit-appearance: none;
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 46px;
+  margin: 12px 0 0;
+  padding: 10px 16px;
+  border: 1.5px solid rgba(40, 70, 150, 0.2);
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  color: #284696;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.2;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+.dlc-reviews-all-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* All-reviews sheet ---------------------------------------------------- */
+.dlc-review-overlay.dlc-rv-overlay {
+  padding: 0;
+}
+.dlc-review-dialog.dlc-rv-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+  height: 88vh;
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+@supports (height: 100dvh) {
+  .dlc-review-dialog.dlc-rv-dialog {
+    height: 88dvh;
+  }
+}
+@media (min-width: 641px) {
+  .dlc-review-overlay.dlc-rv-overlay {
+    padding: 28px;
+  }
+  .dlc-review-dialog.dlc-rv-dialog {
+    height: min(82vh, 780px);
+    border-radius: 28px;
+  }
+}
+.dlc-rv-head {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 20px 64px 12px 22px;
+  border-bottom: 1px solid rgba(40, 70, 150, 0.1);
+}
+.dlc-rv-head::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  width: 40px;
+  height: 4px;
+  margin-left: -20px;
+  border-radius: 4px;
+  background: rgba(13, 27, 77, 0.14);
+}
+.dlc-rv-head .dlc-review-title {
+  margin: 4px 0 2px;
+  text-align: left;
+}
+.dlc-rv-head .dlc-review-text {
+  margin: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dlc-rv-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 18px 18px;
+}
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .dlc-rv-scroll {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+}
+.dlc-rv-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #f5f7fd;
+}
+.dlc-rv-score {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 86px;
+}
+.dlc-rv-score strong {
+  font-size: 38px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #0d1b4d;
+}
+.dlc-rv-score span {
+  font-size: 12px;
+  font-weight: 700;
+  color: #68709a;
+}
+.dlc-rv-stars {
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #ffbf2f;
+  white-space: nowrap;
+}
+.dlc-rv-bars {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dlc-rv-bars li {
+  display: grid;
+  grid-template-columns: 16px 1fr 30px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #68709a;
+}
+.dlc-rv-bars i {
+  position: relative;
+  display: block;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: rgba(13, 27, 77, 0.08);
+}
+.dlc-rv-bars b {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 7px;
+  background: #ffbf2f;
+}
+.dlc-rv-bars em {
+  font-style: normal;
+  text-align: right;
+}
+.dlc-rv-sort {
+  display: flex;
+  gap: 8px;
+  margin: 14px 0 4px;
+}
+html .dlc-rv-chip,
+html .dlc-rv-chip:hover,
+html .dlc-rv-chip:focus {
+  -webkit-appearance: none;
+  appearance: none;
+  width: auto;
+  min-width: 0;
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 14px;
+  border: 1px solid rgba(40, 70, 150, 0.16);
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: #37406b;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: normal;
+  text-transform: none;
+  cursor: pointer;
+}
+html .dlc-rv-chip[aria-pressed="true"] {
+  border-color: #284696;
+  background: #284696;
+  color: #fff;
+}
+.dlc-rv-list {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.dlc-rv-item {
+  padding: 14px 15px;
+  border: 1px solid rgba(40, 70, 150, 0.1);
+  border-radius: 16px;
+  background: #fafbff;
+}
+.dlc-rv-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dlc-rv-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #5b3df5;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+}
+.dlc-rv-id {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dlc-rv-id strong {
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #12142e;
+}
+.dlc-rv-meta {
+  font-size: 12px;
+  line-height: 1.3;
+  color: #6b7190;
+}
+.dlc-rv-verified {
+  font-style: normal;
+  font-weight: 800;
+  color: #1f8a4c;
+}
+.dlc-rv-item > p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: #23263f;
+  overflow-wrap: anywhere;
+}
+.dlc-rv-empty,
+.dlc-rv-status {
+  margin: 18px 0 6px;
+  font-size: 14px;
+  text-align: center;
+  color: #68709a;
+}
+.dlc-rv-status:empty {
+  display: none;
+}
+.dlc-rv-skel {
+  height: 108px;
+  border-radius: 16px;
+  background: linear-gradient(90deg, rgba(13, 27, 77, 0.05), rgba(13, 27, 77, 0.09), rgba(13, 27, 77, 0.05));
+  background-size: 200% 100%;
+  animation: dlc-rv-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes dlc-rv-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dlc-rv-skel {
+    animation: none;
+  }
+}
+.dlc-rv-more {
+  margin-top: 14px;
+}
+.dlc-rv-foot {
+  margin-top: 16px;
+}
+
+/* Votes, button and sheet in dark mode */
+html[data-delicat-theme="dark"] .dlc-votes__label,
+html.dlc-theme-dark .dlc-votes__label {
+  color: #a7aec6;
+}
+html[data-delicat-theme="dark"] .dlc-vote,
+html.dlc-theme-dark .dlc-vote {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #b8bed3;
+}
+html[data-delicat-theme="dark"] .dlc-vote--up[aria-pressed="true"],
+html.dlc-theme-dark .dlc-vote--up[aria-pressed="true"] {
+  border-color: rgba(66, 213, 156, 0.4);
+  background: rgba(66, 213, 156, 0.14);
+  color: #7beab9;
+}
+html[data-delicat-theme="dark"] .dlc-vote--down[aria-pressed="true"],
+html.dlc-theme-dark .dlc-vote--down[aria-pressed="true"] {
+  border-color: rgba(255, 123, 134, 0.4);
+  background: rgba(255, 123, 134, 0.14);
+  color: #ff9aa4;
+}
+html[data-delicat-theme="dark"] .dlc-votes__note,
+html.dlc-theme-dark .dlc-votes__note {
+  color: #ff8095;
+}
+html[data-delicat-theme="dark"] .dnp-review-reply,
+html[data-delicat-theme="dark"] .dlc-rv-reply,
+html.dlc-theme-dark .dnp-review-reply,
+html.dlc-theme-dark .dlc-rv-reply {
+  border-left-color: #7f95ff;
+  background: rgba(127, 149, 255, 0.1);
+}
+html[data-delicat-theme="dark"] .dnp-review-reply strong,
+html[data-delicat-theme="dark"] .dlc-rv-reply strong,
+html.dlc-theme-dark .dnp-review-reply strong,
+html.dlc-theme-dark .dlc-rv-reply strong {
+  color: #a9b8ff;
+}
+html[data-delicat-theme="dark"] .dlc-reviews-all-btn,
+html.dlc-theme-dark .dlc-reviews-all-btn {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #c9d2ff;
+}
+html[data-delicat-theme="dark"] .dlc-rv-head,
+html.dlc-theme-dark .dlc-rv-head {
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+}
+html[data-delicat-theme="dark"] .dlc-rv-head::before,
+html.dlc-theme-dark .dlc-rv-head::before {
+  background: rgba(255, 255, 255, 0.18);
+}
+html[data-delicat-theme="dark"] .dlc-rv-summary,
+html.dlc-theme-dark .dlc-rv-summary {
+  background: #161b35;
+}
+html[data-delicat-theme="dark"] .dlc-rv-score strong,
+html.dlc-theme-dark .dlc-rv-score strong {
+  color: #f7f8fc;
+}
+html[data-delicat-theme="dark"] .dlc-rv-score span,
+html[data-delicat-theme="dark"] .dlc-rv-bars li,
+html[data-delicat-theme="dark"] .dlc-rv-empty,
+html[data-delicat-theme="dark"] .dlc-rv-status,
+html.dlc-theme-dark .dlc-rv-score span,
+html.dlc-theme-dark .dlc-rv-bars li,
+html.dlc-theme-dark .dlc-rv-empty,
+html.dlc-theme-dark .dlc-rv-status {
+  color: #9aa3c7;
+}
+html[data-delicat-theme="dark"] .dlc-rv-bars i,
+html.dlc-theme-dark .dlc-rv-bars i {
+  background: rgba(255, 255, 255, 0.08);
+}
+html[data-delicat-theme="dark"] .dlc-rv-chip,
+html.dlc-theme-dark .dlc-rv-chip {
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #d4d7e3;
+}
+html[data-delicat-theme="dark"] .dlc-rv-chip[aria-pressed="true"],
+html.dlc-theme-dark .dlc-rv-chip[aria-pressed="true"] {
+  border-color: #7f95ff;
+  background: #7f95ff;
+  color: #0b0f22;
+}
+html[data-delicat-theme="dark"] .dlc-rv-item,
+html.dlc-theme-dark .dlc-rv-item {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #161b35;
+}
+html[data-delicat-theme="dark"] .dlc-rv-id strong,
+html[data-delicat-theme="dark"] .dlc-rv-item > p,
+html.dlc-theme-dark .dlc-rv-id strong,
+html.dlc-theme-dark .dlc-rv-item > p {
+  color: #eef0f8;
+}
+html[data-delicat-theme="dark"] .dlc-rv-meta,
+html.dlc-theme-dark .dlc-rv-meta {
+  color: #9aa3c7;
+}
+html[data-delicat-theme="dark"] .dlc-rv-verified,
+html.dlc-theme-dark .dlc-rv-verified {
+  color: #5fe0a3;
+}
+html[data-delicat-theme="dark"] .dlc-rv-skel,
+html.dlc-theme-dark .dlc-rv-skel {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  background-size: 200% 100%;
+}

@@ -1,0 +1,413 @@
+/*
+ * Delicat Builder V9 — dark mode "glass + soft depth" design (9.3.16).
+ * Last file of the chrome bundle; applies only in dark mode.
+ *
+ * Glass without backdrop-filter (old Android WebViews): the page sits on a
+ * deep navy canvas lit by three fixed colour glows, and every surface is a
+ * translucent gradient over it, so the glows show through softly. Depth
+ * comes from neumorphic paired shadows (dark below-right, faint light
+ * above-left) and a 1px top highlight. No color-mix(), backdrop-filter or
+ * relative colours anywhere.
+ *
+ * 1. Tokens          5. Product page          9. Account, cart, checkout
+ * 2. Canvas + glows  6. Home + catalogue     10. Notifications, sheets
+ * 3. Header          7. Fields               11. Footer
+ * 4. Drawer + nav    8. Buttons              12. Low-power phones
+ *                                            13. Order confirmation
+ */
+
+/* 1 ---------------------------------------------------------- tokens */
+html.dlc-theme-dark {
+  --g-canvas: #060817;
+  --g-card: linear-gradient(150deg, rgba(44, 50, 108, 0.5) 0%, rgba(20, 24, 58, 0.58) 46%, rgba(12, 15, 38, 0.66) 100%);
+  --g-card-solid: #121633;
+  --g-card-2: linear-gradient(160deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
+  --g-edge: rgba(255, 255, 255, 0.085);
+  --g-edge-hi: rgba(170, 160, 255, 0.24);
+  --g-depth: inset 0 1px 0 rgba(255, 255, 255, 0.075), -6px -6px 18px rgba(130, 118, 255, 0.04), 10px 16px 32px rgba(0, 0, 0, 0.5);
+  --g-depth-sm: inset 0 1px 0 rgba(255, 255, 255, 0.07), -3px -3px 10px rgba(130, 118, 255, 0.035), 5px 8px 18px rgba(0, 0, 0, 0.42);
+  --g-inset: inset 3px 3px 8px rgba(0, 0, 0, 0.55), inset -2px -2px 6px rgba(255, 255, 255, 0.035);
+  --g-field: rgba(5, 7, 20, 0.62);
+  --g-pill: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.03));
+  --g-glow: 0 10px 26px -8px rgba(124, 92, 255, 0.62);
+  --g-text: #f4f5fb;
+  --g-muted: #a7aec6;
+  --dlc-bg: #060817;
+  --dlc-surface: rgba(20, 24, 56, 0.62);
+  --dlc-surface-strong: rgba(16, 19, 46, 0.94);
+  --dlc-border: rgba(255, 255, 255, 0.085);
+  --dlc-control: rgba(5, 7, 20, 0.62);
+  background: #060817 !important;
+}
+
+/* 2 ------------------------------------------------- canvas + glows */
+html.dlc-theme-dark::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(130vw 70vh at 8% -12%, rgba(108, 84, 255, 0.24), rgba(108, 84, 255, 0) 62%),
+    radial-gradient(95vw 60vh at 112% 38%, rgba(226, 72, 192, 0.13), rgba(226, 72, 192, 0) 62%),
+    radial-gradient(120vw 72vh at 24% 116%, rgba(38, 112, 255, 0.15), rgba(38, 112, 255, 0) 62%);
+}
+/* page-level containers let the canvas show (cards keep their surfaces) */
+html.dlc-theme-dark[data-delicat-theme="dark"] body,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-woo-ui,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-woo-archive,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.woocommerce-shop,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.tax-product_cat,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.tax-product_tag,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-managed,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-cart,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout {
+  background: transparent !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body #page,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .site,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .site-content,
+html.dlc-theme-dark[data-delicat-theme="dark"] body #content,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .content-area,
+html.dlc-theme-dark[data-delicat-theme="dark"] body #primary,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .site-main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .wp-site-blocks,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-page-main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product-main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"],
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout--homepage-managed {
+  background-color: transparent !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce-page {
+  background-color: transparent !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-managed,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"],
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout--homepage-managed {
+  --dbv9-home-bg: transparent !important;
+  --delicat-surface: rgba(20, 24, 56, 0.62) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product {
+  --dnp-bg: transparent !important;
+  --dnp-card: rgba(20, 24, 56, 0.62) !important;
+  --dnp-surface: rgba(255, 255, 255, 0.045);
+}
+
+/* 3 ---------------------------------------------------------- header */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header {
+  --dsb8-header-bg: rgba(10, 12, 32, 0.9) !important;
+  background: linear-gradient(180deg, rgba(16, 19, 46, 0.96), rgba(9, 11, 30, 0.92)) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  box-shadow: inset 0 -1px 0 rgba(140, 128, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dsb8-header__action,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dbv9-notifications__bell {
+  border-radius: 14px;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dsb8-header__action:active,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dbv9-notifications__bell:active {
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: var(--g-inset) !important;
+}
+
+/* 4 ------------------------------------------------- drawer + bottom nav */
+html.dlc-theme-dark .dlx-drawer {
+  --dlx-bg: #0b0e24;
+  --dlx-card: rgba(255, 255, 255, 0.05);
+  --dlx-soft: rgba(255, 255, 255, 0.07);
+  --dlx-line: rgba(255, 255, 255, 0.08);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-drawer__panel {
+  background:
+    radial-gradient(120% 50% at 0% 0%, rgba(108, 84, 255, 0.2), rgba(108, 84, 255, 0) 70%),
+    radial-gradient(110% 40% at 100% 100%, rgba(38, 112, 255, 0.14), rgba(38, 112, 255, 0) 70%),
+    #0b0e24;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 18px 0 50px rgba(0, 0, 0, 0.55);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-theme,
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-account__code {
+  background: var(--g-pill);
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: var(--g-depth-sm);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bottom-nav {
+  --dbn-bg: #141838;
+  --dbn-line: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(34, 39, 86, 0.97), rgba(15, 18, 44, 0.98)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 -2px 0 rgba(124, 108, 255, 0.05), 0 16px 40px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* 5 ---------------------------------------------------- product page */
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-hero,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-section {
+  background: var(--g-card) !important;
+  border: 1px solid var(--g-edge) !important;
+  box-shadow: var(--g-depth) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp-review,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp-trust span,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp-more-options {
+  background: var(--g-card-2) !important;
+  border-color: var(--g-edge) !important;
+  box-shadow: var(--g-depth-sm) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card {
+  background: var(--g-card-2) !important;
+  border-color: rgba(188, 180, 255, 0.18) !important;
+  box-shadow: var(--g-depth-sm) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card.is-selected {
+  background: linear-gradient(135deg, #6a5cff, #2f2a86) !important;
+  border-color: rgba(206, 198, 255, 0.55) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), var(--g-glow) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .dnp-mobile-dock {
+  background: linear-gradient(180deg, rgba(30, 35, 80, 0.97), rgba(13, 16, 40, 0.98)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 40px rgba(0, 0, 0, 0.55) !important;
+}
+
+/* 6 --------------------------------------------- home + catalogue cards */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce ul.products li.product,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-carousel__view-all,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mcard,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__rating,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__review-cta,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-faq__item,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__panel,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why__payments,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-newsletter,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__domain {
+  background: var(--g-card) !important;
+  border-color: var(--g-edge) !important;
+  box-shadow: var(--g-depth) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why__payment,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bk__perk,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-like__chip,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__google {
+  background: var(--g-pill) !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  box-shadow: var(--g-depth-sm) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__form {
+  background: rgba(8, 10, 26, 0.72) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: var(--g-inset), 0 10px 26px rgba(0, 0, 0, 0.35) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__form input {
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__results {
+  background: linear-gradient(180deg, #171b40, #0f1230) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result {
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result:hover,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result.is-active {
+  background: rgba(124, 108, 255, 0.16) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result img,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result-placeholder,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__media,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-search-image {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* 7 ----------------------------------------------------------- fields */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce form :where(input.input-text, select, textarea),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product :where(input[type="text"], input[type="email"], input[type="tel"], input[type="number"], select, textarea),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-review-dialog :where(.dlc-review-input, .dlc-review-textarea),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header__search input[type="search"],
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-currency__select {
+  background-color: var(--g-field) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: var(--g-inset) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce form :where(input.input-text, select, textarea):focus,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product :where(input, select, textarea):focus,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-review-dialog :where(.dlc-review-input, .dlc-review-textarea):focus {
+  border-color: rgba(150, 136, 255, 0.7) !important;
+  box-shadow: var(--g-inset), 0 0 0 3px rgba(124, 108, 255, 0.22) !important;
+  outline: none !important;
+}
+
+/* 8 ---------------------------------------------------------- buttons */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dnp-reviews-btn, .dlc-review-btn--primary, .single_add_to_cart_button, .checkout-button, #place_order, .dnp-buy-now) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), var(--g-glow) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dlc-review-btn--ghost, .dlc-vote, .dlc-rv-chip, .dlc-reviews-all-btn, .dbv9-currency__buttons button) {
+  background: var(--g-pill) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: var(--g-depth-sm) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-vote--up[aria-pressed="true"] {
+  background: linear-gradient(180deg, rgba(66, 213, 156, 0.24), rgba(66, 213, 156, 0.1)) !important;
+  box-shadow: var(--g-inset) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-vote--down[aria-pressed="true"] {
+  background: linear-gradient(180deg, rgba(255, 123, 134, 0.24), rgba(255, 123, 134, 0.1)) !important;
+  box-shadow: var(--g-inset) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-rv-chip[aria-pressed="true"] {
+  background: linear-gradient(135deg, #8b7cff, #6a5cff) !important;
+  color: #0b0e24 !important;
+  box-shadow: var(--g-glow) !important;
+}
+
+/* 9 --------------------------------------------- account, cart, checkout */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.woocommerce-MyAccount-navigation, .woocommerce-MyAccount-content, .woocommerce-cart-form, .cart_totals, .woocommerce-checkout-review-order, .woocommerce form.login, .woocommerce form.register, .wc-block-components-sidebar, .wc-block-checkout__main, .dsb-wallet-card, .dsb-menu-card) {
+  background: var(--g-card) !important;
+  border: 1px solid var(--g-edge) !important;
+  box-shadow: var(--g-depth) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout :where(.dpn-checkout-steps, .dpn-account-card, .dpn-checkout-section, .dip-wc-login-panel, #order_review, #payment),
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-cart :where(.dpn-account-card, .dpn-gate-card, .dpn-gate-cart),
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-checkout :where(.dip-wc-login-panel, .dc-login-required, #order_review, #payment),
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart :where(tr.cart_item > td, td.actions) {
+  background: var(--g-card) !important;
+  border-color: var(--g-edge) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout-classic #payment ul.payment_methods > li {
+  background: var(--g-pill) !important;
+  border-color: rgba(255, 255, 255, 0.09) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout-classic #payment .payment_box,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .woocommerce-error,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .woocommerce-message,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .woocommerce-info,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .woocommerce-error,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .woocommerce-message,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .woocommerce-info,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .woocommerce-error,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .woocommerce-message,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .woocommerce-info {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .dpn-checkout-dock,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dpn-checkout-dock {
+  background: linear-gradient(180deg, rgba(30, 35, 80, 0.97), rgba(13, 16, 40, 0.98)) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 -10px 30px rgba(0, 0, 0, 0.45) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-thumb img, .dpn-empty-icon, .dpn-wallet-icon, .dcn-empty-icon, .dpn-account-mark) {
+  background-color: rgba(255, 255, 255, 0.07) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-badge, .dpn-account-status, .dcn-cart-category, .dpn-wallet-ui) {
+  background: rgba(124, 108, 255, 0.14) !important;
+  color: #d9d4ff !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-clear, .dcn-clear-cart, .delicat-native-cart a.remove) {
+  background: rgba(255, 123, 134, 0.14) !important;
+  color: #ffb3ba !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .quantity,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-cart td.product-thumbnail a {
+  background: var(--g-field) !important;
+  box-shadow: var(--g-inset) !important;
+}
+
+/* 10 ------------------------------------------ notifications, sheets, pwa */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-notifications__panel,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-panel,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-pwa-card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-install-bar,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-push-help__card {
+  background:
+    radial-gradient(120% 60% at 0% 0%, rgba(108, 84, 255, 0.16), rgba(108, 84, 255, 0) 70%),
+    linear-gradient(180deg, #151939, #0d1029) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 26px 70px rgba(0, 0, 0, 0.6) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-notifications__item {
+  background: var(--g-card-2) !important;
+  border-color: rgba(255, 255, 255, 0.07) !important;
+  box-shadow: var(--g-depth-sm) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dbv9-notifications__code, .dbv9-pwa-step-icon, .dbv9-pwa-close, .dbv9-install-bar__close, .dbv9-push-help__close, .dbv9-notifications__error button) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: var(--g-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-review-dialog {
+  background:
+    radial-gradient(120% 50% at 0% 0%, rgba(108, 84, 255, 0.18), rgba(108, 84, 255, 0) 70%),
+    radial-gradient(100% 40% at 100% 100%, rgba(38, 112, 255, 0.12), rgba(38, 112, 255, 0) 70%),
+    #0f1230;
+  border-color: rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 30px 80px rgba(0, 0, 0, 0.65);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-rv-summary,
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-rv-item {
+  background: var(--g-card-2);
+  box-shadow: var(--g-depth-sm);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-review-star {
+  box-shadow: var(--g-depth-sm);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-currency-sticky {
+  background: rgba(14, 17, 42, 0.94) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 11 ----------------------------------------------------------- footer */
+html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-footer {
+  background: linear-gradient(180deg, rgba(10, 12, 32, 0), rgba(10, 12, 32, 0.85) 18%, #080a1c) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-footer-help {
+  background: var(--g-card) !important;
+  border-color: var(--g-edge) !important;
+  box-shadow: var(--g-depth) !important;
+}
+
+/* 12 --------------------------------------------------- low-power phones */
+/* weak phones keep the look but drop the large blurred shadows */
+html.dlc-theme-dark.delicat-low-power {
+  --g-depth: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 6px 14px rgba(0, 0, 0, 0.4);
+  --g-depth-sm: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 8px rgba(0, 0, 0, 0.35);
+  --g-glow: 0 6px 14px -6px rgba(124, 92, 255, 0.55);
+}
+
+/* 13 --------------------------------------- order confirmation (9.4.1) */
+/* The « Commande reçue » cards (9.4.0 module) join the glass surfaces; the
+   hero keeps its status tint and its own tinted edge on top. */
+html.dlc-theme-dark .dlc-oc .dlc-oc-card {
+  background-color: transparent;
+  background-image: linear-gradient(150deg, rgba(44, 50, 108, 0.5) 0%, rgba(20, 24, 58, 0.58) 46%, rgba(12, 15, 38, 0.66) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075), -6px -6px 18px rgba(130, 118, 255, 0.04), 10px 16px 32px rgba(0, 0, 0, 0.5);
+}
+html.dlc-theme-dark .dlc-oc .dlc-oc-card:not(.dlc-oc-hero) {
+  border-color: rgba(255, 255, 255, 0.085);
+}
+html.delicat-low-power.dlc-theme-dark .dlc-oc .dlc-oc-card {
+  background-color: #121633;
+  background-image: none;
+  box-shadow: none;
+}

@@ -1,0 +1,290 @@
+/*
+ * Delicat Builder V9 — chrome fixes (9.3.14). Last file of the chrome bundle.
+ *
+ * 1. Count badges stay hidden at zero.
+ * 2. Header actions keep their spacing on compact rows.
+ * 3. The bottom bar is opaque on every page.
+ * 4. Drawer and notification controls keep their own look whatever generic
+ *    button styling a theme or an account/wallet extension prints on the page.
+ *    Values mirror drawer.css / notifications.css; colours come from the same
+ *    variables, so dark mode is unchanged.
+ */
+
+/* 1 ------------------------------------------------------------------ */
+/* The badge's own display:grid outranked the [hidden] attribute, so an empty
+   basket showed a red "0" on every page that did not load a theme reset. */
+.dsb8-header__badge[hidden],
+.dbn-badge[hidden],
+[data-dsb8-cart-count][hidden],
+[data-dbn-cart-count][hidden],
+[data-delicat-cart-count][hidden] {
+  display: none !important;
+}
+
+/* 2 ------------------------------------------------------------------ */
+/* The polish layer's 44px tap minimum ignored the header's own action size,
+   so on compact rows (installed app with a back button) every icon overflowed
+   its slot and the bell's count landed on the cart. Inside the header the tap
+   minimum is the configured action size. */
+.dsb8-header {
+  --dbv9-app-tap: var(--dsb8-action-size, 44px);
+}
+html .dsb8-header .dsb8-header__action {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  min-width: var(--dbv9-app-tap, 44px);
+  min-height: var(--dbv9-app-tap, 44px);
+  line-height: 1;
+  text-indent: 0;
+  letter-spacing: normal;
+}
+html .dsb8-header .dbv9-notifications__bell {
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  max-width: var(--dsb8-action-size, 44px);
+  max-height: var(--dsb8-action-size, 44px);
+  line-height: 1;
+  color: #14182d;
+}
+html[data-delicat-theme="dark"] .dsb8-header .dbv9-notifications__bell,
+html.dlc-theme-dark .dsb8-header .dbv9-notifications__bell {
+  color: #f5f6ff;
+}
+html .dsb8-header.has-back .dsb8-header__logo {
+  flex: 0 1 auto !important;
+}
+
+/* 3 ------------------------------------------------------------------ */
+/* pro.50 made the bar opaque on the homepage only; on account and wallet
+   pages the dark wallet card still showed through it. */
+html body .delicat-bottom-nav {
+  --dbn-bg: #fff;
+  background: #fff !important;
+}
+html[data-delicat-theme="dark"] body .delicat-bottom-nav,
+html.dlc-theme-dark body .delicat-bottom-nav {
+  --dbn-bg: #171a2b;
+  background: #171a2b !important;
+}
+
+/* 4 ------------------------------------------------------------------ */
+html .delicat-bottom-nav .dbn-item,
+html .delicat-bottom-nav .dbn-item:hover,
+html .delicat-bottom-nav .dbn-item:focus,
+html .delicat-bottom-nav .dbn-item:visited {
+  color: var(--dbn-text);
+}
+html .delicat-bottom-nav .dbn-item.is-active {
+  color: var(--dbn-active);
+}
+html .delicat-bottom-nav .dbn-item--center .dbn-center {
+  color: #fff;
+}
+html .dlx-drawer .dlx-drawer__panel:focus {
+  outline: none;
+}
+html .dlx-drawer button {
+  min-width: 0;
+  margin: 0;
+  float: none;
+  letter-spacing: normal;
+  text-indent: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+html .dlx-drawer .dlx-drawer__close,
+html .dlx-drawer .dlx-drawer__close:hover,
+html .dlx-drawer .dlx-drawer__close:focus,
+html .dlx-drawer .dlx-drawer__close:active {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  background: var(--dlx-soft);
+  box-shadow: none;
+  line-height: 1;
+}
+html .dlx-drawer .dlx-account__code,
+html .dlx-drawer .dlx-account__code:hover,
+html .dlx-drawer .dlx-account__code:focus,
+html .dlx-drawer .dlx-account__code:active {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-height: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--dlx-line);
+  border-radius: 12px;
+  background: var(--dlx-card);
+  box-shadow: none;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: inherit;
+  text-transform: none;
+}
+html .dlx-drawer .dlx-account__code.is-done {
+  border-color: #1fb36b;
+}
+html .dlx-drawer .dlx-section__toggle,
+html .dlx-drawer .dlx-section__toggle:hover,
+html .dlx-drawer .dlx-section__toggle:focus,
+html .dlx-drawer .dlx-section__toggle:active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 12px 16px 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  text-transform: none;
+  text-align: left;
+}
+html .dlx-drawer .dlx-section__toggle:focus-visible {
+  outline: 2px solid var(--dlx-primary);
+  outline-offset: -2px;
+}
+html .dlx-drawer .dlx-theme,
+html .dlx-drawer .dlx-theme:hover,
+html .dlx-drawer .dlx-theme:focus,
+html .dlx-drawer .dlx-theme:active {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--dlx-line);
+  border-radius: var(--dlx-item-radius);
+  background: var(--dlx-card);
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.3;
+  text-transform: none;
+  text-align: left;
+}
+html .dlx-drawer .dlx-theme span {
+  flex: 1 1 auto;
+  text-align: left;
+}
+html .dlx-drawer .dlx-theme .dlx-theme__switch {
+  display: block;
+  flex: 0 0 42px;
+  position: relative;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #d7dae4;
+}
+html .dlx-drawer .dlx-theme[aria-pressed="true"] .dlx-theme__switch,
+html[data-delicat-theme="dark"] .dlx-drawer .dlx-theme .dlx-theme__switch,
+html.dlc-theme-dark .dlx-drawer .dlx-theme .dlx-theme__switch {
+  background: var(--dlx-primary);
+}
+html .dlx-drawer .dlx-account.is-guest .dlx-account__login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  border: 0;
+  border-radius: 15px;
+  background: linear-gradient(135deg, var(--dlx-primary), var(--dlx-secondary));
+  text-transform: none;
+  line-height: 1.2;
+}
+
+html .dbv9-notifications__panel button {
+  min-width: 0;
+  letter-spacing: normal;
+  text-transform: none;
+  text-shadow: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+html .dbv9-notifications__panel .dbv9-notifications__head button,
+html .dbv9-notifications__panel .dbv9-notifications__head button:hover,
+html .dbv9-notifications__panel .dbv9-notifications__head button:focus,
+html .dbv9-notifications__panel .dbv9-notifications__head button:active {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f2f8;
+  box-shadow: none;
+  line-height: 1;
+}
+html[data-delicat-theme="dark"] .dbv9-notifications__panel .dbv9-notifications__head button,
+html.dlc-theme-dark .dbv9-notifications__panel .dbv9-notifications__head button {
+  background: #191d3f;
+}
+html .dbv9-notifications__panel .dbv9-notifications__delete,
+html .dbv9-notifications__panel .dbv9-notifications__delete:hover,
+html .dbv9-notifications__panel .dbv9-notifications__delete:focus,
+html .dbv9-notifications__panel .dbv9-notifications__delete:active {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  box-shadow: none;
+  color: #858ba0;
+  line-height: 1;
+}
+html .dbv9-notifications__panel .dbv9-notifications__push-button,
+html .dbv9-notifications__panel .dbv9-notifications__push-button:hover,
+html .dbv9-notifications__panel .dbv9-notifications__push-button:focus {
+  width: auto;
+  min-height: 39px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 11px;
+  background: #eceeff;
+  box-shadow: none;
+  color: #4e56d8;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+html .dbv9-notifications__panel .dbv9-notifications__push-button.is-active {
+  background: #e7f9ef;
+  color: #13834e;
+}
+html[data-delicat-theme="dark"] .dbv9-notifications__panel .dbv9-notifications__push-button,
+html.dlc-theme-dark .dbv9-notifications__panel .dbv9-notifications__push-button {
+  background: #1a1f48;
+  color: #d9dcff;
+}
+html[data-delicat-theme="dark"] .dbv9-notifications__panel .dbv9-notifications__push-button.is-active,
+html.dlc-theme-dark .dbv9-notifications__panel .dbv9-notifications__push-button.is-active {
+  background: #12372a;
+  color: #9ff1c4;
+}

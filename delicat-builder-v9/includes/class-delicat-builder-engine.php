@@ -1,0 +1,1080 @@
+<?php
+/**
+ * Delicat Builder V9 — Engine delivery (9.3).
+ *
+ * The storefront runtime is one ES module (assets/dist/engine.<hash>.js, built
+ * from src/engine by tools/build.mjs) plus three stylesheets per page:
+ *
+ *   chrome   theme + header + drawer + bottom bar + small always-on widgets
+ *   route    the owner of the page type (Builder components, native product,
+ *            archive, documents, cart/checkout …)
+ *   polish   the late correction layers (app-polish, app-tuning,
+ *            storefront-polish, dbp-app, dbp-type) that decide the final look
+ *
+ * Every file inside a bundle is concatenated in the order WordPress used to
+ * print it, so the cascade is unchanged. This class does the bookkeeping:
+ *
+ *   1. it picks the route bundle for the request;
+ *   2. it dequeues every legacy stylesheet whose file is inside the chosen
+ *      bundles and re-prints their inline additions after the route bundle
+ *      (merchant colours, radii, max widths …); a stylesheet that is not part
+ *      of the chosen bundles is left exactly as it was;
+ *   3. it dequeues the fourteen legacy scripts the engine replaces and carries
+ *      their configuration blocks (window.DelicaBuilderV9, DelicatExpress …)
+ *      into one inline block the engine reads, so every feature keeps the
+ *      configuration object it had;
+ *   4. it prints the module script with modulepreload hints, early in <head>.
+ *
+ * Nothing here changes what a feature renders. Switch the engine off with the
+ * `delicat_builder_v9_engine_active` filter (or `?dbv9_engine=0` as an
+ * administrator) and the storefront falls back to the previous per-file
+ * delivery, bytes for bytes.
+ *
+ * @package Delicat_Builder_V9
+ */
+
+defined( 'ABSPATH' ) || exit;
+
+final class Delicat_Builder_V9_Engine {
+
+	const VERSION       = '9.3.5';
+	const DIST          = 'assets/dist/';
+	const HANDLE_CHROME = 'delicat-engine-chrome';
+	const HANDLE_ROUTE  = 'delicat-engine-route';
+	const HANDLE_POLISH = 'delicat-engine-polish';
+
+	/** Legacy script handles whose behaviour now lives inside the engine module. */
+	const SCRIPTS = array(
+		'delicat-builder-v9-core', 'delicat-builder-v9-carousel', 'delicat-builder-v9-islands', 'delicat-builder-v9-heart',
+		'delicat-builder-v9-hero-search', 'delicat-builder-v9-prefetch', 'delicat-builder-v9-navigation', 'delicat-builder-v9-shell',
+		'delicat-builder-v9-theme', 'delicat-builder-v9-motion', 'delicat-builder-v9-header-studio-8', 'delicat-builder-v9-drawer',
+		'delicat-builder-v9-session', 'delicat-builder-v9-shell-nav', 'delicat-builder-v9-mobile-dock', 'delicat-builder-v9-purchase-native',
+		'delicat-builder-v9-purchase', 'delicat-builder-v9-express', 'delicat-builder-v9-wallet-guard', 'delicat-v9-native-product',
+		'delicat-builder-v9-design-product', 'delicat-builder-v9-pwa-runtime', 'delicat-builder-v9-notifications', 'delicat-builder-v9-currency',
+		'delicat-builder-v9-live-selling', 'delicat-builder-v9-announcement', 'delicat-builder-v9-reviews', 'delicat-builder-v9-storefront-commerce',
+		'delicat-builder-v9-wallet-live', 'delicat-product-switcher', 'dmc-calc', 'delicat-android-app-link', 'dbp-nav', 'dbp-state',
+		'delicat-app-polish-pull-refresh',
+	);
+
+	/** The release bundle header-runtime enqueues; the engine knows what it contains. */
+	const CHROME_BUNDLE_FILES = array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/drawer.css', 'assets/css/bottom-nav.css' );
+
+	/** @var bool */
+	private static $booted = false;
+	/** @var bool|null */
+	private static $active = null;
+	/** @var array|null */
+	private static $manifest = null;
+	/** @var bool */
+	private static $shaped = false;
+	/** @var string */
+	private static $route = 'page';
+	/** @var string */
+	private static $route_bundle = 'page';
+	/** @var string */
+	private static $polish_bundle = 'polish';
+	/** @var array<string,string> rel path => bundle */
+	private static $covered = array();
+	/** @var array<string,bool> */
+	private static $absorbed = array();
+	/** @var string[] */
+	private static $code = array();
+	/** @var string[] */
+	private static $globals = array();
+	/** @var string[] */
+	private static $absorbed_styles = array();
+
+	/* ------------------------------------------------------------ boot */
+
+	public static function boot(): void {
+		if ( self::$booted ) {
+			return;
+		}
+		self::$booted = true;
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_chrome' ), 0 );
+		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'shape' ), 100500 );
+		add_action( 'wp_print_scripts', array( __CLASS__, 'record_product_scripts' ), 100500 );
+		add_filter( 'body_class', array( __CLASS__, 'theme_body_class' ), 20 );
+		add_action( 'wp_head', array( __CLASS__, 'print_head' ), 2 );
+		add_action( 'wp_body_open', array( __CLASS__, 'progress_bar' ), 1 );
+		add_action( 'wp_print_footer_scripts', array( __CLASS__, 'absorb_late' ), 1 );
+		add_action( 'template_redirect', array( __CLASS__, 'link_header' ), 5 );
+		add_action( 'init', array( __CLASS__, 'rescue_missing_asset' ), 0 );
+		add_filter( 'show_admin_bar', array( __CLASS__, 'show_admin_bar' ), 100 );
+		foreach ( array( 'litespeed_optimize_js_excludes', 'litespeed_optm_js_defer_exc', 'litespeed_optm_gm_js_exc', 'litespeed_optimize_css_excludes', 'litespeed_optm_css_async_exc', 'litespeed_optm_ucss_exc' ) as $hook ) {
+			add_filter( $hook, array( __CLASS__, 'litespeed_exclusions' ), PHP_INT_MAX );
+		}
+		add_filter( 'delicat_builder_v9_session_payload', array( __CLASS__, 'session_payload' ), 5 );
+	}
+
+	/**
+	 * 9.3.3: a document rendered before an update still names the previous
+	 * build's hashed bundles. Those files leave with the old plugin folder, so
+	 * a copy kept for a few minutes by a browser, by the installed app's
+	 * service worker or by a CDN came up without its chrome: no bottom bar,
+	 * no drawer styles, no engine. The web server hands a missing file to
+	 * WordPress; this answers with the current build of the same bundle
+	 * instead of a 404. Only bundles named in the manifest are served, never
+	 * an arbitrary path.
+	 */
+	public static function rescue_missing_asset(): void {
+		$uri = (string) ( $_SERVER['REQUEST_URI'] ?? '' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- compared against the manifest only
+		if ( '' === $uri || false === strpos( $uri, '/' . self::DIST ) ) {
+			return;
+		}
+		$path   = (string) wp_parse_url( $uri, PHP_URL_PATH );
+		$prefix = trailingslashit( (string) wp_parse_url( DELICAT_BUILDER_V9_URL, PHP_URL_PATH ) ) . self::DIST;
+		if ( '' === $path || 0 !== strpos( $path, $prefix ) ) {
+			return;
+		}
+		$rel = substr( $path, strlen( $prefix ) );
+		if ( ! preg_match( '#^([a-z0-9-]+)\.[A-Za-z0-9]{6,16}\.(css|js)$#', $rel, $m ) || is_file( DELICAT_BUILDER_V9_DIR . self::DIST . $rel ) ) {
+			return;
+		}
+		$manifest = self::manifest();
+		if ( ! $manifest ) {
+			return;
+		}
+		$file = 'css' === $m[2] ? (string) ( $manifest['css'][ $m[1] ]['file'] ?? '' ) : (string) ( $manifest['js'][ $m[1] ]['file'] ?? '' );
+		if ( '' === $file || ! preg_match( '#^[a-z0-9-]+\.[A-Za-z0-9]+\.(css|js)$#', $file ) || ! is_file( DELICAT_BUILDER_V9_DIR . self::DIST . $file ) ) {
+			return;
+		}
+		status_header( 200 );
+		header( 'Content-Type: ' . ( 'css' === $m[2] ? 'text/css' : 'text/javascript' ) . '; charset=UTF-8' );
+		header( 'Cache-Control: public, max-age=300, must-revalidate', true );
+		header( 'X-Delicat-Asset: rescued ' . $file );
+		readfile( DELICAT_BUILDER_V9_DIR . self::DIST . $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile -- local build output
+		exit;
+	}
+
+	/**
+	 * The installed app (its own cookie, or the launch address) is a native
+	 * surface: no WordPress toolbar for signed-in staff.
+	 */
+	public static function show_admin_bar( $show ) {
+		if ( ! empty( $_COOKIE['dbv9_app'] ) || ( isset( $_GET['utm_source'] ) && 'pwa' === $_GET['utm_source'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presentation only
+			return false;
+		}
+		return $show;
+	}
+
+	/**
+	 * Is the engine delivering this request?
+	 */
+	public static function active(): bool {
+		if ( null !== self::$active ) {
+			return self::$active;
+		}
+		$active = ! is_admin() && ! wp_doing_ajax() && ! wp_doing_cron() && ! ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+		if ( $active && function_exists( 'is_customize_preview' ) && is_customize_preview() ) {
+			$active = false;
+		}
+		if ( $active && did_action( 'wp' ) && ( is_feed() || is_embed() ) ) {
+			$active = false;
+		}
+		if ( $active && class_exists( 'Delicat_Builder_V9_Core', false ) && is_callable( array( 'Delicat_Builder_V9_Core', 'is_enabled' ) ) && ! Delicat_Builder_V9_Core::is_enabled() ) {
+			$active = false;
+		}
+		if ( $active && null === self::manifest() ) {
+			$active = false;
+		}
+		if ( $active && isset( $_GET['dbv9_engine'] ) && '0' === (string) $_GET['dbv9_engine'] && current_user_can( 'manage_options' ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- administrator debugging switch, read only.
+			$active = false;
+		}
+		$active = (bool) apply_filters( 'delicat_builder_v9_engine_active', $active );
+		if ( did_action( 'wp' ) ) {
+			self::$active = $active;
+		}
+		return $active;
+	}
+
+	/** The build manifest, or null when no build is present. */
+	private static function manifest(): ?array {
+		if ( null !== self::$manifest ) {
+			return self::$manifest ? self::$manifest : null;
+		}
+		$file = DELICAT_BUILDER_V9_DIR . self::DIST . 'manifest.json';
+		$data = is_file( $file ) ? json_decode( (string) file_get_contents( $file ), true ) : null; // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local build artefact.
+		if ( ! is_array( $data ) || empty( $data['js']['engine']['file'] ) || empty( $data['css']['chrome']['file'] ) || empty( $data['css']['polish']['file'] ) ) {
+			self::$manifest = array();
+			return null;
+		}
+		self::$manifest = $data;
+		return $data;
+	}
+
+	private static function url( string $file ): string {
+		return DELICAT_BUILDER_V9_URL . self::DIST . ltrim( $file, '/' );
+	}
+
+	/** Plugin-relative path of an asset URL, or '' when it is not a plugin asset. */
+	private static function relative( string $url ): string {
+		static $base = null;
+		if ( null === $base ) {
+			$base = (string) preg_replace( '#^https?://#i', '//', DELICAT_BUILDER_V9_URL );
+		}
+		$bare = (string) preg_replace( '#^https?://#i', '//', $url );
+		if ( '' === $bare || 0 !== strpos( $bare, $base ) ) {
+			return '';
+		}
+		$rel = substr( $bare, strlen( $base ) );
+		$rel = (string) strtok( (string) $rel, '?#' );
+		return ltrim( $rel, '/' );
+	}
+
+	/* ----------------------------------------------------------- styles */
+
+	public static function enqueue_chrome(): void {
+		if ( ! self::active() ) {
+			return;
+		}
+		$manifest = self::manifest();
+		wp_register_style( self::HANDLE_CHROME, self::url( (string) $manifest['css']['chrome']['file'] ), array(), null );
+		wp_enqueue_style( self::HANDLE_CHROME );
+	}
+
+	/**
+	 * Is this archive the native one? The Woo UI module registers native-archive.css
+	 * and woo-ui.css under the same handle, so the handle name alone cannot tell.
+	 */
+	private static function native_archive_active(): bool {
+		if ( class_exists( 'Delicat_Builder_V9_Woo_UI', false ) && is_callable( array( 'Delicat_Builder_V9_Woo_UI', 'archive_active' ) ) && Delicat_Builder_V9_Woo_UI::archive_active() ) {
+			return true;
+		}
+		$obj = wp_styles()->registered['delicat-builder-v9-woo-ui'] ?? null;
+		return $obj && is_string( $obj->src ) && false !== strpos( $obj->src, 'native-archive' );
+	}
+
+	/** Route family of the request: decides the route bundle. */
+	private static function detect_route(): string {
+		$route = 'page';
+		if ( function_exists( 'is_product' ) && is_product() ) {
+			$route = 'product';
+		} elseif ( function_exists( 'is_order_received_page' ) && is_order_received_page() ) {
+			$route = 'page';
+		} elseif ( ( function_exists( 'is_cart' ) && is_cart() ) || ( function_exists( 'is_checkout' ) && is_checkout() ) ) {
+			$route = 'purchase';
+		} elseif ( ( function_exists( 'is_shop' ) && is_shop() ) || ( function_exists( 'is_product_taxonomy' ) && is_product_taxonomy() ) ) {
+			$route = self::native_archive_active() ? 'shop' : ( wp_style_is( 'delicat-builder-v9-woo-ui', 'enqueued' ) ? 'woo' : 'shop' );
+		} elseif ( is_singular( 'page' ) && function_exists( 'delicat_builder_v9_is_managed_page' ) && delicat_builder_v9_is_managed_page( (int) get_queried_object_id() ) ) {
+			$route = 'home';
+		} elseif ( self::builder_page() ) {
+			$route = 'builder';
+		} elseif ( wp_style_is( 'delicat-builder-v9-woo-ui', 'enqueued' ) ) {
+			$route = 'woo';
+		}
+		return (string) apply_filters( 'delicat_builder_v9_engine_route', $route );
+	}
+
+	/**
+	 * The route bundle for this request: the route name with the variants the
+	 * page needs (`-lite` when its compiled component sheet is fresh and stays,
+	 * `-design` when Design Studio enqueued its sheet), falling back to the
+	 * plain name and then to `page`.
+	 */
+	private static function resolve_bundle( string $route, array $css ): string {
+		$name = $route;
+		if ( 'home' === $route && ! self::home_components_covered( $css ) ) {
+			$name = 'builder';
+		}
+		$lite   = wp_style_is( 'delicat-builder-v9-compiled', 'enqueued' ) && in_array( $name, array( 'home', 'builder' ), true );
+		$design = wp_style_is( 'delicat-builder-v9-design', 'enqueued' );
+		$candidates = array();
+		if ( $lite && $design ) {
+			$candidates[] = $name . '-lite-design';
+		}
+		if ( $lite ) {
+			$candidates[] = $name . '-lite';
+		}
+		if ( $design ) {
+			$candidates[] = $name . '-design';
+		}
+		$candidates[] = $name;
+		$candidates[] = 'page';
+		foreach ( $candidates as $candidate ) {
+			if ( isset( $css[ $candidate ]['file'] ) ) {
+				return $candidate;
+			}
+		}
+		return 'page';
+	}
+
+	/** Does the `home` bundle carry every component the homepage layout uses? */
+	private static function home_components_covered( array $css ): bool {
+		if ( ! class_exists( 'Delicat_Builder_V9_Assets', false ) || ! is_callable( array( 'Delicat_Builder_V9_Assets', 'page_components' ) ) ) {
+			return true;
+		}
+		$needed = Delicat_Builder_V9_Assets::page_components();
+		if ( empty( $needed ) ) {
+			return true;
+		}
+		$have = array();
+		foreach ( (array) ( $css['home']['sources'] ?? array() ) as $file ) {
+			if ( preg_match( '#^assets/components/([a-z0-9-]+)\.css$#', (string) $file, $m ) ) {
+				$have[ $m[1] ] = true;
+			}
+		}
+		foreach ( $needed as $component ) {
+			if ( ! isset( $have[ sanitize_key( (string) $component ) ] ) ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/** A Builder page (any page whose Builder component CSS is on the queue). */
+	private static function builder_page(): bool {
+		if ( wp_style_is( 'delicat-builder-v9-components', 'enqueued' ) || wp_style_is( 'delicat-builder-v9-compiled', 'enqueued' ) ) {
+			return true;
+		}
+		if ( is_singular() && class_exists( 'Delicat_Builder_V9_Pages', false ) && defined( 'Delicat_Builder_V9_Pages::META_ENABLED' ) && get_post_meta( (int) get_queried_object_id(), (string) Delicat_Builder_V9_Pages::META_ENABLED, true ) ) {
+			return true;
+		}
+		$styles = wp_styles();
+		foreach ( $styles->queue as $handle ) {
+			$obj = $styles->registered[ $handle ] ?? null;
+			if ( $obj && is_string( $obj->src ) && 0 === strpos( self::relative( $obj->src ), 'assets/components/' ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/** Component files, in bundle order, read from the manifest. */
+	private static function component_files(): array {
+		$manifest = self::manifest();
+		$out      = array();
+		foreach ( (array) ( $manifest['css']['home']['sources'] ?? array() ) as $file ) {
+			if ( 0 === strpos( (string) $file, 'assets/components/' ) ) {
+				$out[] = (string) $file;
+			}
+		}
+		return $out;
+	}
+
+	/** Source files a legacy style handle stands for, or [] when it must be left alone. */
+	private static function style_files( string $handle ): array {
+		$styles = wp_styles();
+		$obj    = $styles->registered[ $handle ] ?? null;
+		if ( ! $obj || ! is_string( $obj->src ) || '' === $obj->src ) {
+			return array(); /* inline-only handles (swatches) print as they always did */
+		}
+		if ( 'delicat-builder-v9-compiled' === $handle ) {
+			return self::component_files();
+		}
+		$rel = self::relative( $obj->src );
+		if ( '' === $rel ) {
+			return array();
+		}
+		if ( 'assets/css/storefront-chrome.min.css' === $rel ) {
+			return self::CHROME_BUNDLE_FILES;
+		}
+		if ( 'assets/components/all-components.min.css' === $rel ) {
+			return self::component_files();
+		}
+		$rel = (string) preg_replace( '/\.min\.css$/', '.css', $rel );
+		return array( $rel );
+	}
+
+	/**
+	 * Choose the bundles, fold the legacy stylesheets into them and absorb the
+	 * legacy scripts. Runs after every module has enqueued.
+	 */
+	public static function shape(): void {
+		if ( self::$shaped || ! self::active() ) {
+			return;
+		}
+		self::$shaped = true;
+		$manifest = self::manifest();
+		$css      = $manifest['css'];
+
+		self::$route = self::detect_route();
+		$bundle      = self::resolve_bundle( self::$route, $css );
+		self::$route_bundle  = $bundle;
+		self::$polish_bundle = ( wp_style_is( 'delicat-builder-v9-storefront-polish', 'enqueued' ) && isset( $css['polish-storefront'] ) ) ? 'polish-storefront' : 'polish';
+
+		self::trim_woo_styles();
+		self::trim_woo_scripts();
+
+		self::$covered = array();
+		foreach ( array( 'chrome', $bundle, self::$polish_bundle ) as $name ) {
+			foreach ( (array) ( $css[ $name ]['sources'] ?? array() ) as $file ) {
+				self::$covered[ (string) $file ] = $name;
+			}
+		}
+
+		$inline = self::fold_styles();
+
+		wp_register_style( self::HANDLE_ROUTE, self::url( (string) $css[ $bundle ]['file'] ), array( self::HANDLE_CHROME ), null );
+		wp_enqueue_style( self::HANDLE_ROUTE );
+		if ( '' !== $inline ) {
+			wp_add_inline_style( self::HANDLE_ROUTE, $inline );
+		}
+		wp_register_style( self::HANDLE_POLISH, self::url( (string) $css[ self::$polish_bundle ]['file'] ), array( self::HANDLE_ROUTE ), null );
+		wp_enqueue_style( self::HANDLE_POLISH );
+
+		$absorbed      = self::absorb_scripts();
+		self::$code    = $absorbed['code'];
+		self::$globals = $absorbed['names'];
+	}
+
+	/**
+	 * WooCommerce's classic catalog skin (woocommerce-layout, -smallscreen,
+	 * -general), its theme-compat sheet (twenty-*.css, 56 KB on this store) and
+	 * select2/photoswipe skins style markup the native documents never print.
+	 * They cost 16 KB compressed and three requests on every page; the cart,
+	 * checkout and account documents keep them.
+	 */
+	private static function trim_woo_styles(): void {
+		if ( class_exists( 'Delicat_Builder_V9_Storefront_Fix', false ) && Delicat_Builder_V9_Storefront_Fix::extension_asset_request() ) {
+			return;
+		}
+		if ( ! in_array( self::$route, array( 'home', 'builder', 'page', 'product', 'shop' ), true ) ) {
+			return;
+		}
+		if ( ! (bool) apply_filters( 'delicat_builder_v9_engine_trim_woo_styles', true ) ) {
+			return;
+		}
+		$styles = wp_styles();
+		foreach ( (array) $styles->queue as $handle ) {
+			$obj = $styles->registered[ $handle ] ?? null;
+			if ( ! $obj || ! is_string( $obj->src ) || false === strpos( $obj->src, '/woocommerce/assets/css/' ) ) {
+				continue;
+			}
+			$base = strtolower( basename( (string) wp_parse_url( $obj->src, PHP_URL_PATH ) ) );
+			if ( preg_match( '/^(?:woocommerce(?:-layout|-smallscreen|-blocktheme)?|twenty-[a-z-]+|storefront[a-z-]*|select2|photoswipe(?:-default-skin)?)\.css$/', $base ) ) {
+				wp_dequeue_style( $handle );
+				self::$absorbed_styles[ $handle ] = true;
+			}
+		}
+	}
+
+	/**
+	 * WooCommerce's generic front-end script (notices, password meter, the
+	 * blockUI overlay and its cookie helper) does nothing on the native home,
+	 * page and archive documents; it is kept wherever another queued script
+	 * still lists it as a dependency (product, cart, checkout, account).
+	 */
+	private static function trim_woo_scripts(): void {
+		if ( ! in_array( self::$route, array( 'home', 'builder', 'page', 'shop' ), true ) ) {
+			return;
+		}
+		if ( ! (bool) apply_filters( 'delicat_builder_v9_engine_trim_woo_scripts', true ) ) {
+			return;
+		}
+		$scripts = wp_scripts();
+		$needed  = array();
+		$walk    = static function ( string $handle ) use ( &$walk, &$needed, $scripts ): void {
+			$obj = $scripts->registered[ $handle ] ?? null;
+			if ( ! $obj ) {
+				return;
+			}
+			foreach ( (array) $obj->deps as $dep ) {
+				if ( isset( $needed[ $dep ] ) ) {
+					continue;
+				}
+				$needed[ $dep ] = true;
+				$walk( (string) $dep );
+			}
+		};
+		$candidates = array( 'woocommerce', 'jquery-blockui', 'js-cookie', 'wc-add-to-cart', 'wc-single-product', 'zoom', 'flexslider', 'photoswipe', 'photoswipe-ui-default', 'selectWoo', 'select2' );
+		foreach ( (array) $scripts->queue as $handle ) {
+			if ( ! in_array( $handle, $candidates, true ) ) {
+				$walk( (string) $handle );
+			}
+		}
+		foreach ( $candidates as $handle ) {
+			if ( in_array( $handle, (array) $scripts->queue, true ) && ! isset( $needed[ $handle ] ) ) {
+				wp_dequeue_script( $handle );
+			}
+		}
+	}
+
+	/**
+	 * Dequeue every queued legacy stylesheet whose files are inside the chosen
+	 * bundles; return their inline additions, in queue order.
+	 */
+	private static function fold_styles(): string {
+		$styles = wp_styles();
+		$inline = array();
+		$folded = array();
+		foreach ( $styles->queue as $handle ) {
+			if ( in_array( $handle, array( self::HANDLE_CHROME, self::HANDLE_ROUTE, self::HANDLE_POLISH ), true ) || isset( self::$absorbed_styles[ $handle ] ) ) {
+				continue;
+			}
+			$files = self::style_files( $handle );
+			if ( empty( $files ) ) {
+				continue;
+			}
+			foreach ( $files as $file ) {
+				if ( ! isset( self::$covered[ $file ] ) ) {
+					continue 2;
+				}
+			}
+			$after = $styles->get_data( $handle, 'after' );
+			if ( is_array( $after ) && ! empty( $after ) ) {
+				$inline[] = "/* {$handle} */\n" . implode( "\n", array_map( 'strval', $after ) );
+			}
+			$folded[] = $handle;
+		}
+		foreach ( $folded as $handle ) {
+			self::$absorbed_styles[ $handle ] = true;
+			wp_dequeue_style( $handle );
+		}
+		/* A dependent must not pull a folded sheet back in, and must not be
+		 * dropped because its dependency is gone. */
+		if ( $folded ) {
+			foreach ( $styles->registered as $name => $obj ) {
+				if ( isset( self::$absorbed_styles[ $name ] ) || empty( $obj->deps ) ) {
+					continue;
+				}
+				$obj->deps = array_values( array_diff( (array) $obj->deps, $folded ) );
+			}
+		}
+		return implode( "\n", $inline );
+	}
+
+	/* ---------------------------------------------------------- scripts */
+
+	/**
+	 * Dequeue the legacy scripts the engine replaces and collect the
+	 * configuration they carried (localize data, before/after inline code).
+	 *
+	 * @return array{code:string[],names:string[]}
+	 */
+	private static function absorb_scripts(): array {
+		$scripts = wp_scripts();
+		$code    = array();
+		$deps    = array();
+		$taken   = array();
+		foreach ( self::SCRIPTS as $handle ) {
+			if ( ! in_array( $handle, $scripts->queue, true ) ) {
+				continue;
+			}
+			$obj = $scripts->registered[ $handle ] ?? null;
+			if ( ! $obj ) {
+				continue;
+			}
+			if ( isset( self::$absorbed[ $handle ] ) ) {
+				/* Enqueued again while rendering (the header re-enqueues itself
+				 * at wp_body_open): its configuration was already carried. */
+				wp_dequeue_script( $handle );
+				continue;
+			}
+			self::$absorbed[ $handle ] = true;
+			$taken[]                   = $handle;
+			$data = $scripts->get_data( $handle, 'data' );
+			if ( is_string( $data ) && '' !== trim( $data ) ) {
+				$code[] = trim( $data );
+			}
+			foreach ( array( 'before', 'after' ) as $position ) {
+				$chunks = $scripts->get_data( $handle, $position );
+				if ( is_array( $chunks ) ) {
+					foreach ( $chunks as $chunk ) {
+						if ( is_string( $chunk ) && '' !== trim( $chunk ) ) {
+							$code[] = trim( $chunk );
+						}
+					}
+				}
+			}
+			foreach ( (array) $obj->deps as $dep ) {
+				if ( ! in_array( $dep, self::SCRIPTS, true ) ) {
+					$deps[] = (string) $dep;
+				}
+			}
+			wp_dequeue_script( $handle );
+		}
+		if ( $taken ) {
+			foreach ( $scripts->registered as $name => $obj ) {
+				if ( isset( self::$absorbed[ $name ] ) || empty( $obj->deps ) ) {
+					continue;
+				}
+				$obj->deps = array_values( array_diff( (array) $obj->deps, $taken ) );
+			}
+			/* jQuery, the variation form … stay on the page exactly as before. */
+			foreach ( array_unique( $deps ) as $dep ) {
+				if ( isset( $scripts->registered[ $dep ] ) && ! in_array( $dep, $scripts->queue, true ) ) {
+					wp_enqueue_script( $dep );
+				}
+			}
+		}
+		$names = array();
+		if ( $code && preg_match_all( '/(?:^|[;\s{(])(?:window\.|var\s+)([A-Za-z_$][\w$]*)\s*=(?!=)/', implode( "\n", $code ), $m ) ) {
+			$names = array_values( array_unique( $m[1] ) );
+		}
+		return array( 'code' => $code, 'names' => $names );
+	}
+
+	/* ------------------------------------------------------------- head */
+
+	/** Engine configuration printed as window.DelicatEngine. */
+	private static function config(): array {
+		$nav = array(
+			'enabled'     => true,
+			'products'    => true,
+			'prefetch'    => true,
+			'transitions' => true,
+			'budget'      => 8,
+			'cacheTtl'    => 60000,
+			'cacheMax'    => 14,
+			'generation'  => self::generation(),
+			'home'        => home_url( '/' ),
+			'hardPaths'   => self::hard_paths(),
+			'productPaths'=> self::product_paths(),
+		);
+		if ( class_exists( 'DBP_Kernel', false ) && is_callable( array( 'DBP_Kernel', 'settings' ) ) ) {
+			$settings           = (array) DBP_Kernel::settings();
+			$nav['enabled']     = DBP_Kernel::on( 'navigation' );
+			$nav['prefetch']    = DBP_Kernel::on( 'prefetch' );
+			$nav['transitions'] = DBP_Kernel::on( 'transitions' );
+			$nav['budget']      = max( 2, min( 16, (int) ( $settings['prefetch_budget'] ?? 6 ) + 2 ) );
+			$nav['cacheTtl']    = max( 15, (int) ( $settings['nav_cache_ttl'] ?? 120 ) ) * 1000;
+			$nav['cacheMax']    = max( 4, (int) ( $settings['nav_cache_max'] ?? 24 ) );
+		}
+		$session = array(
+			'url'      => class_exists( 'WC_AJAX' ) ? WC_AJAX::get_endpoint( 'delicat_session' ) : home_url( '/?wc-ajax=delicat_session' ),
+			'resetUrl' => class_exists( 'Delicat_Builder_V9_Identity_Bridge', false ) && is_callable( array( 'Delicat_Builder_V9_Identity_Bridge', 'auth_reset_url' ) ) ? Delicat_Builder_V9_Identity_Bridge::auth_reset_url() : home_url( '/' ),
+		);
+		$config = array(
+			'version'     => self::VERSION,
+			'debug'       => (bool) ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ),
+			'ajaxUrl'     => admin_url( 'admin-ajax.php' ),
+			'homeUrl'     => home_url( '/' ),
+			'route'       => self::$route,
+			'nav'         => $nav,
+			'session'     => $session,
+			'pullRefresh' => (bool) apply_filters( 'delicat_builder_v9_app_polish_pull_refresh', true ), /* 9.3.4: on by default (touch devices only; the module checks) */
+			'reviews'     => self::reviews_config(),
+			'globals'     => self::$globals,
+			'chunks'      => self::chunk_map(),
+		);
+		return (array) apply_filters( 'delicat_builder_v9_engine_config', $config );
+	}
+
+	/**
+	 * The review sheet ("Laisser un avis") can open on any page: the product
+	 * reviews block, the testimonials call-to-action on any Builder page, and
+	 * after a soft navigation from a page that never printed the reviews
+	 * module's own config (shop, cart). This small config travels with every
+	 * page so the sheet always knows where to post and whether the shopper is
+	 * signed in; the per-page DelicatReviewsConfig (product id, thank-you
+	 * page) still wins when it is printed.
+	 */
+	private static function reviews_config(): array {
+		$account_url = function_exists( 'wc_get_page_permalink' ) ? (string) wc_get_page_permalink( 'myaccount' ) : '';
+		if ( '' === $account_url ) {
+			$account_url = wp_login_url( home_url( '/' ) );
+		}
+		return array(
+			'ajaxUrl'    => admin_url( 'admin-ajax.php' ),
+			'loggedIn'   => is_user_logged_in(),
+			'accountUrl' => esc_url_raw( $account_url ),
+		);
+	}
+
+	private static function generation(): string {
+		if ( class_exists( 'DBP_Kernel', false ) && is_callable( array( 'DBP_Kernel', 'generation' ) ) ) {
+			return (string) DBP_Kernel::generation();
+		}
+		return (string) DELICAT_BUILDER_V9_VERSION;
+	}
+
+	/** Paths the engine always loads as full documents (session-bound surfaces). */
+	private static function hard_paths(): array {
+		$paths = array( '/cart/', '/panier/', '/checkout/', '/commande/', '/my-account/', '/mon-compte/', '/order-pay/', '/order-received/', '/customer-logout/', '/lost-password/', '/my-wallet/', '/wallet/', '/mon-portefeuille/' );
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			foreach ( array( 'cart', 'checkout', 'myaccount' ) as $page ) {
+				$path = wp_parse_url( (string) wc_get_page_permalink( $page ), PHP_URL_PATH );
+				if ( is_string( $path ) && '/' !== $path && '' !== $path ) {
+					$paths[] = trailingslashit( $path );
+				}
+			}
+		}
+		return array_values( array_unique( $paths ) );
+	}
+
+	/** Product permalink bases, so the engine can tell a product tap apart. */
+	private static function product_paths(): array {
+		$paths      = array( '/product/', '/produit/' );
+		$permalinks = get_option( 'woocommerce_permalinks', array() );
+		if ( is_array( $permalinks ) && ! empty( $permalinks['product_base'] ) ) {
+			$base = '/' . trim( (string) $permalinks['product_base'], '/' ) . '/';
+			if ( '/' !== $base && false === strpos( $base, '%' ) ) {
+				$paths[] = $base;
+			}
+		}
+		return array_values( array_unique( $paths ) );
+	}
+
+	/** Logical chunk name => URL, from the manifest. */
+	private static function chunk_map(): array {
+		$manifest = self::manifest();
+		$map      = array();
+		foreach ( (array) ( $manifest['chunks'] ?? array() ) as $file => $meta ) {
+			if ( ! empty( $meta['name'] ) ) {
+				$map[ (string) $meta['name'] ] = self::url( (string) $file );
+			}
+		}
+		return $map;
+	}
+
+	/** Chunks this route is about to need: preloaded so the first mount does not wait. */
+	private static function preload_chunks(): array {
+		$map  = self::chunk_map();
+		$want = array();
+		if ( 'product' === self::$route ) {
+			$want[] = 'product';
+		} elseif ( 'purchase' === self::$route ) {
+			$want[] = 'purchase-native';
+		}
+		if ( class_exists( 'Delicat_Builder_V9_Announcement', false ) || class_exists( 'Delicat_Builder_V9_Live_Selling', false ) ) {
+			$want[] = 'widgets';
+		}
+		$out = array();
+		foreach ( $want as $name ) {
+			if ( isset( $map[ $name ] ) ) {
+				$out[] = $map[ $name ];
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * The reveal motion's root variables for every device class, so the motion
+	 * module finds the values it would compute and writes nothing to <html>
+	 * (an inherited variable written there restyles the whole page at boot).
+	 * Mirrors profile() in src/engine/modules/motion.js.
+	 */
+	private static function motion_vars_css(): string {
+		if ( ! class_exists( 'Delicat_Builder_V9_Core', false ) || ! is_callable( array( 'Delicat_Builder_V9_Core', 'motion_settings' ) ) ) {
+			return '';
+		}
+		$m         = (array) Delicat_Builder_V9_Core::motion_settings();
+		$duration  = max( 180, min( 900, absint( $m['duration_ms'] ?? 440 ) ) );
+		$intensity = max( 0, min( 100, absint( $m['intensity'] ?? 45 ) ) );
+		$mobile    = max( 0.2, min( 1, absint( $m['mobile_intensity'] ?? 70 ) / 100 ) );
+		$num       = static function ( float $value ): string {
+			return rtrim( rtrim( number_format( $value, 4, '.', '' ), '0' ), '.' );
+		};
+		$vars = static function ( float $factor, int $ms ) use ( $intensity, $num ): string {
+			$i = $intensity * $factor;
+			return '--dbv9-motion-duration:' . $ms . 'ms;--dbv9-motion-distance:' . (int) round( 3 + ( $i / 100 ) * 26 ) . 'px;'
+				. '--dbv9-motion-scale-in:' . $num( max( 0.95, 1 - ( 0.006 + ( $i / 100 ) * 0.028 ) ) ) . ';'
+				. '--dbv9-motion-scale-out:' . $num( min( 1.045, 1 + 0.006 + ( $i / 100 ) * 0.022 ) );
+		};
+		$low  = min( $duration, 380 );
+		$very = min( $duration, 300 );
+		return 'html:root{' . $vars( 1, $duration ) . '}'
+			. 'html:root.delicat-low-power,html:root.delicat-save-data{' . $vars( 0.72, $low ) . '}'
+			. 'html:root.delicat-very-low-power{' . $vars( 0.72 * 0.72, $very ) . '}'
+			. '@media(max-width:640px){html:root{' . $vars( $mobile, $duration ) . '}'
+			. 'html:root.delicat-low-power,html:root.delicat-save-data{' . $vars( $mobile * 0.72, $low ) . '}'
+			. 'html:root.delicat-very-low-power{' . $vars( $mobile * 0.72 * 0.72, $very ) . '}}';
+	}
+
+	public static function print_head(): void {
+		if ( self::active() ) {
+			$motion_css = self::motion_vars_css();
+			if ( '' !== $motion_css ) {
+				echo '<style id="delicat-engine-motion">' . $motion_css . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- generated numbers only
+			}
+		}
+		if ( ! self::active() ) {
+			return;
+		}
+		if ( ! self::$shaped ) {
+			self::shape();
+		}
+		$manifest = self::manifest();
+		/* 9.3.3: the installed app is recognised before the first paint (the
+		 * stylesheets key the status-bar inset and the hidden toolbar on it),
+		 * not a frame later when the module starts. */
+		$code     = "try{if((window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true)document.documentElement.classList.add('delicat-standalone');}catch(e){}\n";
+		$code    .= 'window.DelicatEngine=' . wp_json_encode( self::config() ) . ';';
+		if ( self::$code ) {
+			$code .= "\n" . implode( "\n", self::$code );
+		}
+		if ( ! ( class_exists( 'DBP_Nav', false ) && class_exists( 'DBP_Kernel', false ) && DBP_Kernel::on( 'navigation' ) ) ) {
+			echo '<meta name="delicat-generation" content="' . esc_attr( self::generation() ) . '">' . "\n";
+		}
+		echo '<script id="delicat-engine-js-before" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $code . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON and module configuration built above.
+		$engine = self::url( (string) $manifest['js']['engine']['file'] );
+		echo '<link rel="modulepreload" href="' . esc_url( $engine ) . '">' . "\n";
+		/* The shared chunks the module imports at start-up: preloaded with it, so
+		 * the browser does not discover them one round trip later. */
+		foreach ( (array) ( $manifest['js']['engine']['imports'] ?? array() ) as $import ) {
+			echo '<link rel="modulepreload" href="' . esc_url( self::url( (string) $import ) ) . '">' . "\n";
+		}
+		foreach ( self::preload_chunks() as $chunk ) {
+			echo '<link rel="modulepreload" href="' . esc_url( $chunk ) . '">' . "\n";
+		}
+		/* The route and polish sheets are printed with the other stylesheets,
+		 * 10–20 KB of inline configuration further down the head; a preload at
+		 * the top lets the browser request them with the first bytes it reads. */
+		foreach ( array( self::$route_bundle, self::$polish_bundle ) as $bundle ) {
+			if ( isset( $manifest['css'][ $bundle ]['file'] ) ) {
+				echo '<link rel="preload" as="style" href="' . esc_url( self::url( (string) $manifest['css'][ $bundle ]['file'] ) ) . '">' . "\n";
+			}
+		}
+		echo '<script type="module" src="' . esc_url( $engine ) . '" id="delicat-engine-js" data-no-optimize="1" data-no-delay="1" data-no-defer="1" data-cfasync="false"></script>' . "\n";
+		echo '<!-- delicat-engine ' . esc_html( self::VERSION . ' route=' . self::$route . ' css=' . self::$route_bundle . '+' . self::$polish_bundle . ' folded=' . implode( ',', array_keys( self::$absorbed_styles ) ) . ' scripts=' . implode( ',', array_keys( self::$absorbed ) ) ) . ' -->' . "\n";
+	}
+
+	/**
+	 * `Link: rel=preload` for the shell stylesheet and the module. Browsers use
+	 * it the moment the response headers arrive, before any HTML is parsed, and
+	 * Cloudflare / LiteSpeed turn it into a 103 Early Hints response, which
+	 * starts the downloads during the server's own think time.
+	 */
+	public static function link_header(): void {
+		if ( headers_sent() || ! self::active() || is_feed() || is_embed() || is_404() ) {
+			return;
+		}
+		$manifest = self::manifest();
+		if ( null === $manifest ) {
+			return;
+		}
+		$links = array(
+			'<' . esc_url_raw( self::url( (string) $manifest['css']['chrome']['file'] ) ) . '>; rel=preload; as=style',
+			'<' . esc_url_raw( self::url( (string) $manifest['js']['engine']['file'] ) ) . '>; rel=modulepreload',
+		);
+		header( 'Link: ' . implode( ', ', $links ), false );
+	}
+
+	/** The thin progress bar, unless the Pro navigation layer already prints it. */
+	public static function progress_bar(): void {
+		if ( ! self::active() ) {
+			return;
+		}
+		if ( class_exists( 'DBP_Nav', false ) && class_exists( 'DBP_Kernel', false ) && DBP_Kernel::on( 'navigation' ) ) {
+			return;
+		}
+		echo '<div class="dbp-progress dlc-progress" id="dbp-progress" aria-hidden="true"><i></i></div>';
+	}
+
+	/* ----------------------------------------------------------- footer */
+
+	/**
+	 * Scripts and styles enqueued while the page rendered (shortcodes, the
+	 * currency switcher, wallet cards) get the same treatment as the head pass.
+	 */
+	public static function absorb_late(): void {
+		if ( ! self::active() || ! self::$shaped ) {
+			return;
+		}
+		$inline = self::fold_styles();
+		if ( '' !== $inline ) {
+			echo '<style id="delicat-engine-late-inline-css">' . $inline . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- stylesheet data the modules registered themselves.
+		}
+		$absorbed = self::absorb_scripts();
+		if ( empty( $absorbed['code'] ) ) {
+			return;
+		}
+		$code = implode( "\n", $absorbed['code'] );
+		if ( $absorbed['names'] ) {
+			$code .= "\n(function(e){e.globals=(e.globals||[]).concat(" . wp_json_encode( $absorbed['names'] ) . ');})(window.DelicatEngine=window.DelicatEngine||{});';
+		}
+		echo '<script id="delicat-engine-footer-js-before" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $code . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- configuration the modules registered themselves.
+	}
+
+	/* ---------------------------------------------------------- session */
+
+	/**
+	 * The session endpoint also carries the unread count, the cart total and
+	 * fresh nonces, so a page served from a cache can act with current tokens.
+	 *
+	 * @param array $payload Session payload.
+	 * @return array
+	 */
+	public static function session_payload( $payload ) {
+		if ( ! is_array( $payload ) ) {
+			return $payload;
+		}
+		$logged = ! empty( $payload['loggedIn'] );
+		try {
+			if ( function_exists( 'WC' ) && is_object( WC() ) && is_object( WC()->cart ) && ! empty( $payload['cart']['count'] ) ) {
+				$payload['cart']['total']    = wp_strip_all_tags( (string) WC()->cart->get_cart_total() );
+				$payload['cart']['subtotal'] = wp_strip_all_tags( (string) WC()->cart->get_cart_subtotal() );
+			}
+		} catch ( Throwable $error ) {
+			unset( $error );
+		}
+		/* 9.3.14: the session endpoint does not load Notifications; report a
+		 * count only when it is actually known instead of a misleading zero. */
+		if ( $logged && class_exists( 'Delicat_Builder_V9_Notifications', false ) && method_exists( 'Delicat_Builder_V9_Notifications', 'unread_count' ) ) {
+			try {
+				$payload['alerts'] = array( 'count' => max( 0, (int) call_user_func( array( 'Delicat_Builder_V9_Notifications', 'unread_count' ) ) ) );
+			} catch ( Throwable $error ) {
+				unset( $error );
+			}
+		} elseif ( ! $logged ) {
+			$payload['alerts'] = array( 'count' => 0 );
+		}
+		$nonces = array(
+			'wc'        => wp_create_nonce( 'woocommerce-cart' ),
+			'addToCart' => wp_create_nonce( 'woocommerce-add-to-cart' ),
+			'rest'      => wp_create_nonce( 'wp_rest' ),
+			'push'      => wp_create_nonce( 'dbv9_web_push' ),
+			'clearCart' => wp_create_nonce( 'delicat_builder_v9_clear_cart' ),
+			'headerCart'=> wp_create_nonce( 'delicat_builder_v9_header_cart_remove' ),
+			'shell'     => wp_create_nonce( 'delicat_builder_v9_shell_interaction' ),
+		);
+		if ( $logged ) {
+			$nonces['notifications'] = wp_create_nonce( 'dbv9_notifications' );
+			$nonces['walletLive']    = wp_create_nonce( 'delicat_builder_v9_wallet_live' );
+			$nonces['expressAdd']    = wp_create_nonce( 'delicat_express_add' );
+			$nonces['review']        = wp_create_nonce( 'delicat_builder_v9_review' );
+			if ( class_exists( 'Delicat_Builder_V9_Heart_Engine', false ) && defined( 'Delicat_Builder_V9_Heart_Engine::NONCE_ACTION' ) ) {
+				$nonces['heart'] = wp_create_nonce( (string) Delicat_Builder_V9_Heart_Engine::NONCE_ACTION );
+			}
+		}
+		$payload['nonces'] = $nonces;
+		return $payload;
+	}
+
+	/* --------------------------------------------------------- service worker */
+
+	/**
+	 * Plugin-relative files the service worker precaches as the app shell:
+	 * the engine module and the two stylesheets every page shares. Empty when
+	 * no build is present or the engine is switched off.
+	 */
+	public static function precache_files(): array {
+		$manifest = self::manifest();
+		if ( null === $manifest || ! (bool) apply_filters( 'delicat_builder_v9_engine_active', true ) ) {
+			return array();
+		}
+		$files = array( self::DIST . $manifest['js']['engine']['file'], self::DIST . $manifest['css']['chrome']['file'], self::DIST . $manifest['css']['polish']['file'] );
+		/* The route sheets of the screens a shopper moves between (home, shop,
+		 * product, page): one download at install, then every switch has its
+		 * stylesheet on the device. ~60 KB compressed in all. */
+		foreach ( array( 'home-lite', 'home', 'shop', 'product', 'page' ) as $bundle ) {
+			if ( isset( $manifest['css'][ $bundle ]['file'] ) ) {
+				$files[] = self::DIST . $manifest['css'][ $bundle ]['file'];
+			}
+		}
+		foreach ( (array) ( $manifest['js']['engine']['imports'] ?? array() ) as $import ) {
+			$files[] = self::DIST . $import;
+		}
+		return array_values( array_unique( array_filter( $files, static function ( $file ) { return is_file( DELICAT_BUILDER_V9_DIR . $file ); } ) ) );
+	}
+
+	/* ------------------------------------------------------ theme class */
+
+	/**
+	 * The theme module toggles dlc-theme-light / dlc-theme-dark on <body> at
+	 * boot. Toggling a class that is already there is free; adding it restyled
+	 * the whole page on every cold load (the body class carries rules). The
+	 * class is printed with the document when the outcome is certain: no
+	 * preference cookie, or a cookie naming the store's default. A different
+	 * cookie or a "system" preference is left to the module, so a page cache
+	 * that ignores the cookie can never hand one shopper another's theme.
+	 */
+	public static function theme_body_class( $classes ): array {
+		$classes = is_array( $classes ) ? $classes : array();
+		if ( ! self::active() ) {
+			return $classes;
+		}
+		$shell   = get_option( 'delicat_builder_v9_shell', array() );
+		$default = is_array( $shell ) ? (string) ( $shell['theme_default'] ?? 'light' ) : 'light';
+		if ( ! in_array( $default, array( 'light', 'dark' ), true ) ) {
+			return $classes; /* "system": the device decides */
+		}
+		$cookie = isset( $_COOKIE['dbv9_theme'] ) ? sanitize_key( (string) wp_unslash( $_COOKIE['dbv9_theme'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( '' !== $cookie && $cookie !== $default ) {
+			return $classes;
+		}
+		$classes[] = 'dlc-theme-' . $default;
+		/* The managed homepage mirrors the theme as delicat-home-mode-* on <body> too. */
+		if ( in_array( 'delicat-builder-homepage-managed', $classes, true ) ) {
+			$classes[] = 'delicat-home-mode-' . $default;
+		}
+		return array_values( array_unique( $classes ) );
+	}
+
+	/* ------------------------------------------------- product scripts */
+
+	const PRODUCT_SCRIPTS_OPTION = 'delicat_builder_v9_product_scripts';
+
+	/**
+	 * The scripts a product page loads beyond the engine (jQuery, wp-util,
+	 * WooCommerce's variation form …) are the slow part of the first product
+	 * opened in a session on a phone: they are fetched and compiled on that
+	 * tap. Their exact URLs (with WordPress's own version query) are recorded
+	 * when a product page prints them, so the service worker can hold them
+	 * from install and the first product tap reads them from the device.
+	 */
+	public static function record_product_scripts(): void {
+		if ( 'product' !== self::$route ) {
+			return;
+		}
+		$scripts = wp_scripts();
+		$queue   = (array) $scripts->queue;
+		if ( empty( $queue ) ) {
+			return;
+		}
+		$scripts->all_deps( $queue );
+		$urls = array();
+		foreach ( (array) $scripts->to_do as $handle ) {
+			$obj = $scripts->registered[ $handle ] ?? null;
+			if ( ! $obj || ! is_string( $obj->src ) || '' === $obj->src ) {
+				continue;
+			}
+			$src = $obj->src;
+			if ( 0 === strpos( $src, '//' ) ) {
+				$src = ( is_ssl() ? 'https:' : 'http:' ) . $src;
+			} elseif ( 0 === strpos( $src, '/' ) ) {
+				$src = site_url( $src );
+			}
+			if ( false !== strpos( $src, '/delicat-builder-v9/' ) || false === strpos( $src, home_url( '/' ) ) ) {
+				continue; /* the plugin's own files are precached by name; third-party hosts are not ours to cache */
+			}
+			$ver = $obj->ver ? (string) $obj->ver : get_bloginfo( 'version' );
+			if ( false !== $ver ) {
+				$src = add_query_arg( 'ver', $ver, $src );
+			}
+			$urls[] = esc_url_raw( $src );
+		}
+		/* 9.4.3: merged with what is already recorded (products of two types used to
+		 * rewrite the option on every alternation); a new version of a file replaces
+		 * its older URL, and the list stays capped. */
+		$stored = array_values( array_filter( (array) get_option( self::PRODUCT_SCRIPTS_OPTION, array() ), 'is_string' ) );
+		$merged = array();
+		foreach ( array_merge( $urls, $stored ) as $u ) {
+			$path = (string) strtok( $u, '?' );
+			if ( '' !== $path && ! isset( $merged[ $path ] ) ) {
+				$merged[ $path ] = $u;
+			}
+		}
+		$merged = array_slice( array_values( $merged ), 0, 24 );
+		$same   = $merged;
+		$old    = $stored;
+		sort( $same );
+		sort( $old );
+		if ( $same !== $old ) {
+			update_option( self::PRODUCT_SCRIPTS_OPTION, $merged, false );
+		}
+	}
+
+	/** Absolute URLs the service worker precaches besides the plugin's own files. */
+	public static function precache_urls(): array {
+		$urls = (array) get_option( self::PRODUCT_SCRIPTS_OPTION, array() );
+		return array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
+	}
+
+	/* -------------------------------------------------------- litespeed */
+
+	public static function litespeed_exclusions( $list ): array {
+		$list = is_array( $list ) ? $list : array();
+		/* 9.4.0: the order confirmation sheets are served as written (the print one keeps media="print"). */
+		foreach ( array( 'delicat-builder-v9/assets/dist/', 'delicat-builder-v9/assets/css/order-confirmation.css', 'delicat-builder-v9/assets/css/order-confirmation-print.css', 'delicat-engine-js-before', 'delicat-engine-footer-js-before', 'delicat-engine-js', 'DelicatEngine' ) as $item ) {
+			$list[] = $item;
+		}
+		return array_values( array_unique( $list ) );
+	}
+}
+
+Delicat_Builder_V9_Engine::boot();

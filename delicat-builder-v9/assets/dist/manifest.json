@@ -1,0 +1,320 @@
+{
+ "version": 2,
+ "builtAt": "2026-10-24T21:18:02.226Z",
+ "js": {
+  "engine": {
+   "file": "engine.feebd1764cdc.js",
+   "bytes": 85863,
+   "sha256": "feebd1764cdc8f5c096cbe870a4acc8bc24bafda6f858c964997442c64291d68",
+   "imports": [
+    "chunks/chunk.25f985d2845e.js",
+    "chunks/chunk.99ad77e49fbc.js",
+    "chunks/chunk.385b5371c4d9.js",
+    "chunks/chunk.687452d4bbe4.js",
+    "chunks/chunk.71647e346105.js"
+   ]
+  }
+ },
+ "chunks": {
+  "chunks/purchase.4df92b44414e.js": {
+   "bytes": 203,
+   "sha256": "4df92b44414e5274c600390388cde48c48cc3f321e92f829d4c7194dc2c5a514",
+   "name": "purchase"
+  },
+  "chunks/product.a6591498e335.js": {
+   "bytes": 41995,
+   "sha256": "a6591498e335d02b72c86467c010de65393ca91f65e8d0e984411de33632c407",
+   "name": "product"
+  },
+  "chunks/chunk.59c3469ed67d.js": {
+   "bytes": 8999,
+   "sha256": "59c3469ed67dbae7025d99e983558c37032270384c5f268df19c3edbfb95f6ca",
+   "name": null
+  },
+  "chunks/widgets.df88451ae0a0.js": {
+   "bytes": 11597,
+   "sha256": "df88451ae0a0d7c889da3eb0d45698d6460bd11e2df746bcf967a72bef26517d",
+   "name": "widgets"
+  },
+  "chunks/chunk.25f985d2845e.js": {
+   "bytes": 31438,
+   "sha256": "25f985d2845e8174af64b9045226a07a35a5b7c7dbd3083af933c0f5e7cab21e",
+   "name": null
+  },
+  "chunks/reviews.97f7f54eab8c.js": {
+   "bytes": 20160,
+   "sha256": "97f7f54eab8cf364f2ded860da465fbd1fde1fc74bf1c68f2ed79545f80ecbf1",
+   "name": "reviews"
+  },
+  "chunks/chunk.99ad77e49fbc.js": {
+   "bytes": 10132,
+   "sha256": "99ad77e49fbcb47a3da58f2a1d4a63980cb1b86d6fa793b41ba9778e2030fac9",
+   "name": null
+  },
+  "chunks/purchase-native.451d1f377e58.js": {
+   "bytes": 13641,
+   "sha256": "451d1f377e58b57062110c595870f8c06673e39c715e6fe3b8c89ba30e59d556",
+   "name": "purchase-native"
+  },
+  "chunks/notifications.24a173ea4e85.js": {
+   "bytes": 16634,
+   "sha256": "24a173ea4e85d2a5dbebe33b1381d293728e6c8b49ca59cea2a7075931d1044a",
+   "name": "notifications"
+  },
+  "chunks/chunk.385b5371c4d9.js": {
+   "bytes": 1279,
+   "sha256": "385b5371c4d938df35f6a9b20d3c162e1f14a94144e55539334f3f5dd513975e",
+   "name": null
+  },
+  "chunks/chunk.687452d4bbe4.js": {
+   "bytes": 4677,
+   "sha256": "687452d4bbe4a41d6aed6bdd9bb386ca944b38bef729b96ff4339c1a944a8e81",
+   "name": null
+  },
+  "chunks/chunk.71647e346105.js": {
+   "bytes": 4842,
+   "sha256": "71647e346105c824bd792c617c7606c4ede1565435c0972835d8da1b71f069eb",
+   "name": null
+  },
+  "chunks/shell-header.2874f1e410f4.js": {
+   "bytes": 10548,
+   "sha256": "2874f1e410f489565490c31732bedd86aeadfb45a1c380680a67baab5349ea17",
+   "name": "shell-header"
+  }
+ },
+ "css": {
+  "chrome": {
+   "file": "chrome.96f3cdecc73d.css",
+   "bytes": 163898,
+   "sha256": "96f3cdecc73d112a1fdf0c4f1bf7f13a62db86bd07c2cbf01c32f5db5ef4af37",
+   "sources": [
+    "assets/css/theme-system.css",
+    "assets/dsb8-beta2-header.css",
+    "assets/css/drawer.css",
+    "assets/css/bottom-nav.css",
+    "assets/css/pwa-runtime.css",
+    "assets/css/notifications.css",
+    "assets/css/currency.css",
+    "assets/css/engine-chrome.css",
+    "assets/css/surface-compatibility.css",
+    "assets/css/chrome-fixes.css",
+    "assets/css/dark-mode.css",
+    "assets/css/dark-glass.css",
+    "assets/css/motion.css"
+   ]
+  },
+  "home": {
+   "file": "home.727e09e5b2bd.css",
+   "bytes": 144268,
+   "sha256": "727e09e5b2bdb6eb08e578cc2168a8f0622ce8305b05cb8ae682da44a6a694c0",
+   "sources": [
+    "assets/components/base.css",
+    "assets/components/products.css",
+    "assets/components/hero.css",
+    "assets/components/category-chips.css",
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css"
+   ]
+  },
+  "home-lite": {
+   "file": "home-lite.2f9ff2ad4bb1.css",
+   "bytes": 30308,
+   "sha256": "2f9ff2ad4bb138b8e29877a6d64c76c7ddc0627bcf7b88a3366a5db9dec0ebc4",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css"
+   ]
+  },
+  "builder": {
+   "file": "builder.64b3de8eb2eb.css",
+   "bytes": 209709,
+   "sha256": "64b3de8eb2ebf824d4ca7323244651ca6f02eb6e0613d483d7e198c9a29ea0b8",
+   "sources": [
+    "assets/components/base.css",
+    "assets/components/testimonials.css",
+    "assets/components/trust-strip.css",
+    "assets/components/products.css",
+    "assets/components/newsletter.css",
+    "assets/components/how-it-works.css",
+    "assets/components/hero.css",
+    "assets/components/bon-kliyan.css",
+    "assets/components/text.css",
+    "assets/components/banner.css",
+    "assets/components/category-chips.css",
+    "assets/components/faq.css",
+    "assets/components/why-delicat.css",
+    "assets/components/favorites.css",
+    "assets/components/spacer.css",
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css"
+   ]
+  },
+  "builder-design": {
+   "file": "builder-design.4e02b6a41d5c.css",
+   "bytes": 226949,
+   "sha256": "4e02b6a41d5cc7ae63fd971b6f35c3362dae7307885a440c9b0066d85ce162e8",
+   "sources": [
+    "assets/components/base.css",
+    "assets/components/testimonials.css",
+    "assets/components/trust-strip.css",
+    "assets/components/products.css",
+    "assets/components/newsletter.css",
+    "assets/components/how-it-works.css",
+    "assets/components/hero.css",
+    "assets/components/bon-kliyan.css",
+    "assets/components/text.css",
+    "assets/components/banner.css",
+    "assets/components/category-chips.css",
+    "assets/components/faq.css",
+    "assets/components/why-delicat.css",
+    "assets/components/favorites.css",
+    "assets/components/spacer.css",
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css",
+    "assets/css/design-studio.css"
+   ]
+  },
+  "builder-lite": {
+   "file": "home-lite.2f9ff2ad4bb1.css",
+   "bytes": 30308,
+   "sha256": "2f9ff2ad4bb138b8e29877a6d64c76c7ddc0627bcf7b88a3366a5db9dec0ebc4",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css"
+   ]
+  },
+  "builder-lite-design": {
+   "file": "builder-lite-design.06b4f7fab82c.css",
+   "bytes": 47548,
+   "sha256": "06b4f7fab82cf8b2e79be55314b299a2b827dba4ccf2a81c0f80794bfede13d2",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css",
+    "assets/css/design-studio.css"
+   ]
+  },
+  "product": {
+   "file": "product.0b8899e0f4b9.css",
+   "bytes": 67448,
+   "sha256": "0b8899e0f4b95938f424e28dbda01a59de7c531754fe82b027cce2d94dc96e41",
+   "sources": [
+    "assets/css/native-product.css",
+    "assets/css/reviews.css",
+    "assets/css/reviews-community.css",
+    "assets/css/native-footer.css",
+    "assets/css/purchase-ui.css"
+   ]
+  },
+  "product-design": {
+   "file": "product-design.988dd03dd981.css",
+   "bytes": 84688,
+   "sha256": "988dd03dd981ddeeba9144e43e7a9d3d9e51076dd89e97cac451d91b483faa65",
+   "sources": [
+    "assets/css/native-product.css",
+    "assets/css/reviews.css",
+    "assets/css/reviews-community.css",
+    "assets/css/native-footer.css",
+    "assets/css/purchase-ui.css",
+    "assets/css/design-studio.css"
+   ]
+  },
+  "shop": {
+   "file": "shop.0d221fe0bfc9.css",
+   "bytes": 34245,
+   "sha256": "0d221fe0bfc9f40be202f9e51ab63c2fb01692f964d438f2d5591ddd56f2fae8",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-archive.css",
+    "assets/css/native-footer.css"
+   ]
+  },
+  "shop-design": {
+   "file": "shop-design.2f6ba9bc8ed6.css",
+   "bytes": 51485,
+   "sha256": "2f6ba9bc8ed637329d5b5b44d718b4690ffaec09cf2c92a24c43e0667411d509",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-archive.css",
+    "assets/css/native-footer.css",
+    "assets/css/design-studio.css"
+   ]
+  },
+  "page": {
+   "file": "page.3bd38a0e30bd.css",
+   "bytes": 42744,
+   "sha256": "3bd38a0e30bd88745a8f511ad2326752793f2083d39d7fefb7b3c8f839447f48",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css",
+    "assets/css/site.css"
+   ]
+  },
+  "purchase": {
+   "file": "purchase.0112692138ed.css",
+   "bytes": 103910,
+   "sha256": "0112692138ed778e9de87f4630964ac71d5e777fc361e4b499edce30a51b1490",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/native-document.css",
+    "assets/css/native-footer.css",
+    "assets/css/purchase-native.css",
+    "assets/css/wallet-guard.css"
+   ]
+  },
+  "woo": {
+   "file": "woo.1ed5d3c2bc85.css",
+   "bytes": 68741,
+   "sha256": "1ed5d3c2bc85631df047eac0f7171b77bfc0496c5433c470e7b64c1a93c94938",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/woo-ui.css",
+    "assets/css/native-footer.css",
+    "assets/css/site.css"
+   ]
+  },
+  "woo-design": {
+   "file": "woo-design.65dc7511849c.css",
+   "bytes": 85981,
+   "sha256": "65dc7511849c0fffd3ccceb18b0a71d90b833308bf3f4b80e89de66aab4d3af1",
+   "sources": [
+    "assets/css/reviews.css",
+    "assets/css/woo-ui.css",
+    "assets/css/native-footer.css",
+    "assets/css/site.css",
+    "assets/css/design-studio.css"
+   ]
+  },
+  "polish": {
+   "file": "polish.8f523fd6d8cd.css",
+   "bytes": 39906,
+   "sha256": "8f523fd6d8cd858aeee5fec1edb9271893395f1859ddd7a7576e5b556ef698fb",
+   "sources": [
+    "assets/css/app-polish.css",
+    "assets/css/app-tuning.css",
+    "pro/assets/dbp-app.css",
+    "pro/assets/dbp-type.css",
+    "assets/css/polish-fixes.css"
+   ]
+  },
+  "polish-storefront": {
+   "file": "polish-storefront.2d3d5ddabf25.css",
+   "bytes": 63125,
+   "sha256": "2d3d5ddabf256f46ae60cf1e5418b57882b1262defff8473213529648b4e9630",
+   "sources": [
+    "assets/css/app-polish.css",
+    "assets/css/app-tuning.css",
+    "assets/css/storefront-polish.css",
+    "pro/assets/dbp-app.css",
+    "pro/assets/dbp-type.css",
+    "assets/css/polish-fixes.css"
+   ]
+  }
+ }
+}
