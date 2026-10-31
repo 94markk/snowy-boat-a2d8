@@ -286,6 +286,7 @@ class Delicat_Send_Money {
 			$row_id, $sender, $recipient, number_format( $total, 2 )
 		);
 		add_action( 'shutdown', function () use ( $body ) {
+			delicat_recharge_finish_request();
 			wp_mail( get_option( 'admin_email' ), '🚨 Delicat — transfert bloqué', $body );
 		}, 20 );
 	}
@@ -303,6 +304,7 @@ class Delicat_Send_Money {
 			home_url( '/' )
 		);
 		add_action( 'shutdown', function () use ( $user, $body ) {
+			delicat_recharge_finish_request();
 			wp_mail( $user->user_email, '💰 Vous avez reçu de l’argent — Delicat Store', $body );
 		}, 21 );
 	}

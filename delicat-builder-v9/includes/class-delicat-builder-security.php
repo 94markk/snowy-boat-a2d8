@@ -657,6 +657,13 @@ final class Delicat_Builder_V9_Security {
 				return (int) $hits <= $limit;
 			}
 		}
+		/* 9.5.5: without such a cache the counter is two options-table writes per call. For the
+		 * read-only state endpoints every page polls (session, wallet balance, Pro state) that
+		 * cost more than the call it guards, and guests share one hot row per carrier address:
+		 * they are left to the edge (a Cloudflare rate-limit rule) instead. */
+		if ( in_array( $bucket, array( 'session_state', 'wallet_balance', 'pro_state' ), true ) ) {
+			return true;
+		}
 		$state = get_transient( $key );
 		if ( ! is_array( $state ) || empty( $state['started'] ) || $now - absint( $state['started'] ) >= $window ) {
 			set_transient( $key, array( 'started' => $now, 'count' => 1 ), $window );

@@ -113,9 +113,7 @@ class Delicat_Client_License {
         // on shared hosting — but because it runs on shutdown, the customer never
         // waits for it. Best of both: reliable AND no page slowdown.
         add_action( 'shutdown', function () use ( $hq, $key, $sign_key, $tokens, $title, $body ) {
-            if ( function_exists( 'fastcgi_finish_request' ) ) {
-                fastcgi_finish_request();
-            }
+            delicat_recharge_finish_request();
             foreach ( $tokens as $token ) {
                 $ts  = time();
                 $sig = hash_hmac( 'sha256', $key . '|' . $token . '|' . $ts, $sign_key );

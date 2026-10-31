@@ -28,7 +28,8 @@ class Delicat_Rest {
 
     public function __construct() {
         add_action( 'rest_api_init', [ $this, 'routes' ] );
-        add_action( 'init', [ $this, 'ensure_key' ] );
+        // 6.5.2: no longer on every request (one uncached option read each
+        // time) - get_key() creates the key the first time it is needed.
     }
 
     public function ensure_key(): void {

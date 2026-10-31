@@ -88,11 +88,13 @@ class Delicat_Watchdog {
 
 		// Deferred so no customer request is slowed by mail/push.
 		add_action( 'shutdown', function () use ( $body ) {
+			delicat_recharge_finish_request();
 			wp_mail( get_option( 'admin_email' ), '⚠️ Delicat — validation automatique arrêtée', $body );
 		}, 25 );
 
 		if ( class_exists( 'Delicat_Push' ) && method_exists( 'Delicat_Push', 'send' ) ) {
 			add_action( 'shutdown', function () use ( $hrs ) {
+				delicat_recharge_finish_request();
 				try {
 					Delicat_Push::send(
 						'⚠️ Validation auto arrêtée',
@@ -106,6 +108,7 @@ class Delicat_Watchdog {
 
 	private function alert_back(): void {
 		add_action( 'shutdown', function () {
+			delicat_recharge_finish_request();
 			wp_mail(
 				get_option( 'admin_email' ),
 				'✅ Delicat — validation automatique rétablie',
@@ -115,6 +118,7 @@ class Delicat_Watchdog {
 
 		if ( class_exists( 'Delicat_Push' ) && method_exists( 'Delicat_Push', 'send' ) ) {
 			add_action( 'shutdown', function () {
+				delicat_recharge_finish_request();
 				try {
 					Delicat_Push::send( '✅ Validation auto rétablie',
 						'Le forwarder est de nouveau actif.' );

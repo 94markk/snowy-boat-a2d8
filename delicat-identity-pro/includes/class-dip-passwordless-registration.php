@@ -17,7 +17,7 @@ final class DIP_Passwordless_Registration {
     public static function install() {
         $defaults = self::defaults();
         $current = get_option(self::OPTION, []);
-        update_option(self::OPTION, wp_parse_args(is_array($current) ? $current : [], $defaults), false);
+        update_option(self::OPTION, wp_parse_args(is_array($current) ? $current : [], $defaults), true);
     }
 
     public static function init() {

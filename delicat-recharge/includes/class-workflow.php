@@ -41,8 +41,9 @@ class Delicat_Workflow {
 
         // (a) Reused TransCode across DIFFERENT requests.
         if ( ! empty( $r->trans_code ) ) {
+            $dlc_code_col = Delicat_Database::code_sql();
             $dupes = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$table} WHERE REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s AND id <> %d",
+                "SELECT COUNT(*) FROM {$table} WHERE {$dlc_code_col} = %s AND id <> %d",
                 strtoupper( str_replace( [ ' ', '-' ], '', trim( (string) $r->trans_code ) ) ), (int) $r->id
             ) );
             if ( $dupes > 0 ) {
@@ -113,6 +114,7 @@ class Delicat_Workflow {
 
             $rec = Delicat_Database::get( $id );
             add_action( 'shutdown', function () use ( $rec ) {
+                delicat_recharge_finish_request();
                 if ( class_exists( 'Delicat_Email' ) ) Delicat_Email::send_status_update( $rec );
                 if ( class_exists( 'Delicat_Push' ) )  {
                     if ( method_exists( 'Delicat_Push', 'notify_rejected' ) ) {
@@ -200,6 +202,7 @@ class Delicat_Workflow {
             // Defer client notification so the loop stays fast.
             $rec = Delicat_Database::get( $id );
             add_action( 'shutdown', function () use ( $rec ) {
+                delicat_recharge_finish_request();
                 if ( class_exists( 'Delicat_Email' ) )  Delicat_Email::send_status_update( $rec );
                 if ( class_exists( 'Delicat_Push' ) )   Delicat_Push::notify_approved( $rec );
             }, 1 );

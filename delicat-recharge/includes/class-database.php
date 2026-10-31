@@ -34,14 +34,20 @@ class Delicat_Database {
             note_admin text,
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            code_norm varchar(200) NOT NULL DEFAULT '',
             PRIMARY KEY  (id),
             KEY user_id (user_id),
             KEY statut (statut),
-            KEY tab (tab)
+            KEY tab (tab),
+            KEY code_norm (code_norm(64)),
+            KEY created_at (created_at),
+            KEY statut_created (statut,created_at),
+            KEY user_created (user_id,created_at)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
+        self::backfill_code_norm( $table );
 
         // ── TransCode spend ledger ──────────────────────────────────────────
         // Application-level checks can always lose a race under enough load.
@@ -62,6 +68,47 @@ class Delicat_Database {
             KEY recharge_id (recharge_id)
         ) {$charset};";
         dbDelta( $sql2 );
+    }
+
+    /**
+     * 6.5.2: code_norm is an indexed copy of the normalised TransCode, so the
+     * "already used?" checks read one index entry instead of normalising every
+     * row of the table (they ran on each submit, each forwarded SMS and 200
+     * times per admin list). Existing rows are filled with the very expression
+     * the checks used before; the checks switch to the column only once that
+     * fill is done, and fall back to the old expression on any database where
+     * the column could not be added.
+     */
+    private static function backfill_code_norm( string $table ): void {
+        global $wpdb;
+        $has = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", 'code_norm' ) );
+        if ( ! $has ) {
+            update_option( 'delicat_code_norm_ready', '0', true );
+            return;
+        }
+        $fill = "UPDATE {$table} SET code_norm = " . self::CODE_EXPR . " WHERE code_norm = '' AND trans_code <> ''";
+        if ( false === $wpdb->query( $fill ) ) {
+            update_option( 'delicat_code_norm_ready', '0', true );
+            return;
+        }
+        update_option( 'delicat_code_norm_ready', '1', true );
+        // Rows written by a request that started before the flag flipped.
+        $wpdb->query( $fill );
+    }
+
+    /** The normalisation every TransCode check has always used, in SQL. */
+    const CODE_EXPR = "REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','')";
+
+    /** Column (indexed) or expression to compare a normalised TransCode with. */
+    public static function code_sql(): string {
+        return '1' === (string) get_option( 'delicat_code_norm_ready', '0' ) ? 'code_norm' : self::CODE_EXPR;
+    }
+
+    /** PHP twin of CODE_EXPR, used when a row's TransCode is written. */
+    private static function code_norm_value( string $trans_code ): string {
+        // ASCII upper-casing like the checks' own values; the column's _ci
+        // collation already compares any other letters case-insensitively.
+        return strtoupper( str_replace( [ ' ', '-' ], '', $trans_code ) );
     }
 
     /**
@@ -115,7 +162,7 @@ class Delicat_Database {
         global $wpdb;
         $table = $wpdb->prefix . self::TABLE;
 
-        $ok = $wpdb->insert( $table, [
+        $row = [
             'user_id'    => absint( $data['user_id']    ?? 0 ),
             'user_email' => sanitize_email( $data['user_email'] ?? '' ),
             'tab'        => sanitize_text_field( $data['tab']    ?? 'manuel' ),
@@ -126,7 +173,13 @@ class Delicat_Database {
             'nc_sender'  => sanitize_text_field( $data['nc_sender'] ?? '' ),
             'preuve_url' => esc_url_raw( $data['preuve_url'] ?? '' ),
             'statut'     => sanitize_text_field( $data['statut'] ?? 'en_attente' ),
-        ], [ '%d','%s','%s','%s','%f','%s','%s','%s','%s','%s' ] );
+        ];
+        $formats = [ '%d','%s','%s','%s','%f','%s','%s','%s','%s','%s' ];
+        if ( 'code_norm' === self::code_sql() ) {
+            $row['code_norm'] = self::code_norm_value( $row['trans_code'] );
+            $formats[]        = '%s';
+        }
+        $ok = $wpdb->insert( $table, $row, $formats );
 
         if ( $ok === false ) {
             return new WP_Error( 'db_error', $wpdb->last_error );
@@ -146,6 +199,9 @@ class Delicat_Database {
     public static function update( int $id, array $data ): void {
         global $wpdb;
         $table = $wpdb->prefix . self::TABLE;
+        if ( array_key_exists( 'trans_code', $data ) && 'code_norm' === self::code_sql() ) {
+            $data['code_norm'] = self::code_norm_value( (string) $data['trans_code'] );
+        }
         $changed = $wpdb->update( $table, $data, [ 'id' => $id ] );
         if ( $changed > 0 ) {
             do_action(
@@ -174,8 +230,9 @@ class Delicat_Database {
         $table = $wpdb->prefix . self::TABLE;
         $code  = trim( $trans_code );
         if ( $code === '' ) return false;
+        $col   = self::code_sql();
         $count = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s",
+            "SELECT COUNT(*) FROM {$table} WHERE {$col} = %s",
             strtoupper( str_replace( [ ' ', '-' ], '', $code ) )
         ) );
         return $count > 0;

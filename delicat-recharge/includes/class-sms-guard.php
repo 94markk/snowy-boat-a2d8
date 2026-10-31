@@ -478,6 +478,7 @@ class Delicat_SMS_Guard {
 		self::$notified[ $key ] = true;
 		$url = admin_url( 'admin.php?page=delicat-natcash-log' );
 		add_action( 'shutdown', function () use ( $title, $body, $url, $urgent ) {
+			delicat_recharge_finish_request();
 			if ( class_exists( 'Delicat_Push' ) ) Delicat_Push::send( $title, $body, $url, $urgent );
 			$to = get_option( 'delicat_admin_email', '' ) ?: get_option( 'admin_email' );
 			wp_mail( $to, $title, $body . "\n\n" . $url );

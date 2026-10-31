@@ -2,10 +2,17 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.15.3
+Stable tag: 6.15.4
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.15.4 ==
+
+* Fenêtre de connexion plus rapide pour les visiteurs : les méthodes de connexion (code e-mail, lien magique, inscription) sont chargées avec les autres réglages de démarrage au lieu d’une requête à part sur chaque page non mise en cache.
+* Application Delicat : l’usage d’une session mobile (« vu pour la dernière fois ») n’est plus écrit dans la base à chaque appel de l’application, au plus une fois par minute.
+* Sessions et appareils : le lien vers Google Play est vérifié par sa forme (https, domaine) au lieu d’une résolution DNS à chaque affichage de la page.
+* Aucun changement de sécurité, de connexion, de 2FA ni de Passkeys.
 
 == Version 6.15.3 ==
 

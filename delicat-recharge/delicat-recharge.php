@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.5.1
+ * Version:     6.5.2
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
@@ -19,12 +19,37 @@ if ( defined( 'DELICAT_RECHARGE_LOADED' ) ) {
 define( 'DELICAT_RECHARGE_LOADED', true );
 
 if ( ! defined( 'DELICAT_VERSION' ) ) {
-    define( 'DELICAT_VERSION',  '6.0.5' );
+    // 6.5.2: schema change (indexed TransCode column + date indexes).
+    define( 'DELICAT_VERSION',  '6.5.2' );
 }
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.5.1' );
+    define( 'DELICAT_ASSET_VERSION', '6.5.2' );
+}
+if ( ! function_exists( 'delicat_recharge_finish_request' ) ) {
+    /**
+     * 6.5.2: hand the response to the customer before the slow work that runs
+     * on shutdown (e-mails, push, webhooks). PHP-FPM offers
+     * fastcgi_finish_request(); LiteSpeed - the server Hostinger runs - offers
+     * litespeed_finish_request() instead, the same pair wp-cron.php checks.
+     * Without the second one, every submit waited for its own notifications.
+     */
+    function delicat_recharge_finish_request(): void {
+        static $done = false;
+        if ( $done ) {
+            return;
+        }
+        $done = true;
+        if ( function_exists( 'ignore_user_abort' ) ) {
+            ignore_user_abort( true ); // some hosts disable it; PHP 8 would then fatal
+        }
+        if ( function_exists( 'fastcgi_finish_request' ) ) {
+            fastcgi_finish_request();
+        } elseif ( function_exists( 'litespeed_finish_request' ) ) {
+            litespeed_finish_request();
+        }
+    }
 }
 if ( ! defined( 'DELICAT_API_SYNC_VERSION' ) ) {
     // Integration version only: never trigger the existing database upgrades
@@ -86,6 +111,15 @@ add_action( 'init', function () {
     if ( get_option( 'delicat_db_version' ) !== DELICAT_VERSION ) {
         Delicat_Database::create_table();
         Delicat_Send_Money::create_table();
+        // 6.5.2: secrets only the API calls read (FCM service account ~2 KB,
+        // MonCash and webhook secrets) no longer ride along on every page load.
+        if ( function_exists( 'wp_set_option_autoload_values' ) ) {
+            wp_set_option_autoload_values( array_fill_keys( [
+                'delicat_fcm_service_account',
+                'delicat_moncash_secret',
+                'delicat_webhook_secret',
+            ], false ) );
+        }
         update_option( 'delicat_db_version', DELICAT_VERSION );
     }
 }, 1 );

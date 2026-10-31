@@ -1,3 +1,27 @@
+9.5.5 — Serveur plus léger à chaque page (revue de performance WordPress)
+(1) Compte, panier et portefeuille : les appels que chaque page fait en arrière-plan (état de la
+session, solde du portefeuille, état Pro) n’écrivent plus deux lignes dans la base à chaque appel
+quand l’hébergement n’a pas de cache objet (Redis / Memcached) ; avec un cache objet, rien ne change.
+Conseil : une règle de limitation de débit Cloudflare protège ces adresses mieux et sans coût.
+(2) Recherche : les suggestions déjà en cache répondent sans compteur ; la limite par client ne
+s’applique plus qu’aux recherches qui interrogent vraiment la base, avec un seul compteur partagé.
+(3) Notifications : les avis de commande d’un client invité (jamais affichés ni envoyés, faute de
+destinataire) ne remplissent plus l’historique partagé que chaque page lit ; ils passent toujours par
+la file d’envoi pour les autres extensions.
+(4) Tâches terminées qui coûtaient à chaque page : la migration de la clé Firebase ne tourne plus que
+dans l’administration (deux lectures, un déchiffrement et un décodage JSON en moins par page) ; la
+correction des mentions légales s’arrête quand le module est désactivé ou que la page a été modifiée
+à la main ; deux réglages lus partout sont chargés avec les autres en une seule requête.
+(5) Les appels « heartbeat » de l’administration ne chargent plus les 60 réglages du builder.
+(6) Écrans de lancement de l’application : l’icône n’est plus recherchée deux fois par page, et la
+recherche du logo dans la médiathèque est gardée un jour. Ventes en direct : une requête pour tous
+les produits du fil au lieu d’une par vente.
+(7) Accessibilité : le bouton de la lettre d’information garde un nom lisible par les lecteurs
+d’écran quand son texte est vide.
+Vérifié et laissé tel quel : le double passage sur la page avec LiteSpeed (le premier protège les
+scripts de démarrage et les images de l’optimiseur, le second répare ce que l’optimiseur a changé).
+Installer cette archive en remplacement du builder existant, puis purger LiteSpeed / Cloudflare.
+
 9.5.4 — Audit sécurité et accessibilité (outils Claude Code : claude-security, Chrome DevTools, Lighthouse)
 (1) Détail de la commande : textes et pastilles lisibles par tous (contraste 4,5:1 minimum, mesuré à
 100/100 en accessibilité par Lighthouse sur mobile) : gris des dates et libellés, bleu des boutons et

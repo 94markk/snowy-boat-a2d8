@@ -687,9 +687,10 @@ class Delicat_Ajax_Handler {
         // spaces and dashes, uppercase) — otherwise a code credited as
         // "2607 2038-38458" would not be found when re-submitted as
         // "260720383845 8", and one payment could credit twice.
+        $dlc_code_col = Delicat_Database::code_sql();
         $used = (int) $wpdb->get_var( $wpdb->prepare(
             "SELECT COUNT(*) FROM {$tbl}
-             WHERE REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s
+             WHERE {$dlc_code_col} = %s
                AND wallet_credited = 1",
             Delicat_Natcash_Auto::norm_code( $code )
         ) );
@@ -762,9 +763,7 @@ class Delicat_Ajax_Handler {
      */
     private function defer_notifications( object $record ): void {
         add_action( 'shutdown', function () use ( $record ) {
-            if ( function_exists( 'fastcgi_finish_request' ) ) {
-                fastcgi_finish_request();
-            }
+            delicat_recharge_finish_request();
             Delicat_Email::send_status_update( $record );
             $this->fire_webhook( $record );
             // Android push: only on approval (wallet credited)
@@ -783,9 +782,7 @@ class Delicat_Ajax_Handler {
      */
     private function defer_submission( object $record, string $admin_label ): void {
         add_action( 'shutdown', function () use ( $record, $admin_label ) {
-            if ( function_exists( 'fastcgi_finish_request' ) ) {
-                fastcgi_finish_request();
-            }
+            delicat_recharge_finish_request();
             Delicat_Email::send_admin_notification( $record, $admin_label );
             Delicat_Email::send_user_confirmation( $record );
             $this->fire_webhook( $record );

@@ -130,12 +130,7 @@ class Delicat_Alerts {
 
         // (a) WooCommerce product stock
         if ( function_exists( 'wc_get_products' ) ) {
-            $low = wc_get_products( [
-                'limit'        => -1,
-                'status'       => 'publish',
-                'stock_status' => 'instock',
-                'return'       => 'objects',
-            ] );
+            $low = self::low_stock_candidates();
             foreach ( $low as $p ) {
                 if ( ! $p->managing_stock() ) continue;
                 $qty = (int) $p->get_stock_quantity();
@@ -164,6 +159,37 @@ class Delicat_Alerts {
             ? admin_url( 'admin.php?page=delicat-sales-analytics' )
             : admin_url( 'admin.php?page=delicat-recharges' );
         Delicat_Push::send( $title, $body, $url, true );
+    }
+
+    /**
+     * 6.5.2: the hourly check used to build every published in-stock product as
+     * a full object. WooCommerce's lookup table already holds stock per product,
+     * so only the few products at or below the threshold are loaded now (the
+     * same managing_stock()/quantity test still runs on each of them). Falls
+     * back to the old query when the lookup table is not available.
+     */
+    private static function low_stock_candidates(): array {
+        global $wpdb;
+        if ( ! empty( $wpdb->wc_product_meta_lookup ) && function_exists( 'wc_get_product' ) ) {
+            $ids = $wpdb->get_col( $wpdb->prepare(
+                "SELECT l.product_id FROM {$wpdb->wc_product_meta_lookup} l
+                 INNER JOIN {$wpdb->posts} p ON p.ID = l.product_id
+                 WHERE p.post_type = 'product' AND p.post_status = 'publish'
+                   AND l.stock_status = 'instock'
+                   AND l.stock_quantity IS NOT NULL AND l.stock_quantity <= %d
+                 ORDER BY l.stock_quantity ASC LIMIT 50",
+                self::LOW_STOCK_PRODUCT
+            ) );
+            if ( '' === (string) $wpdb->last_error ) {
+                return array_filter( array_map( 'wc_get_product', array_map( 'absint', (array) $ids ) ) );
+            }
+        }
+        return wc_get_products( [
+            'limit'        => -1,
+            'status'       => 'publish',
+            'stock_status' => 'instock',
+            'return'       => 'objects',
+        ] );
     }
 
     /**

@@ -457,11 +457,11 @@ final class DIP_Mobile_API {
         if (!preg_match('/^[A-Za-z0-9\-_]{40,512}$/', $token)) return 0;
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare(
-            'SELECT id,user_id FROM '.self::table().' WHERE token_hash=%s AND revoked_at IS NULL AND access_expires_at > UTC_TIMESTAMP() LIMIT 1',
+            'SELECT id,user_id,last_used_at FROM '.self::table().' WHERE token_hash=%s AND revoked_at IS NULL AND access_expires_at > UTC_TIMESTAMP() LIMIT 1',
             self::hash_token($token)
         ));
         if (!$row || !self::mobile_user_allowed((int) $row->user_id)) return 0;
-        $wpdb->update(self::table(), ['last_used_at'=>current_time('mysql',true)], ['id'=>(int)$row->id], ['%s'], ['%d']);
+        self::touch_session($row);
         return (int) $row->user_id;
     }
 
@@ -930,8 +930,20 @@ final class DIP_Mobile_API {
                 return self::remember_session($memo, null);
             }
         }
-        $wpdb->update(self::table(), ['last_used_at'=>current_time('mysql',true)], ['id'=>(int)$row->id], ['%s'], ['%d']);
+        self::touch_session($row);
         return self::remember_session($memo, $row);
+    }
+
+    /**
+     * 6.15.4: last_used_at only feeds the "last seen" line of the device list,
+     * so it is refreshed at most once a minute instead of an UPDATE on every
+     * authenticated app request.
+     */
+    private static function touch_session($row) {
+        $last = isset($row->last_used_at) && $row->last_used_at ? strtotime($row->last_used_at . ' UTC') : 0;
+        if ($last && $last <= time() && time() - $last < 60) return;
+        global $wpdb;
+        $wpdb->update(self::table(), ['last_used_at'=>current_time('mysql',true)], ['id'=>(int)$row->id], ['%s'], ['%d']);
     }
 
     private static function remember_session($memo, $row) {

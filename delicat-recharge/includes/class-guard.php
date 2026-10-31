@@ -39,8 +39,9 @@ class Delicat_Guard {
 		add_action( 'delicat_recharge_approved', [ $this, 'on_approved' ], 5 );
 
 		// One-time cleanup: release clients auto-banned by the old behaviour so
-		// legitimate recharges stop being refused.
-		add_action( 'init', [ __CLASS__, 'release_auto_bans_once' ] );
+		// legitimate recharges stop being refused. 6.5.2: checked in the admin
+		// only, instead of reading its stamp on every page of the site.
+		add_action( 'admin_init', [ __CLASS__, 'release_auto_bans_once' ] );
 	}
 
 	/**
@@ -153,6 +154,7 @@ class Delicat_Guard {
 
 		// Deferred so the client's request is never slowed by mail sending.
 		add_action( 'shutdown', function () use ( $body ) {
+			delicat_recharge_finish_request();
 			wp_mail(
 				get_option( 'admin_email' ),
 				'🚫 Delicat — blocage automatique d\'un compte',

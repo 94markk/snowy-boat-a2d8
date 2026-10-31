@@ -1577,7 +1577,9 @@ private static function newsletter( array $content ): string {
 		$out .= '<form class="delicat-newsletter__form" action="' . $action . '" method="post" target="_self">';
 		$out .= '<label class="screen-reader-text" for="delicat-newsletter-email">' . esc_html__( 'Email address', 'delicat-builder-v9' ) . '</label>';
 		$out .= '<input id="delicat-newsletter-email" type="email" name="email" inputmode="email" autocomplete="email" required placeholder="' . esc_attr( $content['placeholder'] ?? 'votre@email.com' ) . '">';
-		$out .= '<button type="submit">' . self::icon_markup( 'mail' ) . '<span>' . esc_html( $content['button_text'] ?? '' ) . '</span></button>';
+		$newsletter_label = trim( (string) ( $content['button_text'] ?? '' ) );
+		/* 9.5.5: an icon-only button still needs a name for screen readers. */
+		$out .= '<button type="submit"' . ( '' === $newsletter_label ? ' aria-label="' . esc_attr__( 'S\'inscrire à la newsletter', 'delicat-builder-v9' ) . '"' : '' ) . '>' . self::icon_markup( 'mail' ) . '<span>' . esc_html( $newsletter_label ) . '</span></button>';
 		$out .= '</form>';
 	} else {
 		// Safe visual-only state until the site owner explicitly configures a

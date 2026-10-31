@@ -552,10 +552,11 @@ class Delicat_Natcash_Auto {
         $attended = ! empty( $ctx['attended'] );
 
         // Is a pending natcash_tc request waiting for this exact code + amount?
+        $dlc_code_col = Delicat_Database::code_sql();
         $row = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$tbl}
              WHERE tab = 'natcash_tc' AND statut = 'en_attente'
-               AND REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s
+               AND {$dlc_code_col} = %s
                AND ABS(montant - %f) < 0.01
              ORDER BY created_at DESC LIMIT 1",
             self::norm_code( $p['trans_code'] ), $p['amount']
@@ -608,8 +609,9 @@ class Delicat_Natcash_Auto {
         }
 
         // Anti-reuse: this TransCode must not have already credited.
+        $dlc_code_col = Delicat_Database::code_sql();
         $used = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tbl} WHERE REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s AND wallet_credited = 1", self::norm_code( $p['trans_code'] ) ) );
+            "SELECT COUNT(*) FROM {$tbl} WHERE {$dlc_code_col} = %s AND wallet_credited = 1", self::norm_code( $p['trans_code'] ) ) );
         if ( $used > 0 ) {
             $log( 'TransCode Natcash déjà crédité', $p );
             return rest_ensure_response( [ 'matched' => false, 'reason' => 'TransCode déjà utilisé.' ] );
@@ -715,8 +717,9 @@ class Delicat_Natcash_Auto {
         }
 
         // Anti-reuse: this TransCode must not have already credited.
+        $dlc_code_col = Delicat_Database::code_sql();
         $used = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tbl} WHERE REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s AND wallet_credited = 1", self::norm_code( $parsed['trans_code'] ) ) );
+            "SELECT COUNT(*) FROM {$tbl} WHERE {$dlc_code_col} = %s AND wallet_credited = 1", self::norm_code( $parsed['trans_code'] ) ) );
         if ( $used > 0 ) {
             $log( 'TransCode déjà crédité', $parsed );
             return rest_ensure_response( [ 'matched' => false, 'reason' => 'TransCode déjà utilisé.' ] );
@@ -732,7 +735,7 @@ class Delicat_Natcash_Auto {
         $row = $wpdb->get_row( $wpdb->prepare(
             "SELECT * FROM {$tbl}
              WHERE tab = 'moncash' AND statut = 'en_attente'
-               AND REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s
+               AND {$dlc_code_col} = %s
                AND ABS(montant - %f) < 0.01
              ORDER BY created_at DESC LIMIT 1",
             self::norm_code( $parsed['trans_code'] ), $parsed['amount']

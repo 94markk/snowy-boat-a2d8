@@ -26,7 +26,9 @@ class Delicat_Files {
     const MAX_SIZE = 8388608; // 8 MB
 
     public function __construct() {
-        add_action( 'init',            [ $this, 'ensure_dir' ] );
+        // 6.5.2: admin only (store() also calls it before every upload) -
+        // it cost wp_upload_dir() and three file checks on every request.
+        add_action( 'admin_init',      [ $this, 'ensure_dir' ] );
         add_action( 'admin_post_delicat_view_proof', [ $this, 'serve' ] );
     }
 

@@ -85,9 +85,14 @@ class Delicat_App_Api {
         if ( empty( $dev['enabled'] ) ) return '';
         if ( ! hash_equals( (string) $dev['token_hash'], wp_hash( $token ) ) ) return '';
 
-        // Update last_seen (cheap, no autoload).
-        $devices[ $device_id ]['last_seen'] = current_time( 'mysql' );
-        self::save_devices( $devices );
+        // Update last_seen (no autoload). 6.5.2: at most every 5 minutes - the
+        // app polls, and rewriting the option on each call bought nothing.
+        $now  = current_time( 'mysql' );
+        $seen = strtotime( (string) ( $dev['last_seen'] ?? '' ) );
+        if ( ! $seen || strtotime( $now ) - $seen >= 300 || strtotime( $now ) < $seen ) {
+            $devices[ $device_id ]['last_seen'] = $now;
+            self::save_devices( $devices );
+        }
         return $device_id;
     }
 
@@ -246,8 +251,9 @@ class Delicat_App_Api {
         if ( ! $record ) return new WP_Error( 'notfound', 'Demande introuvable.', [ 'status' => 404 ] );
 
         // Block if this TransCode was already used anywhere (anti-reuse).
+        $dlc_code_col = Delicat_Database::code_sql();
         $dupe = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM {$tbl} WHERE REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','') = %s AND id <> %d AND wallet_credited = 1",
+            "SELECT COUNT(*) FROM {$tbl} WHERE {$dlc_code_col} = %s AND id <> %d AND wallet_credited = 1",
             Delicat_Natcash_Auto::norm_code( $code ), $id
         ) );
         if ( $dupe > 0 ) {
@@ -611,6 +617,7 @@ class Delicat_App_Api {
 
             $fresh = Delicat_Database::get( $p['id'] );
             add_action( 'shutdown', function () use ( $fresh ) {
+                delicat_recharge_finish_request();
                 if ( class_exists( 'Delicat_Email' ) && method_exists( 'Delicat_Email', 'send_status_update' ) ) {
                     Delicat_Email::send_status_update( $fresh );
                 }
@@ -632,6 +639,7 @@ class Delicat_App_Api {
         ] );
         $fresh = Delicat_Database::get( $p['id'] );
         add_action( 'shutdown', function () use ( $fresh ) {
+            delicat_recharge_finish_request();
             if ( class_exists( 'Delicat_Email' ) && method_exists( 'Delicat_Email', 'send_status_update' ) ) {
                 Delicat_Email::send_status_update( $fresh );
             }

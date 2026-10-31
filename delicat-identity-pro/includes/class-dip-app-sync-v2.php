@@ -506,7 +506,13 @@ final class DIP_App_Sync_V2 {
             if ($package !== '') $url = 'https://play.google.com/store/apps/details?id=' . rawurlencode($package);
         }
         $url = (string) apply_filters('dip_app_store_url', $url);
-        return wp_http_validate_url($url) ? $url : '';
+        // 6.15.4: a link shown to the customer, never fetched by the server -
+        // check its shape instead of wp_http_validate_url(), which resolved the
+        // host through DNS on every render of the sessions page.
+        $parts = $url !== '' && strlen($url) <= 2048 ? wp_parse_url($url) : false;
+        if (!is_array($parts) || !in_array(strtolower((string) ($parts['scheme'] ?? '')), ['https', 'http'], true)) return '';
+        if (empty($parts['host']) || isset($parts['user']) || isset($parts['pass'])) return '';
+        return $url;
     }
 
     public static function render_account_panel($user_id = 0) {

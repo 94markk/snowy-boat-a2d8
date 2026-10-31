@@ -159,6 +159,11 @@ final class Delicat_Builder_V9_Legal {
 		if ( get_option( $stamp, false ) ) {
 			return;
 		}
+		/* 9.5.5: with the module off no page is ever provisioned, and this retried two page
+		 * lookups on every request; it catches up once the module is switched on. */
+		if ( empty( self::settings()['enabled'] ) ) {
+			return;
+		}
 		if ( false === get_option( 'delicat_builder_v9_notice_identity', false ) ) {
 			update_option( 'delicat_builder_v9_notice_identity', array(
 				'company' => 'Delicat Store',
@@ -186,12 +191,16 @@ final class Delicat_Builder_V9_Legal {
 		foreach ( array( 'editeur-du-site', 'hebergement' ) as $section ) {
 			$pattern = '~<h2\\b[^>]*\\bid=["\']' . $section . '["\'][^>]*>.*?(?=<h2\\b)~s';
 			if ( ! preg_match( $pattern, $rendered, $match ) ) {
+				update_option( $stamp, 1, false ); // 9.5.5: retrying cannot change the outcome.
 				return;
 			}
 			$count = 0;
 			$body = preg_replace_callback( $pattern, static function () use ( $match ): string { return $match[0]; }, $body, 1, $count );
 			if ( 1 !== $count ) {
-				return; // Unrecognized custom markup: never replace the whole page.
+				/* Unrecognized custom markup: never replace the whole page. 9.5.5: and stop
+				 * re-rendering the document on every request to find that out again. */
+				update_option( $stamp, 1, false );
+				return;
 			}
 		}
 		if ( $body !== (string) $post->post_content ) {

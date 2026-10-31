@@ -56,7 +56,7 @@ final class DIP_Account_Control {
         // Explicit owner request: enable magic links once, without resetting other choices.
         $settings = (array) get_option(DIP_Passwordless_Registration::OPTION, []);
         $settings['magic_enabled'] = 'yes';
-        update_option(DIP_Passwordless_Registration::OPTION, $settings, false);
+        update_option(DIP_Passwordless_Registration::OPTION, $settings, true);
         $security=(array)get_option(DIP_Plugin::OPTION,[]);
         $security['new_device_email']='yes'; $security['trusted_devices_enabled']='yes';
         update_option(DIP_Plugin::OPTION,$security,false);

@@ -38,7 +38,10 @@ final class Delicat_Builder_V9_Notifications {
 			self::$booted = true;
 
 			add_action( 'init', array( __CLASS__, 'migrate_privacy' ), 5 );
-			add_action( 'init', array( __CLASS__, 'migrate_service_secret' ), 6 );
+			/* 9.5.5: in the admin only - on the storefront it cost two option reads, a decrypt
+			 * and a JSON parse per request to confirm, every time, that nothing was left to do.
+			 * Sending reads either copy, so nothing waits on it. */
+			add_action( 'admin_init', array( __CLASS__, 'migrate_service_secret' ), 6 );
 			// RC37.6: V9 owns these two notification shortcodes regardless of which
 			// historical Builder callback was registered first/last. The shortcode
 			// pre-filter prevents legacy notification markup from ever reaching HTML.
@@ -340,6 +343,7 @@ final class Delicat_Builder_V9_Notifications {
 	 * is non-destructive; the existing secret remains server-side only.
 	 */
 	public static function migrate_service_secret(): void {
+		if ( wp_doing_ajax() ) { return; } // admin_init also runs for every storefront admin-ajax call.
 		if ( ! class_exists( 'DIP_Crypto' ) || ! is_callable( array( 'DIP_Crypto', 'is_available' ) ) || ! DIP_Crypto::is_available() ) { return; }
 
 		$current = trim( (string) get_option( self::ENCRYPTED_SERVICE, '' ) );
@@ -752,7 +756,7 @@ final class Delicat_Builder_V9_Notifications {
 		return $text;
 	}
 
-	public static function store_item( array $item ): array {
+	public static function store_item( array $item, bool $persist = true ): array {
 		$extra = isset( $item['extra'] ) && is_array( $item['extra'] ) ? $item['extra'] : array();
 		$item = wp_parse_args(
 			$item,
@@ -771,6 +775,7 @@ final class Delicat_Builder_V9_Notifications {
 			}
 			if ( $safe_extra ) { $item['extra'] = $safe_extra; }
 		}
+		if ( ! $persist ) { return $item; }
 		$items = self::items();
 		array_unshift( $items, $item );
 		update_option( self::HISTORY_OPTION, array_slice( $items, 0, 100 ), false );
@@ -972,7 +977,11 @@ final class Delicat_Builder_V9_Notifications {
 				'source' => 'system',
 				'audience' => $user_id ? 'user' : 'private',
 				'bell' => $user_id ? 1 : 0,
-			)
+			),
+			/* 9.5.5: a guest order's item is private with no owner - no bell, no push target -
+			 * yet it sat in the shared 100-row history every page reads. Still handed to the
+			 * delivery hook (other listeners), just not stored. */
+			$user_id > 0
 		);
 		self::enqueue_delivery( $item );
 	}

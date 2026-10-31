@@ -160,7 +160,9 @@ final class DIP_Plugin {
         if (function_exists('wp_installing') && wp_installing()) return;
         $all = wp_load_alloptions();
         if (!is_array($all)) return;
-        foreach ([self::OPTION, self::VERSION_OPTION, self::RUNTIME_SCHEMA_OPTION] as $name) {
+        // 6.15.4: the sign-in methods are read by the login window that every
+        // guest page carries, so they load with the other boot options.
+        foreach ([self::OPTION, self::VERSION_OPTION, self::RUNTIME_SCHEMA_OPTION, 'dip_auth_methods_settings'] as $name) {
             if (!array_key_exists($name, $all) && get_option($name, null) !== null) self::set_autoload($name);
         }
         if (!array_key_exists(self::RECOVERY_PURGE_FLAG, $all)) {

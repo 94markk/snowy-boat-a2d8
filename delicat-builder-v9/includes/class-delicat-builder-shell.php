@@ -346,6 +346,11 @@ final class Delicat_Builder_V9_Shell {
 	private static function rate_limit_allowed( string $bucket, int $limit, int $window ): bool {
 		$limit  = max( 10, min( 240, $limit ) );
 		$window = max( 10, min( 300, $window ) );
+		/* 9.5.5: one limiter for the whole plugin - Security's keeps its counter in the object
+		 * cache when there is one, which this copy never did. */
+		if ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'rate_limit_allowed' ) ) ) {
+			return Delicat_Builder_V9_Security::rate_limit_allowed( $bucket, $limit, $window );
+		}
 		$user_id = get_current_user_id();
 		/* 9.4.3: the visitor's address as Security resolves it (Cloudflare-aware), not the proxy's. */
 		$remote = ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ) ? Delicat_Builder_V9_Security::client_ip() : ( isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown' );
@@ -421,11 +426,6 @@ final class Delicat_Builder_V9_Shell {
 		if ( empty( $settings['show_search'] ) || empty( $settings['search_suggestions'] ) ) {
 			wp_send_json_error( array( 'message' => __( 'Search suggestions are disabled.', 'delicat-builder-v9' ) ), 403 );
 		}
-		$search_rate = Delicat_Builder_V9_Core::is_safe_mode() ? 90 : 120;
-		if ( ! self::rate_limit_allowed( 'search', $search_rate, 60 ) ) {
-			wp_send_json_error( array( 'message' => __( 'Too many searches. Please wait a moment.', 'delicat-builder-v9' ) ), 429 );
-		}
-
 		$query = isset( $_POST['q'] ) ? sanitize_text_field( wp_unslash( $_POST['q'] ) ) : '';
 		$query = trim( preg_replace( '/\s+/u', ' ', $query ) ?: $query );
 		if ( function_exists( 'mb_substr' ) ) {
@@ -454,9 +454,11 @@ final class Delicat_Builder_V9_Shell {
 			wp_send_json_success( array( 'query' => $query, 'results' => $cached, 'cached' => true ) );
 		}
 
-		/* RC51.63: uncached searches hit the database; throttle per client. */
-		if ( class_exists( 'Delicat_Builder_V9_Security', false ) && ! Delicat_Builder_V9_Security::rate_limit_allowed( 'product_search', 60, 60 ) ) {
-			wp_send_json_error( array( 'message' => 'Trop de requêtes.' ), 429 );
+		/* RC51.63: uncached searches hit the database; throttle per client. 9.5.5: the only
+		 * limiter left on this endpoint - cached suggestions above no longer pay two counter
+		 * writes per keystroke, and the counter lives in the object cache when there is one. */
+		if ( ! self::rate_limit_allowed( 'product_search', 60, 60 ) ) {
+			wp_send_json_error( array( 'message' => __( 'Too many searches. Please wait a moment.', 'delicat-builder-v9' ) ), 429 );
 		}
 
 		global $wpdb;

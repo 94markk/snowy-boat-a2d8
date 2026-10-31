@@ -93,21 +93,33 @@ final class Delicat_Builder_V9_PWA {
 
 	/** The icon the launch screen is built from: the site icon, else the drawer's logo. */
 	private static function splash_icon_path(): string {
+		/* 9.5.5: asked twice per page head (supported + stamp); resolve it once per request. */
+		static $memo = null;
+		if ( null !== $memo ) { return $memo; }
+		$memo = '';
 		$id = (int) get_option( 'site_icon' );
 		if ( $id > 0 ) {
 			$file = (string) get_attached_file( $id );
-			if ( '' !== $file && is_file( $file ) ) { return $file; }
+			if ( '' !== $file && is_file( $file ) ) { return $memo = $file; }
 		}
 		if ( function_exists( 'delicat_builder_v9_menu_get_menu_builder_settings' ) ) {
 			$menu = delicat_builder_v9_menu_get_menu_builder_settings();
 			$url  = is_array( $menu ) ? (string) ( $menu['custom_header_image'] ?? '' ) : '';
 			if ( '' !== $url && function_exists( 'attachment_url_to_postid' ) ) {
-				$att = (int) attachment_url_to_postid( $url );
+				/* 9.5.5: attachment_url_to_postid() scans every _wp_attached_file row; the answer
+				 * for a given logo URL is kept for a day (a new logo is a new URL). */
+				$key = 'dbv9_splash_att_' . substr( md5( $url ), 0, 16 );
+				$att = get_transient( $key );
+				if ( false === $att ) {
+					$att = (int) attachment_url_to_postid( $url );
+					set_transient( $key, $att, DAY_IN_SECONDS );
+				}
+				$att  = (int) $att;
 				$file = $att > 0 ? (string) get_attached_file( $att ) : '';
-				if ( '' !== $file && is_file( $file ) ) { return $file; }
+				if ( '' !== $file && is_file( $file ) ) { return $memo = $file; }
 			}
 		}
-		return '';
+		return $memo;
 	}
 
 	private static function splash_dir(): array {

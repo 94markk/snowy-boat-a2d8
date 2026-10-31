@@ -404,22 +404,29 @@
 
                 // Instant credit: the response already carried the new balance.
                 var hasKnown = (typeof opts.knownBalance === 'number' && !isNaN(opts.knownBalance));
+                if (balanceTimer) { clearInterval(balanceTimer); balanceTimer = null; }
                 if (hasKnown && opts.knownBalance > baseline + 0.001) {
                     animateBalance(baseline, opts.knownBalance, opts.knownFmt);
+                    // 6.5.2: the credit is already shown — polling for it again
+                    // only cost ~48 requests per instant recharge.
+                    return;
                 }
 
-                // Poll a little regardless — the SMS credit can land a beat later,
-                // and this also catches the deferred (pending) case.
-                if (balanceTimer) { clearInterval(balanceTimer); balanceTimer = null; }
+                // Pending case: poll until the SMS credit lands.
                 var interval = opts.interval || 2500;
                 var maxMs    = opts.maxMs || 120000; // give up after 2 min
                 var started  = Date.now();
 
+                var inFlight = false;
                 function tick() {
                     if (Date.now() - started > maxMs) {
                         clearInterval(balanceTimer); balanceTimer = null; return;
                     }
+                    // Hidden tab or a request still running: skip this beat.
+                    if (document.hidden || inFlight) { return; }
+                    inFlight = true;
                     fetchBalance(function (bal) {
+                        inFlight = false;
                         if (!bal || isNaN(bal.value)) { return; }
                         var current = readShownBalance();
                         if (current === null) { current = baseline; }

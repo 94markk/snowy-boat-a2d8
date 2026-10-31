@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.5.4
+ * Version: 9.5.5
 
  * Requires at least: 6.4
  * Requires PHP: 8.3
@@ -227,7 +227,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.5.4' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.5.5' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -325,7 +325,10 @@ function delicat_builder_v9_request_scalar( $value ): string {
  * a name that is already autoloaded costs nothing (wp_prime_option_caches
  * skips cache hits), and priming a missing one just records `notoptions`.
  */
-if ( function_exists( 'wp_prime_option_caches' ) ) {
+/* 9.5.5: not for heartbeat and other plugins' admin-ajax calls - this plugin loads no module
+ * there, so the 60-row read was pure overhead on the most frequent admin request. */
+$delicat_builder_v9_prime_skip = wp_doing_ajax() && isset( $_REQUEST['action'] ) && 'heartbeat' === $_REQUEST['action']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+if ( function_exists( 'wp_prime_option_caches' ) && ! $delicat_builder_v9_prime_skip ) {
 	wp_prime_option_caches(
 		array(
 			'delicat_builder_v9_safe_mode',
@@ -391,6 +394,9 @@ if ( function_exists( 'wp_prime_option_caches' ) ) {
 			'dsb_header_notifications_enabled',
 			'dsb_header_notifications',
 			'dsb_bell_personal',
+			/* 9.5.5: one-time stamps and the app page, read on every storefront request. */
+			'delicat_builder_v9_notice_identity_946',
+			'delicat_builder_v9_android_page',
 			'dmc_settings',
 			'dmc_currencies',
 			'delicat_direct_swatches_settings',

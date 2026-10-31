@@ -500,7 +500,16 @@ final class Delicat_Builder_V9_Live_Selling {
 		$now = time();
 		$cutoff = $now - absint( $s['max_age'] ?? 21600 );
 		$recent = array();
-		foreach ( self::events() as $event ) {
+		$events = self::events();
+		/* 9.5.5: one query for the products of all events instead of one per event (polled). */
+		if ( function_exists( '_prime_post_caches' ) && is_array( $events ) ) {
+			$ids = array();
+			foreach ( $events as $event ) {
+				if ( is_array( $event ) && absint( $event['product_id'] ?? 0 ) > 0 ) { $ids[] = absint( $event['product_id'] ); }
+			}
+			if ( $ids ) { _prime_post_caches( array_values( array_unique( $ids ) ), false, false ); }
+		}
+		foreach ( $events as $event ) {
 			if ( ! is_array( $event ) || absint( $event['created'] ?? 0 ) < $cutoff ) { continue; }
 			$product_id = absint( $event['product_id'] ?? 0 );
 			// Unpublished since the sale: no longer shown.
