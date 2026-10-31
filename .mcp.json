@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "sh",
+      "args": [
+        "-c",
+        "if [ -x /opt/pw-browsers/chromium ]; then exec npx -y chrome-devtools-mcp@1.12.0 --no-usage-statistics --headless=true --isolated=true --executablePath=/opt/pw-browsers/chromium --chromeArg=--no-sandbox; else exec npx -y chrome-devtools-mcp@1.12.0 --no-usage-statistics --isolated=true; fi"
+      ]
+    }
+  }
+}
