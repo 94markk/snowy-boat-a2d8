@@ -199,7 +199,8 @@ final class DIP_Passkeys {
         $user_id = absint($user_id);
         if (!$user_id) return false;
         $credentials = array_slice(array_values($credentials), 0, self::STORED_SANITY_CAP);
-        return update_user_meta($user_id, self::META_CREDENTIALS, $credentials) !== false;
+        return update_user_meta($user_id, self::META_CREDENTIALS, $credentials) !== false
+            || get_user_meta($user_id, self::META_CREDENTIALS, true) === $credentials;
     }
 
     /** Scalar request field as a string ('' for arrays/objects: no PHP warning on hostile JSON). */
@@ -254,6 +255,13 @@ final class DIP_Passkeys {
             'origin' => $origin,
             'expires' => time() + self::CEREMONY_TTL,
         ], $extra);
+        // Sensitive ceremonies belong to this exact authenticated session, not
+        // just to a reusable browser cookie (logout/re-login must invalidate them).
+        if ($purpose !== 'login') {
+            $token = wp_get_session_token();
+            if ($token === '') return false;
+            $state['session'] = hash_hmac('sha256', $token, wp_salt('secure_auth'));
+        }
         set_transient(self::ceremony_key($id), $state, self::CEREMONY_TTL);
         return ['id'=>$id, 'challenge'=>$challenge, 'state'=>$state];
     }
@@ -281,6 +289,12 @@ final class DIP_Passkeys {
             $binding = self::browser_binding(false);
             if ($binding === '' || empty($state['browser']) || !hash_equals((string) $state['browser'], $binding)) {
                 return new WP_Error('dip_passkey_browser_mismatch', __('Cette vérification doit être terminée dans le même navigateur.', 'delicat-google-login'), ['status'=>403]);
+            }
+            if (isset($state['session'])) {
+                $token = wp_get_session_token();
+                if ($token === '' || !hash_equals((string) $state['session'], hash_hmac('sha256', $token, wp_salt('secure_auth')))) {
+                    return new WP_Error('dip_passkey_session_changed', __('Votre session a changé. Recommencez la vérification.', 'delicat-google-login'), ['status'=>403]);
+                }
             }
             return $state;
         } finally {
@@ -325,10 +339,10 @@ final class DIP_Passkeys {
 
     public static function register_routes() {
         register_rest_route(self::REST_NAMESPACE, '/passkeys/login/options', [
-            'methods'=>'POST','callback'=>[__CLASS__,'rest_login_options'],'permission_callback'=>'__return_true',
+            'methods'=>'POST','callback'=>[__CLASS__,'rest_login_options'],'permission_callback'=>[__CLASS__,'permission_browser'],
         ]);
         register_rest_route(self::REST_NAMESPACE, '/passkeys/login/verify', [
-            'methods'=>'POST','callback'=>[__CLASS__,'rest_login_verify'],'permission_callback'=>'__return_true',
+            'methods'=>'POST','callback'=>[__CLASS__,'rest_login_verify'],'permission_callback'=>[__CLASS__,'permission_browser'],
         ]);
         register_rest_route(self::REST_NAMESPACE, '/passkeys/register/options', [
             'methods'=>'POST','callback'=>[__CLASS__,'rest_register_options'],'permission_callback'=>[__CLASS__,'permission_sensitive_customer'],
@@ -364,7 +378,20 @@ final class DIP_Passkeys {
         return $rules;
     }
 
+    /** Same-origin browser ceremonies; native apps use the separate /mobile routes. */
+    public static function permission_browser($request = null) {
+        if (!$request instanceof WP_REST_Request) return true;
+        $origin = trim((string) $request->get_header('origin'));
+        $site = strtolower(trim((string) $request->get_header('sec-fetch-site')));
+        if (($origin !== '' && !hash_equals(self::expected_origin(), $origin)) || $site === 'cross-site') {
+            return new WP_Error('dip_passkey_request_origin', __('Ouvrez la connexion depuis le site officiel Delicat Store.', 'delicat-google-login'), ['status'=>403]);
+        }
+        return true;
+    }
+
     public static function permission_customer($request = null) {
+        $browser = self::permission_browser($request);
+        if (is_wp_error($browser)) return $browser;
         if (!is_user_logged_in()) return new WP_Error('dip_login_required', __('Connexion requise.', 'delicat-google-login'), ['status'=>401]);
         $uid = get_current_user_id();
         if (class_exists('DIP_Access_Guard') && !DIP_Access_Guard::can_self_service($uid)) return new WP_Error('dip_self_service_denied', __('Accès limité à votre propre compte.', 'delicat-google-login'), ['status'=>403]);
@@ -612,20 +639,30 @@ final class DIP_Passkeys {
         if (!is_array($json)) return new WP_Error('dip_passkey_client_json', __('Données Passkey invalides.', 'delicat-google-login'), ['status'=>400]);
         if (!isset($json['type']) || !is_string($json['type']) || !hash_equals((string)$type, $json['type'])) return new WP_Error('dip_passkey_type', __('Type de vérification Passkey invalide.', 'delicat-google-login'), ['status'=>400]);
         if (empty($json['challenge']) || !is_string($json['challenge']) || !hash_equals((string)$state['challenge'], $json['challenge'])) return new WP_Error('dip_passkey_challenge', __('Challenge Passkey invalide.', 'delicat-google-login'), ['status'=>403]);
-        if (empty($json['origin']) || !is_string($json['origin']) || !hash_equals((string)$state['origin'], rtrim($json['origin'], '/'))) return new WP_Error('dip_passkey_origin', __('Origine Passkey refusée.', 'delicat-google-login'), ['status'=>403]);
-        if (!empty($json['crossOrigin'])) return new WP_Error('dip_passkey_cross_origin', __('Vérification Passkey cross-origin refusée.', 'delicat-google-login'), ['status'=>403]);
+        if (empty($json['origin']) || !is_string($json['origin']) || !hash_equals((string)$state['origin'], $json['origin'])) return new WP_Error('dip_passkey_origin', __('Origine Passkey refusée.', 'delicat-google-login'), ['status'=>403]);
+        if ((isset($json['crossOrigin']) && $json['crossOrigin'] !== false) || isset($json['topOrigin'])) return new WP_Error('dip_passkey_cross_origin', __('Vérification Passkey cross-origin refusée.', 'delicat-google-login'), ['status'=>403]);
         return ['raw'=>$raw,'json'=>$json];
     }
 
     /** @internal 6.11.0: shared with DIP_Mobile_Passkeys, behaviour unchanged. */
     public static function parse_authenticator_data($raw, $rp_id, $require_attested = false) {
-        if (!is_string($raw) || strlen($raw) < 37) return new WP_Error('dip_passkey_auth_data', __('Données authenticator invalides.', 'delicat-google-login'), ['status'=>400]);
+        if (!is_string($raw) || strlen($raw) < 37 || strlen($raw) > 262144) return new WP_Error('dip_passkey_auth_data', __('Données authenticator invalides.', 'delicat-google-login'), ['status'=>400]);
         $rp_hash = substr($raw, 0, 32);
         if (!hash_equals(hash('sha256', (string)$rp_id, true), $rp_hash)) return new WP_Error('dip_passkey_rp', __('Cette Passkey appartient à un autre domaine.', 'delicat-google-login'), ['status'=>403]);
         $flags = ord($raw[32]);
         if (($flags & 0x01) !== 0x01) return new WP_Error('dip_passkey_user_presence', __('Présence utilisateur requise.', 'delicat-google-login'), ['status'=>403]);
         if (($flags & 0x04) !== 0x04) return new WP_Error('dip_passkey_user_verification', __('Face ID, Touch ID, biométrie ou PIN appareil requis.', 'delicat-google-login'), ['status'=>403]);
         if ($require_attested && (($flags & 0x40) !== 0x40)) return new WP_Error('dip_passkey_attested_missing', __('Clé publique Passkey absente.', 'delicat-google-login'), ['status'=>400]);
+        if (($flags & 0x10) && !($flags & 0x08)) return new WP_Error('dip_passkey_backup_flags', __('Indicateurs de sécurité Passkey incohérents.', 'delicat-google-login'), ['status'=>403]);
+        if (!$require_attested && ($flags & 0x40)) return new WP_Error('dip_passkey_assertion_flags', __('Données de connexion Passkey invalides.', 'delicat-google-login'), ['status'=>400]);
+        if (!$require_attested) {
+            $offset = 37;
+            if ($flags & 0x80) {
+                $extensions = self::cbor_decode_item($raw, $offset, 0);
+                if (!is_array($extensions)) return new WP_Error('dip_passkey_extensions', __('Extensions Passkey invalides.', 'delicat-google-login'), ['status'=>400]);
+            }
+            if ($offset !== strlen($raw)) return new WP_Error('dip_passkey_trailing_data', __('Données Passkey inattendues.', 'delicat-google-login'), ['status'=>400]);
+        }
         $count = unpack('Ncount', substr($raw, 33, 4));
         return ['flags'=>$flags,'sign_count'=>(int)($count['count'] ?? 0),'raw'=>$raw];
     }
@@ -666,7 +703,7 @@ final class DIP_Passkeys {
             case 4:
                 $arr=[]; for($i=0;$i<$length;$i++){ $v=self::cbor_decode_item($data,$offset,$depth+1); if($v===false) return false; $arr[]=$v; } return $arr;
             case 5:
-                $map=[]; for($i=0;$i<$length;$i++){ $k=self::cbor_decode_item($data,$offset,$depth+1); if($k===false||(!is_int($k)&&!is_string($k))) return false; $v=self::cbor_decode_item($data,$offset,$depth+1); if($v===false) return false; $map[$k]=$v; } return $map;
+                $map=[]; for($i=0;$i<$length;$i++){ $k=self::cbor_decode_item($data,$offset,$depth+1); if($k===false||(!is_int($k)&&!is_string($k))) return false; $v=self::cbor_decode_item($data,$offset,$depth+1); if($v===false) return false; if(array_key_exists($k,$map)) return false; $map[$k]=$v; } return $map;
             case 6: return self::cbor_decode_item($data,$offset,$depth+1);
             case 7:
                 if ($additional === 20) return false;
@@ -720,7 +757,7 @@ final class DIP_Passkeys {
         if ($kty === 3 && $alg === -257) {
             $n = isset($cose[-1]) && is_string($cose[-1]) ? $cose[-1] : '';
             $e = isset($cose[-2]) && is_string($cose[-2]) ? $cose[-2] : '';
-            if ($n === '' || $e === '' || strlen($n) > 1024 || strlen($e) > 8) return false;
+            if (strlen(ltrim($n, "\x00")) < 256 || $e === '' || strlen($n) > 1024 || strlen($e) > 8) return false;
             $rsa = self::der_sequence(self::der_integer($n) . self::der_integer($e));
             $alg_id = hex2bin('300D06092A864886F70D0101010500');
             $spki = self::der_sequence($alg_id . self::der_bit_string($rsa));
@@ -759,6 +796,11 @@ final class DIP_Passkeys {
         $cose_offset = $offset;
         $cose = self::cbor_decode_item($data, $cose_offset, 0);
         if (!is_array($cose)) return new WP_Error('dip_passkey_public_key', __('Clé publique Passkey invalide.', 'delicat-google-login'), ['status'=>400]);
+        if ($auth['flags'] & 0x80) {
+            $extensions = self::cbor_decode_item($data, $cose_offset, 0);
+            if (!is_array($extensions)) return new WP_Error('dip_passkey_extensions', __('Extensions Passkey invalides.', 'delicat-google-login'), ['status'=>400]);
+        }
+        if ($cose_offset !== strlen($data)) return new WP_Error('dip_passkey_trailing_data', __('Données Passkey inattendues.', 'delicat-google-login'), ['status'=>400]);
         $converted = self::cose_to_pem($cose);
         if (!$converted || !openssl_pkey_get_public($converted['pem'])) return new WP_Error('dip_passkey_public_key_unsupported', __('Type de Passkey non pris en charge sur ce serveur.', 'delicat-google-login'), ['status'=>400]);
         return [
@@ -827,9 +869,10 @@ final class DIP_Passkeys {
             if ($verified !== 1) return new WP_Error('dip_passkey_signature', __('Signature Passkey refusée.', 'delicat-google-login'), ['status'=>401]);
             $user_handle = self::str_field($body, 'userHandle');
             if ($user_handle !== '' && !hash_equals(self::user_handle($uid), $user_handle)) return new WP_Error('dip_passkey_user_handle', __('Passkey liée à un autre compte.', 'delicat-google-login'), ['status'=>403]);
+            if (isset($credential['be']) && (bool) $credential['be'] !== (bool) ($auth['flags'] & 0x08)) return new WP_Error('dip_passkey_backup_changed', __('La propriété de sécurité de cette Passkey a changé. Utilisez une autre méthode.', 'delicat-google-login'), ['status'=>403]);
             $stored_count = max(0,(int)($credential['sign_count'] ?? 0));
             $new_count = max(0,(int)$auth['sign_count']);
-            if ($stored_count > 0 && $new_count > 0 && $new_count <= $stored_count) {
+            if (($stored_count > 0 || $new_count > 0) && $new_count <= $stored_count) {
                 if (class_exists('DIP_Audit')) DIP_Audit::record('passkey_counter_replay_blocked','critical',$uid,['credential'=>substr(hash('sha256',$credential_id),0,16)]);
                 return new WP_Error('dip_passkey_counter', __('Cette Passkey présente un compteur de sécurité incohérent. Utilisez une autre méthode et vérifiez vos appareils.', 'delicat-google-login'), ['status'=>403]);
             }
@@ -839,7 +882,7 @@ final class DIP_Passkeys {
             $credential['bs'] = ($auth['flags'] & 0x10) ? 1 : 0;
             if (!$is_pending) {
                 $credentials[$index] = $credential;
-                self::save_credentials($uid,$credentials);
+                if (!self::save_credentials($uid,$credentials)) return new WP_Error('dip_passkey_save', __('Impossible de sauvegarder la vérification. Réessayez.', 'delicat-google-login'), ['status'=>503]);
             }
             return ['user_id'=>$uid,'credential'=>$credential];
         } finally {
@@ -1029,14 +1072,16 @@ final class DIP_Passkeys {
 
     public static function rest_remove($request) {
         $uid=get_current_user_id();
-        $id=sanitize_text_field((string)$request->get_param('credential'));
+        $params=$request->get_url_params();
+        $id=isset($params['credential']) && is_string($params['credential']) ? sanitize_text_field($params['credential']) : '';
+        if($id==='') return new WP_Error('dip_passkey_not_found',__('Passkey introuvable.','delicat-google-login'),['status'=>404]);
         if(!self::acquire_user_lock($uid,10)) return new WP_Error('dip_passkey_account_busy',__('Une autre modification de sécurité est en cours. Réessayez.','delicat-google-login'),['status'=>409]);
         try {
             $credentials=self::credentials($uid); $kept=[]; $removed=null;
             foreach($credentials as $entry){ if(!$removed && !empty($entry['id']) && hash_equals((string)$entry['id'],$id)){$removed=$entry;continue;} $kept[]=$entry; }
             if(!$removed) return new WP_Error('dip_passkey_not_found',__('Passkey introuvable.','delicat-google-login'),['status'=>404]);
             if(!$kept && !self::has_other_primary_login_method($uid)) return new WP_Error('dip_passkey_last_method',__('Ajoutez d’abord un mot de passe utilisable ou reliez Google/Microsoft avant de supprimer votre dernière Passkey.','delicat-google-login'),['status'=>409]);
-            self::save_credentials($uid,$kept);
+            if(!self::save_credentials($uid,$kept)) return new WP_Error('dip_passkey_save',__('Impossible de supprimer cette Passkey. Réessayez.','delicat-google-login'),['status'=>503]);
         } finally { self::release_user_lock($uid); }
         if(class_exists('DIP_Audit'))DIP_Audit::record('passkey_removed','warning',$uid,['credential'=>substr(hash('sha256',$id),0,16)]);
         self::security_email($uid,__('Passkey supprimée de votre compte Delicat','delicat-google-login'),sprintf(__('La Passkey « %s » a été supprimée de votre compte. Si vous n’êtes pas à l’origine de cette action, changez votre mot de passe et vérifiez immédiatement vos sessions.','delicat-google-login'),(string)$removed['label']));
@@ -1212,7 +1257,7 @@ final class DIP_Passkeys {
         $default_label=__('Mon appareil','delicat-google-login');
         ob_start(); ?>
         <div class="dip-security-card dip-passkeys-card" id="dip-passkeys" data-dip-passkeys-card data-dip-passkeys-count="<?php echo esc_attr($count); ?>"<?php if($signal): ?> data-dip-passkeys-signal="<?php echo esc_attr(wp_json_encode($signal)); ?>"<?php endif; ?>>
-          <div class="dip-security-card-title"><span class="dip-security-card-icon dip-passkey-icon" aria-hidden="true"></span><div><h3><?php esc_html_e('Passkeys','delicat-google-login'); ?></h3><p><?php esc_html_e('Connectez-vous en un geste avec Face ID, Touch ID, l’empreinte Android, Windows Hello ou une clé de sécurité. La clé privée ne quitte jamais votre appareil.','delicat-google-login'); ?></p></div></div>
+          <div class="dip-security-card-title"><span class="dip-security-card-icon dip-passkey-icon" aria-hidden="true"></span><div><h3><?php esc_html_e('Passkeys','delicat-google-login'); ?></h3><p><?php esc_html_e('Connectez-vous en un geste avec Face ID, Touch ID, l’empreinte Android, Windows Hello ou une clé de sécurité. Votre biométrie reste sur votre appareil. La clé d’accès peut être synchronisée par votre gestionnaire de mots de passe.','delicat-google-login'); ?></p></div></div>
           <?php if(!$available): ?><div class="dip-security-notice"><?php esc_html_e('Passkeys nécessite HTTPS, OpenSSL et un navigateur compatible.','delicat-google-login'); ?></div><?php endif; ?>
           <?php if($credentials): ?><ul class="dip-passkey-list" aria-label="<?php echo esc_attr__('Vos Passkeys','delicat-google-login'); ?>"><?php foreach($credentials as $entry): ?>
             <li class="dip-passkey-item">
@@ -1238,6 +1283,7 @@ final class DIP_Passkeys {
             <button type="button" class="dip-btn primary" data-dip-passkey-register<?php disabled(!$available || $full); ?>><?php esc_html_e('Ajouter une Passkey','delicat-google-login'); ?></button>
             <?php if($credentials): ?><button type="button" class="dip-btn" data-dip-passkey-reauth<?php disabled(!$available); ?>><?php esc_html_e('Confirmer avec une Passkey','delicat-google-login'); ?></button><?php endif; ?>
           </div>
+          <details class="dip-passkey-guidance"><summary><?php esc_html_e('Comment fonctionne Face ID / le code appareil ?', 'delicat-google-login'); ?></summary><p><?php esc_html_e('Votre navigateur ouvre la fenêtre de sécurité du téléphone. Choisissez Face ID, Touch ID ou le code de déverrouillage de l’appareil. Ce code ne doit jamais être saisi sur le site. Conservez une autre méthode de connexion et vos codes de récupération 2FA dans un endroit sûr.', 'delicat-google-login'); ?></p></details>
           <?php if($full): ?><p class="dip-passkey-hint"><?php echo esc_html(sprintf(__('Maximum de %d Passkeys atteint : supprimez-en une pour en ajouter une autre.','delicat-google-login'),$max)); ?></p><?php endif; ?>
           <div class="dip-passkey-status" data-dip-passkey-status role="status" aria-live="polite" hidden></div>
         </div>
@@ -1268,7 +1314,7 @@ final class DIP_Passkeys {
     public static function render_login_button(){
         if(!self::available()) return '';
         if(!self::rendering_identity_modal()) self::enqueue_runtime();
-        return '<button type="button" class="dipx-passkey-login" data-dip-passkey-login><span aria-hidden="true"></span><strong>'.esc_html__('Continuer avec une Passkey','delicat-google-login').'</strong><small>'.esc_html__('Face ID • Touch ID • Biométrie','delicat-google-login').'</small></button>';
+        return '<button type="button" class="dipx-passkey-login" data-dip-passkey-login><span class="dipx-biometric-icons" aria-hidden="true"><svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M7 17V11a4 4 0 0 1 4-4h6M31 7h6a4 4 0 0 1 4 4v6M41 31v6a4 4 0 0 1-4 4h-6M17 41h-6a4 4 0 0 1-4-4v-6M17 19v4M31 19v4M24 19v9h-3M17 32q7 6 14 0"/></svg><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 6a9 9 0 0 1 14 0M3 12a9 9 0 0 1 1-4M21 12a9 9 0 0 0-1-4M7 19c1-3 1-5 1-7a4 4 0 0 1 8 0c0 5-1 7-2 10M4 17c1-2 1-4 1-5a7 7 0 0 1 14 0c0 3 0 5-1 8M10 22c2-4 2-7 2-10"/></svg></span><strong>'.esc_html__('Connexion par clé d’accès','delicat-google-login').'</strong><small>'.esc_html__('Face ID · Touch ID · Code','delicat-google-login').'</small></button>';
     }
 
     public static function cli_reset($args,$assoc_args=[]){

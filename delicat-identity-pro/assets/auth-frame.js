@@ -6,9 +6,10 @@
   var message=root.querySelector('.dipx-message'),resend=root.querySelector('[data-dipx-resend]');
   var forms=[login,register].filter(Boolean),active=false,busy=false,generation=0,nonces=null,nonceTime=0,pending=null,controllers=[];
   var tabs=Array.prototype.slice.call(root.querySelectorAll('[data-dipx-tab]'));
-  var factor=root.querySelector('[data-dipx-2fa]');
+  var factor=root.querySelector('[data-dipx-2fa]'),magic=root.querySelector('[data-dipx-magic]');
   var passkey=root.querySelector('[data-dip-passkey-login]');
   if(passkey){passkey.setAttribute('data-dip-passkey-loading','1');passkey.disabled=true;if(Number((window.DIPPasskeys||{}).available)!==1)passkey.hidden=true;}
+  root.setAttribute('data-dip-auth-active','0');
   var sizeRequest=0;
   function measure(){
     sizeRequest=0;if(!active)return;
@@ -20,6 +21,7 @@
   function requestSize(){if(active&&!sizeRequest)sizeRequest=window.requestAnimationFrame(measure);}
   if(typeof ResizeObserver!=='undefined')new ResizeObserver(requestSize).observe(root);
   window.addEventListener('resize',requestSize);
+  Array.prototype.forEach.call(root.querySelectorAll('details'),function(d){d.addEventListener('toggle',function(){if(d.open&&d.classList.contains('dipx-password-method'))Array.prototype.forEach.call(root.querySelectorAll('.dipx-password-method[open]'),function(other){if(other!==d)other.open=false;});requestSize();});});
   function show(text,ok){message.textContent=text||'';message.hidden=!text;message.className='dipx-message '+(ok?'is-success':'is-error');requestSize();}
   function passkeyBusy(){return root.getAttribute('data-passkey-busy')==='1';}
   function state(on){
@@ -32,6 +34,7 @@
     });
     var pk=root.querySelector('[data-dip-passkey-login]');if(pk&&!pk.hasAttribute('aria-disabled'))pk.disabled=on||pk.hasAttribute('data-dip-passkey-loading');
     if(resend)resend.disabled=on;
+    if(magic)magic.querySelector('button[type=submit]').disabled=on;
   }
   function post(data){
     var controller=typeof AbortController!=='undefined'?new AbortController():null,timer;
@@ -56,6 +59,9 @@
     if(busy||passkeyBusy())return;
     var reg=name==='register'&&register;
     login.hidden=!!reg;if(register)register.hidden=!reg;
+    var quick=root.querySelector('[data-dipx-quick]');if(quick)quick.hidden=!!reg;
+    if(magic)magic.hidden=!!reg;
+    if(window.DIPPasskeyUI)window.DIPPasskeyUI.resume();
     tabs.forEach(function(t){var yes=t.getAttribute('data-dipx-tab')===(reg?'register':'login');t.setAttribute('aria-selected',yes?'true':'false');t.tabIndex=yes?0:-1;t.classList.toggle('is-active',yes);});
     var sub=root.querySelector('.dipx-subtitle');if(sub)sub.textContent=reg?'Créez votre compte Delicat Store':'Connectez-vous pour continuer';
     show('');if(resend)resend.hidden=true;requestSize();
@@ -106,6 +112,19 @@
     var g=generation;state(true);show('Connexion en cours…',true);
     send(form,false,g).catch(function(err){if(g!==generation)return;state(false);show(err.message||'Erreur réseau. Réessayez.');});
   });});
+  if(magic)magic.addEventListener('submit',function(e){
+    e.preventDefault();if(busy||passkeyBusy())return;
+    if(!magic.checkValidity()){magic.reportValidity();return;}
+    var g=generation;state(true);
+    function deliver(retry){return fresh(false).then(function(n){
+      var data=new FormData(magic);data.set('action','dip_native_request_magic');data.set('nonce',n.magic_request||'');return post(data);
+    }).then(function(r){
+      if(g!==generation)return;
+      if(!r.success&&r.data&&r.data.code==='bad_nonce'&&!retry){nonces=null;return deliver(true);}
+      state(false);show((r.data&&r.data.message)||'Impossible de continuer.',!!r.success);
+    });}
+    deliver(false).catch(function(err){if(g===generation){state(false);show(err.message||'Erreur réseau. Réessayez.');}});
+  });
   tabs.forEach(function(t){t.addEventListener('click',function(){select(t.getAttribute('data-dipx-tab'));});t.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(busy||passkeyBusy())return;var next=t.getAttribute('data-dipx-tab')==='login'?'register':'login';select(next);tabs.forEach(function(n){if(n.getAttribute('data-dipx-tab')===next)n.focus();});}});});
   Array.prototype.forEach.call(root.querySelectorAll('[data-dipx-eye]'),function(b){
     b.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path class="dip-eye-slash" d="m4 4 16 16"/></svg>';
@@ -128,15 +147,18 @@
   document.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();window.parent.DIPIdentityModalAPI.close();}});
   window.DIPAuthFrame={
     open:function(tab){
-      active=true;select(tab);
-      fresh(false).catch(function(){/* Submit retries; Google remains a native link. */});
+      active=true;root.setAttribute('data-dip-auth-active','1');select(tab);
+      window.DIPAuthReady=fresh(false);
+      window.DIPAuthReady.then(function(){if(active&&window.DIPPasskeyUI)window.DIPPasskeyUI.resume();}).catch(function(){/* Submit retries; Google remains a native link. */});
       var params=new URLSearchParams(window.parent.location.search),error=params.get('dip_auth_error');
       if(error)show(Object.prototype.hasOwnProperty.call(errorMessages,error)?errorMessages[error]:'La connexion Google a échoué. Réessayez.');
       else if(params.get('dip_verified')==='1')show('Adresse e-mail vérifiée. Vous pouvez vous connecter.',true);
     },
     close:function(){
+      if(passkeyBusy()&&window.DIPPasskeyUI&&!window.DIPPasskeyUI.cancel()){show('Finalisation de la connexion…',true);return false;}
       if(busy||passkeyBusy()){show('Vérification en cours. Veuillez patienter.',true);return false;}
-      active=false;if(sizeRequest)window.cancelAnimationFrame(sizeRequest);sizeRequest=0;generation++;controllers.forEach(function(c){c.abort();});controllers=[];pending=null;nonces=null;
+      if(window.DIPPasskeyUI)window.DIPPasskeyUI.cancel();
+      active=false;root.setAttribute('data-dip-auth-active','0');if(sizeRequest)window.cancelAnimationFrame(sizeRequest);sizeRequest=0;generation++;controllers.forEach(function(c){c.abort();});controllers=[];pending=null;nonces=null;
       forms.forEach(function(f){f.removeAttribute('data-verification-pending');Array.prototype.forEach.call(f.querySelectorAll('input[type="password"],input[name="password"],input[name="dip_2fa_code"]'),function(i){i.value='';if(i.name==='password')i.type='password';});});
       Array.prototype.forEach.call(root.querySelectorAll('[data-dipx-eye]'),function(b){b.setAttribute('aria-pressed','false');b.setAttribute('aria-label','Afficher le mot de passe');});
       if(factor){factor.hidden=true;factor.querySelector('input').required=false;}state(false);show('');return true;
@@ -148,6 +170,7 @@
       rate_limited: 'Trop de tentatives. Réessayez plus tard.',
       temporarily_locked: 'Connexion temporairement bloquée. Réessayez plus tard.',
       dip_email_not_verified: 'Vérifiez votre adresse e-mail avant de vous connecter.',
+      dip_account_banned: 'Ce compte est suspendu ou désactivé. Contactez le support.',
       account_pending_approval: 'Votre compte attend l’approbation de l’administrateur.',
       privileged_auto_link_blocked: 'Ce compte sensible existe déjà. Delicat refuse une simple liaison par e-mail et doit reprendre son lien Google historique ou une liaison sécurisée.',
       duplicate_nextend_google_identity: 'Cette identité Google apparaît sur plusieurs comptes historiques. Une vérification administrateur est requise.',

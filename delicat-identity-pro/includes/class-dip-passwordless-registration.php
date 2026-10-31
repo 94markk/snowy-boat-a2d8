@@ -424,6 +424,22 @@ final class DIP_Passwordless_Registration {
         }
     }
 
+    /** Atomically burn a proven OTP/link, even when another worker cached its payload. */
+    private static function claim_login_record($key, array $payload) {
+        if (empty($payload['hash']) || (int) ($payload['expires'] ?? 0) <= time()) return false;
+        global $wpdb;
+        self::otp_collect_garbage();
+        // Reuse the bounded-expiry row namespace and its existing garbage collector.
+        // Unlike a transient read/delete, INSERT IGNORE has one winner across workers.
+        $row = self::otp_try_row('consume|' . $key, $payload);
+        $suppress = $wpdb->suppress_errors(true);
+        try {
+            return $wpdb->query($wpdb->prepare("INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, 'used', 'no')", $row)) === 1;
+        } finally {
+            $wpdb->suppress_errors($suppress);
+        }
+    }
+
     public static function verify_otp() {
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') self::redirect(['dip_auth'=>'confirmation_failed']);
         if (!self::verify_form_nonce('dip_verify_otp')) self::redirect(['dip_auth'=>'confirmation_failed']);
@@ -456,6 +472,7 @@ final class DIP_Passwordless_Registration {
             delete_transient($key);
             self::redirect(['dip_auth'=>'otp_exhausted']);
         }
+        if (!self::claim_login_record($key, $payload)) self::redirect(['dip_auth'=>'expired']);
         delete_transient($key);
         $user = get_user_by('email', $email);
         if ($user && !self::passwordless_allowed($user)) {
@@ -492,19 +509,30 @@ final class DIP_Passwordless_Registration {
         wp_safe_redirect(self::safe_redirect($s['redirect_after_login'])); exit;
     }
 
+    private static function magic_reply($args) {
+        if (!wp_doing_ajax()) self::redirect($args);
+        $status = $args['dip_auth'] ?? '';
+        if ($status === 'confirmation_failed') wp_send_json_error(['code'=>'bad_nonce','message'=>'Votre session a expiré. Réessayez.'],403);
+        if ($status === 'invalid_email') wp_send_json_error(['code'=>'invalid_email','message'=>'Saisissez une adresse e-mail valide.'],400);
+        if ($status === 'disabled') wp_send_json_error(['code'=>'disabled','message'=>'La connexion par lien est indisponible.'],403);
+        // Same reply for unknown, blocked, privileged, throttled and undeliverable addresses.
+        wp_send_json_success(['message'=>'Si cette adresse correspond à un compte autorisé, vous recevrez un lien de connexion. Vérifiez aussi vos courriers indésirables.']);
+    }
+
     public static function request_magic() {
-        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') self::redirect(['dip_auth'=>'confirmation_failed']);
-        if (!self::verify_form_nonce('dip_request_magic')) self::redirect(['dip_auth'=>'confirmation_failed']);
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') self::magic_reply(['dip_auth'=>'confirmation_failed']);
+        if (!self::verify_form_nonce('dip_request_magic')) self::magic_reply(['dip_auth'=>'confirmation_failed']);
         $s = self::settings();
-        if ($s['magic_enabled'] !== 'yes') self::redirect(['dip_auth'=>'disabled']);
+        if ($s['magic_enabled'] !== 'yes') self::magic_reply(['dip_auth'=>'disabled']);
         $email = sanitize_email(self::posted('email'));
-        if (!$email || !is_email($email)) self::redirect(['dip_auth'=>'invalid_email']);
-        if (!self::throttle($email, 'magic', 90)) self::redirect(['dip_auth'=>'wait']);
+        if (!$email || !is_email($email)) self::magic_reply(['dip_auth'=>'invalid_email']);
+        if (!self::throttle($email, 'magic', 90)) self::magic_reply(['dip_auth'=>'wait']);
         $user = get_user_by('email', $email);
-        if (!$user && ($s['allow_new_passwordless_users'] !== 'yes' || !self::new_accounts_allowed())) self::redirect(['dip_auth'=>'sent']);
+        if (!$user && ($s['allow_new_passwordless_users'] !== 'yes' || !self::new_accounts_allowed())) self::magic_reply(['dip_auth'=>'sent']);
+        if ($user && class_exists('DIP_Account_Control') && DIP_Account_Control::ban_error($user->ID)) self::magic_reply(['dip_auth'=>'sent']);
         if ($user && !self::passwordless_allowed($user)) {
             self::notify_privileged_request($user, 'magic_link');
-            self::redirect(['dip_auth'=>'sent']);
+            self::magic_reply(['dip_auth'=>'sent']);
         }
         $token = wp_generate_password(48, false, false);
         $email_enc = class_exists('DIP_Crypto') ? DIP_Crypto::encrypt($email) : '';
@@ -528,10 +556,10 @@ final class DIP_Passwordless_Registration {
         if (!$sent) {
             delete_transient(self::magic_key($token));
             if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_email_failed', 0, ['email_hash'=>self::email_hash($email)]);
-            self::redirect(['dip_auth'=>'email_failed']);
+            self::magic_reply(['dip_auth'=>'email_failed']);
         }
         if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_requested', 0, ['email_hash'=>self::email_hash($email)]);
-        self::redirect(['dip_auth'=>'sent']);
+        self::magic_reply(['dip_auth'=>'sent']);
     }
 
     private static function confirmation_page($title, $message, $button, array $fields, $nonce) {
@@ -597,6 +625,8 @@ final class DIP_Passwordless_Registration {
         if (is_user_logged_in() && (!$user || get_current_user_id() !== (int) $user->ID)) {
             wp_safe_redirect(add_query_arg('dip_auth','already_logged_in',home_url('/'))); exit;
         }
+
+        if (($s['magic_enabled'] ?? 'no') !== 'yes' || !self::claim_login_record($key, $record)) { wp_safe_redirect(add_query_arg('dip_auth','expired',home_url('/'))); exit; }
 
         // Consume only after an explicit, browser-bound confirmation. Email
         // scanners/prefetchers can safely open the GET without burning the link.

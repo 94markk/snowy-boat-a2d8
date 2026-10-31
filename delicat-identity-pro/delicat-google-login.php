@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Identity Pro
  * Description: Unified secure identity, authentication, account lifecycle, and synchronized WordPress/WooCommerce transactional email studio.
- * Version:     6.12.0
+ * Version:     6.15.1
  * Author: Delicat Store
  * Text Domain: delicat-google-login
  * Requires at least: 6.2
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('DIP_VERSION', '6.12.0');
+define('DIP_VERSION', '6.15.1');
 define('DIP_FILE', __FILE__);
 define('DIP_DIR', plugin_dir_path(__FILE__));
 define('DIP_URL', plugin_dir_url(__FILE__));
@@ -58,6 +58,10 @@ add_action('user_register', ['DIP_Account_Sync', 'external_user_registered'], 20
 add_filter('woocommerce_registration_auth_new_customer', ['DIP_Account_Sync', 'woocommerce_registration_auth'], 20, 2);
 add_filter('send_auth_cookies', ['DIP_Account_Sync', 'filter_auth_cookies'], 20, 6);
 add_filter('wp_is_application_passwords_available_for_user', ['DIP_Account_Sync', 'filter_application_passwords'], 20, 2);
+add_action('plugins_loaded', ['DIP_Account_Control', 'init'], 15);
+add_action('plugins_loaded', ['DIP_Protection', 'init'], 15);
+add_action('plugins_loaded', ['DIP_Email_Requests', 'init'], 15);
+add_action('plugins_loaded', ['DIP_Transaction_Guard', 'init'], 15);
 add_action('plugins_loaded', ['DIP_Access_Guard', 'init'], 16);
 add_action('plugins_loaded', ['DIP_Reauth', 'init'], 16);
 add_action('plugins_loaded', ['DIP_Two_Factor', 'init'], 17);

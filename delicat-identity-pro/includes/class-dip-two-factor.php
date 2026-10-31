@@ -61,6 +61,7 @@ final class DIP_Two_Factor {
     }
 
     private static function enrollment_available() {
+        if (class_exists('DIP_Protection') && DIP_Protection::required()) return true;
         if (!class_exists('DIP_Plugin')) return true;
         $s = wp_parse_args((array)get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
         return ($s['two_factor_available'] ?? 'yes') === 'yes';
@@ -517,6 +518,7 @@ final class DIP_Two_Factor {
         if (class_exists('DIP_Customer_Dashboard') && function_exists('wc_get_account_endpoint_url')) {
             $url = add_query_arg('dip_tab', 'security', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
         }
+        if (class_exists('DIP_Protection') && current_user_can('manage_options')) $url = DIP_Protection::url();
         // Back on the 2FA card itself, so the result is in view.
         if ($status !== '') $url = add_query_arg('dip_2fa_status', sanitize_key($status), $url) . '#dip-2fa';
         return $url;
@@ -615,6 +617,7 @@ final class DIP_Two_Factor {
     }
 
     public static function disable() {
+        if (class_exists('DIP_Protection') && DIP_Protection::required()) wp_die('La 2FA est obligatoire pour les administrateurs.', '', ['response'=>403]);
         if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') wp_die(esc_html__('Méthode non autorisée.', 'delicat-google-login'), '', ['response'=>405]);
         self::require_self_service();
         check_admin_referer(self::NONCE);
@@ -919,7 +922,7 @@ final class DIP_Two_Factor {
           <?php else: ?>
             <div class="dip-2fa-actions">
               <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_2fa_recovery_regen"><?php wp_nonce_field(self::NONCE); ?><label><span><?php esc_html_e('Code Authenticator', 'delicat-google-login'); ?></span><input type="text" name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" required></label><button type="submit" class="dip-btn"><?php esc_html_e('Régénérer les codes de récupération', 'delicat-google-login'); ?></button></form>
-              <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-dip-confirm="<?php echo esc_attr__('Désactiver 2FA et révoquer les autres sessions ?', 'delicat-google-login'); ?>"><input type="hidden" name="action" value="dip_2fa_disable"><?php wp_nonce_field(self::NONCE); ?><label><span><?php esc_html_e('Code 2FA ou récupération', 'delicat-google-login'); ?></span><input type="text" name="factor_code" autocomplete="one-time-code" maxlength="32" required></label><button type="submit" class="dip-btn danger"><?php esc_html_e('Désactiver 2FA', 'delicat-google-login'); ?></button></form>
+<?php if (!class_exists('DIP_Protection') || !DIP_Protection::required($user_id)): ?>              <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" data-dip-confirm="<?php echo esc_attr__('Désactiver 2FA et révoquer les autres sessions ?', 'delicat-google-login'); ?>"><input type="hidden" name="action" value="dip_2fa_disable"><?php wp_nonce_field(self::NONCE); ?><label><span><?php esc_html_e('Code 2FA ou récupération', 'delicat-google-login'); ?></span><input type="text" name="factor_code" autocomplete="one-time-code" maxlength="32" required></label><button type="submit" class="dip-btn danger"><?php esc_html_e('Désactiver 2FA', 'delicat-google-login'); ?></button></form><?php else: ?><p>La 2FA est obligatoire pour ce compte administrateur.</p><?php endif; ?>
             </div>
           <?php endif; ?>
         </div>

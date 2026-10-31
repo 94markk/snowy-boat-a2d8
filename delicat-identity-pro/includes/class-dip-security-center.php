@@ -503,6 +503,7 @@ final class DIP_Security_Center {
         if (class_exists('WP_Session_Tokens')) WP_Session_Tokens::get_instance($user_id)->destroy_others(wp_get_session_token());
         $mobile_revoked = class_exists('DIP_Mobile_API') ? DIP_Mobile_API::revoke_all_for_user($user_id, 'security_center_logout_others') : 0;
         DIP_Audit::record('sessions_revoked','warning',$user_id,['mobile_revoked'=>(int)$mobile_revoked]);
+        do_action('dip_customer_sessions_revoked',$user_id,'logout_others');
         self::redirect('sessions');
     }
 

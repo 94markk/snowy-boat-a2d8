@@ -48,7 +48,7 @@
 @media(max-width:600px){.dip-passkey-actions{align-items:stretch}.dip-passkey-label{flex-basis:100%}.dip-passkey-actions .dip-btn{flex:1 1 150px}}
 
 /* Dark themes (theme hooks): same layout, dark tokens. */
-html[data-theme="dark"] .dip-passkeys-card,body.dark-mode .dip-passkeys-card,body.is-dark-theme .dip-passkeys-card,[data-dip-theme="dark"] .dip-passkeys-card{--dip-pk-ink:#e8ebf5;--dip-pk-ink-2:#c9cfe0;--dip-pk-muted:#a9b3cf;--dip-pk-line:#2c344d;--dip-pk-surface:#1b2136;--dip-pk-field:#161b2e;--dip-pk-accent:#8ea8ff;--dip-pk-accent-2:#b4a4ff;--dip-pk-accent-ink:#c9d5ff;--dip-pk-accent-soft:#222c4d;--dip-pk-ok-ink:#7fe0bd;--dip-pk-ok-soft:#10261f;--dip-pk-danger-ink:#ff9aa8;--dip-pk-danger-soft:#2a1820;--dip-pk-danger-line:#4a2a33;--dip-pk-warn-ink:#ffc978;--dip-pk-warn-soft:#2b2214;--dip-pk-icon-bg:linear-gradient(135deg,#222c4d,#2c2552)}
+html[data-dip-account-theme="dark"] body.dip-account-app .dip-passkeys-card,html[data-theme="dark"] .dip-passkeys-card,body.dark-mode .dip-passkeys-card,body.is-dark-theme .dip-passkeys-card,[data-dip-theme="dark"] .dip-passkeys-card{--dip-pk-ink:#e8ebf5;--dip-pk-ink-2:#c9cfe0;--dip-pk-muted:#a9b3cf;--dip-pk-line:#2c344d;--dip-pk-surface:#1b2136;--dip-pk-field:#161b2e;--dip-pk-accent:#8ea8ff;--dip-pk-accent-2:#b4a4ff;--dip-pk-accent-ink:#c9d5ff;--dip-pk-accent-soft:#222c4d;--dip-pk-ok-ink:#7fe0bd;--dip-pk-ok-soft:#10261f;--dip-pk-danger-ink:#ff9aa8;--dip-pk-danger-soft:#2a1820;--dip-pk-danger-line:#4a2a33;--dip-pk-warn-ink:#ffc978;--dip-pk-warn-soft:#2b2214;--dip-pk-icon-bg:linear-gradient(135deg,#222c4d,#2c2552)}
 
 /* Standard login forms (wp-login.php, WooCommerce, wp_login_form()). */
 .dip-passkey-standard{margin:12px 0}
@@ -64,3 +64,12 @@ html[data-theme="dark"] .dip-passkeys-card,body.dark-mode .dip-passkeys-card,bod
 
 /* 6.9.18: keep the modal Passkey control light at every load order. */
 #dip-identity-modal .dipx-passkey-login,#dip-identity-modal .dipx-passkey-login:hover{min-height:48px!important;padding:10px 12px!important;border-radius:12px!important;box-shadow:none!important;transform:none!important;transition:none!important;background:#f8f9fe!important}
+
+/* 6.13: consistent account security card; native device confirmation stays outside the site. */
+.dip-security-card.dip-passkeys-card{border:1px solid var(--dip-pk-line);border-radius:24px;background:var(--dip-card,var(--dipma-card,#fff));box-shadow:none;padding:20px}
+.dip-passkeys-card:before{display:none}.dip-passkeys-card .dip-security-card-title{display:flex;align-items:flex-start;gap:12px}.dip-passkeys-card .dip-security-card-title>div{min-width:0}.dip-passkeys-card .dip-security-card-title h3{margin:0 0 6px!important;letter-spacing:-.02em;font-size:20px!important}.dip-passkeys-card .dip-security-card-title p{margin:0!important;font-size:13px!important;line-height:1.6!important}.dip-passkeys-card .dip-passkey-icon{flex:0 0 44px;width:44px;height:44px;border-radius:14px}
+.dip-passkeys-card .dip-passkey-item{border-radius:16px;box-shadow:none}.dip-passkeys-card .dip-passkey-actions{gap:10px;margin-top:18px}.dip-passkeys-card .dip-passkey-label input{font-size:16px!important;min-height:48px!important}.dip-passkeys-card .dip-passkey-guidance{margin-top:16px;border-top:1px solid var(--dip-pk-line);padding-top:10px;color:var(--dip-pk-muted);font-size:13px;line-height:1.6}.dip-passkeys-card .dip-passkey-guidance summary{min-height:44px;cursor:pointer;color:var(--dip-pk-ink-2);font-weight:650}.dip-passkeys-card .dip-passkey-guidance p{margin:0 0 4px;font-size:12px;line-height:1.6}.dip-passkeys-card .dip-passkey-guidance summary:focus-visible{outline:2px solid var(--dip-pk-accent);outline-offset:2px}
+@media(max-width:480px){.dip-security-card.dip-passkeys-card{padding:16px;border-radius:20px}.dip-passkeys-card .dip-passkey-item-body{flex-basis:calc(100% - 52px)}.dip-passkeys-card .dip-passkey-remove{margin-left:48px;min-height:44px!important}.dip-passkeys-card .dip-passkey-actions>.dip-btn{flex-basis:100%}}
+
+/* Paired biometric pictograms replace the generic key only on this login button. */
+.dipx-passkey-login>span.dipx-biometric-icons{display:flex;align-items:center;gap:4px;width:44px;height:24px;background:transparent;-webkit-mask:none;mask:none}.dipx-biometric-icons svg{display:block;width:20px;height:24px;flex:0 0 20px}

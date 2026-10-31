@@ -172,6 +172,8 @@ final class DIP_Security_Architecture {
         $route = (string) $request->get_route();
         if (!self::is_identity_route($route)) return $result;
 
+        // Bound JSON/credential parsing before any identity handler executes.
+        if (strlen((string) $request->get_body()) > 1048576) return new WP_Error('dip_identity_body_too_large', __('La demande de connexion est trop volumineuse.', 'delicat-google-login'), ['status'=>413]);
         $method = strtoupper((string) $request->get_method());
         // REST OPTIONS is metadata/preflight only. Permit it for known routes
         // so browser/mobile clients can negotiate without opening unknown APIs.

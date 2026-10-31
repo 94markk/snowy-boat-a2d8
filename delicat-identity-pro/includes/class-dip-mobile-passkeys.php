@@ -463,7 +463,7 @@ final class DIP_Mobile_Passkeys {
             }
             if (!$removed) return new WP_Error('passkey_not_found', 'Cette clé d’accès n’existe plus.', ['status' => 404]);
             if (!$kept && !DIP_Passkeys::has_other_primary_login_method($uid)) return new WP_Error('passkey_last_method', 'Gardez au moins un moyen de vous connecter.', ['status' => 409]);
-            DIP_Passkeys::save_credentials($uid, $kept);
+            if (!DIP_Passkeys::save_credentials($uid, $kept)) return new WP_Error('passkey_save', 'Impossible de supprimer cette clé d’accès. Réessayez.', ['status' => 503]);
         } finally {
             DIP_Passkeys::release_user_lock($uid);
         }

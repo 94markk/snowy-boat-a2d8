@@ -26,7 +26,7 @@
     for(var i=0;i<bytes.length;i+=0x8000){binary+=String.fromCharCode.apply(null,bytes.subarray(i,Math.min(i+0x8000,bytes.length)));}
     return btoa(binary).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
   }
-  function supported(){return !!(window.PublicKeyCredential&&navigator.credentials&&navigator.credentials.create&&navigator.credentials.get);}
+  function supported(){return window.isSecureContext!==false&&!!(window.PublicKeyCredential&&navigator.credentials&&navigator.credentials.create&&navigator.credentials.get);}
   function usable(){return supported()&&Number(conf().available||0)===1;}
   function own(message){var e=new Error(message);e.dipOwn=true;return e;}
   function timeoutMs(p){var t=Number(p&&p.timeout)||Number(conf().timeout)||120000;return Math.min(Math.max(t,30000),600000);}
@@ -69,24 +69,37 @@
   }
   function setBusy(button,busy){if(!button)return;button.disabled=!!busy;button.classList.toggle('is-busy',!!busy);button.setAttribute('aria-busy',busy?'true':'false');}
 
+  var optionQueue=Promise.resolve();
   function request(path,method,body,customer){
     var c=conf(),headers={'Content-Type':'application/json','Accept':'application/json'};
     if(customer&&c.nonce)headers['X-WP-Nonce']=c.nonce;
     var controller=typeof AbortController!=='undefined'?new AbortController():null,timer;
     var deadline=new Promise(function(_,reject){timer=setTimeout(function(){if(controller)controller.abort();reject(own(str('slow','Le serveur met trop de temps à répondre. Réessayez.')));},15000);});
-    var network=Promise.resolve().then(function(){return fetch(String(c.rest).replace(/\/$/,'')+path,{signal:controller?controller.signal:undefined,method:method||'POST',credentials:'same-origin',cache:'no-store',headers:headers,body:body===undefined?undefined:JSON.stringify(body)});}).then(function(r){
+    var start=Promise.resolve(window.DIPAuthReady).catch(noop);
+    if(path==='/passkeys/login/options')start=Promise.all([start,optionQueue]);
+    var network=start.then(function(){return fetch(String(c.rest).replace(/\/$/,'')+path,{signal:controller?controller.signal:undefined,method:method||'POST',credentials:'same-origin',cache:'no-store',headers:headers,body:body===undefined?undefined:JSON.stringify(body)});}).then(function(r){
       return r.text().then(function(raw){var data={};try{data=raw?JSON.parse(raw):{};}catch(e){}if(!r.ok){var er=new Error((data&&data.message)||('HTTP '+r.status));er.status=r.status;er.code=data&&data.code;er.data=(data&&data.data)||{};throw er;}return data;});
     });
+    if(path==='/passkeys/login/options')optionQueue=Promise.race([network,deadline]).catch(noop);
     return Promise.race([network,deadline]).finally(function(){clearTimeout(timer);});
   }
   // Browsers may leave a WebAuthn prompt pending beyond publicKey.timeout.
   // Bound it ourselves (timeout + 15 s) and ignore any credential arriving after the deadline.
+  var activePrompt=null,loginRun=0,verifyingLogin=false;
   function credential(method,options){
+    if(activePrompt)return Promise.reject(own('Une vérification est déjà ouverte. Terminez-la ou annulez-la.'));
+    stopAllAutofill();
     var controller=typeof AbortController!=='undefined'?new AbortController():null,timer;
     var args={publicKey:options};if(controller)args.signal=controller.signal;
     var deadline=new Promise(function(_,reject){timer=setTimeout(function(){if(controller)controller.abort();reject(own(str('expired','Vérification Passkey expirée. Réessayez.')));},timeoutMs(options)+15000);});
-    var ceremony=Promise.resolve().then(function(){return navigator.credentials[method](args);});
-    return Promise.race([ceremony,deadline]).finally(function(){clearTimeout(timer);});
+    var pending={controller:controller,cancel:null},rejectCancel;
+    var cancelled=new Promise(function(_,reject){rejectCancel=reject;});
+    pending.cancel=function(){if(controller)controller.abort();rejectCancel(own('Vérification annulée. Vous pouvez choisir une autre méthode.'));};
+    activePrompt=pending;
+    // Invoke WebAuthn inside the tap, without adding another microtask.
+    var ceremony;
+    try{ceremony=navigator.credentials[method](args);}catch(err){ceremony=Promise.reject(err);}
+    return Promise.race([ceremony,deadline,cancelled]).finally(function(){clearTimeout(timer);if(activePrompt===pending)activePrompt=null;});
   }
   function descriptors(list){return Array.isArray(list)?list.map(function(c){var x=Object.assign({},c);x.id=b64uToBuf(x.id);return x;}):list;}
   // Never mutates the server answer: a prefetched (autofill) answer can be reused by the button.
@@ -261,16 +274,22 @@
     return qs('#dipx-login-email',root)||qs('input[name="log"]',root)||qs('#user_login',root)||qs('input[name="username"]',root)||qs('input[name="email"]',root);
   }
   function loginContext(root){
-    var remember=root!==document?qs('input[name="remember"],input[name="rememberme"]',root):null;
-    var target=root!==document?qs('input[name="redirect_to"],input[name="redirect"]',root):null;
-    var page=window.location.origin+window.location.pathname+window.location.search;
+    var context=root!==document?(qs('.dipx-form-login',root)||root):root;
+    var remember=context!==document?qs('input[name="remember"],input[name="rememberme"]',context):null;
+    var target=context!==document?qs('input[name="redirect_to"],input[name="redirect"]',context):null;
+    var location=(modalHost()||window).location;
+    var page=location.origin+location.pathname+location.search;
     return {remember:!!(remember&&remember.checked),redirect:(target&&target.value)||page};
   }
   function busyRoot(root){return root.getAttribute&&(root.getAttribute('data-password-busy')==='1'||root.getAttribute('data-passkey-busy')==='1'||root.getAttribute('data-social-busy')==='1');}
   /** The storefront page hosting the identity modal frame (auth-shell.js), when this is that frame. */
   function modalHost(){
     if(typeof window.DIPAuthNavigate!=='function'||!qs('#dip-identity-modal'))return null;
-    try{if(window.parent&&window.parent!==window&&window.parent.location.origin===window.location.origin)return window.parent;}catch(e){}
+    try{
+      // about:blank inherits the parent's security origin, but location.origin
+      // is literally 'null'. Reading parent.document proves same-origin access.
+      if(window.parent&&window.parent!==window&&window.parent.document&&window.parent.location.origin===new URL(conf().rest,window.parent.location.href).origin)return window.parent;
+    }catch(e){}
     return null;
   }
   /**
@@ -289,9 +308,12 @@
     win.location.assign(dest.href);
     window.setTimeout(function(){if(root&&root.removeAttribute)root.removeAttribute('data-passkey-busy');setStatus(str('loginSlow','Connexion réussie. Actualisez la page pour continuer.'),'success',root);},10000);
   }
-  function finishLogin(root,cred,ceremony){
+  function finishLogin(root,cred,ceremony,run){
+    if(run!==undefined&&run!==loginRun)throw own('Vérification annulée.');
+    verifyingLogin=true;
     var body=serializeGet(cred,ceremony);body.remember=loginContext(root).remember;
     return request('/passkeys/login/verify','POST',body,false).then(function(data){
+      if(run!==undefined&&run!==loginRun)return false;
       setStatus(str('loginSuccess','Connexion Passkey réussie.'),'success',root);
       navigate((data&&data.redirect)||conf().redirect||'/my-account/',root);
       return true;
@@ -299,7 +321,7 @@
       // Only a discoverable assertion the site cannot place at all (no account, or not one of its passkeys).
       if(err&&err.data&&err.data.unknown_credential)signalUnknown(cred&&cred.id);
       throw err;
-    });
+    }).finally(function(){verifyingLogin=false;});
   }
 
   function login(button){
@@ -307,25 +329,32 @@
     if(busyRoot(root))return;
     var input=identifierInput(root),value=input?String(input.value||'').trim():'';
     if(value&&input.type==='email'&&input.validity&&!input.validity.valid){input.reportValidity();return;}
-    var ctx=loginContext(root),auto=root.__dipAutofill||null,flow;
+    var ctx=loginContext(root),auto=root.__dipAutofill||null,flow,run=++loginRun;
+    var prepared=root.__dipPrepared;
+    var cached=prepared&&prepared.key===prepareKey(root)&&Date.now()-prepared.at<AUTOFILL_REFRESH_MS?prepared.data:null;
+    root.__dipPrepared=null;
     if(root.setAttribute)root.setAttribute('data-passkey-busy','1');
     setBusy(button,true);setStatus('','',root);
-    var prefetched=(!value&&auto&&auto.data&&Date.now()-auto.at<AUTOFILL_REFRESH_MS)?auto.data:null;
+    var prefetched=cached||((!value&&auto&&auto.data&&Date.now()-auto.at<AUTOFILL_REFRESH_MS)?auto.data:null);
     if(auto)stopAutofill(auto);
     if(prefetched){
       // No e-mail typed: reuse the discoverable ceremony prepared for autofill,
       // so the prompt opens inside this tap (WebKit) without a round trip.
-      flow=credential('get',requestOptions(prefetched)).then(function(cred){if(!cred)throw own(str('cancelled','Passkey non vérifiée.'));return finishLogin(root,cred,prefetched.ceremony);});
+      flow=credential('get',requestOptions(prefetched)).then(function(cred){if(!cred)throw own(str('cancelled','Passkey non vérifiée.'));return finishLogin(root,cred,prefetched.ceremony,run);});
     } else {
       // With an e-mail: this account's passkeys; without: any passkey of this site (discoverable).
       flow=request('/passkeys/login/options','POST',{identifier:value,remember:ctx.remember,redirect:ctx.redirect},false).then(function(data){
-        return credential('get',requestOptions(data)).then(function(cred){if(!cred)throw own(str('cancelled','Passkey non vérifiée.'));return finishLogin(root,cred,data.ceremony);});
+        if(run!==loginRun)throw own('Vérification annulée.');
+        return credential('get',requestOptions(data)).then(function(cred){if(!cred)throw own(str('cancelled','Passkey non vérifiée.'));return finishLogin(root,cred,data.ceremony,run);});
       });
     }
     flow.then(function(){/* navigating: stay busy */}).catch(function(err){
+      if(run!==loginRun)return;
       setStatus(errorMessage(err,(!value&&input)?'loginNoEmail':'login'),'error',root);
+      var fallback=qs('.dipx-password-method',root);if(fallback)fallback.open=true;
       if(root.removeAttribute)root.removeAttribute('data-passkey-busy');
       if(auto)wakeAutofill(auto);
+      prepareLogin(root);
     }).finally(function(){setBusy(button,false);});
   }
 
@@ -338,7 +367,7 @@
     if(state.controller){var c=state.controller;state.controller=null;try{c.abort();}catch(e){}}
   }
   function wakeAutofill(state){
-    if(state.submitted||document.hidden||!visible(state.input)||busyRoot(state.root))return;
+    if(state.root.getAttribute('data-dip-auth-active')==='0'||activePrompt||state.submitted||document.hidden||!visible(state.input)||busyRoot(state.root))return;
     if(state.controller&&state.data&&Date.now()-state.at<AUTOFILL_REFRESH_MS)return;
     if(state.controller&&!state.data)return; // options request in flight
     stopAutofill(state);startAutofill(state);
@@ -359,7 +388,8 @@
         var used=state.data;stopAutofill(state);
         if(busyRoot(state.root))return;
         state.root.setAttribute('data-passkey-busy','1');setBusy(state.button,true);setStatus('','',state.root);
-        return finishLogin(state.root,cred,used.ceremony).catch(function(err){
+        var run=++loginRun;
+        return finishLogin(state.root,cred,used.ceremony,run).catch(function(err){
           setStatus(errorMessage(err,'login'),'error',state.root);state.root.removeAttribute('data-passkey-busy');wakeAutofill(state);
         }).finally(function(){setBusy(state.button,false);});
       });
@@ -403,6 +433,49 @@
     }).catch(noop);
   }
 
+
+  function stopAllAutofill(){
+    qsa('[data-dip-passkey-login]').forEach(function(b){var s=loginRoot(b).__dipAutofill;if(s)stopAutofill(s);});
+  }
+  function prepareKey(root){var i=identifierInput(root),c=loginContext(root);return JSON.stringify([i?String(i.value||'').trim():'',c.remember,c.redirect]);}
+  // Cache only one short-lived, browser-bound challenge per visible form.
+  // Works even on browsers which have no conditional mediation API.
+  function prepareLogin(root){
+    var b=qs('[data-dip-passkey-login]',root),input=identifierInput(root);
+    if(!b||!visible(b)||document.hidden||busyRoot(root)||!usable()||root.getAttribute('data-dip-auth-active')==='0')return;
+    var key=prepareKey(root),old=root.__dipPrepared;
+    if(old&&old.key===key&&(old.pending||Date.now()-old.at<AUTOFILL_REFRESH_MS))return;
+    var ctx=loginContext(root),value=input?String(input.value||'').trim():'';
+    if(value&&input.type==='email'&&!input.validity.valid)return;
+    var state={key:key,pending:true,data:null,at:0};root.__dipPrepared=state;
+    request('/passkeys/login/options','POST',{identifier:value,remember:ctx.remember,redirect:ctx.redirect},false).then(function(data){
+      if(root.__dipPrepared!==state)return;state.pending=false;state.data=data;state.at=Date.now();
+    }).catch(function(){if(root.__dipPrepared===state)root.__dipPrepared=null;});
+  }
+  function initPrepared(){
+    qsa('[data-dip-passkey-login]').forEach(function(b){
+      var root=loginRoot(b),input=identifierInput(root),timer;
+      function prepare(){clearTimeout(timer);timer=setTimeout(function(){prepareLogin(root);},300);}
+      if(input){input.addEventListener('input',prepare);input.addEventListener('focus',prepare);}
+      root.addEventListener('change',prepare);
+      b.addEventListener('pointerenter',function(){prepareLogin(root);});
+      if(typeof IntersectionObserver!=='undefined')new IntersectionObserver(function(entries){if(entries.some(function(e){return e.isIntersecting;}))prepareLogin(root);}).observe(b);
+      prepareLogin(root);
+    });
+  }
+  window.DIPPasskeyUI={
+    cancel:function(){
+      if(verifyingLogin)return false;
+      loginRun++;stopAllAutofill();
+      if(activePrompt)activePrompt.cancel();
+      qsa('[data-passkey-busy]').forEach(function(root){root.removeAttribute('data-passkey-busy');root.__dipPrepared=null;});
+      return true;
+    },
+    resume:function(){qsa('[data-dip-passkey-login]').forEach(function(b){var root=loginRoot(b);prepareLogin(root);if(root.__dipAutofill)wakeAutofill(root.__dipAutofill);});}
+  };
+  window.addEventListener('pagehide',function(){window.DIPPasskeyUI.cancel();});
+  document.addEventListener('visibilitychange',function(){if(document.hidden)stopAllAutofill();else window.DIPPasskeyUI.resume();});
+
   // ------------------------------------------------------------------ Wiring
   document.addEventListener('click',function(e){
     var b=e.target.closest&&e.target.closest('[data-dip-passkey-register],[data-dip-passkey-reauth],[data-dip-passkey-remove],[data-dip-passkey-login]');
@@ -430,6 +503,7 @@
       });
       return;
     }
+    initPrepared();
     initAutofill();
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();

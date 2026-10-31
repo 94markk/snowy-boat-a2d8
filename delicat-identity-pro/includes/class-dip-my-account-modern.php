@@ -32,6 +32,7 @@ final class DIP_My_Account_Modern {
         add_action('woocommerce_before_account_orders', [__CLASS__, 'orders_toolbar'], 5);
         add_action('woocommerce_before_edit_account_form', [__CLASS__, 'profile_form_intro'], 1);
         add_action('wp_enqueue_scripts', [__CLASS__, 'assets'], 90);
+        add_action('template_redirect', [__CLASS__, 'early_private_account'], 0);
         add_action('template_redirect', [__CLASS__, 'redirect_legacy_identity_endpoint'], 15);
     }
 
@@ -84,6 +85,7 @@ final class DIP_My_Account_Modern {
         if (!self::is_account()) return $classes;
         $classes[] = 'dip-account-modern';
         $classes[] = 'dip-account-premium';
+        $classes[] = 'dip-account-app';
         $endpoint = self::current_endpoint();
         $classes[] = $endpoint === '' ? 'dip-account-home' : 'dip-account-endpoint-' . sanitize_html_class($endpoint);
         // 'auto' follows the visitor's system preference; a site can pin 'light' or 'dark'.
@@ -102,6 +104,7 @@ final class DIP_My_Account_Modern {
             'downloads'       => __('Téléchargements', 'delicat-google-login'),
             'edit-address'    => __('Adresses', 'delicat-google-login'),
             'woo-wallet'      => __('Portefeuille', 'delicat-google-login'),
+            'change-password' => __('Mot de passe', 'delicat-google-login'),
             'edit-account'    => __('Profil', 'delicat-google-login'),
             'identity-center' => __('Sécurité', 'delicat-google-login'),
             'customer-logout' => __('Déconnexion', 'delicat-google-login'),
@@ -148,7 +151,10 @@ final class DIP_My_Account_Modern {
 
     public static function assets() {
         if (!self::is_account()) return;
+        // Early non-deferred theme sync: correct on first paint, including iOS dark OS + site light.
+        wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, false);
         wp_enqueue_style('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.css', [], DIP_VERSION);
+        wp_enqueue_style('dip-account-app', DIP_URL . 'assets/account-app.css', ['dip-my-account-modern'], DIP_VERSION);
         wp_enqueue_script('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.js', [], DIP_VERSION, true);
         if (function_exists('wp_script_add_data')) wp_script_add_data('dip-my-account-modern', 'strategy', 'defer');
     }
@@ -158,6 +164,11 @@ final class DIP_My_Account_Modern {
      * even when the page was not detected up front (block templates, widgets,
      * other builders). Account pages already answer no-store.
      */
+    /** Never send a private account response to a page cache, before output begins. */
+    public static function early_private_account() {
+        if (self::is_account()) self::private_page();
+    }
+
     public static function private_page() {
         if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
         do_action('litespeed_control_set_nocache', 'delicat identity: customer data');
@@ -346,53 +357,35 @@ final class DIP_My_Account_Modern {
         echo '<span class="dipma-security-chip ' . esc_attr($class) . '"><i class="dipma-icon ' . esc_attr($icon_class) . '" aria-hidden="true"></i><span class="dipma-chip-label">' . esc_html($label) . '</span><i class="dipma-state" aria-hidden="true"></i>' . ($spoken !== '' ? '<span class="screen-reader-text dipma-sr">' . esc_html($spoken) . '</span>' : '') . '</span>';
     }
 
+    /**
+     * App-style account header. The dashboard must not embed the customer's
+     * e-mail, wallet amount, order history, provider identities or security score.
+     * Those details are displayed only on their existing dedicated pages.
+     */
     public static function profile_header() {
         if (!self::is_account()) return;
-        $uid = get_current_user_id();
         $user = wp_get_current_user();
-        if (!$uid || !$user->exists()) return;
-        self::private_page();
-
-        $name = self::safe_name($user);
-        $initials = self::initials($name);
-        $avatar = self::avatar_src($uid);
-        $security = self::security_context($uid);
-        $profile_url = function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url('edit-account') : get_edit_profile_url($uid);
-        $security_url = $security['cta']['url'];
-        if ($security['passkey']) {
-            $factor_label = __('Passkey active', 'delicat-google-login');
-        } elseif ($security['two_factor']) {
-            $factor_label = __('2FA active', 'delicat-google-login');
-        } else {
-            $factor_label = __('Ajouter une Passkey', 'delicat-google-login');
-        }
+        if (!$user->exists()) return;
+        $endpoint = self::current_endpoint();
+        $home = self::account_url('dashboard');
+        $menu = function_exists('wc_get_account_menu_items') ? (array) wc_get_account_menu_items() : [];
+        $heading = $endpoint === '' ? __('Compte', 'delicat-google-login') : ($menu[$endpoint] ?? __('Mon compte', 'delicat-google-login'));
         ?>
-        <section class="dipma-profile" aria-label="<?php echo esc_attr__('Profil du client', 'delicat-google-login'); ?>">
-            <a class="dipma-avatar" href="<?php echo esc_url($profile_url); ?>" aria-label="<?php echo esc_attr__('Modifier mon profil', 'delicat-google-login'); ?>">
-                <span class="dipma-avatar-fallback" aria-hidden="true"><?php echo esc_html($initials); ?></span>
-                <?php if ($avatar !== '') : ?><img src="<?php echo esc_url($avatar); ?>" alt="" width="72" height="72" decoding="async" referrerpolicy="no-referrer" data-dipma-avatar><?php endif; ?>
-                <span class="dipma-avatar-edit" aria-hidden="true"><i class="dipma-icon dipma-icon-edit"></i></span>
-            </a>
-            <div class="dipma-profile-copy">
-                <div class="dipma-profile-kicker"><span class="dipma-brand-dot" aria-hidden="true"></span><?php esc_html_e('DELICAT IDENTITY', 'delicat-google-login'); ?></div>
-                <strong><?php echo esc_html($name); ?></strong>
-                <span><?php echo esc_html($user->user_email); ?></span>
-            </div>
-            <div class="dipma-profile-mini-status">
-                <?php self::status_chip($security['email_verified'], $security['email_verified'] ? __('Email vérifié', 'delicat-google-login') : __('Email à vérifier', 'delicat-google-login'), 'dipma-icon-mail', null); ?>
-                <?php self::status_chip($security['passkey'] || $security['two_factor'], $factor_label, 'dipma-icon-key', null); ?>
-                <?php self::status_chip($security['linked'], $security['linked'] ? __('Connexion liée', 'delicat-google-login') : __('Ajouter une connexion', 'delicat-google-login'), 'dipma-icon-link', null); ?>
-            </div>
-            <a class="dipma-security-pill is-<?php echo esc_attr($security['tone']); ?>" href="<?php echo esc_url($security_url); ?>" aria-label="<?php echo esc_attr(sprintf(__('Sécurité du compte : %1$d sur 100, %2$s', 'delicat-google-login'), $security['score'], $security['level'])); ?>">
-                <span class="dipma-security-shield" aria-hidden="true"><i class="dipma-icon dipma-icon-shield"></i></span>
-                <span class="dipma-security-pill-copy" aria-hidden="true"><small><?php esc_html_e('Protection', 'delicat-google-login'); ?></small><strong><b><?php echo esc_html($security['score']); ?></b><em>/100</em></strong><span><?php echo esc_html($security['level']); ?></span></span>
-                <i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i>
-            </a>
-        </section>
-        <?php
+        <header class="dipapp-topbar" aria-label="<?php echo esc_attr__('Espace client', 'delicat-google-login'); ?>">
+          <?php if ($endpoint !== '') : ?><a class="dipapp-back" href="<?php echo esc_url($home); ?>" aria-label="<?php echo esc_attr__('Retour au compte', 'delicat-google-login'); ?>"><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a><?php endif; ?>
+          <h1><?php echo esc_html($heading); ?></h1>
+        </header>
+        <?php if ($endpoint === '') : ?>
+          <a class="dipapp-profile" href="<?php echo esc_url(self::account_url('edit-account')); ?>" aria-label="<?php echo esc_attr__('Ouvrir mon profil', 'delicat-google-login'); ?>">
+            <span class="dipapp-avatar" aria-hidden="true"><?php $avatar = self::avatar_src($user->ID, 96); if ($avatar !== '') : ?><img src="<?php echo esc_url($avatar); ?>" alt="" width="48" height="48" decoding="async"><?php else: ?><i class="dipma-icon dipma-icon-user"></i><?php endif; ?></span>
+            <span class="dipapp-profile-text"><strong><?php echo esc_html(self::safe_name($user)); ?></strong><small><?php esc_html_e('Gérer mes informations personnelles', 'delicat-google-login'); ?></small></span>
+            <i class="dipma-icon dipma-icon-chevron dipapp-chevron" aria-hidden="true"></i>
+          </a>
+        <?php endif;
     }
 
     private static function account_url($endpoint) {
+        if ($endpoint === 'woo-wallet') return home_url('/my-wallet/');
         return function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url($endpoint) : home_url('/');
     }
 
@@ -411,118 +404,81 @@ final class DIP_My_Account_Modern {
         return isset($_COOKIE[self::BALANCE_COOKIE]) && $_COOKIE[self::BALANCE_COOKIE] === '1';
     }
 
+    /** Render a compact, accessible settings group with no private values. */
+    private static function app_group($title, array $rows) {
+        if (!$rows) return;
+        echo '<section class="dipapp-section"><h2>' . esc_html($title) . '</h2><div class="dipapp-rows">';
+        foreach ($rows as $row) {
+            $url = isset($row['url']) ? esc_url($row['url']) : '';
+            if (!$url) continue;
+            $label = isset($row['label']) ? (string) $row['label'] : '';
+            $icon = sanitize_html_class($row['icon'] ?? 'dot');
+            echo '<a class="dipapp-row" href="' . $url . '">';
+            echo '<span class="dipapp-row-icon" aria-hidden="true"><i class="dipma-icon dipma-icon-' . esc_attr($icon) . '"></i></span>';
+            echo '<span class="dipapp-row-label">' . esc_html($label) . '</span>';
+            echo '<i class="dipma-icon dipma-icon-chevron dipapp-chevron" aria-hidden="true"></i>';
+            echo '</a>';
+        }
+        echo '</div></section>';
+    }
+
+    /**
+     * Navigation is built only from registered WooCommerce menu items. This
+     * preserves third-party endpoints and avoids broken or speculative links.
+     * No balance/order/security queries are made on the landing screen.
+     */
     public static function dashboard() {
         if (!self::is_account()) return;
-        $uid = get_current_user_id();
-        $user = wp_get_current_user();
-        if (!$uid || !$user->exists()) return;
         self::private_page();
-
-        $hour = (int) current_time('G');
-        $greeting = $hour < 12 ? __('Bonjour', 'delicat-google-login') : ($hour < 18 ? __('Bon après-midi', 'delicat-google-login') : __('Bonsoir', 'delicat-google-login'));
-        $name = self::safe_name($user);
-        $commerce = self::commerce_context($uid);
-        $security = self::security_context($uid);
-        $balance = $commerce['balance'];
-        $hidden = self::balance_hidden();
-
-        $orders_url = self::account_url('orders');
-        $meter = (int) (round($security['score'] / 5) * 5);
+        $menu = function_exists('wc_get_account_menu_items') ? (array) wc_get_account_menu_items() : [];
+        $has = static function ($endpoint) use ($menu) { return isset($menu[$endpoint]); };
+        $url = static function ($endpoint) { return self::account_url($endpoint); };
+        $security = $has('identity-center') ? $url('identity-center') : '';
+        $user_rows = [];
+        if ($has('edit-account')) {
+            $user_rows[] = ['label' => __('Informations personnelles', 'delicat-google-login'), 'icon' => 'user', 'url' => $url('edit-account')];
+            $user_rows[] = ['label' => __('Changer mon mot de passe', 'delicat-google-login'), 'icon' => 'lock', 'url' => $url('change-password')];
+        }
+        if ($security !== '') {
+            $user_rows[] = ['label' => __('Passkey / Face ID', 'delicat-google-login'), 'icon' => 'key', 'url' => add_query_arg('dip_tab', 'security', $security) . '#dip-passkeys'];
+            $user_rows[] = ['label' => __('Sécurité et appareils', 'delicat-google-login'), 'icon' => 'shield', 'url' => add_query_arg('dip_tab', 'security', $security)];
+            $user_rows[] = ['label' => __('Comptes liés', 'delicat-google-login'), 'icon' => 'link', 'url' => add_query_arg('dip_tab', 'accounts', $security)];
+        }
+        if ($has('security-sessions')) $user_rows[] = ['label'=>__('Sessions et connexions', 'delicat-google-login'),'icon'=>'device','url'=>$url('security-sessions')];
+        $service_rows = [];
+        foreach ([
+            'orders' => ['Mes commandes', 'orders'],
+            'woo-wallet' => ['Mon portefeuille', 'wallet'],
+            'downloads' => ['Téléchargements', 'download'],
+            'edit-address' => ['Mes adresses', 'pin'],
+            'payment-methods' => ['Moyens de paiement', 'wallet'],
+        ] as $key => $info) {
+            if ($key === 'woo-wallet' || $has($key)) $service_rows[] = ['label' => __($info[0], 'delicat-google-login'), 'icon' => $info[1], 'url' => $url($key)];
+        }
+        $known = ['dashboard', 'edit-account', 'identity-center', 'orders', 'woo-wallet', 'downloads', 'edit-address', 'payment-methods', 'customer-logout', 'connected-accounts', 'change-password', 'security-sessions'];
+        $other_rows = [];
+        foreach ($menu as $endpoint => $label) {
+            if (!is_string($endpoint) || in_array($endpoint, $known, true)) continue;
+            $label = is_scalar($label) ? trim(wp_strip_all_tags((string) $label)) : '';
+            if ($label === '') continue;
+            $icon = 'dot';
+            if (preg_match('/notification|alert/i', $endpoint)) $icon = 'mail';
+            elseif (preg_match('/exchange|wallet|payment|paiement/i', $endpoint)) $icon = 'wallet';
+            elseif (preg_match('/security|privacy|data|delete|supp/i', $endpoint)) $icon = 'shield';
+            elseif (preg_match('/app|device/i', $endpoint)) $icon = 'device';
+            $other_rows[] = ['label' => $label, 'icon' => $icon, 'url' => $url($endpoint)];
+        }
         ?>
-        <div class="dipma-dashboard">
-            <?php if ($commerce['wallet']) :
-                $history_url = self::validated_site_url(apply_filters('dip_my_account_history_url', self::account_url('woo-wallet')), self::account_url('woo-wallet'));
-                $recharge_default = home_url('/my-wallet/');
-                $send_default = home_url('/envoyer-de-largent/');
-                $recharge_url = self::validated_site_url(defined('DELICAT_RECHARGE_URL') ? DELICAT_RECHARGE_URL : $recharge_default, $recharge_default);
-                $send_url = self::validated_site_url(defined('DELICAT_SEND_PAGE') ? DELICAT_SEND_PAGE : $send_default, $send_default);
-                ?>
-            <section class="dipma-wallet-card" aria-labelledby="dipma-wallet-title">
-                <div class="dipma-wallet-aurora dipma-wallet-aurora-a" aria-hidden="true"></div>
-                <div class="dipma-wallet-aurora dipma-wallet-aurora-b" aria-hidden="true"></div>
-                <div class="dipma-wallet-head">
-                    <div>
-                        <span class="dipma-eyebrow dipma-eyebrow-light"><?php esc_html_e('MON PORTEFEUILLE', 'delicat-google-login'); ?></span>
-                        <h2 id="dipma-wallet-title"><?php esc_html_e('Solde disponible', 'delicat-google-login'); ?></h2>
-                        <p><?php echo esc_html($greeting . ', ' . $name); ?> · <?php esc_html_e('votre espace financier sécurisé', 'delicat-google-login'); ?></p>
-                    </div>
-                    <span class="dipma-live"><i aria-hidden="true"></i><?php esc_html_e('Synchronisé', 'delicat-google-login'); ?></span>
-                </div>
-                <div class="dipma-wallet-visual" aria-hidden="true"><span class="dipma-wallet-shell"><i></i><b>G</b></span></div>
-                <div class="dipma-balance-wrap">
-                    <div class="dipma-balance-block">
-                        <span><?php esc_html_e('Solde du portefeuille', 'delicat-google-login'); ?></span>
-                        <div class="dipma-balance-line">
-                            <strong data-dipma-balance class="<?php echo $hidden ? 'is-hidden' : ''; ?>"><span data-dipma-balance-amount<?php echo $hidden ? ' hidden' : ''; ?>><?php echo $balance === null ? '—' : self::money($balance); ?></span><span data-dipma-balance-mask<?php echo $hidden ? '' : ' hidden'; ?>><span aria-hidden="true">••••</span><span class="screen-reader-text dipma-sr"><?php esc_html_e('Solde masqué', 'delicat-google-login'); ?></span></span></strong>
-                            <button type="button" class="<?php echo $hidden ? 'is-hidden' : ''; ?>" data-dipma-balance-toggle aria-pressed="<?php echo $hidden ? 'true' : 'false'; ?>" aria-label="<?php echo $hidden ? esc_attr__('Afficher le solde', 'delicat-google-login') : esc_attr__('Masquer le solde', 'delicat-google-login'); ?>" data-label-show="<?php echo esc_attr__('Afficher le solde', 'delicat-google-login'); ?>" data-label-hide="<?php echo esc_attr__('Masquer le solde', 'delicat-google-login'); ?>"><i class="dipma-icon dipma-icon-eye" aria-hidden="true"></i></button>
-                        </div>
-                        <small><i class="dipma-icon dipma-icon-lock" aria-hidden="true"></i><?php esc_html_e('Données privées · visibles uniquement dans votre session', 'delicat-google-login'); ?></small>
-                    </div>
-                    <nav class="dipma-quick-actions" aria-label="<?php echo esc_attr__('Actions du portefeuille', 'delicat-google-login'); ?>">
-                        <a class="is-primary" href="<?php echo esc_url($recharge_url); ?>"><i class="dipma-icon dipma-icon-plus" aria-hidden="true"></i><span><?php esc_html_e('Recharger', 'delicat-google-login'); ?></span></a>
-                        <a href="<?php echo esc_url($send_url); ?>"><i class="dipma-icon dipma-icon-send" aria-hidden="true"></i><span><?php esc_html_e('Envoyer', 'delicat-google-login'); ?></span></a>
-                        <a href="<?php echo esc_url($history_url); ?>"><i class="dipma-icon dipma-icon-history" aria-hidden="true"></i><span><?php esc_html_e('Historique', 'delicat-google-login'); ?></span></a>
-                    </nav>
-                </div>
-            </section>
-            <?php endif; ?>
-
-            <div class="dipma-overview-grid">
-                <section class="dipma-stats" aria-label="<?php echo esc_attr__('Résumé du compte', 'delicat-google-login'); ?>">
-                    <a href="<?php echo esc_url($orders_url); ?>"><span class="dipma-stat-icon dipma-icon-orders" aria-hidden="true"></span><span class="dipma-stat-copy"><strong><?php echo esc_html(number_format_i18n($commerce['orders'])); ?></strong><small><?php esc_html_e('Commandes', 'delicat-google-login'); ?></small></span><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a>
-                    <a href="<?php echo esc_url($orders_url); ?>"><span class="dipma-stat-icon dipma-icon-clock" aria-hidden="true"></span><span class="dipma-stat-copy"><strong><?php echo esc_html(number_format_i18n($commerce['pending'])); ?></strong><small><?php esc_html_e('En cours', 'delicat-google-login'); ?></small></span><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a>
-                    <div><span class="dipma-stat-icon dipma-icon-spend" aria-hidden="true"></span><span class="dipma-stat-copy"><strong class="dipma-stat-money"><?php echo self::money($commerce['spent']); ?></strong><small><?php esc_html_e('Total dépensé', 'delicat-google-login'); ?></small></span></div>
-                </section>
-
-                <section class="dipma-security-card is-<?php echo esc_attr($security['tone']); ?>" aria-labelledby="dipma-security-title">
-                    <div class="dipma-security-card-head">
-                        <span class="dipma-security-card-icon" aria-hidden="true"><i class="dipma-icon dipma-icon-shield"></i></span>
-                        <div><span class="dipma-eyebrow"><?php esc_html_e('PROTECTION DU COMPTE', 'delicat-google-login'); ?></span><h3 id="dipma-security-title"><?php echo esc_html($security['level']); ?></h3></div>
-                        <span class="dipma-security-score"><b><?php echo esc_html($security['score']); ?></b><small>/100</small></span>
-                    </div>
-                    <div class="dipma-security-meter dipma-score-<?php echo esc_attr($meter); ?>" role="progressbar" aria-label="<?php echo esc_attr__('Score de sécurité', 'delicat-google-login'); ?>" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?php echo esc_attr($security['score']); ?>"><span></span></div>
-                    <p><?php echo esc_html($security['recommendation']); ?></p>
-                    <div class="dipma-security-checks">
-                        <?php self::status_chip($security['email_verified'], __('Email', 'delicat-google-login'), 'dipma-icon-mail', [__('vérifié', 'delicat-google-login'), __('à vérifier', 'delicat-google-login')]); ?>
-                        <?php self::status_chip($security['passkey'], __('Passkey', 'delicat-google-login'), 'dipma-icon-key'); ?>
-                        <?php self::status_chip($security['two_factor'], __('2FA', 'delicat-google-login'), 'dipma-icon-shield'); ?>
-                        <?php self::status_chip($security['linked'], __('Connexion liée', 'delicat-google-login'), 'dipma-icon-link', [__('oui', 'delicat-google-login'), __('aucune', 'delicat-google-login')]); ?>
-                        <?php self::status_chip($security['trusted'], __('Appareil fiable', 'delicat-google-login'), 'dipma-icon-device', [__('oui', 'delicat-google-login'), __('aucun', 'delicat-google-login')]); ?>
-                        <?php self::status_chip($security['https'], __('HTTPS', 'delicat-google-login'), 'dipma-icon-lock', [__('actif', 'delicat-google-login'), __('inactif', 'delicat-google-login')]); ?>
-                    </div>
-                    <a class="dipma-security-cta" href="<?php echo esc_url($security['cta']['url']); ?>"><i class="dipma-icon dipma-icon-shield" aria-hidden="true"></i><span><?php echo esc_html($security['cta']['label']); ?></span><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a>
-                </section>
-            </div>
-
-            <section class="dipma-recent" aria-labelledby="dipma-recent-title">
-                <div class="dipma-section-head"><div><span class="dipma-eyebrow"><?php esc_html_e('ACTIVITÉ', 'delicat-google-login'); ?></span><h3 id="dipma-recent-title"><?php esc_html_e('Commandes récentes', 'delicat-google-login'); ?></h3></div><a href="<?php echo esc_url($orders_url); ?>"><?php esc_html_e('Tout voir', 'delicat-google-login'); ?><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a></div>
-                <?php if (!empty($commerce['recent'])) : ?><ul class="dipma-order-list"><?php foreach ($commerce['recent'] as $order) :
-                    $product_name = __('Commande Delicat Store', 'delicat-google-login');
-                    $thumb = '<span class="dipma-product-fallback" aria-hidden="true">◆</span>';
-                    foreach ($order->get_items() as $item) {
-                        $product_name = $item->get_name();
-                        $product = $item->get_product();
-                        if ($product && $product->get_image_id()) {
-                            $thumb = wp_get_attachment_image($product->get_image_id(), [64,64], false, ['loading'=>'lazy','decoding'=>'async','alt'=>'']);
-                        }
-                        break;
-                    }
-                    $status = sanitize_html_class($order->get_status());
-                    $created = $order->get_date_created();
-                    $date_label = $created && function_exists('wc_format_datetime') ? wc_format_datetime($created, 'j M Y') : '';
-                    $status_name = function_exists('wc_get_order_status_name') ? wc_get_order_status_name($order->get_status()) : $order->get_status();
-                    ?>
-                    <li><a class="dipma-order" href="<?php echo esc_url($order->get_view_order_url()); ?>">
-                        <span class="dipma-order-thumb"><?php echo wp_kses_post($thumb); ?></span>
-                        <span class="dipma-order-info"><strong><?php echo esc_html($product_name); ?></strong><small>#<?php echo esc_html($order->get_order_number()); ?><?php echo $date_label !== '' ? ' · ' . esc_html($date_label) : ''; ?></small></span>
-                        <span class="dipma-order-right"><strong><?php echo wp_kses_post($order->get_formatted_order_total()); ?></strong><mark class="status-<?php echo esc_attr($status); ?>"><i aria-hidden="true"></i><?php echo esc_html($status_name); ?></mark></span>
-                        <i class="dipma-icon dipma-icon-chevron dipma-chevron" aria-hidden="true"></i>
-                    </a></li>
-                <?php endforeach; ?></ul><?php else : ?>
-                    <div class="dipma-empty"><span class="dipma-empty-icon dipma-icon-orders" aria-hidden="true"></span><strong><?php esc_html_e('Aucune commande pour le moment', 'delicat-google-login'); ?></strong><small><?php esc_html_e('Vos prochains achats apparaîtront ici.', 'delicat-google-login'); ?></small></div>
-                <?php endif; ?>
-                <a class="dipma-all-orders" href="<?php echo esc_url($orders_url); ?>"><span><?php esc_html_e('Voir toutes mes commandes', 'delicat-google-login'); ?></span><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a>
-            </section>
+        <div class="dipapp-dashboard" aria-label="<?php echo esc_attr__('Paramètres du compte', 'delicat-google-login'); ?>">
+          <?php
+            self::app_group(__('Compte et sécurité', 'delicat-google-login'), $user_rows);
+            self::app_group(__('Mes services', 'delicat-google-login'), $service_rows);
+            self::app_group(__('Autres paramètres', 'delicat-google-login'), $other_rows);
+          ?>
+          <?php if ($has('customer-logout')) : ?>
+            <a class="dipapp-logout" href="<?php echo esc_url(function_exists('wc_logout_url') ? wc_logout_url() : $url('customer-logout')); ?>"><i class="dipma-icon dipma-icon-logout" aria-hidden="true"></i><?php esc_html_e('Déconnexion', 'delicat-google-login'); ?></a>
+          <?php endif; ?>
+          <p class="dipapp-privacy"><i class="dipma-icon dipma-icon-lock" aria-hidden="true"></i><?php esc_html_e('Les données privées sont accessibles uniquement dans les rubriques concernées.', 'delicat-google-login'); ?></p>
         </div>
         <?php
     }

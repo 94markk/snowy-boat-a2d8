@@ -415,7 +415,7 @@ final class DIP_Native_Auth {
         // either: it is only reported after the credential matched.
         if ($error instanceof WP_Error) {
             $codes = $error->get_error_codes();
-            if (array_intersect($codes, ['dip_email_not_verified','account_pending_approval','delicat_locked','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required','dip_2fa_application_password_blocked'])) return;
+            if (array_intersect($codes, ['dip_account_banned','dip_email_not_verified','account_pending_approval','delicat_locked','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required','dip_2fa_application_password_blocked'])) return;
         }
         // Do not turn an already-active lock into another failed attempt.
         if (self::is_locked($username)) return;
@@ -601,7 +601,7 @@ final class DIP_Native_Auth {
             // wp_signon fires wp_login_failed; account-policy errors are safe to
             // surface because they help the legitimate customer recover.
             $code = $user->get_error_code();
-            $safe_policy = ['delicat_locked','dip_email_not_verified','account_pending_approval','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required'];
+            $safe_policy = ['dip_account_banned','delicat_locked','dip_email_not_verified','account_pending_approval','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required'];
             $message = in_array($code, $safe_policy, true)
                 ? wp_strip_all_tags($user->get_error_message())
                 : __('❌ Identifiants incorrects. Vérifiez votre email et votre mot de passe.', 'delicat-google-login');
@@ -785,8 +785,6 @@ final class DIP_Native_Auth {
         return ($s['native_modal_enabled'] ?? 'yes') === 'yes';
     }
 
-    private static function should_lazy_modal() { return false; }
-
     private static function ajax_url() {
         $ajax_url = wp_make_link_relative(admin_url('admin-ajax.php'));
         if (!is_string($ajax_url) || $ajax_url === '' || strpos($ajax_url, '/') !== 0) return '/wp-admin/admin-ajax.php';
@@ -806,7 +804,8 @@ final class DIP_Native_Auth {
         // The isolated frame is prepared with the page, without AJAX markup loading.
         DIP_Plugin::instance()->assets(true);
         // Modal CSS travels inside its root, avoiding a separate blocking request.
-        wp_enqueue_script('dip-auth-shell', DIP_URL . 'assets/auth-shell.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, false);
+        wp_enqueue_script('dip-auth-shell', DIP_URL . 'assets/auth-shell.js', ['dip-account-theme'], DIP_VERSION, true);
         wp_localize_script('dip-auth-shell', 'DIPIdentityModal', [
             'frameJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_URL . 'assets/auth-frame.js'),
             'passkeysJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_URL . 'assets/passkeys.js'),
@@ -921,7 +920,7 @@ final class DIP_Native_Auth {
     public static function render_modal() {
         if (self::$modal_rendered || is_admin() || is_user_logged_in()) return;
         $s = self::settings();
-        if (($s['native_modal_enabled'] ?? 'yes') !== 'yes' || self::should_lazy_modal()) return;
+        if (($s['native_modal_enabled'] ?? 'yes') !== 'yes') return;
         self::$modal_rendered = true;
         echo self::modal_markup(self::current_page_url()); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     }
@@ -950,7 +949,7 @@ final class DIP_Native_Auth {
         static $css = null;
         if ($css !== null) return $css;
         $css = '';
-        foreach (['auth-frame.css', 'passkeys.css'] as $asset) {
+        foreach (['auth-frame.css', 'passkeys.css', 'auth-modern.css'] as $asset) {
             $path = DIP_DIR . 'assets/' . $asset;
             if (is_readable($path)) $css .= (string)file_get_contents($path) . "\n";
         }
@@ -1005,6 +1004,12 @@ final class DIP_Native_Auth {
               <?php endif; ?>
             </div>
 
+            <?php if (class_exists('DIP_Passkeys') && DIP_Passkeys::available()) : ?>
+            <div class="dipx-quick" data-dipx-quick>
+              <?php echo DIP_Passkeys::render_login_button(); ?>
+            </div>
+            <?php endif; ?>
+
             <?php if (trim($google) !== '') : ?>
             <div class="dipx-divider"><span><?php echo esc_html__('ou continuer avec', 'delicat-google-login'); ?></span></div>
             <div class="dipx-social"><?php echo self::sanitize_provider_markup($google); ?></div>
@@ -1016,12 +1021,24 @@ final class DIP_Native_Auth {
             <input type="hidden" class="dipx-nonce-resend" value="">
             <button type="button" class="dipx-resend" data-dipx-resend hidden><?php echo esc_html__('Renvoyer l’e-mail de vérification', 'delicat-google-login'); ?></button>
 
+            <?php $methods = wp_parse_args((array)get_option(DIP_Passwordless_Registration::OPTION,[]),DIP_Passwordless_Registration::defaults()); if (($methods['magic_enabled'] ?? 'yes') === 'yes') : ?>
+            <form class="dipx-magic-form" data-dipx-magic method="post" action="<?php echo esc_url(self::ajax_url()); ?>">
+              <details class="dipx-password-method"><summary>Recevoir un lien par e-mail</summary><div class="dipx-password-content">
+                <p class="dipx-help">Recevez un lien à usage unique pour vous connecter sans mot de passe.</p>
+                <label class="dipx-label" for="dipx-magic-email">Adresse e-mail</label><div class="dipx-field"><input id="dipx-magic-email" type="email" name="email" autocomplete="email" inputmode="email" maxlength="254" required></div>
+                <button type="submit" class="dipx-submit">Envoyer le lien sécurisé</button>
+              </div></details>
+            </form>
+            <?php endif; ?>
+
             <form id="dipx-panel-login" class="dipx-form dipx-form-login" method="post" action="<?php echo esc_url(self::ajax_url()); ?>" autocomplete="on" novalidate role="tabpanel" aria-labelledby="dipx-tab-login">
+              <details class="dipx-password-method"<?php if (!class_exists('DIP_Passkeys') || !DIP_Passkeys::available()) echo ' open'; ?>>
+              <summary><?php esc_html_e('E-mail et mot de passe', 'delicat-google-login'); ?></summary>
+              <div class="dipx-password-content">
               <label class="dipx-label" for="dipx-login-email"><span class="dipx-i dipx-i-mail" aria-hidden="true"></span><span><?php echo esc_html__('Email', 'delicat-google-login'); ?></span></label>
               <div class="dipx-field">
                 <input id="dipx-login-email" type="email" name="email" placeholder="Votre@email.com" autocomplete="username webauthn" inputmode="email" maxlength="254" required>
               </div>
-              <?php if (class_exists('DIP_Passkeys')) echo DIP_Passkeys::render_login_button(); ?>
 
               <label class="dipx-label" for="dipx-login-pass"><span class="dipx-i dipx-i-lock" aria-hidden="true"></span><span><?php echo esc_html__('Mot de passe', 'delicat-google-login'); ?></span></label>
               <div class="dipx-field dipx-password">
@@ -1045,6 +1062,7 @@ final class DIP_Native_Auth {
               <input type="hidden" name="nonce" class="dipx-nonce-login" value="">
               <?php echo $return_field; // Escaped above. ?>
               <button type="submit" class="dipx-submit"><span class="dipx-i dipx-i-lock" aria-hidden="true"></span><span class="dipx-submit-label"><?php echo esc_html__('Connexion', 'delicat-google-login'); ?></span><span class="dipx-spinner" hidden aria-hidden="true"></span></button>
+              </div></details>
             </form>
 
             <?php if ($registration_enabled) : ?>
@@ -1069,7 +1087,7 @@ final class DIP_Native_Auth {
             </form>
             <?php endif; ?>
 
-            <footer class="dipx-security"><span class="dipx-i dipx-i-shield" aria-hidden="true"></span><span><?php echo esc_html__('Connexion sécurisée et protégée', 'delicat-google-login'); ?></span></footer>
+            <footer class="dipx-security"><details class="dipx-privacy"><summary><svg class="dipx-identity-shield" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 21 6v6c0 5-5 9-9 10-4-1-9-5-9-10V6z" fill="currentColor" opacity=".14"/><path d="m12 2 9 4v6c0 5-5 9-9 10-4-1-9-5-9-10V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="m8 12 3 3 5-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span><?php esc_html_e('Sécurisé par Delicat Identity', 'delicat-google-login'); ?></span></summary><p><?php esc_html_e('Avec une clé d’accès, votre appareil vérifie votre identité. Delicat Store ne reçoit ni votre biométrie ni le code de votre appareil. Utilisez une clé déjà enregistrée pour Delicat Store.', 'delicat-google-login'); ?></p></details></footer>
           </section>
         </template>
         <?php

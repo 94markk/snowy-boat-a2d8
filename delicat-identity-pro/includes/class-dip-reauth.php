@@ -99,7 +99,20 @@ final class DIP_Reauth {
         $user_id = absint($user_id ?: get_current_user_id());
         $key = self::key($user_id);
         if (!$key) return false;
-        return set_transient($key, time(), self::window());
+        $at=time(); $window=self::window();
+        if (!set_transient($key,$at,$window) && (int)get_transient($key)!==$at) return false;
+        return set_transient($key.'_proof',['id'=>bin2hex(random_bytes(24)),'expires'=>$at+$window],$window);
+    }
+
+    public static function proof_record($user_id = 0) {
+        $key=self::key(absint($user_id ?: get_current_user_id()));
+        $proof=$key ? get_transient($key.'_proof') : false;
+        return is_array($proof) && isset($proof['id'],$proof['expires']) && (int)$proof['expires']>time() ? $proof : [];
+    }
+
+    public static function proof_generation($user_id = 0) {
+        $proof=self::proof_record($user_id);
+        return (string)($proof['id'] ?? '');
     }
 
     public static function is_recent($user_id = 0) {
@@ -264,6 +277,7 @@ final class DIP_Reauth {
     // --------------------------------------------------------------- redirects
 
     private static function security_url() {
+        if (class_exists('DIP_Protection') && current_user_can('manage_options')) return DIP_Protection::url();
         $url = home_url('/my-account/');
         if (class_exists('DIP_Customer_Dashboard') && function_exists('wc_get_account_endpoint_url')) {
             $url = add_query_arg('dip_tab', 'security', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
@@ -295,6 +309,8 @@ final class DIP_Reauth {
         $args = [];
         if ($query !== '') parse_str($query, $args);
         if (($args['dip_tab'] ?? '') === 'security') return true;
+        if (isset($args['dip_confirm_transaction']) && is_string($args['dip_confirm_transaction']) && preg_match('/^[a-f0-9]{48}$/D',$args['dip_confirm_transaction'])) return true;
+        if (class_exists('DIP_Protection') && ($args['page'] ?? '') === DIP_Protection::PAGE && current_user_can('manage_options')) return true;
         $post_id = function_exists('url_to_postid') ? absint(url_to_postid($url)) : 0;
         $content = $post_id ? (string) get_post_field('post_content', $post_id) : '';
         return $content !== '' && has_shortcode($content, 'delicat_security_center');
@@ -549,7 +565,7 @@ final class DIP_Reauth {
         $back = function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url('edit-account') : (string) wp_get_referer();
         $errors->add('dip_reauth_required', sprintf(
             /* translators: %s: link to the identity confirmation card */
-            __('Pour protéger votre compte, confirmez d’abord votre identité avant de modifier votre adresse e-mail ou votre mot de passe. %s — vous reviendrez ensuite ici pour enregistrer.', 'delicat-google-login'),
+            __('Pour protéger votre compte, confirmez d’abord votre identité avant de modifier votre mot de passe. %s — vous reviendrez ensuite ici pour enregistrer.', 'delicat-google-login'),
             '<a href="' . esc_url(self::confirm_url($back, 'required')) . '">' . esc_html__('Confirmer mon identité', 'delicat-google-login') . '</a>'
         ));
         if (class_exists('DIP_Audit')) DIP_Audit::record('profile_sensitive_change_blocked_reauth', 'notice', $current->ID, ['email_change'=>$email_change?1:0,'password_change'=>$password_change?1:0]);
@@ -564,13 +580,13 @@ final class DIP_Reauth {
         return $out;
     }
 
-    public static function render_form() {
+    public static function render_form($force = false, $return_override = '') {
         if (!is_user_logged_in()) return '';
         $user_id = get_current_user_id();
         $user = wp_get_current_user();
-        $recent = self::is_recent();
+        $recent = !$force && self::is_recent();
         $status = sanitize_key(wp_unslash($_GET['dip_reauth_status'] ?? ''));
-        $return = self::posted_return();
+        $return = $return_override !== '' ? self::same_site($return_override) : self::posted_return();
         $two_factor = self::two_factor_enabled($user_id);
         $email_code = !$two_factor && self::email_code_available($user_id);
         $pending = $email_code ? self::pending_code($user_id) : [];

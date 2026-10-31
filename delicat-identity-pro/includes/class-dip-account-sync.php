@@ -610,6 +610,7 @@ final class DIP_Account_Sync {
     public static function login_guard($user_id) {
         $user_id = absint($user_id);
         if (!$user_id) return new WP_Error('dip_account_invalid', __('Compte invalide.', 'delicat-google-login'));
+        if (class_exists('DIP_Account_Control')) { $ban = DIP_Account_Control::ban_error($user_id); if (is_wp_error($ban)) return $ban; }
         // Never let customer-facing verification policy lock WordPress staff out
         // of wp-admin. Social/mobile role policy separately blocks privileged use.
         if (!self::is_customer_account($user_id)) return true;

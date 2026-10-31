@@ -170,7 +170,7 @@ final class DIP_Customer_Dashboard {
           <header class="dip-id-hero">
             <div class="dip-id-user">
               <span class="dip-id-avatar" aria-hidden="true"><span><?php echo esc_html(DIP_My_Account_Modern::initials($name)); ?></span><?php if ($avatar !== '') : ?><img src="<?php echo esc_url($avatar); ?>" alt="" width="72" height="72" decoding="async" referrerpolicy="no-referrer"><?php endif; ?></span>
-              <div><span class="dip-id-kicker"><?php esc_html_e('Centre d’identité', 'delicat-google-login'); ?></span><h2><?php echo esc_html($name); ?></h2><p><?php echo esc_html($user->user_email); ?></p></div>
+              <div><span class="dip-id-kicker"><?php esc_html_e('Centre d’identité', 'delicat-google-login'); ?></span><h2><?php echo esc_html($name); ?></h2><p><?php esc_html_e('Adresse e-mail masquée · informations privées', 'delicat-google-login'); ?></p></div>
             </div>
             <div class="dip-id-score is-<?php echo esc_attr($security['tone']); ?>" role="img" aria-label="<?php echo esc_attr(sprintf(__('Score de sécurité %d sur 100', 'delicat-google-login'), $security['score'])); ?>"><strong><?php echo esc_html($security['score']); ?></strong><span>/100<br><?php echo esc_html($security['level']); ?></span></div>
           </header>
@@ -183,13 +183,11 @@ final class DIP_Customer_Dashboard {
           <div class="dip-id-content">
           <?php echo self::notice($tab); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in notice(). ?>
           <?php if ($tab === 'overview'):
-                $commerce = DIP_My_Account_Modern::commerce_context($uid);
                 list($devices, $trusted) = self::device_counts($uid); ?>
             <div class="dip-id-grid dip-id-stats">
               <article><span><?php esc_html_e('Comptes liés', 'delicat-google-login'); ?></span><strong><?php echo esc_html(number_format_i18n($security['providers'])); ?></strong><a href="<?php echo self::tab_url('accounts'); ?>"><?php esc_html_e('Gérer', 'delicat-google-login'); ?></a></article>
               <article><span><?php esc_html_e('Appareils', 'delicat-google-login'); ?></span><strong><?php echo esc_html(number_format_i18n($devices)); ?></strong><small><?php echo esc_html(sprintf(_n('%d approuvé', '%d approuvés', $trusted, 'delicat-google-login'), $trusted)); ?></small></article>
-              <article><span><?php esc_html_e('Commandes', 'delicat-google-login'); ?></span><strong><?php echo esc_html(number_format_i18n($commerce['orders'])); ?></strong><small><?php echo self::money($commerce['spent']); ?></small></article>
-              <?php if ($commerce['wallet']) : ?><article><span><?php esc_html_e('Portefeuille', 'delicat-google-login'); ?></span><strong><?php echo $commerce['balance'] === null ? '—' : self::money($commerce['balance']); ?></strong><small><?php echo $commerce['balance'] === null ? esc_html__('Non disponible', 'delicat-google-login') : esc_html__('Solde actuel', 'delicat-google-login'); ?></small></article><?php endif; ?>
+
             </div>
             <div class="dip-id-grid dip-id-actions">
               <a href="<?php echo self::tab_url('security'); ?>"><strong><?php echo esc_html($security['passkey'] ? __('Renforcer ma sécurité', 'delicat-google-login') : __('Ajouter une Passkey', 'delicat-google-login')); ?></strong><span><?php echo esc_html($security['passkey'] ? __('Sessions, appareils et historique', 'delicat-google-login') : __('Face ID, empreinte ou Windows Hello : connexion sans mot de passe', 'delicat-google-login')); ?></span></a>

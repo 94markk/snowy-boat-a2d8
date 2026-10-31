@@ -23,7 +23,7 @@ final class DIP_Plugin {
     /** Every WP-Cron hook the plugin schedules (also cleared by uninstall.php). */
     const CRON_HOOKS = [
         'dip_audit_cleanup', 'dip_device_cleanup', 'dip_automatic_migration_tick', 'dip_analytics_daily_rollup',
-        'dip_performance_maintenance', 'dip_mobile_cleanup', 'dip_app_pairing_cleanup', 'dip_flow_claim_cleanup',
+        'dip_performance_maintenance', 'dip_mobile_cleanup', 'dip_app_pairing_cleanup', 'dip_flow_claim_cleanup', 'dip_financial_guard_cleanup',
     ];
     private static $instance;
     /** Per-request copies of the settings, keyed by kind and blog. */

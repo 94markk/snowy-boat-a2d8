@@ -64,15 +64,20 @@ body.dip-account-modern{
   background:radial-gradient(circle at 12% 0,rgba(92,111,255,.07),transparent 32rem),linear-gradient(180deg,#f8f9fd 0,#f4f6fb 45%,#f7f8fc 100%);
 }
 
-/* Dark tokens: the visitor's system preference (unless the site forces light), or the site's own dark switch. */
-@media (prefers-color-scheme:dark){
-  html:not([data-theme="light"]):not(.light):not([data-dip-theme="light"]) body.dip-account-modern:not(.light-mode):not(.dipma-scheme-light):not([data-dip-theme="light"]){
-    --dipma-bg:#0b1020;--dipma-card:#141b2f;--dipma-card-2:#192138;--dipma-field:#0f1528;--dipma-text:#eef1fa;--dipma-text-2:#c8cfe3;--dipma-muted:#a1abc7;--dipma-line:#28324f;--dipma-line-strong:#36426a;--dipma-blue:#8fa8ff;--dipma-indigo:#b29cff;--dipma-pink:#ff8ccf;--dipma-accent-ink:#c9d5ff;--dipma-accent-soft:#1f2a4c;--dipma-green:#7fe0bd;--dipma-green-soft:#10291f;--dipma-warn:#ffc77d;--dipma-warn-soft:#2e2213;--dipma-danger:#ff9eab;--dipma-danger-soft:#2d161d;--dipma-nav-active:linear-gradient(135deg,#2f4cb4,#5a3fd1);--dipma-focus:0 0 0 3px #0b1020,0 0 0 5px #8fa8ff;--dipma-shadow:0 18px 44px rgba(0,0,0,.32);--dipma-shadow-soft:0 8px 22px rgba(0,0,0,.25);--dipma-shell-bg:#0b1020;--dipma-shell-line:#1e2743;color-scheme:dark;
-  }
+/* 6.12.2: single theme source shared with account-app.css and Security Center.
+   The site preference takes precedence over the OS. The media rule is a no-JS fallback only. */
+html[data-dip-account-theme="light"] body.dip-account-modern{
+  color-scheme:light;
 }
-html[data-theme="dark"] body.dip-account-modern,html.dark body.dip-account-modern,html[data-dip-theme="dark"] body.dip-account-modern,body.dip-account-modern.dark-mode,body.dip-account-modern.is-dark-theme,body.dip-account-modern.dipma-scheme-dark,body.dip-account-modern[data-dip-theme="dark"]{
+html[data-dip-account-theme="dark"] body.dip-account-modern{
   --dipma-bg:#0b1020;--dipma-card:#141b2f;--dipma-card-2:#192138;--dipma-field:#0f1528;--dipma-text:#eef1fa;--dipma-text-2:#c8cfe3;--dipma-muted:#a1abc7;--dipma-line:#28324f;--dipma-line-strong:#36426a;--dipma-blue:#8fa8ff;--dipma-indigo:#b29cff;--dipma-pink:#ff8ccf;--dipma-accent-ink:#c9d5ff;--dipma-accent-soft:#1f2a4c;--dipma-green:#7fe0bd;--dipma-green-soft:#10291f;--dipma-warn:#ffc77d;--dipma-warn-soft:#2e2213;--dipma-danger:#ff9eab;--dipma-danger-soft:#2d161d;--dipma-nav-active:linear-gradient(135deg,#2f4cb4,#5a3fd1);--dipma-focus:0 0 0 3px #0b1020,0 0 0 5px #8fa8ff;--dipma-shadow:0 18px 44px rgba(0,0,0,.32);--dipma-shadow-soft:0 8px 22px rgba(0,0,0,.25);--dipma-shell-bg:#0b1020;--dipma-shell-line:#1e2743;color-scheme:dark;
   background:#0b1020;
+}
+@media (prefers-color-scheme:dark){
+  html:not([data-dip-account-theme]) body.dip-account-modern:not(.dipma-scheme-light){
+    --dipma-bg:#0b1020;--dipma-card:#141b2f;--dipma-card-2:#192138;--dipma-field:#0f1528;--dipma-text:#eef1fa;--dipma-text-2:#c8cfe3;--dipma-muted:#a1abc7;--dipma-line:#28324f;--dipma-line-strong:#36426a;--dipma-blue:#8fa8ff;--dipma-indigo:#b29cff;--dipma-pink:#ff8ccf;--dipma-accent-ink:#c9d5ff;--dipma-accent-soft:#1f2a4c;--dipma-green:#7fe0bd;--dipma-green-soft:#10291f;--dipma-warn:#ffc77d;--dipma-warn-soft:#2e2213;--dipma-danger:#ff9eab;--dipma-danger-soft:#2d161d;--dipma-nav-active:linear-gradient(135deg,#2f4cb4,#5a3fd1);--dipma-focus:0 0 0 3px #0b1020,0 0 0 5px #8fa8ff;--dipma-shadow:0 18px 44px rgba(0,0,0,.32);--dipma-shadow-soft:0 8px 22px rgba(0,0,0,.25);--dipma-shell-bg:#0b1020;--dipma-shell-line:#1e2743;color-scheme:dark;
+    background:#0b1020;
+  }
 }
 
 /* == Shell == */
