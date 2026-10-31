@@ -1,3 +1,27 @@
+9.5.3 — Tous les produits s’ouvrent instantanément, portefeuille et compte plus rapides
+(1) Accueil et boutique : chaque produit s’ouvre de la même façon, tout de suite. Au toucher, l’écran
+du produit apparaît aussitôt avec son image, son nom et son prix, puis la page se complète. Avant,
+seuls un ou deux produits (ceux préparés à l’avance) s’ouvraient d’un coup et les autres attendaient
+le réseau ; en 3G, aucun n’était préparé.
+(2) Les produits que le client regarde (carte visible un court instant) sont préparés à l’avance, un à
+la fois : jusqu’à 8 pour un visiteur, 5 pour un client connecté, 3 sur un téléphone d’entrée de
+gamme, 2 en 3G ; jamais en mode économie de données, en 2G, hors ligne ou écran caché. Mesuré :
+4G, produits regardés ouverts en moins de 0,06 s (avant : seulement le premier) ; tous les autres
+affichent leur écran en 0,03 s au lieu de 0,16 s.
+(3) Portefeuille et Compte (Chrome) : pour un client connecté, la page Portefeuille et l’accueil du
+compte sont préparés en arrière-plan dès que le doigt touche leur lien (ou que la souris s’y pose) ;
+ils s’affichent alors aussitôt au toucher. Panier et paiement restent seulement téléchargés à
+l’avance (aucun script exécuté). Les visiteurs non connectés ne sont pas concernés.
+(4) Plus stable : une page préparée en arrière-plan et jamais affichée ne télécharge plus rien
+d’autre (préparation des produits et des onglets seulement une fois la page affichée).
+Technique : moteur — Ge() remplacé par une préparation « au regard » (IntersectionObserver 50 %,
+attente 450 à 700 ms, file d’un fetch à la fois, budgets selon réseau/appareil/connexion), écran
+produit immédiat (C = 0 pour une URL produit sans fetch en cours depuis plus de 400 ms),
+document.prerendering respecté (prerenderingchange). TurboNav : règle prerender « moderate » sur les
+chemins exacts du portefeuille et de l’accueil du compte (connectés ; filtre
+delicat_builder_v9_prerender_documents), règle prefetch inchangée pour le reste.
+Installer cette archive en remplacement du builder existant, puis purger LiteSpeed / Cloudflare.
+
 9.5.2 — Partager le reçu depuis le détail de la commande
 (1) Dans Mon compte › Commandes › une commande payée, le client peut partager son reçu : bouton
 « Partager le reçu » en bas de la page et raccourci « Reçu » dans « Résumé du paiement ». La feuille

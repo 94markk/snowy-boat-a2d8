@@ -1,13 +1,13 @@
 {
  "version": 2,
- "builtAt": "2026-10-31T13:54:57.567Z",
+ "builtAt": "2026-10-31T18:21:15.120Z",
  "js": {
   "engine": {
-   "file": "engine.3e4d35bcc854.js",
+   "file": "engine.726bef735cd8.js",
    "bytes": 85863,
-   "sha256": "3e4d35bcc854977a04fc91c2904bc44c01cdf6283901c32bc86e42cd2d3381c3",
+   "sha256": "726bef735cd8844f8b3bb7753c38fa607ba1d849594720bbfa2e29b69dd42410",
    "imports": [
-    "chunks/chunk.18bdf2438901.js",
+    "chunks/chunk.71afccc3dbb7.js",
     "chunks/chunk.99ad77e49fbc.js",
     "chunks/chunk.385b5371c4d9.js",
     "chunks/chunk.687452d4bbe4.js",
@@ -31,14 +31,14 @@
    "sha256": "59c3469ed67dbae7025d99e983558c37032270384c5f268df19c3edbfb95f6ca",
    "name": null
   },
-  "chunks/widgets.8be74ebbd978.js": {
+  "chunks/widgets.c450e31132bf.js": {
    "bytes": 11597,
-   "sha256": "8be74ebbd978b4299020286a74db3140e0271edd872496fa9caad878d86adcf2",
+   "sha256": "c450e31132bff393f48fedb732a8c335b28d05ee774335d012a409dbf9788df8",
    "name": "widgets"
   },
-  "chunks/chunk.18bdf2438901.js": {
-   "bytes": 36050,
-   "sha256": "18bdf24389012ae3e9a7caeab9571c57665d99a022d6674ebced24a4494d7d36",
+  "chunks/chunk.71afccc3dbb7.js": {
+   "bytes": 37312,
+   "sha256": "71afccc3dbb728fbc9cbdc115fd9ae216e42ca6e6c1882ca087140bc560ef3d0",
    "name": null
   },
   "chunks/reviews.97f7f54eab8c.js": {

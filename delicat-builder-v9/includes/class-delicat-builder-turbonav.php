@@ -340,6 +340,37 @@ final class Delicat_Builder_V9_TurboNav {
 		);
 	}
 
+	/**
+	 * 9.5.3: the two full pages a signed-in shopper opens most from the tab bar, the wallet and
+	 * the account home, are prerendered (built in the background, scripts included) when a finger
+	 * lands on their link or the pointer rests on it, so the tap shows them at once (Chrome). Exact
+	 * paths only: never a sub-page, never a URL with a query (logout, nonces). Guests get the
+	 * prefetch below (their account page is the sign-in form).
+	 *
+	 * @return array<int,string> Exact paths.
+	 */
+	private static function instant_document_targets() {
+		if ( ! is_user_logged_in() ) {
+			return array();
+		}
+		$paths = array();
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			$path = wp_parse_url( (string) wc_get_page_permalink( 'myaccount' ), PHP_URL_PATH );
+			if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
+				$paths[] = trailingslashit( $path );
+			}
+		}
+		$wallet = '/my-wallet/';
+		if ( class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) && is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'wallet_url' ) ) ) {
+			$path = wp_parse_url( (string) Delicat_Builder_V9_Purchase_Native::wallet_url(), PHP_URL_PATH );
+			if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
+				$wallet = trailingslashit( $path );
+			}
+		}
+		$paths[] = $wallet;
+		return array_values( array_unique( (array) apply_filters( 'delicat_builder_v9_prerender_documents', $paths ) ) );
+	}
+
 	private static function print_full_document_prefetch() {
 		if ( ! self::active() || empty( self::settings()['prerender'] ) || self::save_data_requested() ) {
 			return;
@@ -360,29 +391,44 @@ final class Delicat_Builder_V9_TurboNav {
 				}
 			}
 		}
-		$where = array(
+		/* Attribute selectors, not URL patterns: a query string (logout nonces, add-to-cart,
+		 * payment keys) excludes the link whatever the pattern syntax of the browser. */
+		$guards  = array(
+			array( 'not' => array( 'selector_matches' => 'a[href*="?"], a[href*="logout"], a[href*="lost-password"], a[href*="order-pay"], a[href*="order-received"]' ) ),
+			array( 'not' => array( 'selector_matches' => 'a[data-no-turbo], .no-prerender a, a.no-prerender, a[rel~="nofollow"], a[download], a[target="_blank"]' ) ),
+		);
+		$instant = self::instant_document_targets();
+		$where   = array(
 			array( 'href_matches' => $targets ),
 		);
 		if ( $in_place ) {
 			$where[] = array( 'not' => array( 'href_matches' => $in_place ) );
 		}
+		if ( $instant ) {
+			$where[] = array( 'not' => array( 'href_matches' => $instant ) );
+		}
 		$rules = array(
 			'prefetch' => array(
 				array(
 					'source'    => 'document',
-					'where'     => array(
-						'and' => array_merge( $where, array(
-							/* Attribute selectors, not URL patterns: a query string (logout
-							 * nonces, add-to-cart, payment keys) excludes the link whatever
-							 * the pattern syntax of the browser. */
-							array( 'not' => array( 'selector_matches' => 'a[href*="?"], a[href*="logout"], a[href*="lost-password"], a[href*="order-pay"], a[href*="order-received"]' ) ),
-							array( 'not' => array( 'selector_matches' => 'a[data-no-turbo], .no-prerender a, a.no-prerender, a[rel~="nofollow"], a[download], a[target="_blank"]' ) ),
-						) ),
-					),
+					'where'     => array( 'and' => array_merge( $where, $guards ) ),
 					'eagerness' => 'moderate',
 				),
 			),
 		);
+		if ( $instant ) {
+			$pre = array( array( 'href_matches' => $instant ) );
+			if ( $in_place ) {
+				$pre[] = array( 'not' => array( 'href_matches' => $in_place ) );
+			}
+			$rules['prerender'] = array(
+				array(
+					'source'    => 'document',
+					'where'     => array( 'and' => array_merge( $pre, $guards ) ),
+					'eagerness' => 'moderate',
+				),
+			);
+		}
 		$json = wp_json_encode( $rules, JSON_UNESCAPED_SLASHES );
 		if ( ! is_string( $json ) || '' === $json ) {
 			return;

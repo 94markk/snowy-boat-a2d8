@@ -12,3 +12,4 @@ orders) and `zzz-vo-builder.php` (loads the Builder order modules as the Runtime
 - `acct-shots.cjs`, `eye.cjs`, `rewards.cjs`, `assets-check.cjs`, `growth.php`, `setup-account.php`:
   account home (wallet, rewards, recent orders, favourites) and Recharge asset loading.
 - `share-test.cjs`, `share-dark.cjs`, `add-22420.php`: « Partager le reçu » on the order page (sheet, PNG, link, print without codes, receipt per order after in-place switching).
+- `product-taps.cjs` (tap-to-screen timings, 4G/3G, guest/member), `prerender-guard.cjs`, `prerender-test.cjs`, `spec-rules.php`: Builder 9.5.3 product warm-up, immediate product screen and wallet/account prerender rules.
