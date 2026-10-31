@@ -30,12 +30,15 @@ class Delicat_Growth {
         // Capture a referral code at registration (?ref=CODE stored in user meta).
         add_action( 'user_register', [ $this, 'capture_referral' ], 10, 1 );
 
+        // 6.5.1: loyalty tier / referral bonus on the account home of Delicat Identity (read-only).
+        add_filter( 'dip_account_rewards', [ __CLASS__, 'account_rewards' ], 10, 2 );
+
         // Admin settings UI under the existing settings page.
         add_action( 'delicat_settings_extra', [ $this, 'settings_ui' ] );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
     }
 
-    private static function enabled(): bool {
+    public static function enabled(): bool {
         return (bool) get_option( self::OPT_ENABLED, 0 );
     }
 
@@ -107,6 +110,67 @@ class Delicat_Growth {
         $used[] = $code;
         update_user_meta( $user_id, 'delicat_used_promos', $used );
         delete_user_meta( $user_id, 'delicat_pending_promo' );
+    }
+
+    /**
+     * 6.5.1: the « Récompenses » card of the account home (Delicat Identity 6.15.2+):
+     * the customer's loyalty bonus and how far the next tier is, else the referral
+     * bonus. Read-only, the customer's own data, one indexed SUM per page view.
+     *
+     * @param mixed $rewards An earlier provider's answer.
+     * @param int   $user_id The signed-in customer.
+     */
+    public static function account_rewards( $rewards, $user_id ) {
+        if ( is_array( $rewards ) && ! empty( $rewards['value'] ) ) {
+            return $rewards;
+        }
+        $user_id = absint( $user_id );
+        if ( ! $user_id || ! self::enabled() || $user_id !== get_current_user_id() ) {
+            return $rewards;
+        }
+        $url   = home_url( '/my-wallet/' );
+        $tiers = (array) get_option( self::OPT_TIERS, [] );
+        if ( ! empty( $tiers ) ) {
+            global $wpdb;
+            $table = $wpdb->prefix . 'delicat_recharges';
+            $total = (float) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COALESCE(SUM(montant),0) FROM {$table} WHERE user_id = %d AND statut = %s",
+                $user_id, 'approuve'
+            ) );
+            ksort( $tiers, SORT_NUMERIC );
+            $percent = 0.0;
+            $next    = null;
+            foreach ( $tiers as $threshold => $pct ) {
+                if ( $total >= (float) $threshold ) {
+                    $percent = (float) $pct;
+                } elseif ( null === $next ) {
+                    $next = [ (float) $threshold, (float) $pct ];
+                }
+            }
+            $fmt = static function ( float $n ): string {
+                return rtrim( rtrim( number_format_i18n( $n, 2 ), '0' ), ',.' );
+            };
+            return [
+                'label' => __( 'Fidélité', 'delicat-recharge' ),
+                /* translators: %s: bonus percentage */
+                'value' => sprintf( __( 'Bonus %s %%', 'delicat-recharge' ), $fmt( $percent ) ),
+                'hint'  => null !== $next
+                    /* translators: 1: amount still to recharge, 2: next bonus percentage */
+                    ? sprintf( __( 'Encore %1$s HTG pour %2$s %%', 'delicat-recharge' ), number_format_i18n( max( 0, $next[0] - $total ) ), $fmt( $next[1] ) )
+                    : __( 'Niveau maximum atteint', 'delicat-recharge' ),
+                'url'   => $url,
+            ];
+        }
+        $ref = (float) get_option( self::OPT_REF_BONUS, 0 );
+        if ( $ref > 0 ) {
+            return [
+                'label' => __( 'Parrainage', 'delicat-recharge' ),
+                'value' => '+' . number_format_i18n( $ref ) . ' HTG',
+                'hint'  => __( 'Pour vous et chaque ami parrainé', 'delicat-recharge' ),
+                'url'   => $url,
+            ];
+        }
+        return $rewards;
     }
 
     /* ---- 6) Loyalty tiers -------------------------------------------- */

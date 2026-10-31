@@ -36,7 +36,7 @@ class Delicat_Shortcode {
         // v5.0.3: load the modern wallet design outside the recharge shortcode too.
         // This is required because the WooCommerce dashboard / Code Snippets wallet
         // uses .dmc/.dsm/.dpc classes and may not contain [delicat_recharge].
-        if ( ! is_admin() && ( is_account_page() || is_page( 'my-wallet' ) || is_page( 'wallet' ) ) ) {
+        if ( ! is_admin() && ( delicat_recharge_account_needs_wallet_ui() || is_page( 'my-wallet' ) || is_page( 'wallet' ) ) ) {
             wp_enqueue_style( 'delicat-recharge' );
             wp_enqueue_script( 'delicat-recharge' );
         }

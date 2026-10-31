@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.5.0
+ * Version:     6.5.1
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
@@ -24,7 +24,7 @@ if ( ! defined( 'DELICAT_VERSION' ) ) {
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.5.0' );
+    define( 'DELICAT_ASSET_VERSION', '6.5.1' );
 }
 if ( ! defined( 'DELICAT_API_SYNC_VERSION' ) ) {
     // Integration version only: never trigger the existing database upgrades
@@ -126,6 +126,41 @@ register_deactivation_hook( __FILE__, function () {
    even when the recharge shortcode is not present. Admin, licensing,
    database, payment logic and support tools are untouched.
    ============================================================ */
+/**
+ * 6.5.1: whether this account page can show the wallet design (.dmc/.dsm/.dpc,
+ * recharge and balance components). The 286 KB wallet stylesheet, form.js
+ * (with jQuery) and the glass override used to load on every My Account page,
+ * including order details, the orders list, profile and security screens that
+ * never contain them, which made every account section slower to open.
+ * Shortcode renders still enqueue the assets themselves wherever they appear.
+ */
+function delicat_recharge_account_needs_wallet_ui(): bool {
+    if ( ! function_exists( 'is_account_page' ) || ! is_account_page() ) {
+        return false;
+    }
+    $endpoint = '';
+    $query    = ( function_exists( 'WC' ) && is_object( WC() ) && isset( WC()->query ) ) ? WC()->query : null;
+    if ( $query && is_callable( array( $query, 'get_current_endpoint' ) ) ) {
+        $endpoint = (string) $query->get_current_endpoint();
+    } elseif ( $query && is_callable( array( $query, 'get_query_vars' ) ) ) {
+        global $wp;
+        foreach ( (array) $query->get_query_vars() as $key => $var ) {
+            if ( isset( $wp->query_vars[ $var ] ) ) {
+                $endpoint = (string) $key;
+                break;
+            }
+        }
+    }
+    $skip = array( 'orders', 'view-order', 'downloads', 'edit-address', 'edit-account', 'payment-methods', 'add-payment-method', 'delete-payment-method', 'set-default-payment-method', 'change-password', 'identity-center', 'security-sessions', 'customer-logout', 'lost-password' );
+    /* The account home is Delicat Identity's own screen when it is active; without it, a
+     * legacy dashboard may still carry the wallet card, so the design keeps loading there. */
+    if ( '' === $endpoint && class_exists( 'DIP_My_Account_Modern' ) ) {
+        $skip[] = '';
+    }
+    $skip = (array) apply_filters( 'delicat_recharge_wallet_ui_skip_endpoints', $skip );
+    return ! in_array( $endpoint, $skip, true );
+}
+
 add_action( 'wp_enqueue_scripts', function () {
     if ( is_admin() ) {
         return;
@@ -133,7 +168,7 @@ add_action( 'wp_enqueue_scripts', function () {
 
     $should_load = false;
 
-    if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+    if ( delicat_recharge_account_needs_wallet_ui() ) {
         $should_load = true;
     }
 
@@ -153,7 +188,7 @@ add_action( 'wp_head', function () {
 
     $should_load = false;
 
-    if ( function_exists( 'is_account_page' ) && is_account_page() ) {
+    if ( delicat_recharge_account_needs_wallet_ui() ) {
         $should_load = true;
     }
 
