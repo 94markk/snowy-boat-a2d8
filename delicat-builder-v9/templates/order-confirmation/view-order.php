@@ -84,6 +84,10 @@ $dlc_vo_rows  = 'rows' === $dlc_vo_state['group'] || 'review' === $dlc_vo_state[
 		<symbol id="dlc-vo-i-replay" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></symbol>
 		<symbol id="dlc-vo-i-copy" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></symbol>
 		<symbol id="dlc-vo-i-note" viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></symbol>
+		<symbol id="dlc-vo-i-share" viewBox="0 0 24 24"><path d="M16 5l-1.42 1.42-1.59-1.59V16h-1.98V4.83L9.42 6.42 8 5l4-4 4 4zm4 5v11c0 1.1-.9 2-2 2H6c-1.11 0-2-.9-2-2V10c0-1.11.89-2 2-2h3v2H6v11h12V10h-3V8h3c1.1 0 2 .89 2 2z"/></symbol>
+		<symbol id="dlc-vo-i-download" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></symbol>
+		<symbol id="dlc-vo-i-print" viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></symbol>
+		<symbol id="dlc-vo-i-link" viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></symbol>
 		<symbol id="dlc-vo-i-sync" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></symbol>
 	</svg>
 
@@ -243,7 +247,12 @@ $dlc_vo_rows  = 'rows' === $dlc_vo_state['group'] || 'review' === $dlc_vo_state[
 	</div>
 
 	<section class="dlc-vo-card dlc-vo-sum" aria-labelledby="dlc-vo-sum-title">
-		<h3 id="dlc-vo-sum-title" class="dlc-vo-card__title"><?php esc_html_e( 'Résumé du paiement', 'delicat-builder-v9' ); ?></h3>
+		<div class="dlc-vo-card__head">
+			<h3 id="dlc-vo-sum-title" class="dlc-vo-card__title"><?php esc_html_e( 'Résumé du paiement', 'delicat-builder-v9' ); ?></h3>
+			<?php if ( $dlc_vo_view['share'] ) : ?>
+				<button type="button" class="dlc-vo-link" data-vo-share aria-haspopup="dialog" aria-controls="dlc-oc-sheet"><?php echo $dlc_vo_i( 'share' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Reçu', 'delicat-builder-v9' ); ?></button>
+			<?php endif; ?>
+		</div>
 		<dl class="dlc-vo-sum__rows">
 			<?php foreach ( $dlc_vo_view['rows'] as $dlc_vo_row ) : ?>
 				<div<?php echo $dlc_vo_row['minus'] ? ' class="is-minus"' : ''; ?>><dt><?php echo esc_html( $dlc_vo_row['label'] ); ?></dt><dd class="dlc-vo-money"><?php echo esc_html( $dlc_vo_row['value'] ); ?></dd></div>
@@ -283,14 +292,52 @@ $dlc_vo_rows  = 'rows' === $dlc_vo_state['group'] || 'review' === $dlc_vo_state[
 	<?php endif; ?>
 
 	<div class="dlc-vo-actions">
+		<?php if ( $dlc_vo_view['share'] ) : ?>
+			<button type="button" class="dlc-vo-btn dlc-vo-btn--primary" data-vo-share aria-haspopup="dialog" aria-controls="dlc-oc-sheet"><?php echo $dlc_vo_i( 'share' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Partager le reçu', 'delicat-builder-v9' ); ?></button>
+		<?php endif; ?>
 		<?php if ( '' !== $dlc_vo_view['pay_url'] ) : ?>
 			<a class="dlc-vo-btn dlc-vo-btn--primary" href="<?php echo esc_url( $dlc_vo_view['pay_url'] ); ?>" data-delicat-nav="hard"><?php echo $dlc_vo_i( 'card' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php echo 'retry' === $dlc_vo_state['cta'] ? esc_html__( 'Réessayer le paiement', 'delicat-builder-v9' ) : esc_html__( 'Payer maintenant', 'delicat-builder-v9' ); ?></a>
 		<?php endif; ?>
-		<a class="dlc-vo-btn dlc-vo-btn--soft<?php echo '' === $dlc_vo_view['pay_url'] ? ' dlc-vo-btn--wide' : ''; ?>" href="<?php echo esc_url( $dlc_vo_view['support_url'] ); ?>"<?php echo $dlc_vo_view['support_wa'] ? ' target="_blank" rel="noopener noreferrer"' : ''; ?>><?php echo $dlc_vo_i( 'headset' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Contacter le support', 'delicat-builder-v9' ); ?></a>
+		<a class="dlc-vo-btn dlc-vo-btn--soft<?php echo '' === $dlc_vo_view['pay_url'] && ! $dlc_vo_view['share'] ? ' dlc-vo-btn--wide' : ''; ?>" href="<?php echo esc_url( $dlc_vo_view['support_url'] ); ?>"<?php echo $dlc_vo_view['support_wa'] ? ' target="_blank" rel="noopener noreferrer"' : ''; ?>><?php echo $dlc_vo_i( 'headset' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Contacter le support', 'delicat-builder-v9' ); ?></a>
 		<?php if ( '' !== $dlc_vo_view['again_url'] ) : ?>
 			<a class="dlc-vo-btn dlc-vo-btn--ghost dlc-vo-btn--wide" href="<?php echo esc_url( $dlc_vo_view['again_url'] ); ?>" data-delicat-nav="hard"><?php echo $dlc_vo_i( 'replay' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Commander à nouveau', 'delicat-builder-v9' ); ?></a>
 		<?php endif; ?>
 	</div>
 	<p class="dlc-vo-sr" role="status" aria-live="polite" data-vo="announcer"></p>
+	<?php if ( $dlc_vo_view['share'] ) : ?>
+		<?php /* 9.5.2: « Partager le reçu ». Ids of the « Commande reçue » sheet: the same receipt module draws it. The toast moves inside the dialog while it is open (a modal dialog makes the rest of the page inert). */ ?>
+		<dialog class="dlc-vo-sheet" id="dlc-oc-sheet" aria-labelledby="dlc-vo-sheet-title">
+			<div class="dlc-vo-sheet__panel">
+				<div class="dlc-vo-sheet__head">
+					<h3 id="dlc-vo-sheet-title" class="dlc-vo-card__title"><?php esc_html_e( 'Partager le reçu', 'delicat-builder-v9' ); ?></h3>
+					<button type="button" class="dlc-vo-iconbtn" data-vo-close aria-label="<?php esc_attr_e( 'Fermer', 'delicat-builder-v9' ); ?>"><?php echo $dlc_vo_i( 'close' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?></button>
+				</div>
+				<div class="dlc-vo-sheet__preview">
+					<canvas class="dlc-vo-sheet__canvas" width="364" height="560" role="img" aria-label="<?php /* translators: %s: order number */ echo esc_attr( sprintf( __( 'Aperçu du reçu n° %s', 'delicat-builder-v9' ), $dlc_vo_view['number'] ) ); ?>"></canvas>
+				</div>
+				<div class="dlc-vo-sheet__actions">
+					<button type="button" class="dlc-vo-btn dlc-vo-btn--primary" data-oc-act="share"><?php echo $dlc_vo_i( 'share' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Partager', 'delicat-builder-v9' ); ?></button>
+					<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="png"><?php echo $dlc_vo_i( 'download' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Télécharger (PNG)', 'delicat-builder-v9' ); ?></button>
+					<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="print" aria-describedby="dlc-vo-print-hint"><?php echo $dlc_vo_i( 'print' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Imprimer / PDF', 'delicat-builder-v9' ); ?></button>
+					<?php if ( ! empty( $dlc_vo_view['share']['receipt']['link'] ) ) : ?>
+						<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="link"><?php echo $dlc_vo_i( 'link' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Copier le lien', 'delicat-builder-v9' ); ?></button>
+					<?php endif; ?>
+				</div>
+				<p class="dlc-vo-sheet__hint" id="dlc-vo-print-hint"><?php esc_html_e( 'Choisissez « Enregistrer en PDF » pour garder une copie.', 'delicat-builder-v9' ); ?></p>
+				<p class="dlc-vo-sheet__hint"><?php esc_html_e( 'Les codes ne figurent jamais sur ce reçu.', 'delicat-builder-v9' ); ?></p>
+			</div>
+		</dialog>
+		<script type="application/json" id="dlc-oc-receipt"><?php echo wp_json_encode( $dlc_vo_view['share']['receipt'], $dlc_vo_json ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON with < > & ' " hex-escaped, inside a non-executed script element. ?></script>
+		<template class="dlc-vo-print-tpl">
+			<?php
+			$receipt = $dlc_vo_view['share']['receipt']; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- variables of the included print template.
+			$qr_svg  = $dlc_vo_view['share']['qr_svg'];
+			if ( is_readable( DELICAT_BUILDER_V9_DIR . 'templates/order-confirmation/receipt-print.php' ) ) {
+				include DELICAT_BUILDER_V9_DIR . 'templates/order-confirmation/receipt-print.php';
+			}
+			?>
+		</template>
+	<?php endif; ?>
+	<div class="dlc-vo-toast" role="status" aria-live="polite" aria-atomic="true"></div>
 	<script type="application/json" class="dlc-vo-config"><?php echo wp_json_encode( $dlc_vo_view['config'], $dlc_vo_json ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON with < > & ' " hex-escaped, inside a non-executed script element. ?></script>
 </section>

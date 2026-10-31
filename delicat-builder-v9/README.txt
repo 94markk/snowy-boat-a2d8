@@ -1,3 +1,20 @@
+9.5.2 — Partager le reçu depuis le détail de la commande
+(1) Dans Mon compte › Commandes › une commande payée, le client peut partager son reçu : bouton
+« Partager le reçu » en bas de la page et raccourci « Reçu » dans « Résumé du paiement ». La feuille
+de partage montre l’aperçu du reçu et propose Partager (WhatsApp, Messages… avec l’image), Télécharger
+(PNG), Imprimer / PDF et Copier le lien de la commande. Même reçu que sur la page « Commande reçue » :
+logo, numéro, date, paiement, articles, total et QR code ; jamais aucun code, jamais les coordonnées.
+(2) Imprimer (ou Ctrl+P) sur une commande avec reçu imprime uniquement le reçu, jamais la page et ses
+codes ; la carte « Vos codes » n’est jamais imprimée.
+(3) Proposé seulement au client connecté propriétaire de la commande, une fois le paiement reçu
+(payée, en livraison, livrée, en vérification) et si « Partage du reçu » est activé dans les réglages
+du module Confirmation de commande.
+Technique : Delicat_Builder_V9_Order_View::receipt() (Order_Status::receipt(), QR chargé sur le
+compte), feuille dialog + #dlc-oc-receipt + gabarit d’impression dans un <template>, module
+order-confirmation-receipt.js chargé à la première intention et rechargé pour une autre commande après
+un changement sur place ; order-confirmation-print.css (media print) sur les rubriques du compte.
+Installer cette archive en remplacement du builder existant, puis purger LiteSpeed / Cloudflare.
+
 9.5.1 — Détails de la commande redessinés et compte instantané
 (1) Page « Détails de la commande » (Mon compte › Commandes › une commande) entièrement redessinée
 comme une application : carte « Commande #… » avec la date, l’état en pastille colorée et pictogramme

@@ -11,3 +11,4 @@ orders) and `zzz-vo-builder.php` (loads the Builder order modules as the Runtime
 - `nav-bisect.cjs`, `hist-min4.cjs`: the Chrome Back quirk (pushState + same-URL navigation) and its fix.
 - `acct-shots.cjs`, `eye.cjs`, `rewards.cjs`, `assets-check.cjs`, `growth.php`, `setup-account.php`:
   account home (wallet, rewards, recent orders, favourites) and Recharge asset loading.
+- `share-test.cjs`, `share-dark.cjs`, `add-22420.php`: « Partager le reçu » on the order page (sheet, PNG, link, print without codes, receipt per order after in-place switching).

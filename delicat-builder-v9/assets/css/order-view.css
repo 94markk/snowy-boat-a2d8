@@ -621,6 +621,120 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
 .dlc-vo-extra { min-width: 0; }
 .dlc-vo-denied { padding: 24px 0; color: var(--dipapp-muted, #6b7280); text-align: center; }
 
+/* 9.5.2: receipt sharing */
+.dlc-vo-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--vo-accent-soft);
+  color: var(--vo-accent-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .15s ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.dlc-vo-link .dlc-vo-i { width: 17px; height: 17px; }
+.dlc-vo-link:active { transform: scale(.96); }
+.dlc-vo-iconbtn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--vo-border);
+  border-radius: 50%;
+  background: var(--vo-card);
+  color: var(--vo-text);
+  cursor: pointer;
+}
+.dlc-vo-sheet {
+  position: fixed;
+  top: auto;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vo-text);
+  overflow: visible;
+}
+.dlc-vo-sheet::backdrop { background: rgba(8, 10, 20, .5); }
+.dlc-vo-sheet__panel {
+  max-height: 92vh;
+  overflow: auto;
+  padding: 16px 16px 24px;
+  border-radius: 22px 22px 0 0;
+  background: var(--vo-card);
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, .2);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+.dlc-vo-sheet[open] .dlc-vo-sheet__panel { animation: dlc-vo-up .3s cubic-bezier(.2, .8, .2, 1) both; }
+.dlc-vo-sheet.is-closing .dlc-vo-sheet__panel { animation: dlc-vo-down .2s ease-in both; }
+@keyframes dlc-vo-up { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes dlc-vo-down { from { transform: none; opacity: 1; } to { transform: translateY(40px); opacity: 0; } }
+.dlc-vo-sheet__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.dlc-vo-sheet__head .dlc-vo-card__title { margin: 0; }
+.dlc-vo-sheet__preview { display: flex; justify-content: center; padding: 6px 0 14px; }
+.dlc-vo-sheet__canvas {
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  aspect-ratio: 364 / 560;
+  border-radius: 16px;
+  background: #f8fafc;
+  box-shadow: 0 6px 24px rgba(15, 23, 42, .14);
+}
+.dlc-vo-sheet__actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.dlc-vo-sheet__actions .dlc-vo-btn { min-height: 48px; font-size: 14px; }
+.dlc-vo-sheet__hint { margin-top: 10px !important; color: var(--vo-muted); font-size: 12px; text-align: center; }
+@media (min-width: 400px) {
+  .dlc-vo-sheet__actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dlc-vo-sheet__actions [data-oc-act="share"] { grid-column: 1 / -1; }
+}
+@media (min-width: 720px) {
+  .dlc-vo-sheet { top: 0; max-width: 440px; height: -webkit-fit-content; height: fit-content; margin: auto; }
+  .dlc-vo-sheet__panel { border-radius: 22px; }
+}
+.dlc-vo-toast {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 24px;
+  z-index: 100000;
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: #111827;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(12px);
+  pointer-events: none;
+  transition: opacity .2s ease-out, transform .2s ease-out;
+}
+.dlc-vo-toast:empty { display: none; }
+.dlc-vo-toast.is-on { opacity: 1; transform: none; }
+.dlc-vo-sheet .dlc-vo-toast { top: 16px; bottom: auto; transform: translateY(-12px); }
+.dlc-vo-sheet .dlc-vo-toast.is-on { transform: none; }
+.dlc-vo-print { display: none; }
+
 /* Phones */
 @media (max-width: 440px) {
   .dlc-vo-art { width: 108px; height: 81px; margin-right: -8px; }
@@ -665,6 +779,13 @@ html.delicat-low-power .dlc-vo *::after { animation: none !important; transition
 @media print {
   .dlc-vo-actions,
   .dlc-vo-live,
-  .dlc-vo-art { display: none !important; }
+  .dlc-vo-art,
+  .dlc-vo-link,
+  .dlc-vo-sheet,
+  .dlc-vo-toast { display: none !important; }
+  .dlc-vo-codes { display: none !important; }
   .dlc-vo-card { box-shadow: none; break-inside: avoid; }
+  /* « Imprimer / PDF » and Ctrl+P on an order with a receipt: the receipt sheet alone (never the codes). */
+  body.dlc-vo-printing > :not(.dlc-vo-print) { display: none !important; }
+  body.dlc-vo-printing > .dlc-vo-print { display: block !important; }
 }

@@ -6,7 +6,11 @@
  *  - while the order is not final, its status is checked through the order-status route
  *    (signed read-only token, owner session); when it changes the page reloads, because
  *    codes are only ever drawn on the server. Pauses when hidden or offline, backs off on
- *    errors, stops after the configured minutes or when the page is left.
+ *    errors, stops after the configured minutes or when the page is left;
+ *  - 9.5.2 « Partager le reçu » (paid orders, signed-in owner): the share sheet of the « Commande
+ *    reçue » page, drawn by the same receipt module (order-confirmation-receipt.js, loaded on the
+ *    first share intent and again for another order after an in-place switch): Partager, PNG,
+ *    Imprimer / PDF (the receipt sheet alone, never the page and its codes), Copier le lien.
  */
 (function () {
 	'use strict';
@@ -140,6 +144,92 @@
 		schedule(LADDER[0]);
 	}
 
+	function fmt(str) {
+		var a = arguments, i = 0;
+		return String(str || '').replace(/%(?:(\d)\$)?[sd]/g, function (m, n) { var v = a[n ? +n : ++i]; return v == null ? '' : v; });
+	}
+
+	/* Receipt module: one copy per order page (it reads the page's sheet and receipt once). */
+	var receiptFor = null, receiptWaiting = [], receiptLoading = null;
+	function receipt(root, src, cb) {
+		if (w.DlcOcReceipt && receiptFor === root) { if (cb) { cb(w.DlcOcReceipt); } return; }
+		if (cb) { receiptWaiting.push(cb); }
+		if (receiptLoading === root || !src) { return; }
+		receiptLoading = root;
+		try { delete w.DlcOcReceipt; } catch (e) { w.DlcOcReceipt = undefined; }
+		var sc = d.createElement('script');
+		sc.src = src; sc.async = true;
+		sc.onload = function () {
+			if (receiptLoading !== root) { return; }
+			receiptLoading = null; receiptFor = root;
+			var q = receiptWaiting; receiptWaiting = [];
+			if (sc.parentNode) { sc.parentNode.removeChild(sc); }
+			q.forEach(function (f) { if (w.DlcOcReceipt) { f(w.DlcOcReceipt); } });
+		};
+		sc.onerror = function () { receiptLoading = null; receiptWaiting = []; if (sc.parentNode) { sc.parentNode.removeChild(sc); } };
+		d.head.appendChild(sc);
+	}
+
+	function share(root, C) {
+		var sheet = root.querySelector('#dlc-oc-sheet'), toastEl = root.querySelector('.dlc-vo-toast');
+		if (!sheet || !C.receiptJs) { return; }
+		var T = C.receipt || {}, opener = null, toastT = 0, calm = C.motion === 'off' || (w.matchMedia && w.matchMedia('(prefers-reduced-motion: reduce)').matches);
+		function toast(msg) {
+			if (!toastEl || !msg) { return; }
+			clearTimeout(toastT);
+			toastEl.textContent = msg;
+			w.requestAnimationFrame(function () { toastEl.classList.add('is-on'); });
+			toastT = setTimeout(function () { toastEl.classList.remove('is-on'); toastT = setTimeout(function () { toastEl.textContent = ''; }, 260); }, 2400);
+		}
+		/* What the receipt module expects from the page (window.DlcOc on « Commande reçue »). */
+		w.DlcOc = { T: T, fmt: fmt, toast: toast, copy: copyText, motion: C.motion || 'full', last: null, patch: null };
+		function close() {
+			if (!sheet.open) { return; }
+			var done = function () { sheet.classList.remove('is-closing'); if (sheet.close) { sheet.close(); } else { sheet.removeAttribute('open'); sheet.dispatchEvent(new Event('close')); } };
+			if (calm) { done(); return; }
+			sheet.classList.add('is-closing');
+			setTimeout(done, 190);
+		}
+		function open(btn) {
+			opener = btn;
+			sheet.classList.remove('is-closing');
+			if (toastEl) { sheet.appendChild(toastEl); }
+			if (sheet.showModal) { sheet.showModal(); } else { sheet.setAttribute('open', ''); }
+			receipt(root, C.receiptJs, function (r) { r.draw(); });
+		}
+		Array.prototype.forEach.call(root.querySelectorAll('[data-vo-share]'), function (b) {
+			b.addEventListener('pointerdown', function () { receipt(root, C.receiptJs); }, { passive: true });
+			b.addEventListener('click', function () { open(b); });
+		});
+		sheet.addEventListener('close', function () { if (toastEl) { root.appendChild(toastEl); } if (opener && opener.isConnected) { opener.focus(); } });
+		sheet.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+		sheet.addEventListener('click', function (e) {
+			if (e.target === sheet || e.target.closest('[data-vo-close]')) { close(); return; }
+			var b = e.target.closest('[data-oc-act]'), a = b ? b.getAttribute('data-oc-act') : '';
+			if (a === 'print') { close(); setTimeout(function () { printReceipt(root); w.print(); }, calm ? 0 : 230); } else if (a) { receipt(root, C.receiptJs, function (r) { r.act(a); }); }
+		});
+	}
+
+	/* Print: the receipt sheet alone, as a direct child of <body> (never the page, which carries the
+	 * codes); also for a plain Ctrl+P on an order that has a receipt. Removed after printing. */
+	function printReceipt(root) {
+		var tpl = root && root.isConnected ? root.querySelector('template.dlc-vo-print-tpl') : null;
+		if (!tpl || !tpl.content || d.body.querySelector(':scope > .dlc-vo-print')) { return; }
+		var box = d.createElement('div');
+		box.className = 'dlc-vo-print';
+		box.appendChild(d.importNode(tpl.content, true));
+		Array.prototype.forEach.call(box.querySelectorAll('[id]'), function (n) { n.removeAttribute('id'); });
+		d.body.appendChild(box);
+		d.body.classList.add('dlc-vo-printing');
+	}
+	function unprint() {
+		var box = d.body ? d.body.querySelector(':scope > .dlc-vo-print') : null;
+		if (box && box.parentNode) { box.parentNode.removeChild(box); }
+		if (d.body) { d.body.classList.remove('dlc-vo-printing'); }
+	}
+	w.addEventListener('beforeprint', function () { printReceipt(d.getElementById('dlc-vo')); });
+	w.addEventListener('afterprint', unprint);
+
 	function init() {
 		var root = d.getElementById('dlc-vo');
 		if (!root || root.getAttribute('data-vo-bound')) { return; }
@@ -147,6 +237,7 @@
 		var C = json(root);
 		codes(root, C.i18n || {});
 		live(root, C);
+		share(root, C);
 	}
 
 	if (d.readyState === 'loading') { d.addEventListener('DOMContentLoaded', init); } else { init(); }

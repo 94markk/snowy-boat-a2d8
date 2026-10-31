@@ -169,6 +169,10 @@ final class Delicat_Builder_V9_Order_View {
 			return;
 		}
 		wp_enqueue_style( self::HANDLE, DELICAT_BUILDER_V9_URL . 'assets/css/order-view.css', array(), DELICAT_BUILDER_V9_VERSION );
+		if ( ! empty( Delicat_Builder_V9_Order_Confirmation::settings()['oc_share'] ) ) {
+			/* 9.5.2: receipt print sheet (media="print": never blocks the first paint). */
+			wp_enqueue_style( self::HANDLE . '-print', DELICAT_BUILDER_V9_URL . 'assets/css/order-confirmation-print.css', array( self::HANDLE ), DELICAT_BUILDER_V9_VERSION, 'print' );
+		}
 		wp_enqueue_script(
 			self::HANDLE,
 			DELICAT_BUILDER_V9_URL . 'assets/js/order-view.js',
@@ -465,6 +469,33 @@ final class Delicat_Builder_V9_Order_View {
 	}
 
 	/**
+	 * 9.5.2: the shareable receipt of this order for its signed-in owner, in the paid phases only
+	 * and while « Partage du reçu » is on (same rule as the « Commande reçue » page). Built from the
+	 * receipt model: never any code, never billing details.
+	 *
+	 * @param WC_Order $order Order.
+	 * @param array    $state state().
+	 * @return array{receipt:array,qr_svg:string}|null
+	 */
+	public static function receipt( $order, array $state ) {
+		$settings = Delicat_Builder_V9_Order_Confirmation::settings();
+		$owner    = (int) $order->get_customer_id() > 0 && (int) $order->get_customer_id() === get_current_user_id();
+		if ( empty( $settings['oc_share'] ) || empty( $state['shareable'] ) || ! $owner ) {
+			return null;
+		}
+		$receipt = Delicat_Builder_V9_Order_Status::receipt( $order, $state );
+		$qr_svg  = '';
+		if ( ! empty( $receipt['link'] ) && class_exists( 'Delicat_Builder_V9_Qr', false ) ) {
+			$matrix = Delicat_Builder_V9_Qr::matrix( (string) $receipt['link'] );
+			$qr_svg = is_array( $matrix ) ? (string) Delicat_Builder_V9_Qr::svg( $matrix, 96 ) : '';
+		}
+		return array(
+			'receipt' => $receipt,
+			'qr_svg'  => $qr_svg,
+		);
+	}
+
+	/**
 	 * Everything the template prints (escaped by the template).
 	 *
 	 * @param WC_Order $order Order.
@@ -486,6 +517,7 @@ final class Delicat_Builder_V9_Order_View {
 		}
 		$config          = Delicat_Builder_V9_Order_Confirmation::config( $order, $state );
 		$config['owner'] = (int) $order->get_customer_id() === get_current_user_id();
+		$share           = self::receipt( $order, $state );
 		return array(
 			'number'      => $base['number'],
 			'placed'      => self::long_date( $order->get_date_created() ),
@@ -508,6 +540,7 @@ final class Delicat_Builder_V9_Order_View {
 			'glyph'       => self::phase_glyph( $state['phase'] ),
 			'scene'       => self::scene( $state['phase'] ),
 			'live'        => ! empty( $config['live'] ),
+			'share'       => $share,
 			'config'      => array(
 				'endpoint'    => $config['endpoint'],
 				'nonce'       => $config['nonce'],
@@ -516,6 +549,9 @@ final class Delicat_Builder_V9_Order_View {
 				'fingerprint' => $config['fingerprint'],
 				'live'        => ! empty( $config['live'] ),
 				'maxMinutes'  => $config['maxMinutes'],
+				'receiptJs'   => $share ? (string) $config['receiptJs'] : '',
+				'motion'      => (string) ( Delicat_Builder_V9_Order_Confirmation::settings()['oc_motion'] ?? 'full' ),
+				'receipt'     => $share ? Delicat_Builder_V9_Order_Confirmation::i18n() : array(),
 				'i18n'        => array(
 					'copy'     => __( 'Copier le code', 'delicat-builder-v9' ),
 					'copied'   => __( 'Copié', 'delicat-builder-v9' ),

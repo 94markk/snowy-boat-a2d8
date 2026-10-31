@@ -193,6 +193,7 @@ final class Delicat_Builder_V9_Runtime_Router {
                 && class_exists( 'Delicat_Builder_V9_Order_Confirmation_Compat', false )
                 && Delicat_Builder_V9_Order_Confirmation_Compat::enabled() ) {
                 self::load('includes/class-delicat-builder-order-status.php');
+                self::load('includes/lib/class-delicat-builder-qr.php');
                 self::load('includes/class-delicat-builder-order-confirmation.php');
                 self::load('includes/class-delicat-builder-order-view.php','Delicat_Builder_V9_Order_View');
             }

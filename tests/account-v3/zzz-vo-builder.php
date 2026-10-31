@@ -11,6 +11,7 @@ if (get_option('dipstub_builder', '1') === '1') {
     add_action('wp', function () {
         if (is_account_page() && is_user_logged_in() && Delicat_Builder_V9_Order_Confirmation_Compat::enabled()) {
             require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-order-status.php';
+            require_once DELICAT_BUILDER_V9_DIR . 'includes/lib/class-delicat-builder-qr.php';
             require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-order-confirmation.php';
             require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-order-view.php';
             Delicat_Builder_V9_Order_View::boot();
