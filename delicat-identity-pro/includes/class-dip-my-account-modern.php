@@ -373,11 +373,15 @@ final class DIP_My_Account_Modern {
         $menu = function_exists('wc_get_account_menu_items') ? (array) wc_get_account_menu_items() : [];
         $heading = $endpoint === '' ? __('Compte', 'delicat-google-login') : ($menu[$endpoint] ?? __('Mon compte', 'delicat-google-login'));
         if ($endpoint === 'view-order') {
-            // 6.15.2: « Commande #22447 », and Back returns to the orders list.
+            // 6.15.2: Back returns to the orders list. With the Builder's order page (9.5.1),
+            // whose first card already says « Commande #22447 », the bar reads « Détails de la
+            // commande »; otherwise it names the order.
             $order_id = absint(get_query_var('view-order'));
             $order = $order_id && function_exists('wc_get_order') ? wc_get_order($order_id) : false;
+            $own = $order && (int) $order->get_customer_id() === (int) $user->ID;
+            $builder_page = class_exists('Delicat_Builder_V9_Order_View', false) && is_callable(['Delicat_Builder_V9_Order_View', 'enabled']) && Delicat_Builder_V9_Order_View::enabled();
             /* translators: %s: order number */
-            $heading = ($order && (int) $order->get_customer_id() === (int) $user->ID) ? sprintf(__('Commande #%s', 'delicat-google-login'), $order->get_order_number()) : __('Commande', 'delicat-google-login');
+            $heading = ($own && !$builder_page) ? sprintf(__('Commande #%s', 'delicat-google-login'), $order->get_order_number()) : __('Détails de la commande', 'delicat-google-login');
             $home = self::account_url('orders');
         }
         ?>

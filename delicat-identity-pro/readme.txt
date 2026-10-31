@@ -11,7 +11,7 @@ Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
 
 * Accueil du compte comme une application : sous le profil, deux cartes Portefeuille (solde, « Recharger », œil pour masquer le solde) et Récompenses (programme de fidélité ou de parrainage, points WooCommerce Points and Rewards, sinon le nombre de commandes), puis les trois dernières commandes avec leur état, et « Mes favoris » (produits enregistrés avec le cœur). La page reste privée : jamais mise en cache, données du seul client connecté, préférence « Masquer le solde » respectée côté serveur.
 * États de commande avec pictogrammes (style Material) et texte, jamais la couleur seule : paiement en attente, en vérification, en cours, livrée, annulée, remboursée, échouée. Mêmes libellés que la page de commande du Builder quand il est actif ; aussi dans la colonne « État » de la liste des commandes.
-* Détail d’une commande : titre « Commande #… » et retour vers la liste des commandes.
+* Détail d’une commande : barre « Détails de la commande » (avec la page de commande du Builder 9.5.1, dont la première carte affiche « Commande #… »), sinon « Commande #… » ; retour vers la liste des commandes.
 * Navigation instantanée entre les rubriques du compte (Builder 9.5.1) : le masquage du solde et la recherche de commandes fonctionnent aussi après un changement de page sans rechargement.
 * Fournisseurs de récompenses : filtre dip_account_rewards (label, value, hint, url) ; favoris : filtre dip_account_favorites.
 
