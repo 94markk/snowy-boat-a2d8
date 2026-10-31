@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Identity Pro
  * Description: Unified secure identity, authentication, account lifecycle, and synchronized WordPress/WooCommerce transactional email studio.
- * Version:     6.15.1
+ * Version:     6.15.2
  * Author: Delicat Store
  * Text Domain: delicat-google-login
  * Requires at least: 6.2
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('DIP_VERSION', '6.15.1');
+define('DIP_VERSION', '6.15.2');
 define('DIP_FILE', __FILE__);
 define('DIP_DIR', plugin_dir_path(__FILE__));
 define('DIP_URL', plugin_dir_url(__FILE__));

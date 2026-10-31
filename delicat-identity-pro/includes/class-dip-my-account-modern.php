@@ -30,6 +30,8 @@ final class DIP_My_Account_Modern {
         add_action('woocommerce_before_account_navigation', [__CLASS__, 'profile_header'], 1);
         add_action('woocommerce_account_dashboard', [__CLASS__, 'dashboard'], 5);
         add_action('woocommerce_before_account_orders', [__CLASS__, 'orders_toolbar'], 5);
+        // 6.15.2: the « État » column of the orders list shows the same status chip (glyph + words) as the account home.
+        add_action('woocommerce_my_account_my_orders_column_order-status', [__CLASS__, 'orders_status_column']);
         add_action('woocommerce_before_edit_account_form', [__CLASS__, 'profile_form_intro'], 1);
         add_action('wp_enqueue_scripts', [__CLASS__, 'assets'], 90);
         add_action('template_redirect', [__CLASS__, 'early_private_account'], 0);
@@ -370,6 +372,14 @@ final class DIP_My_Account_Modern {
         $home = self::account_url('dashboard');
         $menu = function_exists('wc_get_account_menu_items') ? (array) wc_get_account_menu_items() : [];
         $heading = $endpoint === '' ? __('Compte', 'delicat-google-login') : ($menu[$endpoint] ?? __('Mon compte', 'delicat-google-login'));
+        if ($endpoint === 'view-order') {
+            // 6.15.2: « Commande #22447 », and Back returns to the orders list.
+            $order_id = absint(get_query_var('view-order'));
+            $order = $order_id && function_exists('wc_get_order') ? wc_get_order($order_id) : false;
+            /* translators: %s: order number */
+            $heading = ($order && (int) $order->get_customer_id() === (int) $user->ID) ? sprintf(__('Commande #%s', 'delicat-google-login'), $order->get_order_number()) : __('Commande', 'delicat-google-login');
+            $home = self::account_url('orders');
+        }
         ?>
         <header class="dipapp-topbar" aria-label="<?php echo esc_attr__('Espace client', 'delicat-google-login'); ?>">
           <?php if ($endpoint !== '') : ?><a class="dipapp-back" href="<?php echo esc_url($home); ?>" aria-label="<?php echo esc_attr__('Retour au compte', 'delicat-google-login'); ?>"><i class="dipma-icon dipma-icon-chevron" aria-hidden="true"></i></a><?php endif; ?>
@@ -468,9 +478,13 @@ final class DIP_My_Account_Modern {
             elseif (preg_match('/app|device/i', $endpoint)) $icon = 'device';
             $other_rows[] = ['label' => $label, 'icon' => $icon, 'url' => $url($endpoint)];
         }
+        $uid = get_current_user_id();
         ?>
         <div class="dipapp-dashboard" aria-label="<?php echo esc_attr__('Paramètres du compte', 'delicat-google-login'); ?>">
           <?php
+            self::summary_cards($uid, $has, $url);
+            self::recent_orders($uid, $has, $url);
+            self::favorites($uid);
             self::app_group(__('Compte et sécurité', 'delicat-google-login'), $user_rows);
             self::app_group(__('Mes services', 'delicat-google-login'), $service_rows);
             self::app_group(__('Autres paramètres', 'delicat-google-login'), $other_rows);
@@ -478,8 +492,275 @@ final class DIP_My_Account_Modern {
           <?php if ($has('customer-logout')) : ?>
             <a class="dipapp-logout" href="<?php echo esc_url(function_exists('wc_logout_url') ? wc_logout_url() : $url('customer-logout')); ?>"><i class="dipma-icon dipma-icon-logout" aria-hidden="true"></i><?php esc_html_e('Déconnexion', 'delicat-google-login'); ?></a>
           <?php endif; ?>
-          <p class="dipapp-privacy"><i class="dipma-icon dipma-icon-lock" aria-hidden="true"></i><?php esc_html_e('Les données privées sont accessibles uniquement dans les rubriques concernées.', 'delicat-google-login'); ?></p>
+          <p class="dipapp-privacy"><i class="dipma-icon dipma-icon-lock" aria-hidden="true"></i><?php esc_html_e('Page privée : visible uniquement par vous, jamais mise en cache.', 'delicat-google-login'); ?></p>
         </div>
+        <?php
+    }
+
+    /* ------------------------------------------------------------------
+     * 6.15.2 — account home: wallet and rewards, recent orders, favourites.
+     *
+     * The home now shows the customer's own figures, as the app does. The page
+     * stays private (no-store, DONOTCACHEPAGE, LiteSpeed no-cache, set by
+     * private_page() before any output), every value belongs to the signed-in
+     * customer only, and the « Masquer le solde » preference still hides the
+     * amount server-side. WooCommerce, TeraWallet and the rewards provider
+     * remain the sources of truth; nothing here writes.
+     * ------------------------------------------------------------------ */
+
+    /**
+     * Material-style glyphs (24 px, filled, currentColor), drawn after Google's
+     * Material Symbols (Apache-2.0). Inline so they need no font or request.
+     */
+    public static function glyph($name, $class = 'dipapp-glyph') {
+        static $paths = [
+            'wallet'    => 'M21 18v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1h-9a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h9Zm-9-2h10V8H12v8Zm4-2.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3Z',
+            'redeem'    => 'M20 6h-2.2c.1-.3.2-.6.2-1a3 3 0 0 0-5.5-1.7L12 4l-.5-.7A3 3 0 0 0 6 5c0 .4.1.7.2 1H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm-5-2a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM9 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm11 15H4v-2h16v2Zm0-5H4V8h5.1L7 10.8 8.6 12 12 7.4l3.4 4.6 1.6-1.2L14.9 8H20v6Z',
+            'orders'    => 'M19.5 3.5 18 2l-1.5 1.5L15 2l-1.5 1.5L12 2l-1.5 1.5L9 2 7.5 3.5 6 2v14H3v3a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V2l-1.5 1.5ZM15 20H6a1 1 0 0 1-1-1v-1h10v2Zm4-1a1 1 0 0 1-2 0v-3H8V5h11v14ZM9 7h6v2H9V7Zm7 0h2v2h-2V7Zm-7 3h6v2H9v-2Zm7 0h2v2h-2v-2Z',
+            'heart'     => 'M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35Z',
+            'check'     => 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm-2 15-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9Z',
+            'schedule'  => 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7Z',
+            'sync'      => 'M12 6v3l4-4-4-4v3a8 8 0 0 0-6.76 12.26L6.7 14.8A6 6 0 0 1 12 6Zm6.76 1.74L17.3 9.2A6 6 0 0 1 12 18v-3l-4 4 4 4v-3a8 8 0 0 0 6.76-12.26Z',
+            'hourglass' => 'M6 2v6l4 4-4 4v6h12v-6l-4-4 4-4V2H6Zm10 14.5V20H8v-3.5l4-4 4 4Zm-4-5-4-4V4h8v3.5l-4 4Z',
+            'cancel'    => 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59Z',
+            'error'     => 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 15h-2v-2h2v2Zm0-4h-2V7h2v6Z',
+            'undo'      => 'M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62A7.99 7.99 0 0 1 20.4 16l2.37-.78A10.5 10.5 0 0 0 12.5 8Z',
+            'gift'      => 'M20 6h-2.2c.1-.3.2-.6.2-1a3 3 0 0 0-5.5-1.7L12 4l-.5-.7A3 3 0 0 0 6 5c0 .4.1.7.2 1H4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2Zm-5-2a1 1 0 1 1 0 2 1 1 0 0 1 0-2ZM9 4a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm11 15H4v-2h16v2Zm0-5H4V8h5.1L7 10.8 8.6 12 12 7.4l3.4 4.6 1.6-1.2L14.9 8H20v6Z',
+            'add'       => 'M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z',
+            'arrow'     => 'M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8-8-8Z',
+            'eye'       => 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5ZM12 17a5 5 0 1 1 0-10 5 5 0 0 1 0 10Zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z',
+        ];
+        if (!isset($paths[$name])) return '';
+        return '<svg class="' . esc_attr($class) . '" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path fill="currentColor" d="' . $paths[$name] . '"/></svg>';
+    }
+
+    /**
+     * Customer-facing status of an order: words, tone and glyph. Uses the
+     * Builder's payment-aware model when it is active (the order page shows the
+     * same wording), else WooCommerce's status.
+     */
+    public static function order_status_view($order) {
+        $glyphs = [
+            'awaiting_payment' => 'schedule', 'payment_review' => 'hourglass', 'paid' => 'sync', 'sending' => 'sync',
+            'partial' => 'sync', 'review' => 'hourglass', 'delivered' => 'check', 'failed' => 'error',
+            'cancelled' => 'cancel', 'refunded' => 'undo',
+        ];
+        if (class_exists('Delicat_Builder_V9_Order_Status', false) && is_callable(['Delicat_Builder_V9_Order_Status', 'state'])) {
+            try {
+                $state = Delicat_Builder_V9_Order_Status::state($order);
+                $phase = (string) ($state['phase'] ?? '');
+                if (isset($glyphs[$phase]) && !empty($state['pill']['label'])) {
+                    return ['label' => (string) $state['pill']['label'], 'tone' => sanitize_html_class((string) ($state['pill']['tone'] ?? 'neutral')), 'glyph' => $glyphs[$phase]];
+                }
+            } catch (Throwable $e) {}
+        }
+        $map = [
+            'pending'    => [__('Paiement en attente', 'delicat-google-login'), 'warning', 'schedule'],
+            'on-hold'    => [__('En vérification', 'delicat-google-login'), 'warning', 'hourglass'],
+            'processing' => [__('En cours', 'delicat-google-login'), 'accent', 'sync'],
+            'completed'  => [__('Livrée', 'delicat-google-login'), 'success', 'check'],
+            'cancelled'  => [__('Annulée', 'delicat-google-login'), 'neutral', 'cancel'],
+            'refunded'   => [__('Remboursée', 'delicat-google-login'), 'neutral', 'undo'],
+            'failed'     => [__('Échouée', 'delicat-google-login'), 'danger', 'error'],
+        ];
+        $status = is_object($order) && is_callable([$order, 'get_status']) ? (string) $order->get_status() : '';
+        if (isset($map[$status])) return ['label' => $map[$status][0], 'tone' => $map[$status][1], 'glyph' => $map[$status][2]];
+        $label = function_exists('wc_get_order_status_name') ? (string) wc_get_order_status_name($status) : $status;
+        return ['label' => $label, 'tone' => 'neutral', 'glyph' => 'schedule'];
+    }
+
+    public static function status_chip_html($order) {
+        $view = self::order_status_view($order);
+        return '<span class="dipapp-status" data-tone="' . esc_attr($view['tone']) . '">' . self::glyph($view['glyph'], 'dipapp-status-glyph') . '<span>' . esc_html($view['label']) . '</span></span>';
+    }
+
+    /** woocommerce_my_account_my_orders_column_order-status: the chip instead of the bare status name. */
+    public static function orders_status_column($order) {
+        if (!is_object($order)) return;
+        echo self::status_chip_html($order); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts.
+    }
+
+    /**
+     * Rewards shown next to the wallet. A provider answers through the
+     * dip_account_rewards filter with ['label','value','hint','url'] (Delicat
+     * Recharge does, for its loyalty tiers and referral bonus); WooCommerce
+     * Points and Rewards is read directly. null when no programme is active.
+     */
+    public static function rewards_context($uid) {
+        $uid = absint($uid);
+        $rewards = apply_filters('dip_account_rewards', null, $uid);
+        if ((!is_array($rewards) || empty($rewards['value'])) && class_exists('WC_Points_Rewards_Manager') && is_callable(['WC_Points_Rewards_Manager', 'get_users_points'])) {
+            try {
+                $points = (int) WC_Points_Rewards_Manager::get_users_points($uid);
+                $worth = is_callable(['WC_Points_Rewards_Manager', 'calculate_points_value']) ? (float) WC_Points_Rewards_Manager::calculate_points_value($points) : 0.0;
+                $rewards = [
+                    'label' => __('Points', 'delicat-google-login'),
+                    'value' => number_format_i18n($points),
+                    'hint'  => $worth > 0 ? '≈ ' . wp_strip_all_tags(function_exists('wc_price') ? wc_price($worth) : number_format_i18n($worth, 2)) : __('Points fidélité', 'delicat-google-login'),
+                    'url'   => function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url('points-and-rewards') : '',
+                ];
+            } catch (Throwable $e) { $rewards = null; }
+        }
+        if (!is_array($rewards) || !isset($rewards['value']) || (string) $rewards['value'] === '') return null;
+        return [
+            'label' => sanitize_text_field((string) ($rewards['label'] ?? __('Récompenses', 'delicat-google-login'))),
+            'value' => sanitize_text_field((string) $rewards['value']),
+            'hint'  => sanitize_text_field((string) ($rewards['hint'] ?? '')),
+            'url'   => self::validated_site_url((string) ($rewards['url'] ?? ''), ''),
+        ];
+    }
+
+    /** Wallet and rewards (or the orders count when no rewards programme runs). */
+    private static function summary_cards($uid, $has, $url) {
+        $commerce = self::commerce_context($uid);
+        $hidden = self::balance_hidden();
+        $rewards = self::rewards_context($uid);
+        ?>
+        <div class="dipapp-summary">
+          <?php if ($commerce['wallet'] && $commerce['balance'] !== null) : ?>
+            <div class="dipapp-stat dipapp-stat--wallet<?php echo $hidden ? ' is-hidden' : ''; ?>" data-dipma-balance>
+              <a class="dipapp-stat-link" href="<?php echo esc_url($url('woo-wallet')); ?>"><span class="screen-reader-text"><?php esc_html_e('Ouvrir mon portefeuille', 'delicat-google-login'); ?></span></a>
+              <span class="dipapp-stat-head"><?php echo self::glyph('wallet', 'dipapp-stat-glyph'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><?php esc_html_e('Portefeuille', 'delicat-google-login'); ?></span>
+              <strong class="dipapp-stat-value"><span data-dipma-balance-amount<?php echo $hidden ? ' hidden' : ''; ?>><?php echo self::money($commerce['balance']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wc_price through wp_kses_post. ?></span><span class="dipapp-mask" data-dipma-balance-mask<?php echo $hidden ? '' : ' hidden'; ?> aria-label="<?php esc_attr_e('Solde masqué', 'delicat-google-login'); ?>">••••</span></strong>
+              <span class="dipapp-stat-foot"><span class="dipapp-stat-action"><?php echo self::glyph('add', 'dipapp-stat-mini'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><?php esc_html_e('Recharger', 'delicat-google-login'); ?></span>
+                <button type="button" class="dipapp-eye<?php echo $hidden ? ' is-hidden' : ''; ?>" data-dipma-balance-toggle aria-pressed="<?php echo $hidden ? 'true' : 'false'; ?>" data-label-show="<?php esc_attr_e('Afficher le solde', 'delicat-google-login'); ?>" data-label-hide="<?php esc_attr_e('Masquer le solde', 'delicat-google-login'); ?>" aria-label="<?php echo $hidden ? esc_attr__('Afficher le solde', 'delicat-google-login') : esc_attr__('Masquer le solde', 'delicat-google-login'); ?>"><?php echo self::glyph('eye', 'dipapp-stat-mini'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></button>
+              </span>
+            </div>
+          <?php endif; ?>
+          <?php if ($rewards) : ?>
+            <div class="dipapp-stat dipapp-stat--rewards">
+              <?php if ($rewards['url'] !== '') : ?><a class="dipapp-stat-link" href="<?php echo esc_url($rewards['url']); ?>"><span class="screen-reader-text"><?php echo esc_html($rewards['label']); ?></span></a><?php endif; ?>
+              <span class="dipapp-stat-head"><?php echo self::glyph('redeem', 'dipapp-stat-glyph'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><?php echo esc_html($rewards['label']); ?></span>
+              <strong class="dipapp-stat-value"><?php echo esc_html($rewards['value']); ?></strong>
+              <span class="dipapp-stat-foot"><span class="dipapp-stat-hint"><?php echo esc_html($rewards['hint']); ?></span></span>
+            </div>
+          <?php elseif ($has('orders')) : ?>
+            <div class="dipapp-stat dipapp-stat--orders">
+              <a class="dipapp-stat-link" href="<?php echo esc_url($url('orders')); ?>"><span class="screen-reader-text"><?php esc_html_e('Mes commandes', 'delicat-google-login'); ?></span></a>
+              <span class="dipapp-stat-head"><?php echo self::glyph('orders', 'dipapp-stat-glyph'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><?php esc_html_e('Commandes', 'delicat-google-login'); ?></span>
+              <strong class="dipapp-stat-value"><?php echo esc_html(number_format_i18n((int) $commerce['orders'])); ?></strong>
+              <span class="dipapp-stat-foot"><span class="dipapp-stat-hint"><?php
+                echo esc_html((int) $commerce['pending'] > 0
+                    /* translators: %s: number of orders in progress */
+                    ? sprintf(_n('%s en cours', '%s en cours', (int) $commerce['pending'], 'delicat-google-login'), number_format_i18n((int) $commerce['pending']))
+                    : __('Tout est à jour', 'delicat-google-login'));
+              ?></span></span>
+            </div>
+          <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /** First item's name, « + n » for the others. */
+    private static function order_title($order) {
+        $items = $order->get_items('line_item');
+        $first = $items ? reset($items) : null;
+        $name = $first ? wp_strip_all_tags((string) $first->get_name()) : __('Commande', 'delicat-google-login');
+        $more = max(0, count($items) - 1);
+        return $more > 0 ? sprintf('%s + %d', $name, $more) : $name;
+    }
+
+    /** 48 px thumbnail of the first item ('' when none). */
+    private static function order_thumb($order) {
+        $items = $order->get_items('line_item');
+        $first = $items ? reset($items) : null;
+        $product = $first && is_callable([$first, 'get_product']) ? $first->get_product() : null;
+        if (!is_object($product)) return '';
+        $image = (int) $product->get_image_id();
+        if (!$image && $product->get_parent_id() && function_exists('wc_get_product')) {
+            $parent = wc_get_product($product->get_parent_id());
+            $image = $parent ? (int) $parent->get_image_id() : 0;
+        }
+        return $image ? (string) wp_get_attachment_image_url($image, 'thumbnail') : '';
+    }
+
+    private static function recent_orders($uid, $has, $url) {
+        if (!$has('orders')) return;
+        $commerce = self::commerce_context($uid);
+        ?>
+        <section class="dipapp-section dipapp-recent" aria-labelledby="dipapp-recent-title">
+          <div class="dipapp-section-head"><h2 id="dipapp-recent-title"><?php esc_html_e('Commandes récentes', 'delicat-google-login'); ?></h2>
+            <?php if (!empty($commerce['recent'])) : ?><a href="<?php echo esc_url($url('orders')); ?>"><?php esc_html_e('Tout voir', 'delicat-google-login'); ?><?php echo self::glyph('arrow', 'dipapp-link-glyph'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></a><?php endif; ?>
+          </div>
+          <?php if (empty($commerce['recent'])) : ?>
+            <div class="dipapp-empty"><?php echo self::glyph('orders', 'dipapp-empty-glyph'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><p><?php esc_html_e('Aucune commande pour le moment.', 'delicat-google-login'); ?></p>
+              <a href="<?php echo esc_url(function_exists('wc_get_page_permalink') ? wc_get_page_permalink('shop') : home_url('/')); ?>"><?php esc_html_e('Découvrir la boutique', 'delicat-google-login'); ?></a></div>
+          <?php else : ?>
+            <div class="dipapp-orders">
+              <?php foreach ($commerce['recent'] as $order) :
+                $thumb = self::order_thumb($order);
+                $date = $order->get_date_created();
+              ?>
+                <a class="dipapp-order" href="<?php echo esc_url($order->get_view_order_url()); ?>">
+                  <span class="dipapp-order-thumb" aria-hidden="true"><?php if ($thumb !== '') : ?><img src="<?php echo esc_url($thumb); ?>" alt="" width="48" height="48" loading="lazy" decoding="async"><?php else : echo self::glyph('gift', 'dipapp-order-glyph'); endif; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></span>
+                  <span class="dipapp-order-main">
+                    <span class="dipapp-order-line"><strong><?php echo esc_html(self::order_title($order)); ?></strong><span class="dipapp-order-total"><?php echo self::money($order->get_total()); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wc_price through wp_kses_post. ?></span></span>
+                    <span class="dipapp-order-line"><small><?php echo esc_html(($date ? wp_date('j M', $date->getTimestamp()) . ' · ' : '') . '#' . $order->get_order_number()); ?></small><?php echo self::status_chip_html($order); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts. ?></span>
+                  </span>
+                </a>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </section>
+        <?php
+    }
+
+    /**
+     * Favourites saved with the heart on product cards (Delicat Builder keeps
+     * them in user meta). Published, visible products only; at most 10.
+     */
+    public static function favorites_context($uid) {
+        $uid = absint($uid);
+        $ids = [];
+        if (class_exists('Delicat_Builder_V9_Heart_Engine', false) && is_callable(['Delicat_Builder_V9_Heart_Engine', 'favorites_for_current_user']) && $uid === get_current_user_id()) {
+            try { $ids = (array) Delicat_Builder_V9_Heart_Engine::favorites_for_current_user(); } catch (Throwable $e) { $ids = []; }
+        } else {
+            $raw = get_user_meta($uid, '_delicat_builder_v9_favorites', true);
+            $ids = is_array($raw) ? $raw : [];
+        }
+        $ids = apply_filters('dip_account_favorites', $ids, $uid);
+        $ids = array_values(array_unique(array_filter(array_map('absint', is_array($ids) ? $ids : []))));
+        if (!$ids || !function_exists('wc_get_products')) return ['total' => 0, 'items' => []];
+        $total = count($ids);
+        $products = [];
+        try {
+            $products = wc_get_products(['include' => array_slice(array_reverse($ids), 0, 24), 'status' => 'publish', 'limit' => 10, 'orderby' => 'include', 'return' => 'objects']);
+        } catch (Throwable $e) { $products = []; }
+        $items = [];
+        foreach ((array) $products as $product) {
+            if (!is_object($product) || !$product->is_visible()) continue;
+            $image = (int) $product->get_image_id();
+            $items[] = [
+                'name'  => wp_strip_all_tags((string) $product->get_name()),
+                'url'   => (string) $product->get_permalink(),
+                'img'   => $image ? (string) wp_get_attachment_image_url($image, 'woocommerce_thumbnail') : '',
+                'price' => (string) $product->get_price_html(),
+            ];
+        }
+        return ['total' => $total, 'items' => $items];
+    }
+
+    private static function favorites($uid) {
+        $favs = self::favorites_context($uid);
+        if (!class_exists('Delicat_Builder_V9_Heart_Engine', false) && !$favs['items']) return;
+        ?>
+        <section class="dipapp-section dipapp-favs" aria-labelledby="dipapp-favs-title">
+          <div class="dipapp-section-head"><h2 id="dipapp-favs-title"><?php esc_html_e('Mes favoris', 'delicat-google-login'); ?><?php if ($favs['total'] > 0) : ?> <span class="dipapp-count"><?php echo esc_html(number_format_i18n($favs['total'])); ?></span><?php endif; ?></h2></div>
+          <?php if (!$favs['items']) : ?>
+            <div class="dipapp-empty"><?php echo self::glyph('heart', 'dipapp-empty-glyph dipapp-heart'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><p><?php esc_html_e('Touchez le cœur d’un produit pour le retrouver ici.', 'delicat-google-login'); ?></p>
+              <a href="<?php echo esc_url(function_exists('wc_get_page_permalink') ? wc_get_page_permalink('shop') : home_url('/')); ?>"><?php esc_html_e('Parcourir la boutique', 'delicat-google-login'); ?></a></div>
+          <?php else : ?>
+            <ul class="dipapp-fav-rail" role="list">
+              <?php foreach ($favs['items'] as $item) : ?>
+                <li><a class="dipapp-fav" href="<?php echo esc_url($item['url']); ?>" data-delicat-product-link>
+                  <span class="dipapp-fav-img"><?php if ($item['img'] !== '') : ?><img src="<?php echo esc_url($item['img']); ?>" alt="" loading="lazy" decoding="async" width="132" height="132"><?php else : echo self::glyph('gift', 'dipapp-order-glyph'); endif; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><?php echo self::glyph('heart', 'dipapp-fav-heart'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></span>
+                  <span class="dipapp-fav-name"><?php echo esc_html($item['name']); ?></span>
+                  <?php if ($item['price'] !== '') : ?><span class="dipapp-fav-price"><?php echo wp_kses_post($item['price']); ?></span><?php endif; ?>
+                </a></li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </section>
         <?php
     }
 

@@ -8,12 +8,15 @@
     else document.addEventListener('DOMContentLoaded',fn,{once:true});
   }
 
-  ready(function(){
+  // 6.15.2: also after an instant (soft) navigation between account pages, where
+  // the content is swapped without a new page load. Each control is bound once.
+  function init(){
     if(!document.body||!document.body.classList.contains('dip-account-modern'))return;
 
     // Avatar: fall back to the initials when the picture cannot load (also when it failed before this ran).
     var avatar=document.querySelector('[data-dipma-avatar]');
-    if(avatar){
+    if(avatar&&!avatar.hasAttribute('data-dipma-bound')){
+      avatar.setAttribute('data-dipma-bound','1');
       var fail=function(){avatar.setAttribute('data-failed','1');};
       if(avatar.complete&&avatar.naturalWidth===0)fail();
       else avatar.addEventListener('error',fail,{once:true});
@@ -23,7 +26,8 @@
     // so the server renders the masked state directly on the next visit.
     var balance=document.querySelector('[data-dipma-balance]');
     var toggle=document.querySelector('[data-dipma-balance-toggle]');
-    if(balance&&toggle){
+    if(balance&&toggle&&!toggle.hasAttribute('data-dipma-bound')){
+      toggle.setAttribute('data-dipma-bound','1');
       var amount=balance.querySelector('[data-dipma-balance-amount]');
       var mask=balance.querySelector('[data-dipma-balance-mask]');
       var render=function(hidden){
@@ -46,7 +50,8 @@
 
     // Orders: filter the orders shown on this page.
     var search=document.getElementById('dipma-order-search');
-    if(search){
+    if(search&&!search.hasAttribute('data-dipma-bound')){
+      search.setAttribute('data-dipma-bound','1');
       var toolbar=search.closest('.dipma-orders-toolbar');
       var clear=toolbar?toolbar.querySelector('[data-dipma-search-clear]'):null;
       var empty=toolbar?toolbar.querySelector('[data-dipma-search-empty]'):null;
@@ -77,5 +82,7 @@
       if(clear)clear.addEventListener('click',function(){search.value='';filter();search.focus();});
       if(search.value)filter();
     }
-  });
+  }
+  ready(init);
+  document.addEventListener('delicat:navigated',function(){ready(init);});
 })();
