@@ -157,7 +157,7 @@ final class DIP_My_Account_Modern {
         wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, false);
         wp_enqueue_style('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.css', [], DIP_VERSION);
         wp_enqueue_style('dip-account-app', DIP_URL . 'assets/account-app.css', ['dip-my-account-modern'], DIP_VERSION);
-        wp_enqueue_script('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
         if (function_exists('wp_script_add_data')) wp_script_add_data('dip-my-account-modern', 'strategy', 'defer');
     }
 
@@ -378,7 +378,8 @@ final class DIP_My_Account_Modern {
             // commande »; otherwise it names the order.
             $order_id = absint(get_query_var('view-order'));
             $order = $order_id && function_exists('wc_get_order') ? wc_get_order($order_id) : false;
-            $own = $order && (int) $order->get_customer_id() === (int) $user->ID;
+            // 6.15.3: a refund id in the URL is not an order (no customer): never call get_customer_id() on it.
+            $own = $order instanceof WC_Order && (int) $order->get_customer_id() === (int) $user->ID;
             $builder_page = class_exists('Delicat_Builder_V9_Order_View', false) && is_callable(['Delicat_Builder_V9_Order_View', 'enabled']) && Delicat_Builder_V9_Order_View::enabled();
             /* translators: %s: order number */
             $heading = ($own && !$builder_page) ? sprintf(__('Commande #%s', 'delicat-google-login'), $order->get_order_number()) : __('Détails de la commande', 'delicat-google-login');
@@ -390,7 +391,7 @@ final class DIP_My_Account_Modern {
           <h1><?php echo esc_html($heading); ?></h1>
         </header>
         <?php if ($endpoint === '') : ?>
-          <a class="dipapp-profile" href="<?php echo esc_url(self::account_url('edit-account')); ?>" aria-label="<?php echo esc_attr__('Ouvrir mon profil', 'delicat-google-login'); ?>">
+          <a class="dipapp-profile" href="<?php echo esc_url(self::account_url('edit-account')); ?>">
             <span class="dipapp-avatar" aria-hidden="true"><?php $avatar = self::avatar_src($user->ID, 96); if ($avatar !== '') : ?><img src="<?php echo esc_url($avatar); ?>" alt="" width="48" height="48" decoding="async"><?php else: ?><i class="dipma-icon dipma-icon-user"></i><?php endif; ?></span>
             <span class="dipapp-profile-text"><strong><?php echo esc_html(self::safe_name($user)); ?></strong><small><?php esc_html_e('Gérer mes informations personnelles', 'delicat-google-login'); ?></small></span>
             <i class="dipma-icon dipma-icon-chevron dipapp-chevron" aria-hidden="true"></i>

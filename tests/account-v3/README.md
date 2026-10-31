@@ -13,3 +13,4 @@ orders) and `zzz-vo-builder.php` (loads the Builder order modules as the Runtime
   account home (wallet, rewards, recent orders, favourites) and Recharge asset loading.
 - `share-test.cjs`, `share-dark.cjs`, `add-22420.php`: « Partager le reçu » on the order page (sheet, PNG, link, print without codes, receipt per order after in-place switching).
 - `product-taps.cjs` (tap-to-screen timings, 4G/3G, guest/member), `prerender-guard.cjs`, `prerender-test.cjs`, `spec-rules.php`: Builder 9.5.3 product warm-up, immediate product screen and wallet/account prerender rules.
+- `mcp-audit.mjs`, `mcp-lh.mjs`, `mcp-insight.mjs`: drive the project's chrome-devtools MCP server (.mcp.json) — Lighthouse (mobile) and performance traces on Slow 4G with CPU x4, render-blocking / LCP / dependency-tree insights.

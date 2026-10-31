@@ -170,7 +170,7 @@ final class DIP_Session_Router {
     }
     public static function assets() {
         if (is_admin()) return;
-        wp_enqueue_script('dip-session-router', DIP_URL . 'assets/session-router.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-session-router', DIP_URL . 'assets/session-router.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
         wp_localize_script('dip-session-router', 'DIPSession', ['ajaxUrl'=>wp_make_link_relative(admin_url('admin-ajax.php')), 'home'=>home_url('/'), 'logoutEndpoint'=>(string)get_option('woocommerce_logout_endpoint', 'customer-logout')]);
     }
 }

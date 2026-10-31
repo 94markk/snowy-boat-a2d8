@@ -1220,7 +1220,7 @@ final class DIP_Passkeys {
         $s=self::settings(); if(($s['passkeys_available']??'yes')!=='yes') return false;
         if(defined('REST_REQUEST') && REST_REQUEST) return false;
         wp_enqueue_style('dip-passkeys',DIP_URL.'assets/passkeys.css',[],DIP_VERSION);
-        wp_enqueue_script('dip-passkeys',DIP_URL.'assets/passkeys.js',[],DIP_VERSION,true);
+        wp_enqueue_script('dip-passkeys',DIP_URL.'assets/passkeys.js',[],DIP_VERSION,['in_footer' => true, 'strategy' => 'defer']);
         if(!self::$runtime_enqueued){
             self::$runtime_enqueued=true;
             wp_localize_script('dip-passkeys','DIPPasskeys',self::frontend_config());

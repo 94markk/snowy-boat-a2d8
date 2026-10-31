@@ -120,7 +120,8 @@ final class Delicat_Builder_V9_Order_View {
 			return;
 		}
 		$order = wc_get_order( absint( get_query_var( 'view-order' ) ) );
-		if ( ! $order || (int) $order->get_customer_id() !== get_current_user_id() || ! self::needs_full_page( $order ) ) {
+		/* 9.5.4: a refund id in the URL is not an order (WC_Order_Refund has no customer). */
+		if ( ! ( $order instanceof WC_Order ) || (int) $order->get_customer_id() !== get_current_user_id() || ! self::needs_full_page( $order ) ) {
 			return;
 		}
 		nocache_headers();

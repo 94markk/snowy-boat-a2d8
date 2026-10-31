@@ -1,14 +1,14 @@
 /* Delicat Identity 6.12.1 — private mobile-app account navigation.
    Only affects authenticated WooCommerce My Account pages; no theme/header/PWA changes. */
 body.dip-account-app {
-  --dipapp-blue:#1683ff;
+  --dipapp-blue:#0b6bdc; /* 6.15.3: 5:1 with white text (was #1683ff, 3.7:1) */
   --dipapp-bg:#f7f8fa;
   --dipapp-surface:#fff;
   --dipapp-hover:#f4f6fa;
   --dipapp-text:#20232b;
-  --dipapp-muted:#747987;
+  --dipapp-muted:#646a78; /* 6.15.3: 4.8:1 or more on every light surface (was #747987) */
   --dipapp-border:#e8ebf1;
-  --dipapp-red:#cf3542;
+  --dipapp-red:#b02a37;
   background:var(--dipapp-bg);
 }
 body.dip-account-app .dipma-icon-user{--dipma-icon:var(--dipma-i-user)}
@@ -264,21 +264,21 @@ body.dip-account-app #dip-email-policy{font-size:12px;line-height:1.6;color:var(
    order status chips. Plain colours (no color-mix) for old WebViews.
    ------------------------------------------------------------------ */
 body.dip-account-app{
-  --dipapp-green:#0f8a4b;--dipapp-green-soft:#e7f6ee;
-  --dipapp-amber:#b45309;--dipapp-amber-soft:#fef3e2;
-  --dipapp-blue-soft:#e8f2ff;
+  --dipapp-green:#0b6e3c;--dipapp-green-soft:#e7f6ee;
+  --dipapp-amber:#9a4507;--dipapp-amber-soft:#fef3e2;
+  --dipapp-blue-soft:#e8f2ff;--dipapp-blue-ink:#0a5bbf;
   --dipapp-redsoft:#fdecee;
   --dipapp-grey-soft:#f0f1f4;
 }
 html[data-dip-account-theme="dark"] body.dip-account-app{
   --dipapp-green:#4ade80;--dipapp-green-soft:#173a26;
   --dipapp-amber:#fbbf24;--dipapp-amber-soft:#3a2d12;
-  --dipapp-blue-soft:#13304f;--dipapp-redsoft:#3d1d22;--dipapp-grey-soft:#38383c;
+  --dipapp-blue-soft:#13304f;--dipapp-blue-ink:#9ccbff;--dipapp-redsoft:#3d1d22;--dipapp-grey-soft:#38383c;
 }
 @media (prefers-color-scheme:dark){
   html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light){
     --dipapp-green:#4ade80;--dipapp-green-soft:#173a26;--dipapp-amber:#fbbf24;--dipapp-amber-soft:#3a2d12;
-    --dipapp-blue-soft:#13304f;--dipapp-redsoft:#3d1d22;--dipapp-grey-soft:#38383c;
+    --dipapp-blue-soft:#13304f;--dipapp-blue-ink:#9ccbff;--dipapp-redsoft:#3d1d22;--dipapp-grey-soft:#38383c;
   }
 }
 body.dip-account-app .dipapp-glyph,body.dip-account-app .dipapp-stat-glyph,body.dip-account-app .dipapp-stat-mini,
@@ -333,10 +333,10 @@ body.dip-account-app .dipapp-order-total .woocommerce-Price-amount{color:inherit
 /* Status chip: glyph + words, never colour alone */
 .dipapp-status{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:2px 9px 2px 6px;border-radius:999px;background:var(--dipapp-grey-soft,#f0f1f4);color:var(--dipapp-muted,#5f6472);font-size:12px;font-weight:650;line-height:1.2;white-space:nowrap}
 .dipapp-status-glyph{width:15px;height:15px;flex:0 0 auto}
-.dipapp-status[data-tone="success"]{background:var(--dipapp-green-soft,#e7f6ee);color:var(--dipapp-green,#0f8a4b)}
-.dipapp-status[data-tone="warning"]{background:var(--dipapp-amber-soft,#fef3e2);color:var(--dipapp-amber,#b45309)}
-.dipapp-status[data-tone="accent"]{background:var(--dipapp-blue-soft,#e8f2ff);color:var(--dipapp-blue,#1683ff)}
-.dipapp-status[data-tone="danger"]{background:var(--dipapp-redsoft,#fdecee);color:var(--dipapp-red,#cf3542)}
+.dipapp-status[data-tone="success"]{background:var(--dipapp-green-soft,#e7f6ee);color:var(--dipapp-green,#0b6e3c)}
+.dipapp-status[data-tone="warning"]{background:var(--dipapp-amber-soft,#fef3e2);color:var(--dipapp-amber,#9a4507)}
+.dipapp-status[data-tone="accent"]{background:var(--dipapp-blue-soft,#e8f2ff);color:var(--dipapp-blue-ink,#0a5bbf)}
+.dipapp-status[data-tone="danger"]{background:var(--dipapp-redsoft,#fdecee);color:var(--dipapp-red,#b02a37)}
 body.dip-account-app .woocommerce-orders-table__cell-order-status .dipapp-status{font-size:12px}
 
 /* Favourites rail */

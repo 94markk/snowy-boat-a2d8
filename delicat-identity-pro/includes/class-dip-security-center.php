@@ -34,7 +34,7 @@ final class DIP_Security_Center {
         }
         if (!$load) return;
         wp_enqueue_style('dip-customer-dashboard', DIP_URL . 'assets/customer-dashboard.css', [], DIP_VERSION);
-        wp_enqueue_script('dip-security-center-client', DIP_URL . 'assets/security-center.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-security-center-client', DIP_URL . 'assets/security-center.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
     }
 
     public static function record_native_login($user_login, $user) {
@@ -389,7 +389,7 @@ final class DIP_Security_Center {
         }
 
         wp_enqueue_style('dip-customer-dashboard', DIP_URL . 'assets/customer-dashboard.css', [], DIP_VERSION);
-        wp_enqueue_script('dip-security-center-client', DIP_URL . 'assets/security-center.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-security-center-client', DIP_URL . 'assets/security-center.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
 
         $atts = shortcode_atts(['title'=>'Centre de sécurité'], $atts, 'delicat_security_center');
         $user_id = get_current_user_id();

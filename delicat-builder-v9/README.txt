@@ -1,3 +1,16 @@
+9.5.4 — Audit sécurité et accessibilité (outils Claude Code : claude-security, Chrome DevTools, Lighthouse)
+(1) Détail de la commande : textes et pastilles lisibles par tous (contraste 4,5:1 minimum, mesuré à
+100/100 en accessibilité par Lighthouse sur mobile) : gris des dates et libellés, bleu des boutons et
+liens, vert « Livrée », orange et rouge des états. Mode sombre inchangé et vérifié.
+(2) Sécurité (revue indépendante du code 9.5.1 à 9.5.3, aucune faille trouvée) : renforcement — la
+feuille « Partager le reçu » et les données du reçu passent avant les messages de la boutique et le
+contenu des extensions, pour qu’aucun identifiant HTML dans ce contenu ne puisse les remplacer.
+(3) Robustesse : l’adresse d’une commande avec le numéro d’un remboursement ne provoque plus d’erreur
+fatale lors d’un changement de page sur place (contrôle WC_Order avant get_customer_id()).
+Mesures (site de test, mobile, 4G lente et processeur ×4) : aucun décalage de mise en page (CLS 0,00) sur
+l’accueil du compte, les commandes et le détail d’une commande.
+Installer cette archive en remplacement du builder existant, puis purger LiteSpeed / Cloudflare.
+
 9.5.3 — Tous les produits s’ouvrent instantanément, portefeuille et compte plus rapides
 (1) Accueil et boutique : chaque produit s’ouvre de la même façon, tout de suite. Au toucher, l’écran
 du produit apparaît aussitôt avec son image, son nom et son prix, puis la page se complète. Avant,

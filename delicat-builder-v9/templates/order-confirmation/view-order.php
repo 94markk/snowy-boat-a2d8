@@ -91,6 +91,42 @@ $dlc_vo_rows  = 'rows' === $dlc_vo_state['group'] || 'review' === $dlc_vo_state[
 		<symbol id="dlc-vo-i-sync" viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></symbol>
 	</svg>
 
+	<?php /* 9.5.4: the sheet and the receipt data come first in the section, before any shop note or plugin markup, so an id in that content can never stand in for them (getElementById returns the first match). */ ?>
+	<?php if ( $dlc_vo_view['share'] ) : ?>
+		<?php /* 9.5.2: « Partager le reçu ». Ids of the « Commande reçue » sheet: the same receipt module draws it. The toast moves inside the dialog while it is open (a modal dialog makes the rest of the page inert). */ ?>
+		<dialog class="dlc-vo-sheet" id="dlc-oc-sheet" aria-labelledby="dlc-vo-sheet-title">
+			<div class="dlc-vo-sheet__panel">
+				<div class="dlc-vo-sheet__head">
+					<h3 id="dlc-vo-sheet-title" class="dlc-vo-card__title"><?php esc_html_e( 'Partager le reçu', 'delicat-builder-v9' ); ?></h3>
+					<button type="button" class="dlc-vo-iconbtn" data-vo-close aria-label="<?php esc_attr_e( 'Fermer', 'delicat-builder-v9' ); ?>"><?php echo $dlc_vo_i( 'close' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?></button>
+				</div>
+				<div class="dlc-vo-sheet__preview">
+					<canvas class="dlc-vo-sheet__canvas" width="364" height="560" role="img" aria-label="<?php /* translators: %s: order number */ echo esc_attr( sprintf( __( 'Aperçu du reçu n° %s', 'delicat-builder-v9' ), $dlc_vo_view['number'] ) ); ?>"></canvas>
+				</div>
+				<div class="dlc-vo-sheet__actions">
+					<button type="button" class="dlc-vo-btn dlc-vo-btn--primary" data-oc-act="share"><?php echo $dlc_vo_i( 'share' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Partager', 'delicat-builder-v9' ); ?></button>
+					<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="png"><?php echo $dlc_vo_i( 'download' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Télécharger (PNG)', 'delicat-builder-v9' ); ?></button>
+					<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="print" aria-describedby="dlc-vo-print-hint"><?php echo $dlc_vo_i( 'print' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Imprimer / PDF', 'delicat-builder-v9' ); ?></button>
+					<?php if ( ! empty( $dlc_vo_view['share']['receipt']['link'] ) ) : ?>
+						<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="link"><?php echo $dlc_vo_i( 'link' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Copier le lien', 'delicat-builder-v9' ); ?></button>
+					<?php endif; ?>
+				</div>
+				<p class="dlc-vo-sheet__hint" id="dlc-vo-print-hint"><?php esc_html_e( 'Choisissez « Enregistrer en PDF » pour garder une copie.', 'delicat-builder-v9' ); ?></p>
+				<p class="dlc-vo-sheet__hint"><?php esc_html_e( 'Les codes ne figurent jamais sur ce reçu.', 'delicat-builder-v9' ); ?></p>
+			</div>
+		</dialog>
+		<script type="application/json" id="dlc-oc-receipt"><?php echo wp_json_encode( $dlc_vo_view['share']['receipt'], $dlc_vo_json ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON with < > & ' " hex-escaped, inside a non-executed script element. ?></script>
+		<template class="dlc-vo-print-tpl">
+			<?php
+			$receipt = $dlc_vo_view['share']['receipt']; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- variables of the included print template.
+			$qr_svg  = $dlc_vo_view['share']['qr_svg'];
+			if ( is_readable( DELICAT_BUILDER_V9_DIR . 'templates/order-confirmation/receipt-print.php' ) ) {
+				include DELICAT_BUILDER_V9_DIR . 'templates/order-confirmation/receipt-print.php';
+			}
+			?>
+		</template>
+	<?php endif; ?>
+
 	<div class="dlc-vo-card dlc-vo-hero" data-tone="<?php echo esc_attr( $dlc_vo_tone ); ?>">
 		<div class="dlc-vo-hero__text">
 			<h2 id="dlc-vo-title" class="dlc-vo-hero__title">
@@ -304,40 +340,6 @@ $dlc_vo_rows  = 'rows' === $dlc_vo_state['group'] || 'review' === $dlc_vo_state[
 		<?php endif; ?>
 	</div>
 	<p class="dlc-vo-sr" role="status" aria-live="polite" data-vo="announcer"></p>
-	<?php if ( $dlc_vo_view['share'] ) : ?>
-		<?php /* 9.5.2: « Partager le reçu ». Ids of the « Commande reçue » sheet: the same receipt module draws it. The toast moves inside the dialog while it is open (a modal dialog makes the rest of the page inert). */ ?>
-		<dialog class="dlc-vo-sheet" id="dlc-oc-sheet" aria-labelledby="dlc-vo-sheet-title">
-			<div class="dlc-vo-sheet__panel">
-				<div class="dlc-vo-sheet__head">
-					<h3 id="dlc-vo-sheet-title" class="dlc-vo-card__title"><?php esc_html_e( 'Partager le reçu', 'delicat-builder-v9' ); ?></h3>
-					<button type="button" class="dlc-vo-iconbtn" data-vo-close aria-label="<?php esc_attr_e( 'Fermer', 'delicat-builder-v9' ); ?>"><?php echo $dlc_vo_i( 'close' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?></button>
-				</div>
-				<div class="dlc-vo-sheet__preview">
-					<canvas class="dlc-vo-sheet__canvas" width="364" height="560" role="img" aria-label="<?php /* translators: %s: order number */ echo esc_attr( sprintf( __( 'Aperçu du reçu n° %s', 'delicat-builder-v9' ), $dlc_vo_view['number'] ) ); ?>"></canvas>
-				</div>
-				<div class="dlc-vo-sheet__actions">
-					<button type="button" class="dlc-vo-btn dlc-vo-btn--primary" data-oc-act="share"><?php echo $dlc_vo_i( 'share' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Partager', 'delicat-builder-v9' ); ?></button>
-					<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="png"><?php echo $dlc_vo_i( 'download' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Télécharger (PNG)', 'delicat-builder-v9' ); ?></button>
-					<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="print" aria-describedby="dlc-vo-print-hint"><?php echo $dlc_vo_i( 'print' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Imprimer / PDF', 'delicat-builder-v9' ); ?></button>
-					<?php if ( ! empty( $dlc_vo_view['share']['receipt']['link'] ) ) : ?>
-						<button type="button" class="dlc-vo-btn dlc-vo-btn--ghost" data-oc-act="link"><?php echo $dlc_vo_i( 'link' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped in the closure. ?><?php esc_html_e( 'Copier le lien', 'delicat-builder-v9' ); ?></button>
-					<?php endif; ?>
-				</div>
-				<p class="dlc-vo-sheet__hint" id="dlc-vo-print-hint"><?php esc_html_e( 'Choisissez « Enregistrer en PDF » pour garder une copie.', 'delicat-builder-v9' ); ?></p>
-				<p class="dlc-vo-sheet__hint"><?php esc_html_e( 'Les codes ne figurent jamais sur ce reçu.', 'delicat-builder-v9' ); ?></p>
-			</div>
-		</dialog>
-		<script type="application/json" id="dlc-oc-receipt"><?php echo wp_json_encode( $dlc_vo_view['share']['receipt'], $dlc_vo_json ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON with < > & ' " hex-escaped, inside a non-executed script element. ?></script>
-		<template class="dlc-vo-print-tpl">
-			<?php
-			$receipt = $dlc_vo_view['share']['receipt']; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- variables of the included print template.
-			$qr_svg  = $dlc_vo_view['share']['qr_svg'];
-			if ( is_readable( DELICAT_BUILDER_V9_DIR . 'templates/order-confirmation/receipt-print.php' ) ) {
-				include DELICAT_BUILDER_V9_DIR . 'templates/order-confirmation/receipt-print.php';
-			}
-			?>
-		</template>
-	<?php endif; ?>
 	<div class="dlc-vo-toast" role="status" aria-live="polite" aria-atomic="true"></div>
 	<script type="application/json" class="dlc-vo-config"><?php echo wp_json_encode( $dlc_vo_view['config'], $dlc_vo_json ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- JSON with < > & ' " hex-escaped, inside a non-executed script element. ?></script>
 </section>

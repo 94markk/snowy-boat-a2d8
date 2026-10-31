@@ -55,7 +55,7 @@ return array(
  'assets/css/notifications.css' => '559d23b615c2',
  'assets/css/order-confirmation-print.css' => '570087532ca7',
  'assets/css/order-confirmation.css' => '6830e85b4e90',
- 'assets/css/order-view.css' => '9e60b564439c',
+ 'assets/css/order-view.css' => '27fd5d2e9a09',
  'assets/css/polish-fixes.css' => '9bf0964951ad',
  'assets/css/product-switcher-admin.css' => '353287739802',
  'assets/css/product-switcher.css' => 'e6a8191d9cd1',

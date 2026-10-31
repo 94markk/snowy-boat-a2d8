@@ -2,10 +2,17 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.15.2
+Stable tag: 6.15.3
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.15.3 ==
+
+* Lisibilité (audit Lighthouse) : textes gris, liens bleus et pastilles d’état du compte assez contrastés pour tous (4,5:1 minimum ; accueil du compte et liste des commandes à 100/100 en accessibilité). Bleu des boutons légèrement plus soutenu (#0b6bdc), sombre inchangé.
+* Lien du profil : nom lu par les lecteurs d’écran identique au texte affiché.
+* Pages du compte plus rapides à s’afficher : scripts de session, centre de sécurité, Passkeys et compte chargés en « defer » (ils ne retardent plus le premier affichage).
+* Robustesse : une adresse /my-account/view-order/ avec le numéro d’un remboursement n’entraîne plus d’erreur fatale (contrôle WC_Order).
 
 == Version 6.15.2 ==
 

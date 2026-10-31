@@ -11,19 +11,19 @@
   --vo-bg: var(--dipapp-bg, #f7f8fa);
   --vo-card: var(--dipapp-surface, #fff);
   --vo-text: var(--dipapp-text, #1d2430);
-  --vo-muted: var(--dipapp-muted, #6b7280);
+  --vo-muted: #646a78; /* 9.5.4: 4.8:1 or more on every light surface (Lighthouse) */
   --vo-border: var(--dipapp-border, #e8ebf1);
   --vo-hover: var(--dipapp-hover, #f4f6fa);
-  --vo-accent: var(--dipapp-blue, #1683ff);
+  --vo-accent: #0b6bdc; /* 5:1 with white text */
   --vo-accent-soft: #e8f2ff;
   --vo-accent-ink: #0b5cc2;
-  --vo-ok: #0f8a4b;
+  --vo-ok: #0b6e3c;
   --vo-ok-soft: #e7f6ee;
-  --vo-warn: #b45309;
+  --vo-warn: #9a4507;
   --vo-warn-soft: #fef3e2;
-  --vo-bad: #cf3542;
+  --vo-bad: #b02a37;
   --vo-bad-soft: #fdecee;
-  --vo-grey: #667085;
+  --vo-grey: #565c6a;
   --vo-grey-soft: #f0f1f4;
   --vo-hero-a: #eaf3ff;
   --vo-hero-b: #f6faff;
@@ -91,6 +91,8 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
 }
 @media (prefers-color-scheme: dark) {
   html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light) .dlc-vo {
+    --vo-muted: var(--dipapp-muted, #a7abb5);
+    --vo-accent: var(--dipapp-blue, #3b9bff);
     --vo-accent-soft: #13304f;
     --vo-accent-ink: #9ccbff;
     --vo-ok: #4ade80;
