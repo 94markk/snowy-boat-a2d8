@@ -1,3 +1,26 @@
+9.5.0 — Comme une application : pages instantanées, application installée et nouveau pied de page
+(1) Changer de page est instantané pour les clients connectés : les pages déjà préparées (au toucher
+d’un lien, au survol, les onglets du bas) restent prêtes en mémoire 90 s au lieu d’être téléchargées
+une seconde fois. Avant, un client connecté ne profitait jamais de la préparation.
+(2) Panier, Compte et Wallet répondent tout de suite au toucher : l’onglet s’allume et l’écran passe
+au squelette de la page pendant son chargement, puis la page arrive en fondu. Le chargement de ces
+pages commence dès que le doigt touche le lien (Chrome). Retour arrière : la page précédente revient
+intacte.
+(3) Squelette de chargement affiché plus tôt (0,14 s au lieu de 0,3 s) quand une page n’est pas prête.
+(4) Application installée : toucher l’icône alors que l’app est déjà ouverte la remet au premier plan
+là où le client était, comme une application native, au lieu de la recharger.
+(5) Pied de page reconstruit : plus court et plus clair sur téléphone (rubriques repliables, boutons
+Support et WhatsApp côte à côte, trois garanties sur une ligne, moyens de paiement, documents
+légaux), colonnes ouvertes sur ordinateur, mode sombre, contrastes et zones tactiles de 42 px et plus.
+Technique : moteur (cache mémoire des documents « private » avec durée propre, jamais « no-store »,
+vidé à la connexion/déconnexion, au panier, au portefeuille, à la devise et sur l’événement de
+session d’Identity), retour immédiat des pages complètes par l’API Navigation (navigate,
+navigateerror, pageshow), règles de préchargement « moderate » pour panier/compte/wallet/paiement
+quand le moteur est actif (sans paramètres d’URL, déconnexion, paiement de commande),
+launch_handler focus-existing dans le manifeste, pied de page en dbv9-ft__* (anciennes surcharges
+!important retirées de surface-compatibility.css et dark-glass.css).
+Installer cette archive en remplacement du builder existant, puis purger LiteSpeed / Cloudflare.
+
 9.4.6 — Mentions légales
 Informations de l’éditeur et hébergement corrigés selon les coordonnées fournies.
 Mise à jour ciblée des deux sections existantes au premier chargement.

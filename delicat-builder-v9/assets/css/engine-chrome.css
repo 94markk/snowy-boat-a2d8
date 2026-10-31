@@ -263,6 +263,80 @@ html.delicat-placeholder {
   border-radius: 10px;
   width: 100%;
 }
+/* 9.5.0: a tab that opens a full page (Panier, Compte, Wallet) answers the tap at
+   once: the screen below the header turns into the page's skeleton while the real
+   page loads, and the new page cross-fades in over it. Removed on bfcache return. */
+.dph-leave {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 399;
+  overflow: hidden;
+  background: var(--dlc-bg, #f6f7fb);
+  color: var(--dn-text, #171923);
+  animation: 0.12s ease-out both dph-leave-in;
+  pointer-events: auto;
+}
+.dph-leave .dph__body {
+  padding-top: 18px;
+}
+.dph__row,
+.dph__profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--dlc-bg-elevated, #fff);
+  border: 1px solid #1418280f;
+}
+.dph__row .dph__thumb {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  aspect-ratio: auto;
+  border-radius: 14px;
+}
+.dph__lines {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.dph__profile {
+  padding: 16px;
+  margin-bottom: 4px;
+}
+.dph__avatar {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #787e9629;
+}
+html[data-delicat-theme="dark"] .dph__row,
+html[data-delicat-theme="dark"] .dph__profile,
+html.dlc-theme-dark .dph__row,
+html.dlc-theme-dark .dph__profile {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+@keyframes dph-leave-in {
+  0% {
+    opacity: 0;
+  }
+}
+html.delicat-low-power .dph-leave,
+html.delicat-reduce-motion .dph-leave {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dph-leave {
+    animation: none;
+  }
+}
 @media (min-width: 640px) {
   .dph__grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));

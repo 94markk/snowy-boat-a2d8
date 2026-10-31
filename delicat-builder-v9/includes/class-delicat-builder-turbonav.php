@@ -301,10 +301,84 @@ final class Delicat_Builder_V9_TurboNav {
 		return $config;
 	}
 
+	/**
+	 * 9.5.0: the pages the engine never swaps (cart, account, wallet, checkout)
+	 * load as full documents, so the engine's own warm-up cannot help them. A
+	 * prefetch rule at `moderate` eagerness asks the browser for that document
+	 * when a finger lands on the link (or the pointer rests on it), so the
+	 * request is already under way when the tap completes. Prefetch only: it
+	 * runs no script of the target page (no cart fragments, no checkout draft
+	 * order, no analytics hit) and a URL with a query string — logout, nonces,
+	 * add-to-cart — is never matched.
+	 *
+	 * @return array<int,string> URL patterns.
+	 */
+	private static function full_document_targets() {
+		$paths = array();
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			foreach ( array( 'cart', 'myaccount', 'checkout' ) as $page ) {
+				$path = wp_parse_url( (string) wc_get_page_permalink( $page ), PHP_URL_PATH );
+				if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
+					$paths[] = trailingslashit( $path );
+				}
+			}
+		}
+		$wallet = '/my-wallet/';
+		if ( class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) && is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'wallet_url' ) ) ) {
+			$path = wp_parse_url( (string) Delicat_Builder_V9_Purchase_Native::wallet_url(), PHP_URL_PATH );
+			if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
+				$wallet = trailingslashit( $path );
+			}
+		}
+		$paths[] = $wallet;
+		$paths   = array_values( array_unique( array_filter( $paths ) ) );
+		return array_map(
+			static function ( $path ) {
+				return $path . '*';
+			},
+			$paths
+		);
+	}
+
+	private static function print_full_document_prefetch() {
+		if ( ! self::active() || empty( self::settings()['prerender'] ) || self::save_data_requested() ) {
+			return;
+		}
+		$targets = self::full_document_targets();
+		if ( empty( $targets ) ) {
+			return;
+		}
+		$rules = array(
+			'prefetch' => array(
+				array(
+					'source'    => 'document',
+					'where'     => array(
+						'and' => array(
+							array( 'href_matches' => $targets ),
+							/* Attribute selectors, not URL patterns: a query string (logout
+							 * nonces, add-to-cart, payment keys) excludes the link whatever
+							 * the pattern syntax of the browser. */
+							array( 'not' => array( 'selector_matches' => 'a[href*="?"], a[href*="logout"], a[href*="lost-password"], a[href*="order-pay"], a[href*="order-received"]' ) ),
+							array( 'not' => array( 'selector_matches' => 'a[data-no-turbo], .no-prerender a, a.no-prerender, a[rel~="nofollow"], a[download], a[target="_blank"]' ) ),
+						),
+					),
+					'eagerness' => 'moderate',
+				),
+			),
+		);
+		$json = wp_json_encode( $rules, JSON_UNESCAPED_SLASHES );
+		if ( ! is_string( $json ) || '' === $json ) {
+			return;
+		}
+		echo '<script type="speculationrules" id="dbv9-speculation-full" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_json_encode output.
+	}
+
 	public static function print_speculation_rules() {
 		/* 9.3: the engine fetches and swaps documents itself; a prerender or
-		 * prefetch rule would download the same page a second time. */
+		 * prefetch rule would download the same page a second time.
+		 * 9.5.0: except the full documents it never swaps (see above). */
 		if ( class_exists( 'Delicat_Builder_V9_Engine', false ) && Delicat_Builder_V9_Engine::active() ) {
+			self::print_full_document_prefetch();
 			return;
 		}
 		if (

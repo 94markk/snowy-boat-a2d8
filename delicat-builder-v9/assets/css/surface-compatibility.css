@@ -13,35 +13,8 @@ html body .delicat-builder-hero-search__result{min-width:0}
 html body .delicat-builder-hero-search__result-copy{min-width:0}
 html body .delicat-builder-hero-search__result-copy strong,
 html body .delicat-builder-hero-search__result-copy small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-/* Footer navigation is UI, not editorial H2 typography. Pro's global important
-   heading scale previously won on the live site, including small phones. */
-html body #dbv9-universal-footer .dbv9-footer-column h2 {
- font-size:12px!important;line-height:1.35!important;font-weight:800!important;
- letter-spacing:.06em!important;margin:0 0 12px!important;
-}
-html body #dbv9-universal-footer .dbv9-footer-brand>p{font-size:13px!important;line-height:1.65!important}
-html body #dbv9-universal-footer .dbv9-footer-column a{font-size:13px!important;line-height:1.5!important}
-html body #dbv9-universal-footer .dbv9-footer-trust strong{font-size:12px!important;line-height:1.4!important}
-html body #dbv9-universal-footer .dbv9-footer-trust small{font-size:11px!important;line-height:1.4!important}
-html body #dbv9-universal-footer .dbv9-footer-payments li,
-html body #dbv9-universal-footer .dbv9-footer-bottom a,
-html body #dbv9-universal-footer .dbv9-footer-bottom p{font-size:11px!important;line-height:1.5!important}
-html body #dbv9-universal-footer{content-visibility:visible!important;contain:none!important;contain-intrinsic-size:none!important;margin-top:32px;padding-top:32px;padding-bottom:32px}
-html body #dbv9-universal-footer .dbv9-footer-navigation{padding-block:24px;gap:24px 20px}
-html body #dbv9-universal-footer .dbv9-footer-intro{padding-bottom:24px}
-html body #dbv9-universal-footer .dbv9-footer-glow{display:none}
-html body #dbv9-universal-footer .dbv9-footer-help{box-shadow:none}
-html body #dbv9-universal-footer .dbv9-footer-bottom>*{min-width:0;max-width:100%}
-html body #dbv9-universal-footer .dbv9-footer-bottom a{overflow-wrap:anywhere}
 body.dbv9-universal-footer-active:has(#dbv9-universal-footer) .delicat-trust__domain,
 body.dbv9-universal-footer-active:has(#dbv9-universal-footer) .delicat-trust__footer{display:none!important}
-@media(max-width:820px){
- html body #dbv9-universal-footer .dbv9-footer-column h2{font-size:11px!important}
- html body #dbv9-universal-footer .dbv9-footer-trust li{min-height:50px;padding:8px 10px}
- html body #dbv9-universal-footer .dbv9-footer-trust{gap:7px;padding-block:16px}
- html body.delicat-bottom-nav-active #dbv9-universal-footer,
- html body.delicat-shell-mobile-nav-active #dbv9-universal-footer{padding-bottom:calc(104px + env(safe-area-inset-bottom,0px))}
-}
 /* The installed app gets an opaque chrome surface. No scrolling content can
    bleed through the status area or the sticky header's glass background. */
 html.delicat-standalone body .dsb8-header{

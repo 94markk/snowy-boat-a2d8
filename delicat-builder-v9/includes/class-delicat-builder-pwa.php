@@ -250,6 +250,10 @@ final class Delicat_Builder_V9_PWA {
 			'scope'            => home_url( '/' ),
 			'display'          => 'standalone',
 			'display_override' => array( 'standalone', 'minimal-ui' ),
+			/* 9.5.0: tapping the home-screen icon while the app is already open brings
+			 * that window back where the customer left it, as a native app resumes,
+			 * instead of opening a second window or reloading the home page. */
+			'launch_handler'   => array( 'client_mode' => array( 'focus-existing', 'auto' ) ),
 			'background_color' => sanitize_hex_color( $s['background'] ) ?: '#ffffff',
 			'theme_color'      => sanitize_hex_color( $s['theme_color'] ) ?: '#11104a',
 			'orientation'      => 'portrait-primary',

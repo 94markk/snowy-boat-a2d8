@@ -377,15 +377,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-currency-sticky {
 }
 
 /* 11 ----------------------------------------------------------- footer */
-html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-footer {
-  background: linear-gradient(180deg, rgba(10, 12, 32, 0), rgba(10, 12, 32, 0.85) 18%, #080a1c) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-footer-help {
-  background: var(--g-card) !important;
-  border-color: var(--g-edge) !important;
-  box-shadow: var(--g-depth) !important;
-}
+/* 9.5.0: the rebuilt footer carries its own dark tokens (native-footer.css). */
 
 /* 12 --------------------------------------------------- low-power phones */
 /* weak phones keep the look but drop the large blurred shadows */

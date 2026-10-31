@@ -329,22 +329,33 @@ final class Delicat_Builder_V9_Footer {
 
 	private static function icon( string $name ): string {
 		$icons = array(
-			'bolt'   => '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.2h6.2L10 22l9-12h-6.3L13 2Z"/></svg>',
-			'shield' => '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.2c0 4.5 2.8 8.2 7 9.8 4.2-1.6 7-5.3 7-9.8V6l-7-3Z"/><path d="m8.8 12 2.1 2.1 4.5-4.7"/></svg>',
-			'chat'   => '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.6a7.5 7.5 0 0 1-8 7.4 8.7 8.7 0 0 1-3.1-.7L4 20l1.7-4.3A7.4 7.4 0 1 1 20 11.6Z"/><path d="M8.5 11.8h.01M12 11.8h.01M15.5 11.8h.01"/></svg>',
-			'arrow'  => '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M14 7l5 5-5 5"/></svg>',
+			'bolt'     => '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 2 4.5 13.2h6.2L10 22l9-12h-6.3L13 2Z"/></svg>',
+			'shield'   => '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 5 6v5.2c0 4.5 2.8 8.2 7 9.8 4.2-1.6 7-5.3 7-9.8V6l-7-3Z"/><path d="m8.8 12 2.1 2.1 4.5-4.7"/></svg>',
+			'chat'     => '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.6a7.5 7.5 0 0 1-8 7.4 8.7 8.7 0 0 1-3.1-.7L4 20l1.7-4.3A7.4 7.4 0 1 1 20 11.6Z"/><path d="M8.5 11.8h.01M12 11.8h.01M15.5 11.8h.01"/></svg>',
+			'whatsapp' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.1-1.3A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3a8.2 8.2 0 1 1 7 3.8Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.7.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>',
+			'headset'  => '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 14a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2v-2ZM20 14a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2v-2Z"/><path d="M17 18c0 1.7-2 3-5 3"/></svg>',
+			'chevron'  => '<svg class="dbv9-ft__chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>',
+			'lock'     => '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
 		);
 		return $icons[ $name ] ?? '';
 	}
 
-	private static function render_column( array $column, array &$seen_urls ): string {
+	/**
+	 * 9.5.0: one link group. A <details> element: a tap-to-open accordion on
+	 * phones (the footer shrinks to a few rows, the way an app's settings list
+	 * reads) and an always-open column on wider screens, where the footer's
+	 * tiny inline script keeps it open. Without JavaScript every group still
+	 * opens with a tap; nothing depends on it.
+	 */
+	private static function render_column( array $column, array &$seen_urls, int $index ): string {
 		$title = sanitize_text_field( (string) ( $column['title'] ?? '' ) );
 		$links = is_array( $column['links'] ?? null ) ? $column['links'] : array();
 		if ( '' === $title || empty( $links ) ) {
 			return '';
 		}
 
-		$items = '';
+		$home_host = strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) );
+		$items     = '';
 		foreach ( $links as $link ) {
 			if ( ! is_array( $link ) ) {
 				continue;
@@ -356,16 +367,55 @@ final class Delicat_Builder_V9_Footer {
 				continue;
 			}
 			$seen_urls[ $key ] = true;
-			$home_host = strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_HOST ) );
 			$link_host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
-			$prefetch  = ( '' === $link_host || $home_host === $link_host ) ? ' data-delicat-prefetch' : '';
-			$items .= '<li><a href="' . esc_url( $url ) . '"' . $prefetch . '>' . esc_html( $label ) . '</a></li>';
+			$internal  = '' === $link_host || $home_host === $link_host;
+			$items    .= '<li><a href="' . esc_url( $url ) . '"' . ( $internal ? ' data-delicat-prefetch' : ' rel="noopener noreferrer" target="_blank"' ) . '>' . esc_html( $label ) . '</a></li>';
 		}
 		if ( '' === $items ) {
 			return '';
 		}
 
-		return '<section class="dbv9-footer-column"><h2>' . esc_html( $title ) . '</h2><ul role="list">' . $items . '</ul></section>';
+		$id = 'dbv9-ft-group-' . $index;
+		return '<details class="dbv9-ft__group" data-dbv9-ft-group>'
+			. '<summary class="dbv9-ft__summary" aria-controls="' . esc_attr( $id ) . '"><span>' . esc_html( $title ) . '</span>' . self::icon( 'chevron' ) . '</summary>'
+			. '<ul class="dbv9-ft__links" id="' . esc_attr( $id ) . '" role="list">' . $items . '</ul>'
+			. '</details>';
+	}
+
+	/** The legal documents (filled by the Legal module), filtered for the app view and de-duplicated. */
+	private static function legal_links( string $terms, string $privacy ): array {
+		/* RC81.2: the footer listed two documents. The store now publishes
+		 * nine, and a refund policy nobody can find protects nobody.
+		 * The Legal module fills this through the filter; the two original
+		 * links remain the fallback if that module is disabled. */
+		$legal_links = apply_filters(
+			'delicat_builder_v9_footer_legal_links',
+			array(
+				'terms'   => array( 'label' => __( 'Conditions d’utilisation', 'delicat-builder-v9' ), 'url' => $terms ),
+				'privacy' => array( 'label' => __( 'Confidentialité', 'delicat-builder-v9' ), 'url' => $privacy ),
+			)
+		);
+		/* 9.3.7: seen from the app, « Conditions Exchange et Wallet » is left out. */
+		if ( class_exists( 'Delicat_Builder_V9_App_View', false ) ) {
+			$legal_links = Delicat_Builder_V9_App_View::filter_items( $legal_links, 'url', array( 'label' ), true );
+		}
+		$out  = array();
+		$seen = array();
+		foreach ( (array) $legal_links as $legal_link ) {
+			if ( ! is_array( $legal_link ) || empty( $legal_link['url'] ) || empty( $legal_link['label'] ) ) {
+				continue;
+			}
+			$legal_url = (string) $legal_link['url'];
+			$legal_key = untrailingslashit( strtolower( (string) wp_parse_url( $legal_url, PHP_URL_PATH ) ) );
+			if ( '' !== $legal_key && isset( $seen[ $legal_key ] ) ) {
+				continue;
+			}
+			if ( '' !== $legal_key ) {
+				$seen[ $legal_key ] = true;
+			}
+			$out[] = array( 'label' => (string) $legal_link['label'], 'url' => $legal_url );
+		}
+		return $out;
 	}
 
 	public static function render_html(): string {
@@ -382,99 +432,77 @@ final class Delicat_Builder_V9_Footer {
 			$whatsapp    = (string) $settings['whatsapp'];
 			$seen_urls   = array();
 			$column_html = '';
+			$index       = 0;
 			foreach ( self::columns( $settings ) as $column ) {
 				if ( is_array( $column ) ) {
-					$column_html .= self::render_column( $column, $seen_urls );
+					$column_html .= self::render_column( $column, $seen_urls, ++$index );
 				}
 			}
+			$legal      = self::legal_links( $terms, $privacy );
+			$wallet_lbl = ( class_exists( 'Delicat_Builder_V9_App_View', false ) && Delicat_Builder_V9_App_View::hides_gifts() ) ? __( 'Crédit boutique Délicat', 'delicat-builder-v9' ) : 'Delicat Wallet'; /* 9.3.7: seen from the Google Play build, the app's own name for it */
+			$name       = get_bloginfo( 'name' );
 
 			ob_start();
 			?>
-			<footer id="dbv9-universal-footer" class="dbv9-footer" aria-labelledby="dbv9-footer-title" data-delicat-universal-footer data-delicat-footer-version="<?php echo esc_attr( DELICAT_BUILDER_V9_VERSION ); ?>">
-				<div class="dbv9-footer-glow" aria-hidden="true"></div>
-				<div class="dbv9-footer-inner">
-					<div class="dbv9-footer-intro">
-						<section class="dbv9-footer-brand">
-							<h2 id="dbv9-footer-title" class="screen-reader-text"><?php echo esc_html( sprintf( __( 'Pied de page de %s', 'delicat-builder-v9' ), get_bloginfo( 'name' ) ) ); ?></h2>
+			<footer id="dbv9-universal-footer" class="dbv9-footer dbv9-ft" aria-labelledby="dbv9-footer-title" data-delicat-universal-footer data-delicat-footer-version="<?php echo esc_attr( DELICAT_BUILDER_V9_VERSION ); ?>">
+				<div class="dbv9-ft__inner">
+					<h2 id="dbv9-footer-title" class="screen-reader-text"><?php echo esc_html( sprintf( __( 'Pied de page de %s', 'delicat-builder-v9' ), $name ) ); ?></h2>
+
+					<div class="dbv9-ft__top">
+						<div class="dbv9-ft__brand">
 							<?php echo self::logo_html(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- generated and escaped above. ?>
-							<p><?php echo esc_html( (string) $settings['tagline'] ); ?></p>
-						</section>
-						<aside class="dbv9-footer-help" aria-label="<?php esc_attr_e( 'Assistance Delicat', 'delicat-builder-v9' ); ?>">
-							<span><?php esc_html_e( 'Besoin d’aide ?', 'delicat-builder-v9' ); ?></span>
-							<strong><?php esc_html_e( 'Notre équipe vous accompagne.', 'delicat-builder-v9' ); ?></strong>
-							<a href="<?php echo esc_url( $support ); ?>" data-delicat-prefetch><?php esc_html_e( 'Contacter le support', 'delicat-builder-v9' ); ?> <?php echo self::icon( 'arrow' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></a>
-						</aside>
+							<p class="dbv9-ft__tagline"><?php echo esc_html( (string) $settings['tagline'] ); ?></p>
+						</div>
+						<div class="dbv9-ft__help" role="group" aria-label="<?php esc_attr_e( 'Assistance Delicat', 'delicat-builder-v9' ); ?>">
+							<p class="dbv9-ft__help-copy"><strong><?php esc_html_e( 'Besoin d’aide ?', 'delicat-builder-v9' ); ?></strong> <span><?php esc_html_e( 'Une vraie personne vous répond.', 'delicat-builder-v9' ); ?></span></p>
+							<div class="dbv9-ft__actions">
+								<a class="dbv9-ft__btn dbv9-ft__btn--primary" href="<?php echo esc_url( $support ); ?>" data-delicat-prefetch><?php echo self::icon( 'headset' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><span><?php esc_html_e( 'Support', 'delicat-builder-v9' ); ?></span></a>
+								<?php if ( '' !== $whatsapp ) : ?>
+									<a class="dbv9-ft__btn dbv9-ft__btn--whatsapp dbv9-footer-whatsapp" href="<?php echo esc_url( 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode( __( 'Bonjour Delicat Store, j’ai besoin d’aide.', 'delicat-builder-v9' ) ) ); /* 9.4.4: the chat opens with a first line */ ?>" rel="noopener noreferrer" target="_blank" aria-label="<?php esc_attr_e( 'Écrire au support sur WhatsApp', 'delicat-builder-v9' ); ?>"><?php echo self::icon( 'whatsapp' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><span>WhatsApp</span></a>
+								<?php endif; ?>
+							</div>
+						</div>
 					</div>
 
 					<?php if ( '' !== $column_html ) : ?>
-						<nav class="dbv9-footer-navigation" aria-label="<?php esc_attr_e( 'Navigation du pied de page', 'delicat-builder-v9' ); ?>">
+						<nav class="dbv9-ft__nav" aria-label="<?php esc_attr_e( 'Navigation du pied de page', 'delicat-builder-v9' ); ?>">
 							<?php echo $column_html; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- normalized and escaped above. ?>
 						</nav>
 					<?php endif; ?>
 
 					<?php if ( ! empty( $settings['show_trust'] ) ) : ?>
-						<ul class="dbv9-footer-trust" role="list" aria-label="<?php esc_attr_e( 'Engagements Delicat', 'delicat-builder-v9' ); ?>">
-							<li><?php echo self::icon( 'bolt' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><span><strong><?php esc_html_e( 'Livraison rapide', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'Traitement optimisé', 'delicat-builder-v9' ); ?></small></span></li>
-							<li><?php echo self::icon( 'shield' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><span><strong><?php esc_html_e( 'Paiement sécurisé', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'Transactions protégées', 'delicat-builder-v9' ); ?></small></span></li>
-							<li><?php echo self::icon( 'chat' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><span><strong><?php esc_html_e( 'Support humain', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'Assistance disponible', 'delicat-builder-v9' ); ?></small></span></li>
+						<ul class="dbv9-ft__trust" role="list" aria-label="<?php esc_attr_e( 'Engagements Delicat', 'delicat-builder-v9' ); ?>">
+							<li><span class="dbv9-ft__trust-icon"><?php echo self::icon( 'bolt' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></span><span><strong><?php esc_html_e( 'Livraison rapide', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'Traitement optimisé', 'delicat-builder-v9' ); ?></small></span></li>
+							<li><span class="dbv9-ft__trust-icon"><?php echo self::icon( 'shield' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></span><span><strong><?php esc_html_e( 'Paiement sécurisé', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'Transactions protégées', 'delicat-builder-v9' ); ?></small></span></li>
+							<li><span class="dbv9-ft__trust-icon"><?php echo self::icon( 'chat' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?></span><span><strong><?php esc_html_e( 'Support humain', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'Assistance disponible', 'delicat-builder-v9' ); ?></small></span></li>
 						</ul>
 					<?php endif; ?>
 
-					<div class="dbv9-footer-meta">
+					<div class="dbv9-ft__bottom">
 						<?php if ( ! empty( $settings['show_payments'] ) ) : ?>
-							<div class="dbv9-footer-payments" aria-label="<?php esc_attr_e( 'Moyens de paiement acceptés', 'delicat-builder-v9' ); ?>">
-								<span><?php esc_html_e( 'Paiements', 'delicat-builder-v9' ); ?></span>
-								<ul role="list"><li>MonCash</li><li>NatCash</li><li><?php echo ( class_exists( 'Delicat_Builder_V9_App_View', false ) && Delicat_Builder_V9_App_View::hides_gifts() ) ? esc_html__( 'Crédit boutique Délicat', 'delicat-builder-v9' ) : 'Delicat Wallet'; /* 9.3.7: seen from the Google Play build, the app's own name for it */ ?></li></ul>
+							<div class="dbv9-ft__payments" role="group" aria-label="<?php esc_attr_e( 'Moyens de paiement acceptés', 'delicat-builder-v9' ); ?>">
+								<span class="dbv9-ft__label"><?php echo self::icon( 'lock' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><?php esc_html_e( 'Paiements acceptés', 'delicat-builder-v9' ); ?></span>
+								<ul role="list">
+									<li class="dbv9-ft__pay dbv9-ft__pay--moncash">MonCash</li>
+									<li class="dbv9-ft__pay dbv9-ft__pay--natcash">NatCash</li>
+									<li class="dbv9-ft__pay dbv9-ft__pay--wallet"><?php echo esc_html( $wallet_lbl ); ?></li>
+								</ul>
 							</div>
 						<?php endif; ?>
-						<?php if ( '' !== $whatsapp ) : ?>
-							<a class="dbv9-footer-whatsapp" href="<?php echo esc_url( 'https://wa.me/' . $whatsapp . '?text=' . rawurlencode( __( 'Bonjour Delicat Store, j’ai besoin d’aide.', 'delicat-builder-v9' ) ) ); /* 9.4.4: the chat opens with a first line */ ?>" rel="noopener noreferrer" target="_blank" aria-label="<?php esc_attr_e( 'Écrire au support sur WhatsApp', 'delicat-builder-v9' ); ?>"><?php echo self::icon( 'chat' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- static SVG. ?><span>WhatsApp</span></a>
+						<?php if ( ! empty( $legal ) ) : ?>
+							<nav class="dbv9-ft__legal" aria-label="<?php esc_attr_e( 'Informations légales', 'delicat-builder-v9' ); ?>">
+								<ul role="list">
+									<?php foreach ( $legal as $legal_link ) : ?>
+										<li><a href="<?php echo esc_url( $legal_link['url'] ); ?>" data-delicat-prefetch><?php echo esc_html( $legal_link['label'] ); ?></a></li>
+									<?php endforeach; ?>
+								</ul>
+							</nav>
 						<?php endif; ?>
-					</div>
-
-					<div class="dbv9-footer-bottom">
-						<p><?php echo esc_html( sprintf( __( '© %1$s %2$s. Tous droits réservés.', 'delicat-builder-v9' ), wp_date( 'Y' ), get_bloginfo( 'name' ) ) ); ?></p>
-						<nav aria-label="<?php esc_attr_e( 'Informations légales', 'delicat-builder-v9' ); ?>">
-							<?php
-							/* RC81.2: the footer listed two documents. The store now publishes
-							 * nine, and a refund policy nobody can find protects nobody.
-							 * The Legal module fills this through the filter; the two original
-							 * links remain the fallback if that module is disabled. */
-							$legal_links = apply_filters(
-								'delicat_builder_v9_footer_legal_links',
-								array(
-									'terms'   => array( 'label' => __( 'Conditions d’utilisation', 'delicat-builder-v9' ), 'url' => $terms ),
-									'privacy' => array( 'label' => __( 'Confidentialité', 'delicat-builder-v9' ), 'url' => $privacy ),
-								)
-							);
-							/* 9.3.7: seen from the app, « Conditions Exchange et Wallet » is left out. */
-							if ( class_exists( 'Delicat_Builder_V9_App_View', false ) ) {
-								$legal_links = Delicat_Builder_V9_App_View::filter_items( $legal_links, 'url', array( 'label' ), true );
-							}
-							$seen_legal_urls = array();
-							foreach ( (array) $legal_links as $legal_link ) {
-								if ( empty( $legal_link['url'] ) || empty( $legal_link['label'] ) ) {
-									continue;
-								}
-								$legal_url = (string) $legal_link['url'];
-								$legal_key = untrailingslashit( strtolower( (string) wp_parse_url( $legal_url, PHP_URL_PATH ) ) );
-								if ( '' !== $legal_key && isset( $seen_legal_urls[ $legal_key ] ) ) {
-									continue;
-								}
-								if ( '' !== $legal_key ) {
-									$seen_legal_urls[ $legal_key ] = true;
-								}
-								printf(
-									'<a href="%1$s" data-delicat-prefetch>%2$s</a>',
-									esc_url( $legal_url ),
-									esc_html( (string) $legal_link['label'] )
-								);
-							}
-							?>
-						</nav>
+						<p class="dbv9-ft__copy"><?php echo esc_html( sprintf( __( '© %1$s %2$s. Tous droits réservés.', 'delicat-builder-v9' ), wp_date( 'Y' ), $name ) ); ?></p>
 					</div>
 				</div>
 			</footer>
+			<script id="dbv9-footer-groups" data-no-optimize="1" data-no-defer="1" data-cfasync="false">(function(){var f=document.getElementById('dbv9-universal-footer');if(!f||!window.matchMedia)return;var q=window.matchMedia('(min-width: 821px)'),g=f.querySelectorAll('[data-dbv9-ft-group]');function s(){for(var i=0;i<g.length;i++){g[i].open=q.matches;}}s();if(q.addEventListener){q.addEventListener('change',s);}else if(q.addListener){q.addListener(s);}f.addEventListener('click',function(e){var t=e.target&&e.target.closest?e.target.closest('.dbv9-ft__summary'):null;if(t&&q.matches){e.preventDefault();}});}());</script>
 			<?php
 			return (string) ob_get_clean();
 		} catch ( Throwable $error ) {

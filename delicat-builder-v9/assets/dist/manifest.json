@@ -1,13 +1,13 @@
 {
  "version": 2,
- "builtAt": "2026-10-24T21:18:02.226Z",
+ "builtAt": "2026-10-31T05:21:56.926Z",
  "js": {
   "engine": {
-   "file": "engine.feebd1764cdc.js",
+   "file": "engine.8f3c5cceb42a.js",
    "bytes": 85863,
-   "sha256": "feebd1764cdc8f5c096cbe870a4acc8bc24bafda6f858c964997442c64291d68",
+   "sha256": "8f3c5cceb42aa463ee086dfe14872784297b6662d509d24ec98887faabded71e",
    "imports": [
-    "chunks/chunk.25f985d2845e.js",
+    "chunks/chunk.368826ece38f.js",
     "chunks/chunk.99ad77e49fbc.js",
     "chunks/chunk.385b5371c4d9.js",
     "chunks/chunk.687452d4bbe4.js",
@@ -31,14 +31,14 @@
    "sha256": "59c3469ed67dbae7025d99e983558c37032270384c5f268df19c3edbfb95f6ca",
    "name": null
   },
-  "chunks/widgets.df88451ae0a0.js": {
+  "chunks/widgets.41dfe17a8dee.js": {
    "bytes": 11597,
-   "sha256": "df88451ae0a0d7c889da3eb0d45698d6460bd11e2df746bcf967a72bef26517d",
+   "sha256": "41dfe17a8deefecf28a75515f1687b7130351d39ab1b30440d6a8ff0c94044f2",
    "name": "widgets"
   },
-  "chunks/chunk.25f985d2845e.js": {
-   "bytes": 31438,
-   "sha256": "25f985d2845e8174af64b9045226a07a35a5b7c7dbd3083af933c0f5e7cab21e",
+  "chunks/chunk.368826ece38f.js": {
+   "bytes": 34560,
+   "sha256": "368826ece38fd204f34173488b3b4e8afc2906b1e1d924d791aa460b77e70f2f",
    "name": null
   },
   "chunks/reviews.97f7f54eab8c.js": {
@@ -84,9 +84,9 @@
  },
  "css": {
   "chrome": {
-   "file": "chrome.96f3cdecc73d.css",
-   "bytes": 163898,
-   "sha256": "96f3cdecc73d112a1fdf0c4f1bf7f13a62db86bd07c2cbf01c32f5db5ef4af37",
+   "file": "chrome.aa4d3ea90ad9.css",
+   "bytes": 162987,
+   "sha256": "aa4d3ea90ad935030282aa1f91b7d48aca220363c01d43fd0246f1f2919d31b4",
    "sources": [
     "assets/css/theme-system.css",
     "assets/dsb8-beta2-header.css",
@@ -104,9 +104,9 @@
    ]
   },
   "home": {
-   "file": "home.727e09e5b2bd.css",
-   "bytes": 144268,
-   "sha256": "727e09e5b2bdb6eb08e578cc2168a8f0622ce8305b05cb8ae682da44a6a694c0",
+   "file": "home.5361240cd2e9.css",
+   "bytes": 143713,
+   "sha256": "5361240cd2e93798d4ea152229b8afadd5498d7fda12c78ecdcf79293938f461",
    "sources": [
     "assets/components/base.css",
     "assets/components/products.css",
@@ -118,9 +118,9 @@
    ]
   },
   "home-lite": {
-   "file": "home-lite.2f9ff2ad4bb1.css",
-   "bytes": 30308,
-   "sha256": "2f9ff2ad4bb138b8e29877a6d64c76c7ddc0627bcf7b88a3366a5db9dec0ebc4",
+   "file": "home-lite.08beda71a52f.css",
+   "bytes": 29663,
+   "sha256": "08beda71a52f1d5c249514c158c8aa01061e9f92811a33fc815bc6ea424e6235",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -128,9 +128,9 @@
    ]
   },
   "builder": {
-   "file": "builder.64b3de8eb2eb.css",
-   "bytes": 209709,
-   "sha256": "64b3de8eb2ebf824d4ca7323244651ca6f02eb6e0613d483d7e198c9a29ea0b8",
+   "file": "builder.90bd0eb48296.css",
+   "bytes": 209205,
+   "sha256": "90bd0eb482964ace5254901d846878c57612328e9909fd64f4e800c5989cb53e",
    "sources": [
     "assets/components/base.css",
     "assets/components/testimonials.css",
@@ -153,9 +153,9 @@
    ]
   },
   "builder-design": {
-   "file": "builder-design.4e02b6a41d5c.css",
-   "bytes": 226949,
-   "sha256": "4e02b6a41d5cc7ae63fd971b6f35c3362dae7307885a440c9b0066d85ce162e8",
+   "file": "builder-design.6994172de565.css",
+   "bytes": 226454,
+   "sha256": "6994172de565f43f37d752554e217fb306d2a22377242ed1f1bf60b220955e9d",
    "sources": [
     "assets/components/base.css",
     "assets/components/testimonials.css",
@@ -179,9 +179,9 @@
    ]
   },
   "builder-lite": {
-   "file": "home-lite.2f9ff2ad4bb1.css",
-   "bytes": 30308,
-   "sha256": "2f9ff2ad4bb138b8e29877a6d64c76c7ddc0627bcf7b88a3366a5db9dec0ebc4",
+   "file": "home-lite.08beda71a52f.css",
+   "bytes": 29663,
+   "sha256": "08beda71a52f1d5c249514c158c8aa01061e9f92811a33fc815bc6ea424e6235",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -189,9 +189,9 @@
    ]
   },
   "builder-lite-design": {
-   "file": "builder-lite-design.06b4f7fab82c.css",
-   "bytes": 47548,
-   "sha256": "06b4f7fab82cf8b2e79be55314b299a2b827dba4ccf2a81c0f80794bfede13d2",
+   "file": "builder-lite-design.c60dda33bcfe.css",
+   "bytes": 46912,
+   "sha256": "c60dda33bcfe03c6708caa81b5c930570e4a0b49d1ad949dff903a7c70cf57f0",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -200,9 +200,9 @@
    ]
   },
   "product": {
-   "file": "product.0b8899e0f4b9.css",
-   "bytes": 67448,
-   "sha256": "0b8899e0f4b95938f424e28dbda01a59de7c531754fe82b027cce2d94dc96e41",
+   "file": "product.e612eb1ff901.css",
+   "bytes": 66820,
+   "sha256": "e612eb1ff901cef3165857aece73b689b3564f18e0dfb0183bb676101be51dc5",
    "sources": [
     "assets/css/native-product.css",
     "assets/css/reviews.css",
@@ -212,9 +212,9 @@
    ]
   },
   "product-design": {
-   "file": "product-design.988dd03dd981.css",
-   "bytes": 84688,
-   "sha256": "988dd03dd981ddeeba9144e43e7a9d3d9e51076dd89e97cac451d91b483faa65",
+   "file": "product-design.1fa701e4375f.css",
+   "bytes": 84069,
+   "sha256": "1fa701e4375f9a70d070febaad0f61d5e2976cb65ab3519e29df76c95916e5d4",
    "sources": [
     "assets/css/native-product.css",
     "assets/css/reviews.css",
@@ -225,9 +225,9 @@
    ]
   },
   "shop": {
-   "file": "shop.0d221fe0bfc9.css",
-   "bytes": 34245,
-   "sha256": "0d221fe0bfc9f40be202f9e51ab63c2fb01692f964d438f2d5591ddd56f2fae8",
+   "file": "shop.3cef0f9f6d75.css",
+   "bytes": 33597,
+   "sha256": "3cef0f9f6d7535d932bbbf1aaa7c4dea0bebb9f164eb37200e1aeeabe50f69ac",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-archive.css",
@@ -235,9 +235,9 @@
    ]
   },
   "shop-design": {
-   "file": "shop-design.2f6ba9bc8ed6.css",
-   "bytes": 51485,
-   "sha256": "2f6ba9bc8ed637329d5b5b44d718b4690ffaec09cf2c92a24c43e0667411d509",
+   "file": "shop-design.48b99c8375cd.css",
+   "bytes": 50846,
+   "sha256": "48b99c8375cd66d79648786bf8d8f88250eca6c7338ce72440ac081605c6fa57",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-archive.css",
@@ -246,9 +246,9 @@
    ]
   },
   "page": {
-   "file": "page.3bd38a0e30bd.css",
-   "bytes": 42744,
-   "sha256": "3bd38a0e30bd88745a8f511ad2326752793f2083d39d7fefb7b3c8f839447f48",
+   "file": "page.e6141d35b274.css",
+   "bytes": 42101,
+   "sha256": "e6141d35b274669c73b34cb0261002b64f07fec3bf9b0f9c1abdb859f1d221d5",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -257,9 +257,9 @@
    ]
   },
   "purchase": {
-   "file": "purchase.0112692138ed.css",
-   "bytes": 103910,
-   "sha256": "0112692138ed778e9de87f4630964ac71d5e777fc361e4b499edce30a51b1490",
+   "file": "purchase.52526e8bca0b.css",
+   "bytes": 103282,
+   "sha256": "52526e8bca0b942529ac317a646ba8362bfaadccd402c621331a3936bf0412ba",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -269,9 +269,9 @@
    ]
   },
   "woo": {
-   "file": "woo.1ed5d3c2bc85.css",
-   "bytes": 68741,
-   "sha256": "1ed5d3c2bc85631df047eac0f7171b77bfc0496c5433c470e7b64c1a93c94938",
+   "file": "woo.1a82cbf20f8c.css",
+   "bytes": 68114,
+   "sha256": "1a82cbf20f8c57ece498cf38003aa062d7b4531ad141d038aae34b35a098b0de",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/woo-ui.css",
@@ -280,9 +280,9 @@
    ]
   },
   "woo-design": {
-   "file": "woo-design.65dc7511849c.css",
-   "bytes": 85981,
-   "sha256": "65dc7511849c0fffd3ccceb18b0a71d90b833308bf3f4b80e89de66aab4d3af1",
+   "file": "woo-design.91b607a67f08.css",
+   "bytes": 85363,
+   "sha256": "91b607a67f0873d4582f80f26b334c426625dc89f240c4dfd91170bb38bdddb0",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/woo-ui.css",
@@ -292,9 +292,9 @@
    ]
   },
   "polish": {
-   "file": "polish.8f523fd6d8cd.css",
-   "bytes": 39906,
-   "sha256": "8f523fd6d8cd858aeee5fec1edb9271893395f1859ddd7a7576e5b556ef698fb",
+   "file": "polish.45bb7a15d0e5.css",
+   "bytes": 39940,
+   "sha256": "45bb7a15d0e58f6fe89d7cc5c154fabc3ccdd2c54228a38c74c5083f1e1925da",
    "sources": [
     "assets/css/app-polish.css",
     "assets/css/app-tuning.css",
@@ -304,9 +304,9 @@
    ]
   },
   "polish-storefront": {
-   "file": "polish-storefront.2d3d5ddabf25.css",
-   "bytes": 63125,
-   "sha256": "2d3d5ddabf256f46ae60cf1e5418b57882b1262defff8473213529648b4e9630",
+   "file": "polish-storefront.28dac66f4e5b.css",
+   "bytes": 63164,
+   "sha256": "28dac66f4e5b5770bd00476c6a136335a12a7d99631a3f42b97a27e0b5417dc6",
    "sources": [
     "assets/css/app-polish.css",
     "assets/css/app-tuning.css",
