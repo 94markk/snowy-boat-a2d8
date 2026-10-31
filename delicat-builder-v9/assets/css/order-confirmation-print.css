@@ -1,0 +1,27 @@
+/* Delicat Builder 9.4.0 - Confirmation de commande, print sheet (enqueued with media="print", so it never
+ * blocks the first paint; the @media wrapper stays in case an optimizer merges it). Prints the receipt
+ * sheet alone, never the page (it carries the codes). */
+@media print{
+@page{size:A5;margin:10mm}
+body.dlc-oc-page:has(>.dlc-oc-print)>:not(.dlc-oc-print){display:none!important}
+.dlc-oc-codes,.dlc-oc-sheet,.dlc-oc-toast{display:none!important}
+.dlc-oc-print{display:block!important;color:#111827;background:#fff;font:12px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.dlc-oc-print *{animation:none!important;transition:none!important;box-sizing:border-box}
+.dlc-oc-print :where(p,dl,dd,ul){margin:0;padding:0;list-style:none}
+.dlc-oc-print__card{border:1px solid #e5e7eb;border-radius:14px;overflow:hidden}
+.dlc-oc-print__band{display:flex;align-items:center;gap:10px;padding:14px 16px;background:linear-gradient(135deg,#3b9eff,#0d53d6);color:#fff}
+.dlc-oc-print__logo{width:36px;height:36px;border-radius:10px;background:#fff;color:#0d53d6;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;overflow:hidden}
+.dlc-oc-print__logo img{width:36px;height:36px;object-fit:cover}
+.dlc-oc-print__brand{flex:1;display:flex;flex-direction:column}.dlc-oc-print__brand small{opacity:.85}
+.dlc-oc-print__no{background:#fff;color:#111827;border-radius:999px;padding:3px 10px;font-weight:700}
+.dlc-oc-print__meta{display:flex;flex-wrap:wrap;gap:8px 18px;padding:12px 16px;border-bottom:1px dashed #e5e7eb}
+.dlc-oc-print__meta dt,.dlc-oc-print__rows dt{color:#6b7280;font-size:10px}.dlc-oc-print__meta dd{font-weight:600}
+.dlc-oc-print__pill{padding:1px 8px;border-radius:999px;background:#fef3c7;color:#b45309}.dlc-oc-print__pill[data-tone="paid"]{background:#dcfce7;color:#15803d}.dlc-oc-print__pill[data-tone="neutral"]{background:#f1f5f9;color:#475467}
+.dlc-oc-print__lines{padding:8px 16px}.dlc-oc-print__lines li{display:flex;gap:8px;padding:6px 0;align-items:flex-start}
+.dlc-oc-print__qty{background:#f1f5f9;border-radius:6px;padding:0 5px;font-weight:700}.dlc-oc-print__name{flex:1;font-weight:600}.dlc-oc-print__name small{display:block;color:#6b7280;font-weight:400}.dlc-oc-print__amount{font-weight:600;white-space:nowrap}
+.dlc-oc-print__more{padding:0 16px 6px;color:#6b7280}
+.dlc-oc-print__rows{padding:6px 16px;border-top:1px dashed #e5e7eb}.dlc-oc-print__rows div{display:flex;justify-content:space-between}
+.dlc-oc-print__total{display:flex;justify-content:space-between;align-items:baseline;padding:10px 16px;border-top:1px dashed #e5e7eb}.dlc-oc-print__total span{font-size:10px;letter-spacing:.08em;color:#6b7280}.dlc-oc-print__total strong{font-size:20px;white-space:nowrap}
+.dlc-oc-print__foot{display:flex;gap:12px;align-items:center;padding:12px 16px;border-top:1px dashed #e5e7eb;color:#6b7280;font-size:10px}
+.dlc-oc-print__thanks{color:#111827;font-size:12px;font-weight:600}.dlc-oc-print__link{word-break:break-all}
+}

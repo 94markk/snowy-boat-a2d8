@@ -1,0 +1,292 @@
+<?php
+defined('ABSPATH') || exit;
+
+/**
+ * Central notification service for Delicat Identity.
+ *
+ * All Identity security/access emails use the same embedded Email Studio
+ * renderer as WordPress/WooCommerce messages. No authentication secret,
+ * OTP, token or magic URL is persisted or written to the audit log here.
+ */
+final class DIP_Email_Hub {
+    public static function init() {
+        add_action('after_password_reset', [__CLASS__, 'password_changed'], 20, 2);
+        // WooCommerce « Mot de passe oublié » (the main customer path) never
+        // fires after_password_reset: wp_set_password covers every reset.
+        add_action('wp_set_password', [__CLASS__, 'password_set'], 20, 3);
+        add_action('dip_account_linked', [__CLASS__, 'provider_connected'], 30, 2);
+        add_action('dip_account_disconnected', [__CLASS__, 'provider_disconnected'], 30, 2);
+        add_filter('retrieve_password_notification_email', [__CLASS__, 'wordpress_password_reset_email'], 99, 4);
+    }
+
+    public static function security_url() {
+        if (class_exists('DIP_Customer_Dashboard') && function_exists('wc_get_account_endpoint_url')) {
+            return add_query_arg('dip_tab', 'security', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
+        }
+        if (function_exists('wc_get_page_permalink')) return wc_get_page_permalink('myaccount');
+        return home_url('/my-account/');
+    }
+
+    private static function studio_ready() {
+        return class_exists('DIP_Email_Studio_Bridge') && DIP_Email_Studio_Bridge::load() && function_exists('dipes_email_css');
+    }
+
+    private static function user_context(WP_User $user, array $extra = []) {
+        $first = trim((string)get_user_meta($user->ID, 'first_name', true));
+        $last  = trim((string)get_user_meta($user->ID, 'last_name', true));
+        $display = trim((string)$user->display_name);
+        $base = [
+            'first_name' => $first ?: ($display ?: $user->user_login),
+            'last_name' => $last,
+            'full_name' => trim($first . ' ' . $last) ?: ($display ?: $user->user_login),
+            'display_name' => $display ?: $user->user_login,
+            'username' => $user->user_login,
+            'user_email' => $user->user_email,
+            'user_id' => (string)$user->ID,
+            'security_url' => self::security_url(),
+            'admin_identity_url' => admin_url('admin.php?page=dip-ui-stability'),
+        ];
+        return function_exists('dipes_context') ? dipes_context(null, null, array_merge($base, $extra)) : array_merge($base, $extra);
+    }
+
+    private static function fallback_html($title, $message_html, $cta_label = '', $cta_url = '') {
+        $cta = '';
+        if ($cta_label && $cta_url) {
+            $cta = '<p style="margin:24px 0 0;text-align:center"><a href="' . esc_url($cta_url) . '" style="display:inline-block;padding:14px 22px;border-radius:12px;background:#123b72;color:#fff;text-decoration:none;font-weight:700">' . esc_html($cta_label) . '</a></p>';
+        }
+        return '<!doctype html><html><body style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;background:#f3f6fb;padding:24px"><div style="max-width:620px;margin:auto;background:#fff;padding:28px;border-radius:18px"><h1 style="font-size:24px">' . esc_html($title) . '</h1><div style="font-size:15px;line-height:1.7">' . wp_kses_post($message_html) . '</div>' . $cta . '</div></body></html>';
+    }
+
+    private static function render($email_id, array $ctx, $title, $message_html, array $args = []) {
+        $cta_label = sanitize_text_field($args['cta_label'] ?? '');
+        $cta_url = esc_url_raw($args['cta_url'] ?? '');
+        if (!self::studio_ready()) return self::fallback_html($title, $message_html, $cta_label, $cta_url);
+
+        $overrides = [
+            'heading' => sanitize_text_field($title),
+            'preheader' => sanitize_text_field($args['preheader'] ?? wp_strip_all_tags($title)),
+            'badge' => sanitize_text_field($args['badge'] ?? 'Sécurité'),
+            'accent' => sanitize_hex_color($args['accent'] ?? '') ?: ('identity_admin_alert' === $email_id ? '#d97706' : '#dc2626'),
+            'show_badge' => 'yes',
+            'show_cta' => ($cta_label && $cta_url) ? 'yes' : 'no',
+            'cta_label' => $cta_label,
+            'cta_url' => $cta_url,
+        ];
+
+        $old_current = $GLOBALS['dipes_current_email_id'] ?? null;
+        $old_render = !empty($GLOBALS['dipes_rendering_email']);
+        $old_preview = !empty($GLOBALS['dipes_preview_mode']);
+        $old_overrides = $GLOBALS['dipes_runtime_email_overrides'][$email_id] ?? null;
+
+        $GLOBALS['dipes_runtime_email_overrides'][$email_id] = $overrides;
+        $GLOBALS['dipes_current_email_id'] = $email_id;
+        $GLOBALS['dipes_rendering_email'] = true;
+        $GLOBALS['dipes_preview_mode'] = true;
+
+        ob_start();
+        $email = null;
+        $email_heading = $title;
+        include DIPES_DIR . 'templates/emails/email-header.php';
+        echo '<div class="desp-notice desp-identity-message"><div class="desp-notice-label">' . esc_html($args['label'] ?? 'Delicat Identity') . '</div><div class="desp-notice-content">' . wp_kses_post($message_html) . '</div></div>';
+        if ($cta_label && $cta_url) {
+            $ctx['action_url'] = $cta_url;
+            // Access links (verification, magic link, password reset) also
+            // appear in plain text under the button.
+            if (!empty($args['required_action']) && function_exists('dipes_render_required_action')) dipes_render_required_action($cta_label, $cta_url);
+            elseif (function_exists('dipes_render_cta')) dipes_render_cta($email_id, $ctx);
+        }
+        include DIPES_DIR . 'templates/emails/email-footer.php';
+        $html = ob_get_clean();
+        // Inline while this e-mail's overrides are still active (accent, id).
+        if (function_exists('dipes_inline_html')) $html = dipes_inline_html($html);
+
+        if ($old_overrides === null) unset($GLOBALS['dipes_runtime_email_overrides'][$email_id]);
+        else $GLOBALS['dipes_runtime_email_overrides'][$email_id] = $old_overrides;
+        if ($old_current === null) unset($GLOBALS['dipes_current_email_id']);
+        else $GLOBALS['dipes_current_email_id'] = $old_current;
+        if (!$old_render) unset($GLOBALS['dipes_rendering_email']);
+        if (!$old_preview) unset($GLOBALS['dipes_preview_mode']);
+
+        return $html;
+    }
+
+    private static function send($to, $email_id, $subject, $title, $message_html, array $args = [], $audit_user_id = 0) {
+        $to = sanitize_email($to);
+        if (!is_email($to)) return false;
+
+        $user = $audit_user_id ? get_userdata(absint($audit_user_id)) : get_user_by('email', $to);
+        $ctx = $user instanceof WP_User ? self::user_context($user, $args['context'] ?? []) : (function_exists('dipes_context') ? dipes_context(null, null, $args['context'] ?? []) : ($args['context'] ?? []));
+        $html = self::render($email_id, $ctx, $title, $message_html, $args);
+        $headers = function_exists('dipes_add_html_content_type_header') ? dipes_add_html_content_type_header([]) : ['Content-Type: text/html; charset=UTF-8'];
+        // Plain-text alternative part (code / link readable in text-only
+        // clients and notifications, better spam score), set only for this call.
+        self::$plain_current = self::plain_text($title, $message_html, (string)($args['cta_label'] ?? ''), esc_url_raw((string)($args['cta_url'] ?? '')));
+        add_action('phpmailer_init', [__CLASS__, 'attach_plain_text'], 20);
+        try {
+            $sent = (bool)wp_mail($to, wp_strip_all_tags((string)$subject), $html, $headers);
+        } finally {
+            self::$plain_current = '';
+            if (!self::$plain_queue) remove_action('phpmailer_init', [__CLASS__, 'attach_plain_text'], 20);
+        }
+
+        if (class_exists('DIP_Audit')) {
+            DIP_Audit::record($sent ? 'unified_email_sent' : 'unified_email_failed', $sent ? 'info' : 'warning', absint($audit_user_id), ['template'=>sanitize_key($email_id)]);
+        }
+        return $sent;
+    }
+
+    public static function send_user_security($user_id, $subject, $message, array $args = []) {
+        $user = get_userdata(absint($user_id));
+        if (!$user || !is_email($user->user_email)) return false;
+        $title = sanitize_text_field($args['title'] ?? $subject);
+        $defaults = [
+            'badge' => 'Sécurité',
+            'accent' => '#dc2626',
+            'label' => 'Sécurité du compte',
+            'cta_label' => 'Ouvrir le centre de sécurité',
+            'cta_url' => self::security_url(),
+        ];
+        return self::send($user->user_email, 'identity_security_alert', $subject, $title, '<p>' . esc_html((string)$message) . '</p>' . (!empty($args['advice']) ? '<p>' . esc_html((string)$args['advice']) . '</p>' : ''), array_merge($defaults, $args), $user->ID);
+    }
+
+    public static function send_access_email($email, $subject, $title, $message_html, $cta_label = '', $cta_url = '', array $args = []) {
+        $defaults = [
+            'badge' => 'Vérification',
+            'accent' => '#2563eb',
+            'label' => 'Accès sécurisé',
+            'cta_label' => $cta_label,
+            'cta_url' => $cta_url,
+            'required_action' => true,
+        ];
+        return self::send($email, 'identity_access_message', $subject, $title, $message_html, array_merge($defaults, $args));
+    }
+
+    public static function send_admin_alert($subject, $title, $message, $cta_url = '', $cta_label = 'Ouvrir Delicat Identity') {
+        $admin = sanitize_email(get_option('admin_email'));
+        if (!is_email($admin)) return false;
+        return self::send($admin, 'identity_admin_alert', $subject, $title, '<p>' . esc_html((string)$message) . '</p>', [
+            'badge'=>'Admin', 'accent'=>'#d97706', 'label'=>'Delicat Identity',
+            'cta_label'=>$cta_url ? sanitize_text_field((string)$cta_label) : '', 'cta_url'=>$cta_url,
+            'context'=>['admin_identity_url'=>admin_url('admin.php?page=dip-ui-stability')],
+        ]);
+    }
+
+
+    public static function wordpress_password_reset_email($notification, $key, $user_login, $user_data) {
+        if (!($user_data instanceof WP_User) || !self::studio_ready() || 'yes' !== dipes_email_setting('customer_reset_password', 'enabled', 'yes')) return $notification;
+        $locale = get_user_locale($user_data);
+        $reset_url = network_site_url('wp-login.php?login=' . rawurlencode($user_login) . '&key=' . rawurlencode($key) . '&action=rp', 'login');
+        if ($locale) $reset_url = add_query_arg('wp_lang', $locale, $reset_url);
+        $ctx = self::user_context($user_data, ['reset_password_url'=>$reset_url, 'action_url'=>$reset_url]);
+        $subject_tpl = dipes_email_setting('customer_reset_password', 'subject', 'Réinitialisez votre mot de passe — {site_name}');
+        $heading = dipes_replace_tokens(dipes_email_setting('customer_reset_password', 'heading', 'Réinitialisation du mot de passe'), $ctx);
+        $subject = dipes_replace_tokens($subject_tpl, $ctx);
+        $body = '<p>Une demande de réinitialisation du mot de passe a été reçue pour votre compte <strong>' . esc_html($user_login) . '</strong>.</p><p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail. Aucun changement ne sera effectué sans utiliser le lien sécurisé.</p>';
+        $notification['subject'] = wp_strip_all_tags($subject);
+        $notification['message'] = self::render('customer_reset_password', $ctx, $heading, $body, ['badge'=>'Sécurité','accent'=>'#7c3aed','label'=>'Réinitialisation sécurisée','cta_label'=>'Créer un nouveau mot de passe','cta_url'=>$reset_url,'required_action'=>true]);
+        $notification['headers'] = dipes_add_html_content_type_header($notification['headers'] ?? '');
+        // WordPress sends this one itself: its plain-text part is attached when
+        // that wp_mail() call reaches PHPMailer with this exact body.
+        self::queue_plain_text($notification['message'], self::plain_text($heading, $body, 'Créer un nouveau mot de passe', $reset_url));
+        return $notification;
+    }
+
+    /** @var string plain-text part of the e-mail self::send() is sending right now */
+    private static $plain_current = '';
+    /** @var array<string,string> plain-text parts of messages sent by WordPress itself, keyed by md5 of the HTML body */
+    private static $plain_queue = [];
+
+    private static function plain_text($title, $message_html, $cta_label = '', $cta_url = '') {
+        $text = preg_replace('~<\s*br\s*/?>|</\s*(?:p|div|li|h[1-6]|tr)\s*>~i', "\n", (string)$message_html);
+        $text = html_entity_decode(wp_strip_all_tags((string)$text), ENT_QUOTES, 'UTF-8');
+        $lines = array_filter(array_map('trim', explode("\n", str_replace(["\r", "\t"], ['', ' '], $text))), 'strlen');
+        $parts = [trim(wp_strip_all_tags((string)$title)), implode("\n", $lines)];
+        if ($cta_label !== '' && $cta_url !== '') $parts[] = trim(wp_strip_all_tags($cta_label)) . " :\n" . $cta_url;
+        $brand = function_exists('dipes_brand_name') ? dipes_brand_name() : wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+        if ($brand !== '') $parts[] = '— ' . $brand;
+        return implode("\n\n", array_filter($parts, 'strlen'));
+    }
+
+    private static function queue_plain_text($html, $text) {
+        if (!is_string($html) || $html === '' || $text === '') return;
+        self::$plain_queue[md5($html)] = $text;
+        add_action('phpmailer_init', [__CLASS__, 'attach_plain_text'], 20);
+    }
+
+    public static function attach_plain_text($phpmailer) {
+        if (!is_object($phpmailer) || !property_exists($phpmailer, 'AltBody') || (string)$phpmailer->AltBody !== '') return;
+        $text = '';
+        if (self::$plain_current !== '' && property_exists($phpmailer, 'Body') && false !== strpos((string)$phpmailer->Body, 'desp-shell')) {
+            // The Studio message self::send() is sending (never a nested,
+            // unrelated wp_mail() fired from inside that call).
+            $text = self::$plain_current;
+        } elseif (self::$plain_queue && property_exists($phpmailer, 'Body')) {
+            $key = md5((string)$phpmailer->Body);
+            if (isset(self::$plain_queue[$key])) { $text = self::$plain_queue[$key]; unset(self::$plain_queue[$key]); }
+        }
+        if ($text !== '') $phpmailer->AltBody = $text;
+    }
+
+    /** @var array<int,bool> users already told about a password change in this request */
+    private static $password_alerted = [];
+
+    /**
+     * wp_set_password (WordPress 6.2+): core and WooCommerce resets alike.
+     * Skipped for Delicat's own random-password rotation (the customer gets a
+     * dedicated e-mail) and for a re-hash of the same password at sign-in.
+     */
+    public static function password_set($password, $user_id, $old_user_data = null) {
+        $user_id = absint($user_id);
+        if (!$user_id || isset(self::$password_alerted[$user_id])) return;
+        if (class_exists('DIP_Account_Sync') && method_exists('DIP_Account_Sync', 'internal_password_rotation') && DIP_Account_Sync::internal_password_rotation($user_id)) return;
+        if ($old_user_data instanceof WP_User) {
+            $old_hash = (string)$old_user_data->user_pass;
+            // No user id: a legacy hash must not be re-hashed (and re-enter this hook) here.
+            if ($old_hash !== '' && (string)$password !== '' && wp_check_password((string)$password, $old_hash)) return;
+        } elseif (doing_filter('authenticate') || self::rehash_in_progress()) {
+            // WordPress < 6.7 passes no previous data: a legacy hash upgraded by
+            // wp_check_password() (sign-in, app login, re-authentication) is the
+            // same password, not a change.
+            return;
+        }
+        $user = get_userdata($user_id);
+        if ($user instanceof WP_User) self::password_changed($user);
+    }
+
+    private static function rehash_in_progress() {
+        foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
+            if (empty($frame['class']) && isset($frame['function']) && 'wp_check_password' === $frame['function']) return true;
+        }
+        return false;
+    }
+
+    public static function password_changed($user, $new_pass = '') {
+        if (!($user instanceof WP_User) || isset(self::$password_alerted[$user->ID])) return;
+        // Core resets fire wp_set_password then after_password_reset: one e-mail.
+        self::$password_alerted[$user->ID] = true;
+        self::send_user_security($user->ID, 'Votre mot de passe a été modifié', 'Le mot de passe de votre compte Delicat a été modifié avec succès.', [
+            'title'=>'Mot de passe mis à jour',
+            'advice'=>'Si vous n’êtes pas à l’origine de cette action, sécurisez immédiatement votre compte et déconnectez les autres appareils.',
+        ]);
+    }
+
+    public static function provider_connected($user_id, $provider = '') {
+        // A migration batch (Nextend => Delicat) links accounts whose Google
+        // sign-in simply keeps working: no « nouveau compte connecté » alert.
+        if (is_array($provider) && ($provider['source'] ?? '') === 'migration') return;
+        if (class_exists('DIP_Migration') && method_exists('DIP_Migration', 'is_running') && DIP_Migration::is_running()) return;
+        // dip_account_linked passes the provider profile array; older callers pass the provider id.
+        if (is_array($provider)) $provider = $provider['provider'] ?? 'google';
+        $provider = ucfirst(sanitize_text_field((string)$provider));
+        self::send_user_security($user_id, 'Compte ' . ($provider ?: 'social') . ' connecté', ($provider ?: 'Un compte social') . ' est maintenant connecté à votre compte Delicat.', [
+            'title'=>'Nouveau compte connecté', 'accent'=>'#2563eb', 'badge'=>'Compte lié', 'label'=>'Comptes connectés',
+        ]);
+    }
+
+    public static function provider_disconnected($user_id, $provider = '') {
+        $provider = ucfirst(sanitize_text_field((string)$provider));
+        self::send_user_security($user_id, 'Compte ' . ($provider ?: 'social') . ' déconnecté', ($provider ?: 'Un compte social') . ' a été retiré de votre compte Delicat.', [
+            'title'=>'Compte déconnecté', 'accent'=>'#d97706', 'badge'=>'Compte retiré', 'label'=>'Comptes connectés',
+        ]);
+    }
+}

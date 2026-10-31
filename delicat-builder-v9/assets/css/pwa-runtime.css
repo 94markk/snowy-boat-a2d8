@@ -1,0 +1,53 @@
+.dbv9-pwa-modal{position:fixed;inset:0;z-index:100010;display:grid;place-items:center;padding:18px;opacity:0;visibility:hidden;pointer-events:none}.dbv9-pwa-modal.is-open{opacity:1;visibility:visible;pointer-events:auto}.dbv9-pwa-backdrop{position:absolute;inset:0;background:rgba(7,10,35,.62)}.dbv9-pwa-card{position:relative;width:min(92vw,390px);padding:26px 20px 20px;border:1px solid rgba(122,112,235,.24);border-radius:24px;background:#fff;color:#101326;text-align:center;box-shadow:0 24px 70px rgba(6,10,40,.28)}.dbv9-pwa-card h3{margin:10px 0 6px;font-size:22px}.dbv9-pwa-card p{margin:0 0 18px;color:#687084;line-height:1.5}.dbv9-pwa-icon{display:grid;place-items:center;width:52px;height:52px;margin:auto;border-radius:17px;background:linear-gradient(135deg,#5964ff,#e63da9);color:#fff;font-size:26px}.dbv9-pwa-action{width:100%;min-height:48px;border:0;border-radius:14px;background:linear-gradient(100deg,#5964ff,#e63da9);color:#fff;font-weight:900}.dbv9-pwa-close{position:absolute;top:10px;right:10px;width:34px;height:34px;border:0;border-radius:50%;background:#eef1f7;color:#111827;font-size:24px}@media(prefers-reduced-motion:no-preference){.dbv9-pwa-modal{transition:opacity .16s ease,visibility .16s ease}}
+
+/* 9.3 — iPhone install sheet, the invitation bar and the installed app. */
+.dbv9-pwa-steps{margin:0 0 6px;padding:0;list-style:none;text-align:left}
+.dbv9-pwa-steps li{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #eef1f7;color:#101326;font-size:14.5px;line-height:1.4}
+.dbv9-pwa-steps li:first-child{border-top:0}
+.dbv9-pwa-step-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:#eef0ff;color:#5964ff}
+.dbv9-pwa-step-text{flex:1;min-width:0}
+.dbv9-install-bar{position:fixed;left:12px;right:12px;top:calc(env(safe-area-inset-top,0px) + 10px);z-index:2147481950;display:flex;align-items:center;gap:10px;padding:10px 10px 10px 12px;border:1px solid rgba(20,24,40,.08);border-radius:18px;background:#fff;color:#101326;box-shadow:0 14px 34px rgba(16,24,40,.16);transform:translateY(-120%);opacity:0;transition:transform .22s cubic-bezier(.2,.8,.2,1),opacity .2s ease}
+.dbv9-install-bar.is-in{transform:none;opacity:1}
+.dbv9-install-bar__icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;border-radius:13px;background:linear-gradient(135deg,#5964ff,#e63da9);color:#fff}
+.dbv9-install-bar__copy{display:flex;flex:1;min-width:0;flex-direction:column;line-height:1.25}
+.dbv9-install-bar__copy strong{font-size:14px;font-weight:800}
+.dbv9-install-bar__copy small{font-size:12px;color:#687084;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dbv9-install-bar__go{flex:0 0 auto;min-height:38px;padding:0 14px;border:0;border-radius:999px;background:linear-gradient(100deg,#5964ff,#e63da9);color:#fff;font:inherit;font-size:13px;font-weight:800}
+.dbv9-install-bar__close{flex:0 0 auto;width:34px;height:34px;border:0;border-radius:50%;background:#eef1f7;color:#111827;font-size:22px;line-height:1}
+html[data-delicat-theme="dark"] .dbv9-install-bar,html.dlc-theme-dark .dbv9-install-bar{background:#171a2b;color:#f3f4fa;border-color:rgba(255,255,255,.08)}
+html[data-delicat-theme="dark"] .dbv9-install-bar__close,html.dlc-theme-dark .dbv9-install-bar__close{background:#262a3d;color:#f3f4fa}
+html[data-delicat-theme="dark"] .dbv9-pwa-steps li,html.dlc-theme-dark .dbv9-pwa-steps li{border-top-color:#262a3d;color:#f3f4fa}
+@media(min-width:560px){.dbv9-install-bar{left:50%;right:auto;width:min(calc(100% - 24px),460px);transform:translate(-50%,-120%)}.dbv9-install-bar.is-in{transform:translate(-50%,0)}}
+/* Signed-in staff see the WordPress bar above the page. */
+body.admin-bar .dbv9-install-bar{top:calc(env(safe-area-inset-top,0px) + 56px)}
+/* The installed app: no browser bar below, so the bar stands on the home indicator; the status bar keeps its own strip. */
+html.delicat-standalone,html.delicat-standalone body{overscroll-behavior-y:none}
+/* 9.3.2: in the installed app the page runs under the status bar (viewport-fit=cover); the sticky header carries that inset, so its row sits below the clock and the island and its background fills the strip, as a native app's bar does. */
+html.delicat-standalone .dsb8-header{padding-top:env(safe-area-inset-top,0px)!important}
+html.delicat-standalone .dsb8-header.is-sticky{top:0}
+html.delicat-standalone .dbv9-install-bar,html.delicat-standalone [data-dlx-install],html.delicat-standalone .delicat-builder-v9-install-app{display:none!important}
+/* 9.3.3: the installed app never shows the WordPress toolbar. Staff opening the app signed in saw it wedged under the status bar, the header pushed down behind it and the page offset by the toolbar's own 46px (the server withholds it as well once the app has identified itself with its cookie). */
+html.delicat-standalone{margin-top:0!important}
+html.delicat-standalone #wpadminbar{display:none!important}
+html.delicat-standalone body.admin-bar{--dbv9-assistant-panel-top:0px}
+/* 9.3.4: the header already carries a back button in the installed app; the native cart/checkout page head keeps its own only in the browser. */
+html.delicat-standalone .dpn-head .dpn-back{display:none}
+html.delicat-standalone .dpn-head{gap:0}
+html.delicat-standalone a,html.delicat-standalone button,html.delicat-standalone .dbn-item,html.delicat-standalone .dlx-item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+html.delicat-standalone input,html.delicat-standalone textarea,html.delicat-standalone [contenteditable]{-webkit-user-select:text;user-select:text}
+
+/* Scoped installed-app layout, including first paint before the JS class. */
+@media (display-mode:standalone){
+ .dsb8-header{padding-top:env(safe-area-inset-top,0px)!important}
+ .dsb8-header.is-sticky,body.admin-bar .dsb8-header.is-sticky{top:0!important}
+}
+html.delicat-standalone .dsb8-header.is-sticky{top:0!important}
+html.delicat-standalone .dsb8-header--floating{width:100%;margin:0!important;border-radius:0}
+html.delicat-standalone .dsb8-header__row{padding-left:max(var(--dsb8-mobile-padding,12px),env(safe-area-inset-left,0px))!important;padding-right:max(var(--dsb8-mobile-padding,12px),env(safe-area-inset-right,0px))!important}
+html.delicat-standalone .delicat-shell--header{padding-top:env(safe-area-inset-top,0px)}
+html.delicat-standalone .delicat-shell--header.is-sticky{top:0!important}
+/* 9.4.3: inside the store's Android app (WebView) the interface reads like the installed app:
+   no long-press callout or text selection on links and buttons, no rubber-band at the edges. */
+html.delicat-app,html.delicat-app body{overscroll-behavior-y:none}
+html.delicat-app a,html.delicat-app button,html.delicat-app .dbn-item,html.delicat-app .dlx-item{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+html.delicat-app input,html.delicat-app textarea,html.delicat-app [contenteditable]{-webkit-user-select:text;user-select:text}

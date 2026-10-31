@@ -1,0 +1,12 @@
+/* Delicat Identity — guest sign-in panel of the checkout (classic form and Checkout block). */
+.dip-wc-login-panel{--dip-wc-ink:#0d1738;--dip-wc-muted:#46506a;--dip-wc-accent:#2a44b6;--dip-wc-line:rgba(15,23,42,.1);--dip-wc-card:linear-gradient(135deg,#fff,#f8fafc);display:flex;align-items:center;justify-content:space-between;gap:24px;margin:0 0 24px;padding:24px;border:1px solid var(--dip-wc-line);border-radius:20px;background:var(--dip-wc-card);box-shadow:0 14px 40px rgba(15,23,42,.08);color:var(--dip-wc-ink)}
+html[data-theme="dark"] .dip-wc-login-panel,html.dark .dip-wc-login-panel,body.dark-mode .dip-wc-login-panel,body.is-dark-theme .dip-wc-login-panel,[data-dip-theme="dark"] .dip-wc-login-panel{--dip-wc-ink:#eef1fa;--dip-wc-muted:#c8cfe3;--dip-wc-accent:#c9d5ff;--dip-wc-line:#28324f;--dip-wc-card:#141b2f;box-shadow:none}
+.dip-wc-login-panel h2{margin:4px 0 8px;color:var(--dip-wc-ink);font-size:clamp(20px,3vw,28px);line-height:1.15}
+.dip-wc-login-panel p{margin:0;color:var(--dip-wc-muted)}
+.dip-wc-eyebrow{color:var(--dip-wc-accent);font-size:12px;font-weight:800;letter-spacing:.12em}
+.dip-wc-login-actions{display:grid;gap:10px;min-width:min(100%,280px)}
+.dip-wc-login-actions .button{box-sizing:border-box;justify-content:center;width:100%;min-height:44px}
+.dip-wc-native-login{text-align:center}
+.dip-wc-login-panel a:focus-visible,.dip-wc-login-panel button:focus-visible{outline:2px solid currentColor;outline-offset:3px}
+@media (max-width:720px){.dip-wc-login-panel{flex-direction:column;align-items:stretch;padding:18px;border-radius:16px}.dip-wc-login-actions{min-width:100%}}
+@media (prefers-reduced-motion:reduce){.dip-wc-login-panel *{scroll-behavior:auto!important;transition:none!important}}

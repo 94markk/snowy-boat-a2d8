@@ -1,0 +1,407 @@
+/* Delicat Builder 9.4.0 - Confirmation de commande. Everything scoped to .dlc-oc (and body.dlc-oc-page,
+ * set only while the module owns the page); colours from the Builder tokens (theme-system.css), light
+ * and dark; type from the site font token. LiteSpeed combiner rules: no calc(), clamp() or
+ * backdrop-filter. Only transform and opacity animate; one-shot motion stays within 150-450 ms (the
+ * delivery burst excepted); late content has reserved space (no layout shift). Print rules:
+ * order-confirmation-print.css (media="print"). */
+.dlc-oc{--oc-card:var(--dlc-bg-elevated,#fff);--oc-text:var(--dlc-text,#111827);--oc-muted:var(--dlc-muted,#667085);--oc-hero-muted:var(--dlc-text-soft,#475467);--oc-border:var(--dlc-border,rgba(42,48,68,.1));--oc-accent:var(--dlc-accent,#695df6);--oc-ok:var(--dlc-success,#0f9f6e);--oc-bad:var(--dlc-danger,#dc3d4f);--oc-soft:#f2f4f7;--oc-primary:var(--oc-accent);--oc-ink:#fff;--dlc-oc-warn:#b45309;--dlc-oc-ease-out:cubic-bezier(.2,.8,.2,1);--dlc-oc-ease-inout:cubic-bezier(.65,0,.35,1);--dlc-oc-ease-pop:cubic-bezier(.34,1.56,.64,1);
+--oc-t-accent:#f1f0ff;--oc-b-accent:rgba(105,93,246,.25);--oc-p-accent:#4f43d9;--oc-t-success:#ecfdf3;--oc-b-success:#abefc6;--oc-p-success:#067647;--oc-t-warning:#fffaeb;--oc-b-warning:#fedf89;--oc-p-warning:#92400e;--oc-t-danger:#fef3f2;--oc-b-danger:#fecdca;--oc-p-danger:#b42318;--oc-t-neutral:#f2f4f7;--oc-b-neutral:var(--oc-border);--oc-p-neutral:#344054;
+box-sizing:border-box;max-width:680px;margin:0 auto;padding:8px 16px 96px;display:flex;flex-direction:column;gap:12px;color:var(--oc-text);font-size:15px;line-height:1.45;font-family:var(--delicat-font,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);-webkit-text-size-adjust:100%}
+/* Dark: bright fills carry a dark glyph (white on #42d59c / #fbbf24 / #ff7b86 / #9da4b6 is under 3:1). */
+html[data-delicat-theme="dark"] .dlc-oc,html.dlc-theme-dark .dlc-oc{--oc-soft:rgba(255,255,255,.06);--oc-primary:#5f52ea;--oc-ink:var(--dlc-bg-elevated,#0d1020);--dlc-oc-warn:#fbbf24;--oc-t-accent:rgba(135,124,255,.1);--oc-b-accent:rgba(135,124,255,.28);--oc-p-accent:#c4beff;--oc-t-success:rgba(66,213,156,.1);--oc-b-success:rgba(66,213,156,.3);--oc-p-success:#7ee2b8;--oc-t-warning:rgba(251,191,36,.1);--oc-b-warning:rgba(251,191,36,.3);--oc-p-warning:#fcd34d;--oc-t-danger:rgba(255,123,134,.1);--oc-b-danger:rgba(255,123,134,.3);--oc-p-danger:#fda29b;--oc-t-neutral:rgba(255,255,255,.04);--oc-p-neutral:#d0d5dd}
+@media (min-width:600px){.dlc-oc{gap:16px}}
+.dlc-oc *,.dlc-oc *::before,.dlc-oc *::after{box-sizing:border-box}
+.dlc-oc :where(h1,h2,h3,p,ul,ol,dl,dd){margin:0;padding:0}.dlc-oc :where(ul,ol){list-style:none}
+.dlc-oc a[x-apple-data-detectors]{color:inherit;text-decoration:none}
+.dlc-oc-sprite{display:none}
+.dlc-oc-i{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dlc-oc-sr,.dlc-oc-step__long{position:absolute!important;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.dlc-oc-money{white-space:nowrap;font-variant-numeric:tabular-nums}
+/* The page's own title (« Commande reçue » from the theme or Builder page header) never follows the
+ * order: hidden visually while the module owns the page and kept as the document's h1 for screen
+ * readers; the hero headline names the real status. body.dlc-oc-page exists on this page only. */
+body.dlc-oc-page .delicat-native-page-main>h1,body.dlc-oc-page .page-header>h1,body.dlc-oc-page h1.entry-title,body.dlc-oc-page h1.page-title,body.dlc-oc-page h1.wp-block-post-title{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
+/* Cards */
+.dlc-oc-card{position:relative;background:var(--oc-card);border:1px solid var(--oc-border);border-radius:var(--dlc-radius,18px);box-shadow:var(--dlc-shadow-sm,0 5px 18px rgba(24,31,55,.06));padding:18px 16px}
+@media (min-width:600px){.dlc-oc-card{padding:22px}}
+.dlc-oc-eyebrow{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--oc-muted);margin-bottom:4px}
+.dlc-oc-card__title{font-size:17px;line-height:1.3;font-weight:750;color:var(--oc-text);margin-bottom:12px}
+.dlc-oc-card__head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.dlc-oc-chip{display:inline-flex;align-items:center;min-height:24px;padding:2px 10px;border-radius:999px;background:var(--oc-soft);color:var(--oc-text);font-size:12px;font-weight:650;line-height:1.3;white-space:nowrap}
+/* Buttons */
+.dlc-oc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid var(--oc-border);border-radius:13px;background:var(--oc-card);color:var(--oc-text);font:inherit;font-weight:650;line-height:1.3;text-decoration:none;cursor:pointer;transition:transform .15s var(--dlc-oc-ease-out);-webkit-tap-highlight-color:transparent}
+.dlc-oc-btn--primary{background:var(--oc-primary);border-color:transparent;color:#fff}
+.dlc-oc-btn--ghost{background:transparent}
+.dlc-oc-btn--soft{border-color:var(--oc-edge,var(--oc-border))}
+.dlc-oc-btn:active,.dlc-oc-iconbtn:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){.dlc-oc-btn:hover{transform:translateY(-1px)}}
+.dlc-oc a:focus-visible,.dlc-oc button:focus-visible,.dlc-oc [tabindex]:focus-visible{outline:2px solid var(--oc-accent);outline-offset:2px}
+.dlc-oc-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border:1px solid var(--oc-border);border-radius:50%;background:var(--oc-card);color:var(--oc-text);cursor:pointer;padding:0;transition:transform .15s var(--dlc-oc-ease-out)}
+/* Hero: tone tint and edge on a layer (no overflow clip, so the A7 burst leaves the card); a tone
+ * change cross-fades the previous layer out over the new one. */
+.dlc-oc-hero{z-index:1;border-color:transparent;--oc-tint:var(--oc-t-neutral);--oc-edge:var(--oc-b-neutral);--oc-fill:var(--oc-muted)}
+.dlc-oc-hero[data-tone="accent"]{--oc-tint:var(--oc-t-accent);--oc-edge:var(--oc-b-accent);--oc-fill:var(--oc-accent)}
+.dlc-oc-hero[data-tone="success"]{--oc-tint:var(--oc-t-success);--oc-edge:var(--oc-b-success);--oc-fill:var(--oc-ok)}
+.dlc-oc-hero[data-tone="warning"]{--oc-tint:var(--oc-t-warning);--oc-edge:var(--oc-b-warning);--oc-fill:var(--dlc-oc-warn)}
+.dlc-oc-hero[data-tone="danger"]{--oc-tint:var(--oc-t-danger);--oc-edge:var(--oc-b-danger);--oc-fill:var(--oc-bad)}
+.dlc-oc-hero[data-prev-tone="neutral"]{--oc-ptint:var(--oc-t-neutral);--oc-pedge:var(--oc-b-neutral)}
+.dlc-oc-hero[data-prev-tone="accent"]{--oc-ptint:var(--oc-t-accent);--oc-pedge:var(--oc-b-accent)}
+.dlc-oc-hero[data-prev-tone="success"]{--oc-ptint:var(--oc-t-success);--oc-pedge:var(--oc-b-success)}
+.dlc-oc-hero[data-prev-tone="warning"]{--oc-ptint:var(--oc-t-warning);--oc-pedge:var(--oc-b-warning)}
+.dlc-oc-hero[data-prev-tone="danger"]{--oc-ptint:var(--oc-t-danger);--oc-pedge:var(--oc-b-danger)}
+.dlc-oc-hero__bg,.dlc-oc-hero__prev{position:absolute;inset:-1px;border-radius:inherit;pointer-events:none}
+.dlc-oc-hero__bg{background:var(--oc-tint);box-shadow:inset 0 0 0 1px var(--oc-edge)}
+.dlc-oc-hero__prev{display:none;background:var(--oc-ptint);box-shadow:inset 0 0 0 1px var(--oc-pedge)}
+.dlc-oc-hero[data-prev-tone] .dlc-oc-hero__prev{display:block;animation:dlc-oc-fadeout .45s var(--dlc-oc-ease-out) both}
+.dlc-oc-hero>:not(.dlc-oc-hero__bg):not(.dlc-oc-hero__prev){position:relative}
+.dlc-oc-hero__top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px}
+.dlc-oc-emblem{position:relative;width:56px;height:56px;color:var(--oc-fill)}
+.dlc-oc-emblem__halo{position:absolute;top:-16px;left:-16px;width:88px;height:88px;border-radius:50%;background:radial-gradient(closest-side,currentColor,transparent);opacity:.18}
+.dlc-oc-emblem__disc{position:absolute;top:6px;left:6px;width:44px;height:44px;border-radius:50%;background:var(--oc-fill);color:var(--oc-ink);display:flex;align-items:center;justify-content:center}
+.dlc-oc-hero[data-tone="accent"] .dlc-oc-emblem__disc{color:#fff}
+.dlc-oc-emblem__disc .dlc-oc-i{width:24px;height:24px}
+.dlc-oc-emblem__arc{position:absolute;inset:0;width:56px;height:56px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-dasharray:44 120;opacity:0}
+.dlc-oc-hero[data-tone="accent"] .dlc-oc-emblem__arc{opacity:1;animation:dlc-oc-spin 1.2s linear infinite}
+.dlc-oc-hero__greet{font-size:13px;font-weight:650;color:var(--oc-hero-muted);margin-bottom:2px}
+/* Reserved: 2 headline lines and 3 message lines on phones, so a live text change never moves the
+ * tracker. .dlc-oc in front: the headline may become the page's h1 (see the script), and theme h1
+ * rules must not restyle it. */
+.dlc-oc .dlc-oc-hero__title{margin:0;font-family:inherit;font-size:22px;line-height:1.2;font-weight:800;letter-spacing:-.01em;color:var(--oc-text);min-height:2.4em}
+.dlc-oc .dlc-oc-hero__msg{margin-top:6px;color:var(--dlc-text-soft,#475467);min-height:4.35em}
+@media (min-width:600px){.dlc-oc .dlc-oc-hero__title{min-height:1.2em}.dlc-oc .dlc-oc-hero__msg{min-height:2.9em}}
+.dlc-oc[data-live="0"] .dlc-oc-hero__title,.dlc-oc[data-live="0"] .dlc-oc-hero__msg{min-height:0}
+.dlc-oc-hero__meta{margin-top:10px;font-size:13px;color:var(--oc-hero-muted);font-variant-numeric:tabular-nums}
+@media (max-width:359px){.dlc-oc .dlc-oc-hero__title{font-size:20px}.dlc-oc-step__title{font-size:11px}.dlc-oc-step{padding:0 1px}}
+/* Status: pill, then the live line on its own fixed row (it never wraps into a second line). */
+.dlc-oc-hero__status{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin-top:12px;min-height:52px}
+.dlc-oc-pill{display:inline-block;max-width:100%;height:28px;padding:3px 12px;border-radius:999px;font-size:13px;font-weight:700;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--oc-t-neutral);color:var(--oc-p-neutral);border:1px solid var(--oc-b-neutral)}
+.dlc-oc-pill[data-tone="accent"]{background:var(--oc-card);color:var(--oc-p-accent);border-color:var(--oc-b-accent)}
+.dlc-oc-pill[data-tone="success"]{background:var(--oc-card);color:var(--oc-p-success);border-color:var(--oc-b-success)}
+.dlc-oc-pill[data-tone="warning"]{background:var(--oc-card);color:var(--oc-p-warning);border-color:var(--oc-b-warning)}
+.dlc-oc-pill[data-tone="danger"]{background:var(--oc-card);color:var(--oc-p-danger);border-color:var(--oc-b-danger)}
+.dlc-oc-live{display:flex;align-items:center;gap:6px;max-width:100%;height:18px;font-size:12px;line-height:18px;white-space:nowrap;color:var(--oc-hero-muted);font-variant-numeric:tabular-nums}
+.dlc-oc-live__label,.dlc-oc-live__ago{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.dlc-oc-live__label{flex:0 1 auto}.dlc-oc-live__ago{flex:0 9 auto}
+.dlc-oc-live__dot{position:relative;width:8px;height:8px;border-radius:50%;background:var(--oc-muted);flex:none}
+/* The dot pulses only while the page polls; it settles once, then stays still, at the final state. */
+.dlc-oc-live[data-state="live"] .dlc-oc-live__dot{background:var(--oc-ok)}
+.dlc-oc-live[data-state="live"] .dlc-oc-live__dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--oc-ok);animation:dlc-oc-ring 2s var(--dlc-oc-ease-out) infinite}
+.dlc-oc-live[data-state="final"] .dlc-oc-live__dot{animation:dlc-oc-settle .36s var(--dlc-oc-ease-out) both}
+.dlc-oc[data-phase="delivered"] .dlc-oc-live[data-state="final"] .dlc-oc-live__dot{background:var(--oc-ok)}
+.dlc-oc-live[data-state="offline"] .dlc-oc-live__dot,.dlc-oc-live[data-state="stopped"] .dlc-oc-live__dot{background:var(--dlc-oc-warn)}
+.dlc-oc-live__refresh{position:relative;flex:none;border:0;background:none;color:var(--oc-accent);font:inherit;font-weight:700;line-height:18px;padding:0 4px;cursor:pointer;text-decoration:underline}
+.dlc-oc-live__refresh::before{content:"";position:absolute;top:-13px;right:-4px;bottom:-13px;left:-4px}
+/* Tracker (9.4.2): one icon per step (reçue, payée, envoyée, livrée). A done step keeps its icon on
+ * the success colour with a check badge; the step in progress turns accent, a light arc circles it,
+ * its icon floats and the rail stretch leading to it carries a moving glint. Transform/opacity only;
+ * the connector fill scales to --p (the script sets its duration from the distance travelled). */
+.dlc-oc-track{position:relative;margin-top:20px}
+.dlc-oc-track__rail{position:absolute;top:18px;left:12.5%;right:12.5%;height:4px;border-radius:4px;background:var(--oc-border);overflow:hidden}
+.dlc-oc-track__fill{position:absolute;top:0;right:0;bottom:0;left:0;border-radius:4px;background:var(--oc-ok);transform-origin:0 50%;transform:scaleX(var(--p,0));transition:transform .45s var(--dlc-oc-ease-inout)}
+.dlc-oc-track__flow{position:absolute;top:0;bottom:0;left:0;width:33.334%;overflow:hidden;display:none}
+.dlc-oc-track[data-at="1"] .dlc-oc-track__flow{left:33.333%}
+.dlc-oc-track[data-at="2"] .dlc-oc-track__flow{left:66.666%}
+.dlc-oc-track[data-flow="1"] .dlc-oc-track__flow{display:block}
+.dlc-oc-track__flow::before{content:"";position:absolute;top:0;bottom:0;left:0;width:55%;border-radius:4px;background:linear-gradient(90deg,transparent,var(--oc-accent),transparent);transform:translateX(-100%);animation:dlc-oc-glint 1.5s var(--dlc-oc-ease-inout) infinite}
+.dlc-oc-steps{position:relative;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));min-height:100px}
+.dlc-oc-step{display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 2px;min-width:0}
+.dlc-oc-step__node{position:relative;isolation:isolate;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--oc-card);border:2px solid var(--oc-border);color:var(--oc-muted);transition:background-color .3s var(--dlc-oc-ease-out),border-color .3s var(--dlc-oc-ease-out),color .3s var(--dlc-oc-ease-out)}
+.dlc-oc .dlc-oc-step__node .dlc-oc-step__icon{display:block;width:20px;height:20px;stroke-width:1.9}
+.dlc-oc-step__spin{position:absolute;top:-6px;left:-6px;width:48px;height:48px;display:none;fill:none;stroke:var(--oc-accent);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:30 109;pointer-events:none}
+.dlc-oc-step__badge{position:absolute;right:-5px;bottom:-5px;width:19px;height:19px;border-radius:50%;display:none;align-items:center;justify-content:center;background:var(--oc-card);color:var(--oc-ok);border:2px solid var(--oc-card);box-shadow:0 1px 3px rgba(15,23,42,.18)}
+.dlc-oc .dlc-oc-step__badge .dlc-oc-i{display:block;width:11px;height:11px;stroke-width:3.4}
+.dlc-oc-step__title{margin-top:9px;font-size:12px;line-height:1.25;font-weight:650;color:var(--oc-hero-muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;max-width:100%;overflow-wrap:anywhere;-webkit-hyphens:auto;hyphens:auto}
+.dlc-oc-step__short{display:none}
+.dlc-oc-step__sub{margin-top:2px;font-size:11px;line-height:1.3;color:var(--oc-hero-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;min-height:1.3em;font-variant-numeric:tabular-nums}
+/* Under 375 px (and enlarged text at 360 px): one-word labels (« Reçue », « Payée », « Envoi », « Livrée »),
+ * the full title kept for screen readers; « 1 sur 2 articles » may take two lines in a taller, fixed tracker. */
+@media (max-width:374px){.dlc-oc-step__short{display:inline}.dlc-oc-steps{min-height:110px}.dlc-oc-step__sub{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}}
+@media (min-width:375px){.dlc-oc-step__long{position:static!important;width:auto;height:auto;margin:0;overflow:visible;clip:auto;white-space:normal}}
+@media (max-width:359px){.dlc-oc-step__badge{width:17px;height:17px;right:-6px;bottom:-6px}.dlc-oc-step__node{width:34px;height:34px}.dlc-oc-track__rail{top:15px}.dlc-oc .dlc-oc-step__node .dlc-oc-step__icon{width:17px;height:17px}.dlc-oc-step__spin{width:42px;height:42px;top:-6px;left:-6px}}
+.dlc-oc-step.is-done .dlc-oc-step__node{background:var(--oc-ok);border-color:var(--oc-ok);color:var(--oc-ink)}
+.dlc-oc-step.is-current .dlc-oc-step__node{background:var(--oc-primary);border-color:var(--oc-primary);color:#fff;box-shadow:0 6px 16px -6px var(--oc-accent)}
+.dlc-oc-step.is-alert .dlc-oc-step__node{background:var(--dlc-oc-warn);border-color:var(--dlc-oc-warn);color:var(--oc-ink)}
+.dlc-oc-step.is-ended .dlc-oc-step__node{background:var(--oc-muted);border-color:var(--oc-muted);color:var(--oc-ink)}
+.dlc-oc[data-phase="failed"] .dlc-oc-step.is-ended .dlc-oc-step__node{background:var(--oc-bad);border-color:var(--oc-bad)}
+.dlc-oc-step.is-skipped .dlc-oc-step__node{border-style:dashed;opacity:.5}
+.dlc-oc-step.is-done .dlc-oc-step__badge,.dlc-oc-step.is-alert .dlc-oc-step__badge,.dlc-oc-step.is-ended .dlc-oc-step__badge{display:flex}
+.dlc-oc-step.is-alert .dlc-oc-step__badge{color:var(--dlc-oc-warn)}
+.dlc-oc-step.is-ended .dlc-oc-step__badge{color:var(--oc-muted)}
+.dlc-oc[data-phase="failed"] .dlc-oc-step.is-ended .dlc-oc-step__badge{color:var(--oc-bad)}
+.dlc-oc-step.is-current .dlc-oc-step__spin,.dlc-oc-step.is-alert .dlc-oc-step__spin{display:block;animation:dlc-oc-spin 1.4s linear infinite}
+.dlc-oc-step.is-alert .dlc-oc-step__spin{stroke:var(--dlc-oc-warn);animation-duration:2.6s}
+.dlc-oc-step.is-current .dlc-oc-step__icon{animation:dlc-oc-float 1.8s ease-in-out infinite}
+/* The active node breathes: a soft halo slowly swells and settles behind it. */
+.dlc-oc-step.is-current .dlc-oc-step__node::after,.dlc-oc-step.is-alert .dlc-oc-step__node::after{content:"";position:absolute;top:-2px;left:-2px;width:40px;height:40px;border-radius:50%;background:var(--oc-accent);opacity:0;animation:dlc-oc-breath 2.4s ease-in-out infinite;z-index:-1}
+@media (max-width:359px){.dlc-oc-step.is-current .dlc-oc-step__node::after,.dlc-oc-step.is-alert .dlc-oc-step__node::after{width:34px;height:34px}}
+.dlc-oc-step.is-alert .dlc-oc-step__node::after{background:var(--dlc-oc-warn)}
+.dlc-oc-step.is-done .dlc-oc-step__title,.dlc-oc-step.is-ended .dlc-oc-step__title{color:var(--oc-text)}
+.dlc-oc-step.is-current .dlc-oc-step__title,.dlc-oc-step.is-alert .dlc-oc-step__title{color:var(--oc-text);font-weight:750}
+.dlc-oc-step.is-skipped .dlc-oc-step__title{opacity:.7}
+/* Hero action slot: always one 44 px row while live changes can swap its button (pay, support, share). */
+.dlc-oc-cta{display:flex;margin-top:16px;min-height:44px}
+.dlc-oc-cta>*{display:none}
+.dlc-oc-cta[data-cta="pay"] [data-cta-pay],.dlc-oc-cta[data-cta="retry"] [data-cta-pay],.dlc-oc-cta[data-cta="support"] [data-cta-support],.dlc-oc-cta[data-cta="share"] [data-cta-share]{display:inline-flex}
+.dlc-oc-cta[data-cta="none"]{visibility:hidden}
+.dlc-oc-cta[data-cta="none"][data-reserve="0"]{display:none}
+/* Delivery card */
+.dlc-oc-when{display:none}
+.dlc-oc[data-group="wait"] [data-when="wait"],.dlc-oc[data-group="rows"] [data-when="rows"],.dlc-oc[data-group="review"] [data-when="review"],.dlc-oc[data-group="done"] [data-when="done"]{display:block}
+/* « Besoin d'aide ? » is left out when the first render's hero slot holds « Contacter le support »
+ * (template class, never toggled live: a live change does not show or hide a card). */
+.dlc-oc[data-group="end"] .dlc-oc-delivery,.dlc-oc-support--off{display:none}
+.dlc-oc-delivery__msg{color:var(--dlc-text-soft,#475467)}
+.dlc-oc-delivery__msg a:not(.dlc-oc-btn){color:var(--oc-accent);font-weight:650}
+.dlc-oc-rows{flex-direction:column;gap:8px}
+.dlc-oc[data-group="rows"] .dlc-oc-rows{display:flex}
+.dlc-oc-row{position:relative;display:flex;align-items:center;gap:10px;padding:10px 12px 13px;border-radius:13px;background:var(--oc-soft);overflow:hidden}
+.dlc-oc-row__name{flex:1;min-width:0;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dlc-oc-row[data-state="delivered"] .dlc-oc-row__chip{color:var(--oc-p-success);background:var(--oc-t-success)}
+.dlc-oc-row[data-state="moving"] .dlc-oc-row__chip{color:var(--oc-p-accent);background:var(--oc-t-accent)}
+.dlc-oc-row[data-state="review"] .dlc-oc-row__chip{color:var(--oc-p-warning);background:var(--oc-t-warning)}
+.dlc-oc-row__bar{position:absolute;left:12px;right:12px;bottom:5px;height:3px;border-radius:3px;overflow:hidden;opacity:0;transition:opacity .3s var(--dlc-oc-ease-out)}
+.dlc-oc-row[data-state="moving"] .dlc-oc-row__bar{opacity:1;background:var(--oc-t-accent)}
+.dlc-oc-row__bar span{position:absolute;top:0;left:0;width:30%;height:100%;border-radius:3px;background:var(--oc-accent);transform:translateX(-100%)}
+.dlc-oc-row[data-state="moving"] .dlc-oc-row__bar span{animation:dlc-oc-shimmer 1.4s var(--dlc-oc-ease-inout) infinite}
+.dlc-oc-note{margin-top:10px;font-size:13px;color:var(--oc-muted)}
+/* Codes: the Digital Gateway panel and Shop2TopUp vouchers, restyled (never replaced). Their inline
+ * light colours are overridden so dark mode stays readable. */
+.dlc-oc-codes{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+.dlc-oc-codes__name{font-size:13px;font-weight:700;color:var(--oc-muted);margin-bottom:4px}
+.dlc-oc-codes .dfr-digital-delivery{margin:0!important;padding:14px!important;border:1px solid var(--oc-border)!important;border-radius:13px!important;background:var(--oc-soft)!important;box-shadow:none!important;color:var(--oc-text)!important}
+.dlc-oc-codes .dfr-digital-delivery h2{font-size:15px!important;color:var(--oc-text)!important}
+.dlc-oc-codes .dfr-digital-delivery [style*="15803d"]{color:var(--oc-p-success)!important}
+.dlc-oc-codes .dfr-digital-delivery [style*="edf2f7"]{border-color:var(--oc-border)!important}
+.dlc-oc-codes .dfr-secure-order-reveal,.dlc-oc-codes button{min-height:44px;border-radius:13px}
+.dlc-oc-codes .dfr-secure-order-reveal{padding:10px 16px;border:0;background:var(--oc-primary);color:#fff;font:inherit;font-weight:650;cursor:pointer;transition:transform .15s var(--dlc-oc-ease-out)}
+.dlc-oc-codes .dfr-secure-order-reveal:active{transform:scale(.97)}
+.dlc-oc-codes .dfr-secure-order-output>div{background:var(--oc-card)!important;border-color:var(--oc-border)!important;border-radius:12px!important;animation:dlc-oc-rise .3s var(--dlc-oc-ease-out) both}
+.dlc-oc-codes .dfr-secure-order-output>div>div:first-child{color:var(--oc-muted)!important}
+.dlc-oc-codes .dfr-secure-order-output button{min-height:44px!important;padding:6px 12px!important;border:1px solid var(--oc-border)!important;border-radius:11px!important;background:var(--oc-card)!important;color:var(--oc-text)!important;font:inherit!important;font-size:13px!important;font-weight:650!important}
+/* Codes reveal with a flip (rotateX + fade), then one shine sweep; staggered when several. */
+.dlc-oc-codes code{position:relative;display:inline-block;overflow:hidden;padding:6px 10px!important;border-radius:10px!important;background:var(--oc-card)!important;border:1px dashed var(--oc-b-accent)!important;color:var(--oc-text)!important;font:600 15px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.04em;word-break:break-all;transform-origin:50% 100%;animation:dlc-oc-flip .42s var(--dlc-oc-ease-out) .3s both}
+.dlc-oc-codes code::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.55) 50%,transparent 70%);transform:translateX(-100%);animation:dlc-oc-shine .45s var(--dlc-oc-ease-out) .72s both;pointer-events:none}
+.dlc-oc-codes li:nth-child(2) code{animation-delay:.38s}.dlc-oc-codes li:nth-child(2) code::after{animation-delay:.8s}
+.dlc-oc-codes li:nth-child(n+3) code{animation-delay:.46s}.dlc-oc-codes li:nth-child(n+3) code::after{animation-delay:.88s}
+.dlc-oc-codes .dfr-secure-order-output code{animation-delay:.08s}.dlc-oc-codes .dfr-secure-order-output code::after{animation-delay:.5s}
+.dlc-oc-codes .dfr-secure-order-output>div:nth-child(2),.dlc-oc-codes .dfr-secure-order-output>div:nth-child(2) code{animation-delay:.16s}
+.dlc-oc-codes .dst2t-vouchers>strong{display:block;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--oc-muted)}
+.dlc-oc-codes .dst2t-vouchers ul{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+.dlc-oc-codes .dst2t-vouchers li{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+/* « N° de série : TEST-SERIAL-01 »: the whole chip wraps to its own line first, then the value (one
+ * inline block, set by the script) to its own line inside it; the value breaks only when wider than a
+ * full line, and is never cut. */
+.dlc-oc-codes .dst2t-vouchers small{display:inline-block;max-width:100%;min-width:0;padding:3px 10px;border-radius:12px;background:var(--oc-card);border:1px solid var(--oc-border);color:var(--oc-hero-muted);font-size:12px;font-weight:600;line-height:18px;overflow-wrap:anywhere}
+.dlc-oc-codes__val{display:inline-block;max-width:100%}
+/* Copy button: « Copier » and « Copié ! » stacked in one cell (constant width), cross-faded. */
+.dlc-oc-copy{display:inline-grid;place-items:center;min-height:36px;padding:6px 12px;font-size:13px;vertical-align:middle;overflow:hidden}
+.dlc-oc-copy>span{grid-area:1/1;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:opacity .2s var(--dlc-oc-ease-out),transform .2s var(--dlc-oc-ease-out)}
+.dlc-oc-copy .dlc-oc-i{width:16px;height:16px}
+.dlc-oc-copy__done{opacity:0;transform:translateY(8px);color:var(--oc-p-success)}
+.dlc-oc-copy.is-done .dlc-oc-copy__label{opacity:0;transform:translateY(-8px)}
+.dlc-oc-copy.is-done .dlc-oc-copy__done{opacity:1;transform:none}
+.dlc-oc-copy.is-pop{animation:dlc-oc-press .22s var(--dlc-oc-ease-out)}
+/* Summary */
+.dlc-oc-meta{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.dlc-oc-meta>div{padding:10px 12px;border-radius:13px;background:var(--oc-soft);min-width:0}
+.dlc-oc-meta dt,.dlc-oc-totals dt{font-size:13px;color:var(--oc-muted)}
+.dlc-oc-meta dd{font-weight:700;overflow-wrap:anywhere}
+.dlc-oc-meta__total dd{font-size:17px}.dlc-oc-meta__total[data-paid="1"] dd{color:var(--oc-p-success)}
+@media (max-width:359px){.dlc-oc-meta__pay,.dlc-oc-meta__total{grid-column:1/-1}}
+@media (max-width:479px){.dlc-oc-meta--wide .dlc-oc-meta__pay,.dlc-oc-meta--wide .dlc-oc-meta__total{grid-column:1/-1}}
+.dlc-oc-lines{display:flex;flex-direction:column;border-top:1px solid var(--oc-border)}
+.dlc-oc-line{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--oc-border)}
+.dlc-oc-line__thumb{width:48px;height:48px;flex:none;border-radius:12px;object-fit:cover;background:var(--oc-soft)}
+.dlc-oc-line__thumb--empty{display:flex;align-items:center;justify-content:center;color:var(--oc-muted)}
+.dlc-oc-line__main{flex:1;min-width:0;display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 12px}
+.dlc-oc-line__body{flex:1 1 62%;min-width:0}
+.dlc-oc-line__name{font-weight:700;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dlc-oc-line__qty{font-size:13px;color:var(--oc-muted);margin-top:2px}
+.dlc-oc-line__chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.dlc-oc-line__chips .dlc-oc-chip{white-space:normal;overflow-wrap:anywhere}
+.dlc-oc-line__total{flex:0 0 auto;margin-left:auto;font-weight:700}
+/* Under 360 px the line total drops under the name, so a player ID chip keeps one line. */
+@media (max-width:359px){.dlc-oc-line__body{flex-basis:100%}}
+.dlc-oc-totals{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.dlc-oc-totals>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.dlc-oc-totals dd{font-weight:650;text-align:right;overflow-wrap:anywhere}
+.dlc-oc-totals__grand{padding-top:10px;border-top:1px solid var(--oc-border)}
+.dlc-oc-totals__grand dt{font-size:15px;color:var(--oc-text);font-weight:700}
+.dlc-oc-totals__grand dd{font-size:20px;font-weight:800}
+.dlc-oc-totals--plain{margin-top:0}
+.dlc-oc-instructions__body{overflow-wrap:anywhere}
+.dlc-oc-support__text{color:var(--dlc-text-soft,#475467);margin-bottom:12px}
+/* Actions */
+.dlc-oc-actions{display:flex;flex-direction:column;gap:8px}
+.dlc-oc-actions .dlc-oc-btn{width:100%}
+@media (min-width:480px){.dlc-oc-actions{flex-direction:row;flex-wrap:wrap}.dlc-oc-actions .dlc-oc-btn{width:auto;flex:1 1 auto}}
+.dlc-oc-hero .dlc-oc-actions{margin-top:16px}
+.dlc-oc-extra:empty{display:none}
+.dlc-oc-extra:has(>:not(script,noscript,style,link,[hidden])){padding:16px;border-radius:var(--dlc-radius,18px);background:var(--oc-card);border:1px solid var(--oc-border)}
+/* Share sheet: the panel slides up over a fading backdrop, then the receipt card scales in and the
+ * actions rise one after the other (each opening replays it: [open] toggles the display). */
+.dlc-oc-sheet{position:fixed;top:auto;bottom:0;left:0;right:0;width:100%;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;color:var(--oc-text);overflow:visible}
+.dlc-oc-sheet::backdrop{background:rgba(8,10,20,.5);animation:dlc-oc-fade .3s var(--dlc-oc-ease-out) both}
+.dlc-oc-sheet__panel{max-height:92vh;overflow:auto;padding:16px 16px 24px;border-radius:20px 20px 0 0;background:var(--oc-card);box-shadow:0 -10px 40px rgba(0,0,0,.2);animation:dlc-oc-up .34s var(--dlc-oc-ease-out) both}
+.dlc-oc-sheet[open] .dlc-oc-sheet__canvas{animation:dlc-oc-card-in .36s var(--dlc-oc-ease-out) .1s both}
+.dlc-oc-sheet[open] .dlc-oc-sheet__actions>*{animation:dlc-oc-rise .28s var(--dlc-oc-ease-out) .16s both}
+.dlc-oc-sheet[open] .dlc-oc-sheet__actions>:nth-child(2){animation-delay:.21s}.dlc-oc-sheet[open] .dlc-oc-sheet__actions>:nth-child(3){animation-delay:.26s}.dlc-oc-sheet[open] .dlc-oc-sheet__actions>:nth-child(4){animation-delay:.31s}
+.dlc-oc-sheet.is-closing .dlc-oc-sheet__panel{animation:dlc-oc-down .2s var(--dlc-oc-ease-inout) both}
+.dlc-oc-sheet.is-closing::backdrop{animation:dlc-oc-fadeout .2s var(--dlc-oc-ease-out) both}
+.dlc-oc-sheet__head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.dlc-oc-sheet__head .dlc-oc-card__title{margin:0}
+.dlc-oc-sheet__preview{display:flex;justify-content:center;padding:8px 0 14px}
+.dlc-oc-sheet__canvas{width:100%;max-width:340px;height:auto;aspect-ratio:364/560;border-radius:16px;background:#f8fafc;box-shadow:0 6px 24px rgba(15,23,42,.14)}
+.dlc-oc-sheet__actions{display:grid;grid-template-columns:1fr;gap:8px}
+@media (min-width:400px){.dlc-oc-sheet__actions{grid-template-columns:1fr 1fr}.dlc-oc-sheet__actions [data-oc-act="share"]{grid-column:1/-1}}
+.dlc-oc-sheet__hint{margin-top:10px;font-size:12px;color:var(--oc-muted);text-align:center}
+@media (min-width:720px){.dlc-oc-sheet{top:0;margin:auto;max-width:440px;height:fit-content}.dlc-oc-sheet__panel{border-radius:20px;animation-name:dlc-oc-zoom}.dlc-oc-sheet.is-closing .dlc-oc-sheet__panel{animation-name:dlc-oc-unzoom}}
+/* Toast: an always-present live region (only its opacity changes); inside the dialog while the sheet is open. */
+.dlc-oc-toast{position:fixed;left:16px;right:16px;bottom:24px;z-index:100000;margin:0 auto;max-width:360px;padding:12px 16px;border-radius:13px;background:#111827;color:#fff;font-size:14px;font-weight:600;line-height:1.4;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.25);opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity .2s var(--dlc-oc-ease-out),transform .2s var(--dlc-oc-ease-out)}
+.dlc-oc-toast.is-on{opacity:1;transform:none}
+.dlc-oc-sheet .dlc-oc-toast{top:16px;bottom:auto;transform:translateY(-12px)}
+.dlc-oc-sheet .dlc-oc-toast.is-on{transform:none}
+/* Success burst (A7): emblem spring, shock ring, confetti (stars and second ring: see 9.4.2 below). */
+.dlc-oc-burst{position:absolute;top:28px;left:28px;width:0;height:0;pointer-events:none}
+.dlc-oc-burst b{position:absolute;top:-28px;left:-28px;width:56px;height:56px;border-radius:50%;border:2px solid var(--oc-ok);opacity:0;animation:dlc-oc-wave .6s var(--dlc-oc-ease-out) both}
+.dlc-oc-burst i{position:absolute;top:-5px;left:-3px;width:6px;height:10px;border-radius:2px;background:var(--oc-ok);animation:dlc-oc-fly .8s var(--dlc-oc-ease-out) both}
+.dlc-oc-burst i:nth-child(3n){background:var(--oc-accent)}.dlc-oc-burst i:nth-child(4n){background:var(--dlc-accent-2,#d946b7)}.dlc-oc-burst i:nth-child(5n){top:-3px;width:6px;height:6px;border-radius:50%;background:#fbbf24}
+/* The celebration wins over the icon-swap pop (same disc, same specificity: later rule). */
+.dlc-oc-emblem.is-swap .dlc-oc-emblem__disc{animation:dlc-oc-pop .36s var(--dlc-oc-ease-out) both}
+.dlc-oc-hero.is-celebrate .dlc-oc-emblem__disc{animation:dlc-oc-celebrate .42s var(--dlc-oc-ease-out) both}
+/* Text swap (A6): the old text lifts away, the new one rises in. */
+.dlc-oc-swap-out{animation:dlc-oc-out .16s var(--dlc-oc-ease-out) both}
+.dlc-oc-swap-in{animation:dlc-oc-rise .24s var(--dlc-oc-ease-out) both}
+/* Entrance (A1), pure CSS: cards rise and fade in 70 ms apart; inside the hero the emblem springs in,
+ * the tracker nodes follow one by one and the connector draws up to the current step. Skipped
+ * after the page reloaded itself (data-entrance="none"). Once played, the script sets
+ * data-entrance="played" before the first live change: the finished rules stop matching (no visual
+ * change), so a node losing .is-pop never replays its entrance and a card can glide (FLIP). */
+.dlc-oc>.dlc-oc-card,.dlc-oc>.dlc-oc-actions{animation:dlc-oc-enter .38s var(--dlc-oc-ease-out) both}
+.dlc-oc>.dlc-oc-s1{animation-delay:70ms}.dlc-oc>.dlc-oc-s2{animation-delay:140ms}.dlc-oc>.dlc-oc-s3{animation-delay:210ms}.dlc-oc>.dlc-oc-s4{animation-delay:280ms}.dlc-oc>.dlc-oc-s5{animation-delay:350ms}.dlc-oc>.dlc-oc-s6{animation-delay:420ms}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-emblem{animation:dlc-oc-emblem-in .42s var(--dlc-oc-ease-out) .08s both}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step__node{animation:dlc-oc-node-in .32s var(--dlc-oc-ease-out) .16s both}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step:nth-child(2) .dlc-oc-step__node{animation-delay:.23s}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step:nth-child(3) .dlc-oc-step__node{animation-delay:.3s}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step:nth-child(4) .dlc-oc-step__node{animation-delay:.37s}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-track__fill{animation:dlc-oc-fill-in .45s var(--dlc-oc-ease-inout) .3s backwards}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step__badge{animation:dlc-oc-check .34s var(--dlc-oc-ease-out) .4s both}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step:nth-child(2) .dlc-oc-step__badge{animation-delay:.5s}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step:nth-child(3) .dlc-oc-step__badge{animation-delay:.6s}
+.dlc-oc[data-entrance="full"][data-motion="full"] .dlc-oc-step:nth-child(4) .dlc-oc-step__badge{animation-delay:.7s}
+@media (prefers-reduced-motion:no-preference){.dlc-oc[data-entrance="full"][data-motion="full"][data-phase="delivered"] .dlc-oc-emblem__disc .dlc-oc-i{stroke-dasharray:21;animation:dlc-oc-draw .42s var(--dlc-oc-ease-out) .34s both}}
+/* A newly completed node pops into its check (spring, overshoot 1.12); delays set by the script so
+ * each node lands as the connector fill reaches it. */
+.dlc-oc .dlc-oc-steps .dlc-oc-step.is-pop .dlc-oc-step__node{animation:dlc-oc-pop .38s var(--dlc-oc-ease-out) .12s both}
+.dlc-oc .dlc-oc-steps .dlc-oc-step.is-pop .dlc-oc-step__badge{animation:dlc-oc-check .38s var(--dlc-oc-ease-out) .12s both}
+.dlc-oc[data-motion="full"] .dlc-oc-emblem__halo{animation:dlc-oc-breathe 3s ease-in-out infinite alternate}
+@keyframes dlc-oc-enter{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes dlc-oc-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes dlc-oc-out{to{opacity:0;transform:translateY(-6px)}}
+@keyframes dlc-oc-fade{from{opacity:0}to{opacity:1}}
+@keyframes dlc-oc-fadeout{from{opacity:1}to{opacity:0}}
+@keyframes dlc-oc-spin{to{transform:rotate(360deg)}}
+@keyframes dlc-oc-ring{0%{transform:scale(1);opacity:.45}100%{transform:scale(1.6);opacity:0}}
+@keyframes dlc-oc-breath{0%,100%{transform:scale(1);opacity:.3}50%{transform:scale(1.55);opacity:.06}}
+@keyframes dlc-oc-settle{0%{transform:scale(1.7);opacity:.4}100%{transform:none;opacity:1}}
+@keyframes dlc-oc-pop{0%{transform:scale(.82)}55%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes dlc-oc-check{0%{opacity:0;transform:scale(.4) rotate(-14deg)}60%{opacity:1;transform:scale(1.1)}100%{opacity:1;transform:none}}
+@keyframes dlc-oc-celebrate{0%{transform:scale(.6)}60%{transform:scale(1.12)}100%{transform:scale(1)}}
+@keyframes dlc-oc-emblem-in{0%{opacity:0;transform:scale(.6)}60%{opacity:1;transform:scale(1.08)}100%{opacity:1;transform:none}}
+@keyframes dlc-oc-node-in{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
+@keyframes dlc-oc-fill-in{from{transform:scaleX(0)}}
+@keyframes dlc-oc-shimmer{from{transform:translateX(-100%)}to{transform:translateX(330%)}}
+@keyframes dlc-oc-shine{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+@keyframes dlc-oc-flip{0%{opacity:0;transform:perspective(480px) rotateX(-80deg)}55%{opacity:1}100%{opacity:1;transform:perspective(480px) rotateX(0)}}
+@keyframes dlc-oc-press{0%{transform:scale(.95)}100%{transform:scale(1)}}
+@keyframes dlc-oc-breathe{from{opacity:.14}to{opacity:.26}}
+@keyframes dlc-oc-up{from{transform:translateY(100%)}to{transform:none}}
+@keyframes dlc-oc-down{to{transform:translateY(100%)}}
+@keyframes dlc-oc-zoom{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes dlc-oc-unzoom{to{opacity:0;transform:scale(.96)}}
+@keyframes dlc-oc-card-in{from{opacity:0;transform:translateY(10px) scale(.94)}to{opacity:1;transform:none}}
+@keyframes dlc-oc-wave{0%{opacity:.55;transform:scale(.7)}100%{opacity:0;transform:scale(2.4)}}
+@keyframes dlc-oc-glint{from{transform:translateX(-100%)}to{transform:translateX(182%)}}
+@keyframes dlc-oc-float{0%,100%{transform:none}50%{transform:translateY(-2px)}}
+@keyframes dlc-oc-draw{from{stroke-dashoffset:21}to{stroke-dashoffset:0}}
+@keyframes dlc-oc-hop{0%,100%{transform:none}40%{transform:translateY(-6px) scale(1.06)}70%{transform:translateY(1px)}}
+@keyframes dlc-oc-twinkle{0%{opacity:0;transform:translate(0,0) scale(.2) rotate(0)}35%{opacity:1;transform:translate(var(--x),var(--y)) scale(1) rotate(45deg)}100%{opacity:0;transform:translate(var(--x),var(--y)) scale(.3) rotate(120deg)}}
+@keyframes dlc-oc-gleam{from{transform:translateX(-100%)}to{transform:translateX(170%)}}
+@keyframes dlc-oc-fly{0%{opacity:1;transform:translate(0,0) rotate(0) scale(1)}70%{opacity:1}100%{opacity:0;transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(.6)}}
+/* Infinite animations pause off-screen: hero (arc, halo, breathing node, live dot) and delivery rows (shimmer) apart. */
+.dlc-oc--paused .dlc-oc-emblem__arc,.dlc-oc--paused .dlc-oc-emblem__halo,.dlc-oc--paused .dlc-oc-step__node::after,.dlc-oc--paused .dlc-oc-live__dot::after,.dlc-oc-delivery--paused .dlc-oc-row__bar span{animation-play-state:paused}
+/* Motion levels: calm (slow phones, save-data: opacity only, no loops) and off (reduced motion, setting) */
+.dlc-oc[data-motion="calm"]>.dlc-oc-card,.dlc-oc[data-motion="calm"]>.dlc-oc-actions{animation-name:dlc-oc-fade;animation-duration:.2s;animation-delay:0s}
+.dlc-oc[data-motion="calm"] .dlc-oc-emblem__arc,.dlc-oc[data-motion="calm"] .dlc-oc-row__bar span,.dlc-oc[data-motion="calm"] .dlc-oc-live__dot::after,.dlc-oc[data-motion="calm"] .dlc-oc-step__node::after,.dlc-oc[data-motion="calm"] .dlc-oc-codes code::after,.dlc-oc[data-motion="calm"] .dlc-oc-emblem.is-swap .dlc-oc-emblem__disc,.dlc-oc[data-motion="calm"] .dlc-oc-live__dot,.dlc-oc[data-motion="calm"] .dlc-oc-copy.is-pop,.dlc-oc[data-motion="calm"] .dlc-oc-step.is-pop .dlc-oc-step__badge,.dlc-oc[data-motion="calm"] .dlc-oc-step__spin,.dlc-oc[data-motion="calm"] .dlc-oc-step__icon{animation:none}
+.dlc-oc[data-motion="calm"] .dlc-oc-row__bar span{transform:none;width:100%;opacity:.35}
+.dlc-oc[data-motion="calm"] .dlc-oc-steps .dlc-oc-step.is-pop .dlc-oc-step__node,.dlc-oc[data-motion="calm"] .dlc-oc-steps .dlc-oc-step.is-pop .dlc-oc-step__badge,.dlc-oc[data-motion="calm"] .dlc-oc-btn:active{animation:none;transform:none}
+.dlc-oc[data-motion="calm"] .dlc-oc-track__fill{transition-duration:.2s}
+.dlc-oc[data-motion="calm"] .dlc-oc-swap-out{animation:dlc-oc-fadeout .16s linear both}
+.dlc-oc[data-motion="calm"] .dlc-oc-swap-in,.dlc-oc[data-motion="calm"] .dlc-oc-codes code,.dlc-oc[data-motion="calm"] .dlc-oc-codes .dfr-secure-order-output>div,.dlc-oc[data-motion="calm"] .dlc-oc-sheet[open] .dlc-oc-sheet__canvas,.dlc-oc[data-motion="calm"] .dlc-oc-sheet[open] .dlc-oc-sheet__actions>*{animation:dlc-oc-fade .2s linear both}
+.dlc-oc[data-motion="calm"] .dlc-oc-copy>span{transform:none}
+.dlc-oc[data-motion="calm"] .dlc-oc-sheet__panel{animation:dlc-oc-fade .16s linear both}
+.dlc-oc[data-motion="calm"] .dlc-oc-sheet.is-closing .dlc-oc-sheet__panel{animation:dlc-oc-fadeout .16s linear both}
+.dlc-oc[data-motion="calm"] .dlc-oc-toast,.dlc-oc[data-motion="calm"] .dlc-oc-sheet .dlc-oc-toast{transform:none}
+.dlc-oc[data-entrance="none"]>.dlc-oc-card,.dlc-oc[data-entrance="none"]>.dlc-oc-actions,.dlc-oc[data-entrance="played"]>.dlc-oc-card,.dlc-oc[data-entrance="played"]>.dlc-oc-actions{animation:none}
+.dlc-oc[data-motion="off"] *,.dlc-oc[data-motion="off"] *::before,.dlc-oc[data-motion="off"] *::after,.dlc-oc[data-motion="off"] .dlc-oc-sheet::backdrop,html.delicat-reduce-motion .dlc-oc *,html.delicat-reduce-motion .dlc-oc *::before,html.delicat-reduce-motion .dlc-oc *::after,html.delicat-reduce-motion .dlc-oc-sheet::backdrop{animation:none!important;transition-duration:.01ms!important}
+@media (prefers-reduced-motion:reduce){.dlc-oc *,.dlc-oc *::before,.dlc-oc *::after,.dlc-oc-sheet::backdrop{animation:none!important;transition-duration:.01ms!important}}
+/* Print: the receipt sheet only (order-confirmation-print.css shows it); hidden on screen */
+.dlc-oc-print{display:none}
+/* 9.4.1 fixes (found with the render harness). */
+/* Theme buttons (`button`, `.woocommerce button`, `.woocommerce-page a`) no longer restyle the module's buttons. */
+.dlc-oc .dlc-oc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid var(--oc-border);border-radius:13px;background:var(--oc-card);color:var(--oc-text);font:inherit;font-weight:650;line-height:1.3;text-align:center;text-transform:none;text-decoration:none;box-shadow:none}
+.dlc-oc .dlc-oc-btn:hover,.dlc-oc .dlc-oc-btn:focus{background:var(--oc-card);color:var(--oc-text);border-color:var(--oc-border)}
+.dlc-oc .dlc-oc-btn--primary,.dlc-oc .dlc-oc-btn--primary:hover,.dlc-oc .dlc-oc-btn--primary:focus{background:var(--oc-primary);border-color:transparent;color:#fff}
+.dlc-oc .dlc-oc-btn--ghost,.dlc-oc .dlc-oc-btn--ghost:hover,.dlc-oc .dlc-oc-btn--ghost:focus{background:transparent}
+.dlc-oc .dlc-oc-btn--soft,.dlc-oc .dlc-oc-btn--soft:hover,.dlc-oc .dlc-oc-btn--soft:focus{border-color:var(--oc-edge,var(--oc-border))}
+.dlc-oc .dlc-oc-copy{display:inline-grid;min-height:36px;padding:6px 12px;font-size:13px}
+.dlc-oc .dlc-oc-iconbtn,.dlc-oc .dlc-oc-iconbtn:hover,.dlc-oc .dlc-oc-iconbtn:focus{display:inline-flex;width:44px;height:44px;min-height:0;padding:0;border:1px solid var(--oc-border);border-radius:50%;background:var(--oc-card);color:var(--oc-text)}
+.dlc-oc .dlc-oc-live__refresh,.dlc-oc .dlc-oc-live__refresh:hover,.dlc-oc .dlc-oc-live__refresh:focus{display:inline;min-height:0;height:auto;padding:0 4px;border:0;border-radius:0;background:none;color:var(--oc-accent);font:inherit;font-weight:700;line-height:18px}
+.dlc-oc .dlc-oc-cta>*{display:none}
+.dlc-oc-cta[data-cta="pay"] [data-cta-pay],.dlc-oc-cta[data-cta="retry"] [data-cta-pay],.dlc-oc-cta[data-cta="support"] [data-cta-support],.dlc-oc-cta[data-cta="share"] [data-cta-share]{display:inline-flex}
+/* Thumbnails keep 48x48: the storefront's img[width][height]{height:auto} let the flex row stretch them. */
+.dlc-oc-line__thumb{align-self:flex-start;aspect-ratio:1/1}
+/* Looping animations really pause off-screen (the animation shorthands reset the play state). */
+.dlc-oc--paused .dlc-oc-emblem__arc,.dlc-oc--paused .dlc-oc-emblem__halo,.dlc-oc--paused .dlc-oc-step__node::after,.dlc-oc--paused .dlc-oc-live__dot::after,.dlc-oc-delivery--paused .dlc-oc-row__bar span{animation-play-state:paused!important}
+/* Under 360 px the step labels shrink (the earlier rule lost to the base rules). */
+@media (max-width:359px){.dlc-oc .dlc-oc-step__title{font-size:11px}.dlc-oc .dlc-oc-step{padding:0 1px}}
+/* « 1 sur 2 articles » may take two lines on phones; the tracker keeps one fixed height. */
+@media (max-width:479px){.dlc-oc-steps{min-height:110px}.dlc-oc-step__sub{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}}
+/* Dark: warning borders the dark adapter would repaint (and leave stale after a live change). */
+html[data-delicat-theme="dark"] .dlc-oc,html.dlc-theme-dark .dlc-oc{--oc-b-warning:#544521}
+html[data-delicat-theme="dark"] .dlc-oc-step.is-alert .dlc-oc-step__node,html.dlc-theme-dark .dlc-oc-step.is-alert .dlc-oc-step__node{border-color:transparent}
+/* Skipped steps stay readable (opacity .7 gave 3.46:1). */
+.dlc-oc-step.is-skipped .dlc-oc-step__title{opacity:1;color:var(--oc-muted)}
+.dlc-oc-instructions__body>*+*{margin-top:8px}
+.dlc-oc-totals dt{flex:none}.dlc-oc-totals dd{min-width:0}
+/* Slow phones get the calm motion from the first frame (the script switches to it later). */
+html.delicat-low-power .dlc-oc>.dlc-oc-card,html.delicat-low-power .dlc-oc>.dlc-oc-actions,html.delicat-save-data .dlc-oc>.dlc-oc-card,html.delicat-save-data .dlc-oc>.dlc-oc-actions{animation-name:dlc-oc-fade;animation-duration:.2s;animation-delay:0s}
+html.delicat-low-power .dlc-oc[data-entrance] .dlc-oc-emblem,html.delicat-low-power .dlc-oc[data-entrance] .dlc-oc-step__node,html.delicat-low-power .dlc-oc[data-entrance] .dlc-oc-track__fill,html.delicat-low-power .dlc-oc .dlc-oc-emblem__halo,html.delicat-low-power .dlc-oc .dlc-oc-emblem__arc,html.delicat-low-power .dlc-oc .dlc-oc-row__bar span,html.delicat-low-power .dlc-oc .dlc-oc-step__node::after,html.delicat-low-power .dlc-oc .dlc-oc-live__dot::after{animation:none}
+/* Dark: the accent emblem's arc and halo (currentColor) stay readable on the glass card. */
+html[data-delicat-theme="dark"] .dlc-oc-hero[data-tone="accent"] .dlc-oc-emblem,html.dlc-theme-dark .dlc-oc-hero[data-tone="accent"] .dlc-oc-emblem{color:#a99cff}
+/* 9.4.2 */
+/* Receipt layout: the checkout's white wrapper card (storefront-polish, native-document) is dropped on
+ * this page, so the module's cards sit on the page (no card in a card, no doubled side padding). */
+body.dlc-oc-page .delicat-native-page-main>.woocommerce,body.dlc-oc-page.delicat-native-checkout .delicat-native-page-main>.woocommerce,body.dlc-oc-page.delicat-native-checkout .woocommerce{padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+body.dlc-oc-page .delicat-native-page-main>.woocommerce::before{content:none!important}
+/* WhatsApp Business support: a green action (white text 5:1), full width in the support card. */
+.dlc-oc .dlc-oc-btn--wa,.dlc-oc .dlc-oc-btn--wa:hover,.dlc-oc .dlc-oc-btn--wa:focus{background:#15803d;border-color:transparent;color:#fff}
+.dlc-oc-support .dlc-oc-btn--wa{width:100%}
+.dlc-oc-support__num{font-weight:700;color:var(--oc-text);white-space:nowrap;font-variant-numeric:tabular-nums}
+/* Tracker loops (arc, floating icon, rail glint) pause off-screen and stop on calm / slow phones. */
+.dlc-oc--paused .dlc-oc-step__spin,.dlc-oc--paused .dlc-oc-step__icon,.dlc-oc--paused .dlc-oc-track__flow::before{animation-play-state:paused!important}
+.dlc-oc[data-motion="calm"] .dlc-oc-track__flow,html.delicat-low-power .dlc-oc .dlc-oc-track__flow,html.delicat-save-data .dlc-oc .dlc-oc-track__flow{display:none}
+html.delicat-low-power .dlc-oc .dlc-oc-step__spin,html.delicat-low-power .dlc-oc .dlc-oc-step__icon,html.delicat-low-power .dlc-oc[data-entrance] .dlc-oc-step__badge,html.delicat-low-power .dlc-oc[data-entrance] .dlc-oc-emblem__disc .dlc-oc-i{animation:none}
+/* Completed order (about 1 s): two shock rings, 22 confetti pieces and 6 twinkling stars around the
+ * emblem, a gleam across the pill and a hop along the tracker, then the totals count up. */
+.dlc-oc-burst b+b{border-color:var(--oc-accent);animation-delay:.14s}
+.dlc-oc-burst em{position:absolute;top:-7px;left:-7px;width:14px;height:14px;background:#fbbf24;-webkit-clip-path:polygon(50% 0,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0 50%,39% 39%);clip-path:polygon(50% 0,61% 39%,100% 50%,61% 61%,50% 100%,39% 61%,0 50%,39% 39%);opacity:0;animation:dlc-oc-twinkle .9s var(--dlc-oc-ease-out) both}
+.dlc-oc-burst em:nth-of-type(2n){background:var(--oc-accent)}
+.dlc-oc-pill{position:relative}
+.dlc-oc-hero.is-celebrate .dlc-oc-pill::after{content:"";position:absolute;top:0;bottom:0;left:0;width:60%;background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.8),rgba(255,255,255,0));transform:translateX(-100%);animation:dlc-oc-gleam .7s var(--dlc-oc-ease-inout) .2s both;pointer-events:none}
+html[data-delicat-theme="dark"] .dlc-oc-hero.is-celebrate .dlc-oc-pill::after,html.dlc-theme-dark .dlc-oc-hero.is-celebrate .dlc-oc-pill::after{background:linear-gradient(100deg,rgba(255,255,255,0),rgba(255,255,255,.22),rgba(255,255,255,0))}
+.dlc-oc-track.is-cheer .dlc-oc-step__node{animation:dlc-oc-hop .5s var(--dlc-oc-ease-out) both}
+.dlc-oc-track.is-cheer .dlc-oc-step:nth-child(2) .dlc-oc-step__node{animation-delay:.08s}
+.dlc-oc-track.is-cheer .dlc-oc-step:nth-child(3) .dlc-oc-step__node{animation-delay:.16s}
+.dlc-oc-track.is-cheer .dlc-oc-step:nth-child(4) .dlc-oc-step__node{animation-delay:.24s}
+.dlc-oc[data-motion="calm"] .dlc-oc-hero.is-celebrate .dlc-oc-pill::after,html.delicat-low-power .dlc-oc-hero.is-celebrate .dlc-oc-pill::after{display:none}

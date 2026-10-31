@@ -1,0 +1,108 @@
+/*
+ * Delicat Builder V9 — late polish fixes (last file of the polish bundle).
+ */
+html[data-delicat-theme="dark"] body .dmc-calc,
+html.dlc-theme-dark body .dmc-calc {
+  color: #f7f8fc;
+  --dmc-card-bg: #0f1328 !important;
+  --dmc-field-bg: #11162a !important;
+  --dmc-help-bg: #141a33 !important;
+  --dmc-total-bg: #141a33 !important;
+  --dmc-border: #ffffff1f !important;
+  --dmc-text: #f7f8fc !important;
+}
+html[data-delicat-theme="dark"]
+  body
+  .dmc-calc
+  .dmc-input:not([type="radio"]):not([type="checkbox"]),
+html[data-delicat-theme="dark"] body .dmc-calc select.dmc-input,
+html[data-delicat-theme="dark"] body .dmc-calc textarea.dmc-input,
+html.dlc-theme-dark
+  body
+  .dmc-calc
+  .dmc-input:not([type="radio"]):not([type="checkbox"]),
+html.dlc-theme-dark body .dmc-calc select.dmc-input,
+html.dlc-theme-dark body .dmc-calc textarea.dmc-input {
+  background: var(--dmc-field-bg, #11162a) !important;
+  color: #f7f8fc !important;
+  border-color: #ffffff24 !important;
+}
+html[data-delicat-theme="dark"] .delicat-legal,
+html.dlc-theme-dark .delicat-legal {
+  --lg-ink: #f3f4f7;
+  --lg-brand: #d6d1ff;
+  --lg-mute: #a6aab6;
+  --lg-accent: #a89bff;
+  --lg-line: #ffffff1f;
+  color: var(--lg-ink);
+}
+html[data-delicat-theme="dark"] .delicat-legal__toc,
+html[data-delicat-theme="dark"] .delicat-legal__body th,
+html[data-delicat-theme="dark"] .delicat-legal__body thead td,
+html.dlc-theme-dark .delicat-legal__toc,
+html.dlc-theme-dark .delicat-legal__body th,
+html.dlc-theme-dark .delicat-legal__body thead td {
+  color: var(--lg-ink);
+  background: #141a33;
+}
+html[data-delicat-theme="dark"] body.dpn-checkout,
+html.dlc-theme-dark body.dpn-checkout {
+  --dpn-bg: #eef0f4;
+  --dpn-card: #fff;
+  --dpn-text: #171922;
+  --dpn-muted: #737887;
+  --dpn-line: #e5e7ed;
+  --dpn-soft: #f7f8fa;
+  --dpn-shadow: 0 12px 34px #1a1d2a12;
+  color: var(--dpn-text);
+}
+html[data-delicat-theme="dark"]
+  body.dpn-checkout.dpn-checkout-dock-ready
+  .dpn-checkout-dock-total
+  > strong,
+html.dlc-theme-dark
+  body.dpn-checkout.dpn-checkout-dock-ready
+  .dpn-checkout-dock-total
+  > strong {
+  color: var(--dpn-text, #101828);
+}
+html[data-delicat-theme="dark"] body.dpn-checkout .dpn-checkout-dock,
+html.dlc-theme-dark body.dpn-checkout .dpn-checkout-dock {
+  border-top-color: var(--dpn-line) !important;
+}
+@media (max-width: 820px) {
+  html
+    body.delicat-shell-mobile-nav-active
+    .delicat-page-layout[data-delicat-page-layout],
+  html
+    body.delicat-builder-homepage-managed
+    .delicat-page-layout[data-delicat-page-layout],
+  html body.delicat-shell-mobile-nav-active main[data-delicat-server-render],
+  html body.delicat-shell-mobile-nav-active main[data-delicat-native-document],
+  html body.delicat-bottom-nav-active main[data-delicat-server-render],
+  html body.delicat-bottom-nav-active main[data-delicat-native-document] {
+    padding-bottom: 24px !important;
+  }
+  html
+    body.delicat-shell-mobile-nav-active
+    .dbv9-footer[data-delicat-universal-footer],
+  html
+    body.delicat-bottom-nav-active
+    .dbv9-footer[data-delicat-universal-footer] {
+    padding-bottom: max(34px, env(safe-area-inset-bottom)) !important;
+  }
+}
+body.delicat-native-product-document .pswp,
+body.single-product .delicat-native-product ~ .pswp,
+body.single-product .pswp[aria-hidden="true"] {
+  display: none !important;
+}
+.delicat-archive-toolbar select,
+.delicat-archive-toolbar .woocommerce-ordering select {
+  width: auto !important;
+  min-width: 200px !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 38px !important;
+  line-height: 1.2 !important;
+}

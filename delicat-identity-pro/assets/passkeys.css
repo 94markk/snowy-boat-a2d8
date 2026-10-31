@@ -1,0 +1,75 @@
+/* Delicat Identity 6.12.0 — scoped Passkeys/WebAuthn UI (security card, standard login button, identity modal button).
+   Tokens follow my-account-modern.css (--dipma-*) with standalone fallbacks; text pairs meet WCAG AA. */
+.dip-passkeys-card{--dip-pk-ink:var(--dipma-text,#11162d);--dip-pk-ink-2:var(--dipma-text-2,#46506a);--dip-pk-muted:#5d6478;--dip-pk-line:var(--dipma-line,#e7eaf1);--dip-pk-surface:var(--dipma-card-2,#fafbfe);--dip-pk-field:#fff;--dip-pk-accent:var(--dipma-blue,#2d63ff);--dip-pk-accent-2:var(--dipma-indigo,#6849f3);--dip-pk-accent-ink:#2a3f86;--dip-pk-accent-soft:#eef2ff;--dip-pk-ok-ink:#0a6b4e;--dip-pk-ok-soft:#e7f6ef;--dip-pk-danger-ink:#a8303f;--dip-pk-danger-soft:#fdeff1;--dip-pk-danger-line:#f1d9de;--dip-pk-warn-ink:#8a4b00;--dip-pk-warn-soft:#fff5e6;--dip-pk-focus:0 0 0 3px rgba(45,99,255,.28);--dip-pk-icon-bg:linear-gradient(135deg,#eaf0ff,#f1ebff);position:relative;overflow:hidden;color:var(--dip-pk-ink)}
+.dip-passkeys-card:before{content:"";position:absolute;inset:0 0 auto;height:3px;background:linear-gradient(90deg,var(--dip-pk-accent),var(--dip-pk-accent-2),var(--dipma-pink,#e33496))}
+.dip-passkeys-card .dip-security-card-title h3{color:var(--dip-pk-ink)!important}
+.dip-passkeys-card .dip-security-card-title p{color:var(--dip-pk-muted)!important;font-size:12px!important;line-height:1.45!important}
+.dip-passkey-icon{position:relative;background:var(--dip-pk-icon-bg)!important;color:var(--dip-pk-accent-2)!important}
+.dip-passkey-icon:after,.dip-passkey-item-icon:after,.dip-passkey-external>span,#dip-identity-modal .dipx-passkey-login>span{-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7a5 5 0 0 1 4.58 3H22v4h-2v3h-3v-3h-5.42A5 5 0 1 1 7 7Zm0 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 7a5 5 0 0 1 4.58 3H22v4h-2v3h-3v-3h-5.42A5 5 0 1 1 7 7Zm0 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z'/%3E%3C/svg%3E") center/contain no-repeat}
+.dip-passkey-icon:after{content:"";position:absolute;inset:8px;background:currentColor}
+
+.dip-passkey-list{display:grid;gap:8px;margin:14px 0 4px;padding:0;list-style:none}
+.dip-passkey-item{display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;margin:0;padding:12px 12px 12px 13px;border:1px solid var(--dip-pk-line);border-radius:16px;background:var(--dip-pk-surface)}
+.dip-passkey-item-icon{position:relative;flex:0 0 36px;width:36px;height:36px;border-radius:12px;background:var(--dip-pk-accent-soft);color:var(--dip-pk-accent)}
+.dip-passkey-item-icon:after{content:"";position:absolute;inset:9px;background:currentColor}
+.dip-passkey-item-icon.is-synced{background:var(--dip-pk-ok-soft);color:var(--dip-pk-ok-ink)}
+.dip-passkey-item-body{display:flex;flex:1 1 170px;flex-direction:column;gap:3px;min-width:0}
+.dip-passkey-item .dip-passkey-remove{flex:0 0 auto;margin-left:auto}
+.dip-passkey-item strong{color:var(--dip-pk-ink);font-size:14px;font-weight:800;line-height:1.3;overflow-wrap:anywhere}
+.dip-passkey-badges{display:flex;flex-wrap:wrap;gap:5px}
+.dip-passkey-badge{display:inline-flex;align-items:center;min-height:20px;padding:1px 8px;border-radius:999px;background:var(--dip-pk-accent-soft);color:var(--dip-pk-accent-ink);font-size:11px;font-weight:750;line-height:1.4}
+.dip-passkey-badge.is-synced{background:var(--dip-pk-ok-soft);color:var(--dip-pk-ok-ink)}
+.dip-passkey-meta{color:var(--dip-pk-muted);font-size:12px;line-height:1.45}
+.dip-passkey-empty{margin:14px 0 4px;padding:13px 14px;border:1px dashed var(--dip-pk-line);border-radius:16px;background:var(--dip-pk-surface);color:var(--dip-pk-ink-2);font-size:13px;line-height:1.5}
+.dip-passkey-empty strong{color:var(--dip-pk-ink)}
+
+.dip-passkey-actions{display:flex;align-items:flex-end;gap:9px;flex-wrap:wrap;margin-top:14px}
+.dip-passkey-label{display:flex!important;flex:1 1 200px;flex-direction:column;gap:6px;margin:0!important}
+.dip-passkey-label span{font-size:12px;font-weight:750;color:var(--dip-pk-ink-2)}
+.dip-passkey-label input{box-sizing:border-box!important;width:100%!important;max-width:100%!important;min-height:44px!important;margin:0!important;padding:10px 12px!important;border:1px solid var(--dip-pk-line)!important;border-radius:12px!important;background:var(--dip-pk-field)!important;color:var(--dip-pk-ink)!important;font-size:14px!important;box-shadow:none!important}
+.dip-passkey-label input:focus{outline:0!important;border-color:var(--dip-pk-accent)!important;box-shadow:var(--dip-pk-focus)!important}
+.dip-passkeys-card .dip-btn{min-height:44px;padding:0 15px;font-size:13px;font-weight:800;border-radius:12px}
+.dip-passkeys-card .dip-btn:not(.primary):not(.ghost){background:var(--dip-pk-field);color:var(--dip-pk-ink-2);border:1px solid var(--dip-pk-line)}
+.dip-passkeys-card .dip-btn:focus-visible,.dip-passkey-external:focus-visible{outline:0;box-shadow:var(--dip-pk-focus,0 0 0 3px rgba(45,99,255,.28))}
+.dip-passkeys-card .dip-btn:disabled{opacity:.55;cursor:not-allowed}
+.dip-passkeys-card .dip-btn.ghost,.dip-btn.ghost{min-height:38px;background:transparent!important;color:var(--dip-pk-danger-ink,#a8303f)!important;border:1px solid var(--dip-pk-danger-line,#f1d9de)!important;box-shadow:none!important}
+.dip-passkeys-card .dip-btn.ghost:hover{background:var(--dip-pk-danger-soft)!important}
+.dip-btn.is-busy{opacity:.65!important;cursor:wait!important}
+.dip-passkey-hint{margin:10px 0 0;color:var(--dip-pk-muted);font-size:12px;line-height:1.45}
+
+.dip-passkey-status{margin-top:12px;padding:11px 13px;border-radius:12px;background:var(--dip-pk-accent-soft,#eef2ff);color:var(--dip-pk-accent-ink,#2a3f86);font-size:13px;font-weight:700;line-height:1.45}
+.dip-passkey-status.is-error{background:var(--dip-pk-danger-soft,#fdeff1);color:var(--dip-pk-danger-ink,#a8303f)}
+.dip-passkey-status.is-success{background:var(--dip-pk-ok-soft,#e7f6ef);color:var(--dip-pk-ok-ink,#0a6b4e)}
+.dip-passkey-status.is-warning{background:var(--dip-pk-warn-soft,#fff5e6);color:var(--dip-pk-warn-ink,#8a4b00)}
+.dip-passkey-status p{margin:0}
+.dip-passkey-status-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.dip-passkey-status-actions .dip-btn{text-decoration:none}
+
+@media(max-width:600px){.dip-passkey-actions{align-items:stretch}.dip-passkey-label{flex-basis:100%}.dip-passkey-actions .dip-btn{flex:1 1 150px}}
+
+/* Dark themes (theme hooks): same layout, dark tokens. */
+html[data-dip-account-theme="dark"] body.dip-account-app .dip-passkeys-card,html[data-theme="dark"] .dip-passkeys-card,body.dark-mode .dip-passkeys-card,body.is-dark-theme .dip-passkeys-card,[data-dip-theme="dark"] .dip-passkeys-card{--dip-pk-ink:#e8ebf5;--dip-pk-ink-2:#c9cfe0;--dip-pk-muted:#a9b3cf;--dip-pk-line:#2c344d;--dip-pk-surface:#1b2136;--dip-pk-field:#161b2e;--dip-pk-accent:#8ea8ff;--dip-pk-accent-2:#b4a4ff;--dip-pk-accent-ink:#c9d5ff;--dip-pk-accent-soft:#222c4d;--dip-pk-ok-ink:#7fe0bd;--dip-pk-ok-soft:#10261f;--dip-pk-danger-ink:#ff9aa8;--dip-pk-danger-soft:#2a1820;--dip-pk-danger-line:#4a2a33;--dip-pk-warn-ink:#ffc978;--dip-pk-warn-soft:#2b2214;--dip-pk-icon-bg:linear-gradient(135deg,#222c4d,#2c2552)}
+
+/* Standard login forms (wp-login.php, WooCommerce, wp_login_form()). */
+.dip-passkey-standard{margin:12px 0}
+.dip-passkey-external{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:48px;padding:10px 14px;border:1px solid #cdd7eb;border-radius:13px;background:#fff;color:#18203b;font-weight:750;cursor:pointer}
+.dip-passkey-external:hover{border-color:#8199dd}
+.dip-passkey-external>span{display:block;width:20px;height:20px;background:linear-gradient(135deg,#225fff,#7c46e7)}
+.dip-passkey-external:disabled{opacity:.5;cursor:not-allowed}
+.dip-passkey-standard .dip-passkey-status{font-size:12.5px}
+.login .dip-passkey-standard{margin:12px 0 16px}
+
+#dip-identity-modal .dipx-passkey-login{display:grid!important;grid-template-columns:26px 1fr!important;grid-template-rows:auto auto!important;column-gap:11px!important;align-items:center!important;width:100%!important;min-height:58px!important;margin:11px 0 2px!important;padding:11px 15px!important;border:1.5px solid #cfd8ed!important;border-radius:16px!important;background:linear-gradient(180deg,#fff,#f8faff)!important;color:#18203b!important;box-shadow:0 7px 18px rgba(26,42,91,.05)!important;cursor:pointer!important;text-align:left!important;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease!important}#dip-identity-modal .dipx-passkey-login:hover{transform:translateY(-1px)!important;border-color:#8199dd!important;box-shadow:0 11px 24px rgba(44,69,151,.10)!important}#dip-identity-modal .dipx-passkey-login>span{grid-row:1/3;display:block!important;width:24px!important;height:24px!important;background:linear-gradient(135deg,#225fff,#7c46e7)!important}#dip-identity-modal .dipx-passkey-login strong{align-self:end;font-size:14px!important;line-height:1.2!important;font-weight:850!important;color:#18203b!important}#dip-identity-modal .dipx-passkey-login small{align-self:start;font-size:11px!important;line-height:1.2!important;font-weight:600!important;color:#5b6278!important}#dip-identity-modal .dipx-passkey-login:disabled{opacity:.48!important;cursor:not-allowed!important;transform:none!important}#dip-identity-modal .dipx-passkey-login:focus-visible{outline:0!important;box-shadow:0 0 0 3px rgba(45,99,255,.28)!important}
+@media(prefers-reduced-motion:reduce){#dip-identity-modal .dipx-passkey-login{transition:none!important}#dip-identity-modal .dipx-passkey-login:hover{transform:none!important}}
+
+/* 6.9.18: keep the modal Passkey control light at every load order. */
+#dip-identity-modal .dipx-passkey-login,#dip-identity-modal .dipx-passkey-login:hover{min-height:48px!important;padding:10px 12px!important;border-radius:12px!important;box-shadow:none!important;transform:none!important;transition:none!important;background:#f8f9fe!important}
+
+/* 6.13: consistent account security card; native device confirmation stays outside the site. */
+.dip-security-card.dip-passkeys-card{border:1px solid var(--dip-pk-line);border-radius:24px;background:var(--dip-card,var(--dipma-card,#fff));box-shadow:none;padding:20px}
+.dip-passkeys-card:before{display:none}.dip-passkeys-card .dip-security-card-title{display:flex;align-items:flex-start;gap:12px}.dip-passkeys-card .dip-security-card-title>div{min-width:0}.dip-passkeys-card .dip-security-card-title h3{margin:0 0 6px!important;letter-spacing:-.02em;font-size:20px!important}.dip-passkeys-card .dip-security-card-title p{margin:0!important;font-size:13px!important;line-height:1.6!important}.dip-passkeys-card .dip-passkey-icon{flex:0 0 44px;width:44px;height:44px;border-radius:14px}
+.dip-passkeys-card .dip-passkey-item{border-radius:16px;box-shadow:none}.dip-passkeys-card .dip-passkey-actions{gap:10px;margin-top:18px}.dip-passkeys-card .dip-passkey-label input{font-size:16px!important;min-height:48px!important}.dip-passkeys-card .dip-passkey-guidance{margin-top:16px;border-top:1px solid var(--dip-pk-line);padding-top:10px;color:var(--dip-pk-muted);font-size:13px;line-height:1.6}.dip-passkeys-card .dip-passkey-guidance summary{min-height:44px;cursor:pointer;color:var(--dip-pk-ink-2);font-weight:650}.dip-passkeys-card .dip-passkey-guidance p{margin:0 0 4px;font-size:12px;line-height:1.6}.dip-passkeys-card .dip-passkey-guidance summary:focus-visible{outline:2px solid var(--dip-pk-accent);outline-offset:2px}
+@media(max-width:480px){.dip-security-card.dip-passkeys-card{padding:16px;border-radius:20px}.dip-passkeys-card .dip-passkey-item-body{flex-basis:calc(100% - 52px)}.dip-passkeys-card .dip-passkey-remove{margin-left:48px;min-height:44px!important}.dip-passkeys-card .dip-passkey-actions>.dip-btn{flex-basis:100%}}
+
+/* Paired biometric pictograms replace the generic key only on this login button. */
+.dipx-passkey-login>span.dipx-biometric-icons{display:flex;align-items:center;gap:4px;width:44px;height:24px;background:transparent;-webkit-mask:none;mask:none}.dipx-biometric-icons svg{display:block;width:20px;height:24px;flex:0 0 20px}

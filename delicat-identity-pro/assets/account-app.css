@@ -1,0 +1,375 @@
+/* Delicat Identity 6.12.1 — private mobile-app account navigation.
+   Only affects authenticated WooCommerce My Account pages; no theme/header/PWA changes. */
+body.dip-account-app {
+  --dipapp-blue:#1683ff;
+  --dipapp-bg:#f7f8fa;
+  --dipapp-surface:#fff;
+  --dipapp-hover:#f4f6fa;
+  --dipapp-text:#20232b;
+  --dipapp-muted:#747987;
+  --dipapp-border:#e8ebf1;
+  --dipapp-red:#cf3542;
+  background:var(--dipapp-bg);
+}
+body.dip-account-app .dipma-icon-user{--dipma-icon:var(--dipma-i-user)}
+body.dip-account-app .dipma-icon-pin{--dipma-icon:var(--dipma-i-pin)}
+body.dip-account-app .dipma-icon-wallet{--dipma-icon:var(--dipma-i-wallet)}
+body.dip-account-app .dipma-icon-download{--dipma-icon:var(--dipma-i-download)}
+body.dip-account-app .dipma-icon-dot{--dipma-icon:var(--dipma-i-dot)}
+body.dip-account-app .dipma-icon-logout{--dipma-icon:var(--dipma-i-logout)}
+body.dip-account-app .woocommerce:has(.woocommerce-MyAccount-navigation){
+  max-width:1080px!important;
+  padding:8px 15px 44px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:var(--dipapp-text);
+}
+body.dip-account-app .woocommerce-MyAccount-navigation{display:none!important}
+body.dip-account-app .woocommerce-MyAccount-content{
+  float:none!important;
+  width:100%!important;
+  max-width:none!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  overflow:visible!important;
+}
+body.dip-account-app .dipapp-topbar{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:65px;
+  margin:0 0 15px;
+  padding:12px 52px;
+  color:var(--dipapp-text);
+}
+body.dip-account-app .dipapp-topbar h1{
+  margin:0!important;
+  padding:0!important;
+  border:0!important;
+  color:var(--dipapp-text)!important;
+  font:700 clamp(19px,4.5vw,24px)/1.3 var(--dipma-font)!important;
+  letter-spacing:-.02em;
+  text-align:center;
+}
+body.dip-account-app .dipapp-back{
+  position:absolute;
+  left:0;
+  top:50%;
+  display:grid;
+  place-items:center;
+  width:46px;
+  height:46px;
+  transform:translateY(-50%);
+  border:1px solid var(--dipapp-border);
+  border-radius:15px;
+  background:var(--dipapp-surface);
+  color:var(--dipapp-blue)!important;
+}
+body.dip-account-app .dipapp-back .dipma-icon{width:20px;height:20px;transform:rotate(180deg)}
+body.dip-account-app .dipapp-profile{
+  display:flex!important;
+  align-items:center;
+  gap:15px;
+  min-width:0;
+  margin:0 0 24px!important;
+  padding:17px 20px!important;
+  border:1px solid var(--dipapp-border);
+  border-radius:22px;
+  background:var(--dipapp-surface)!important;
+  box-shadow:none!important;
+  color:var(--dipapp-text)!important;
+  text-decoration:none!important;
+}
+body.dip-account-app .dipapp-avatar{
+  display:grid;
+  flex:0 0 48px;
+  place-items:center;
+  width:48px;
+  height:48px;
+  border:1px solid color-mix(in srgb,var(--dipapp-blue) 26%,transparent);
+  border-radius:50%;
+  color:var(--dipapp-blue);
+}
+body.dip-account-app .dipapp-avatar .dipma-icon{width:27px;height:27px}
+body.dip-account-app .dipapp-profile-text{display:flex;flex:1 1 auto;flex-direction:column;gap:4px;min-width:0}
+body.dip-account-app .dipapp-profile-text strong{
+  overflow:hidden;
+  color:var(--dipapp-text);
+  font-size:18px;
+  font-weight:700;
+  line-height:1.3;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+body.dip-account-app .dipapp-profile-text small{
+  overflow:hidden;
+  color:var(--dipapp-muted);
+  font-size:13px;
+  font-weight:400;
+  line-height:1.4;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+body.dip-account-app .dipapp-chevron{width:17px;height:17px;color:var(--dipapp-muted);opacity:.8}
+body.dip-account-app .dipapp-dashboard{display:flex;flex-direction:column;gap:22px;padding:0 0 10px}
+body.dip-account-app .dipapp-section{min-width:0}
+body.dip-account-app .dipapp-section h2{
+  margin:0 0 10px 9px!important;
+  padding:0!important;
+  color:var(--dipapp-muted)!important;
+  font:600 13px/1.35 var(--dipma-font)!important;
+  letter-spacing:.025em;
+}
+body.dip-account-app .dipapp-rows{
+  overflow:hidden;
+  border:1px solid var(--dipapp-border);
+  border-radius:21px;
+  background:var(--dipapp-surface);
+}
+body.dip-account-app .dipapp-row{
+  position:relative;
+  display:flex!important;
+  align-items:center;
+  gap:15px;
+  min-width:0;
+  min-height:62px;
+  padding:12px 19px!important;
+  border:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+  color:var(--dipapp-text)!important;
+  text-decoration:none!important;
+  transition:background-color .15s ease;
+}
+body.dip-account-app .dipapp-row:not(:last-child)::after{
+  content:"";
+  position:absolute;
+  right:18px;
+  bottom:0;
+  left:74px;
+  height:1px;
+  background:var(--dipapp-border);
+  pointer-events:none;
+}
+body.dip-account-app .dipapp-row-icon{display:grid;flex:0 0 39px;place-items:center;width:39px;height:39px;color:var(--dipapp-blue)}
+body.dip-account-app .dipapp-row-icon .dipma-icon{width:23px;height:23px}
+body.dip-account-app .dipapp-row-label{
+  flex:1 1 auto;
+  min-width:0;
+  color:var(--dipapp-text);
+  font-size:16px;
+  font-weight:500;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+body.dip-account-app .dipapp-row:hover,body.dip-account-app .dipapp-profile:hover{background:var(--dipapp-hover)!important}
+body.dip-account-app .dipapp-row:active,body.dip-account-app .dipapp-logout:active{opacity:.76}
+body.dip-account-app .dipapp-logout{
+  display:flex!important;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  min-height:60px;
+  margin:3px 0 0;
+  padding:13px;
+  border:1px solid var(--dipapp-border);
+  border-radius:21px;
+  background:var(--dipapp-surface);
+  color:var(--dipapp-red)!important;
+  font-size:16px;
+  font-weight:650;
+  line-height:1.3;
+  text-decoration:none!important;
+}
+body.dip-account-app .dipapp-logout .dipma-icon{width:19px;height:19px}
+body.dip-account-app .dipapp-privacy{
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  gap:7px;
+  margin:0!important;
+  padding:0 14px;
+  color:var(--dipapp-muted)!important;
+  font-size:12px;
+  line-height:1.5;
+  text-align:center;
+}
+body.dip-account-app .dipapp-privacy .dipma-icon{flex:0 0 14px;width:14px;height:14px;margin-top:2px}
+body.dip-account-app .dipapp-row:focus-visible,body.dip-account-app .dipapp-profile:focus-visible,body.dip-account-app .dipapp-logout:focus-visible,body.dip-account-app .dipapp-back:focus-visible{outline:2px solid var(--dipapp-blue)!important;outline-offset:3px!important;box-shadow:none!important}
+/* Do not interfere with the original endpoint forms, Identity Center, or order details. */
+body.dip-account-app:not(.dip-account-home) .woocommerce-MyAccount-content{padding-top:3px!important}
+body.dip-account-app.dip-account-home .woocommerce-MyAccount-content>.dipma-dashboard{display:none!important}
+
+/* The explicit site preference wins even when iOS/Android is in dark mode. */
+html[data-dip-account-theme="dark"] body.dip-account-app{
+  --dipapp-bg:#19191b;
+  --dipapp-surface:#2b2b2d;
+  --dipapp-hover:#353539;
+  --dipapp-text:#f5f5f6;
+  --dipapp-muted:#ababaf;
+  --dipapp-border:#38383c;
+  --dipapp-blue:#168aff;
+  --dipapp-red:#ff4756;
+  color-scheme:dark;
+}
+html[data-dip-account-theme="light"] body.dip-account-app{color-scheme:light}
+@media (prefers-color-scheme:dark){
+  html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light){
+    --dipapp-bg:#19191b;--dipapp-surface:#2b2b2d;--dipapp-hover:#353539;--dipapp-text:#f5f5f6;--dipapp-muted:#ababaf;--dipapp-border:#38383c;--dipapp-blue:#168aff;--dipapp-red:#ff4756;color-scheme:dark;
+  }
+}
+@media(max-width:640px){
+  body.dip-account-app .woocommerce:has(.woocommerce-MyAccount-navigation){padding:5px 10px 34px!important}
+  body.dip-account-app .dipapp-topbar{min-height:57px;margin-bottom:11px}
+  body.dip-account-app .dipapp-profile{padding:15px!important;border-radius:19px;margin-bottom:19px!important}
+  body.dip-account-app .dipapp-rows{border-radius:19px}
+  body.dip-account-app .dipapp-row{min-height:59px;padding:11px 14px!important;gap:12px}
+  body.dip-account-app .dipapp-row::after{left:64px!important;right:12px!important}
+  body.dip-account-app .dipapp-row-icon{flex-basis:36px;width:36px;height:36px}
+  body.dip-account-app .dipapp-row-label{font-size:15px}
+  body.dip-account-app .dipapp-dashboard{gap:19px}
+  body.dip-account-app .dipapp-logout{min-height:57px}
+}
+@media(prefers-reduced-motion:reduce){body.dip-account-app .dipapp-row{transition:none}}
+/* Override legacy navy background in both explicit modes and system fallback. */
+body.dip-account-app{background:var(--dipapp-bg)!important}
+
+/* 6.14: the landing screen itself has no second decorative container. */
+body.dip-account-app.dip-account-home .woocommerce-MyAccount-content>.dipapp-dashboard,
+body.dip-account-app .dipapp-section{background:transparent!important;background-image:none!important;border:0!important;box-shadow:none!important;border-radius:0!important;padding:0!important}
+body.dip-account-app .dipapp-avatar{overflow:hidden}
+body.dip-account-app .dipapp-avatar img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
+body.dip-account-app .dip-control-card{background:var(--dipapp-surface);color:var(--dipapp-text);border:1px solid var(--dipapp-border);border-radius:22px;padding:20px;margin:0 0 16px}
+body.dip-account-app .dip-control-card h2{font-size:20px;margin:0 0 12px;color:var(--dipapp-text)}
+body.dip-account-app .dip-control-card p,body.dip-account-app .dip-control-card small{color:var(--dipapp-muted);line-height:1.6}
+body.dip-account-app .dip-control-card form{display:flex;flex-direction:column;gap:10px}
+body.dip-account-app .dip-control-card label{color:var(--dipapp-text);font-weight:600;font-size:13px}
+body.dip-account-app .dip-control-card input{max-width:100%;min-width:0}
+body.dip-account-app .dip-profile-photo{display:block;width:80px;height:80px;object-fit:cover;border-radius:50%;margin:0 0 16px}
+body.dip-account-app .dip-photo-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:6px}
+body.dip-account-app .dip-photo-remove{background:var(--dipapp-hover)!important;color:var(--dipapp-red)!important;box-shadow:none!important}
+body.dip-account-app #account_email[readonly]{opacity:.8;cursor:default}
+@media(max-width:480px){body.dip-account-app .dip-control-card{padding:16px;border-radius:18px}body.dip-account-app .dip-photo-actions>*{width:100%}}
+body.dip-account-app .woocommerce-MyAccount-content .dip-control-card .dip-photo-remove{background:var(--dipapp-hover)!important;color:var(--dipapp-red)!important;box-shadow:none!important}
+body.dip-account-app #dip-email-policy{font-size:12px;line-height:1.6;color:var(--dipapp-muted)}
+
+/* ------------------------------------------------------------------
+   6.15.2 — account home: wallet & rewards, recent orders, favourites,
+   order status chips. Plain colours (no color-mix) for old WebViews.
+   ------------------------------------------------------------------ */
+body.dip-account-app{
+  --dipapp-green:#0f8a4b;--dipapp-green-soft:#e7f6ee;
+  --dipapp-amber:#b45309;--dipapp-amber-soft:#fef3e2;
+  --dipapp-blue-soft:#e8f2ff;
+  --dipapp-redsoft:#fdecee;
+  --dipapp-grey-soft:#f0f1f4;
+}
+html[data-dip-account-theme="dark"] body.dip-account-app{
+  --dipapp-green:#4ade80;--dipapp-green-soft:#173a26;
+  --dipapp-amber:#fbbf24;--dipapp-amber-soft:#3a2d12;
+  --dipapp-blue-soft:#13304f;--dipapp-redsoft:#3d1d22;--dipapp-grey-soft:#38383c;
+}
+@media (prefers-color-scheme:dark){
+  html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light){
+    --dipapp-green:#4ade80;--dipapp-green-soft:#173a26;--dipapp-amber:#fbbf24;--dipapp-amber-soft:#3a2d12;
+    --dipapp-blue-soft:#13304f;--dipapp-redsoft:#3d1d22;--dipapp-grey-soft:#38383c;
+  }
+}
+body.dip-account-app .dipapp-glyph,body.dip-account-app .dipapp-stat-glyph,body.dip-account-app .dipapp-stat-mini,
+body.dip-account-app .dipapp-status-glyph,body.dip-account-app .dipapp-link-glyph,body.dip-account-app .dipapp-order-glyph,
+body.dip-account-app .dipapp-empty-glyph,body.dip-account-app .dipapp-fav-heart{display:block;flex:0 0 auto}
+
+/* Wallet & rewards */
+body.dip-account-app .dipapp-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:-8px}
+body.dip-account-app .dipapp-stat{position:relative;display:flex;flex-direction:column;gap:6px;min-width:0;padding:16px 16px 14px;border:1px solid var(--dipapp-border);border-radius:22px;background:var(--dipapp-surface);color:var(--dipapp-text)}
+body.dip-account-app .dipapp-stat-link{position:absolute;top:0;right:0;bottom:0;left:0;z-index:1;border-radius:inherit}
+body.dip-account-app .dipapp-stat-link:focus-visible{outline:2px solid var(--dipapp-blue);outline-offset:3px}
+body.dip-account-app .dipapp-stat:active{transform:scale(.985)}
+body.dip-account-app .dipapp-stat-head{display:flex;align-items:center;gap:8px;color:var(--dipapp-muted);font-size:14px;font-weight:600;line-height:1.3}
+body.dip-account-app .dipapp-stat-glyph{width:20px;height:20px;color:var(--dipapp-blue)}
+body.dip-account-app .dipapp-stat--rewards .dipapp-stat-glyph{color:#d97706}
+body.dip-account-app .dipapp-stat--orders .dipapp-stat-glyph{color:#7c3aed}
+body.dip-account-app .dipapp-stat-value{display:block;overflow:hidden;color:var(--dipapp-text);font-size:26px;font-weight:750;line-height:1.15;letter-spacing:-.02em;text-overflow:ellipsis;white-space:nowrap}
+body.dip-account-app .dipapp-stat-value .woocommerce-Price-amount,body.dip-account-app .dipapp-stat-value bdi{color:inherit;font:inherit}
+body.dip-account-app .dipapp-mask{letter-spacing:.08em}
+body.dip-account-app .dipapp-stat-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:30px}
+body.dip-account-app .dipapp-stat-action{display:inline-flex;align-items:center;gap:4px;color:var(--dipapp-blue);font-size:14px;font-weight:600}
+body.dip-account-app .dipapp-stat-mini{width:18px;height:18px}
+body.dip-account-app .dipapp-stat-hint{display:-webkit-box;overflow:hidden;color:var(--dipapp-muted);font-size:13px;line-height:1.3;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+body.dip-account-app .dipapp-eye{position:relative;z-index:2;display:grid;place-items:center;width:34px;height:34px;margin:0 -6px 0 0;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;color:var(--dipapp-muted)!important;box-shadow:none!important;min-height:0!important;cursor:pointer}
+body.dip-account-app .dipapp-eye.is-hidden{color:var(--dipapp-blue)!important}
+body.dip-account-app .dipapp-eye:focus-visible{outline:2px solid var(--dipapp-blue)!important;outline-offset:1px}
+
+/* Section heads with a « Tout voir » link */
+body.dip-account-app .dipapp-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 9px 10px}
+body.dip-account-app .dipapp-section-head h2{margin:0!important;display:flex;align-items:center;gap:7px}
+body.dip-account-app .dipapp-section-head a{display:inline-flex;align-items:center;gap:4px;min-height:36px;color:var(--dipapp-blue)!important;font-size:14px;font-weight:600;text-decoration:none!important}
+body.dip-account-app .dipapp-link-glyph{width:16px;height:16px}
+body.dip-account-app .dipapp-count{display:inline-grid;place-items:center;min-width:22px;height:20px;padding:0 6px;border-radius:999px;background:var(--dipapp-grey-soft);color:var(--dipapp-muted);font-size:11.5px;font-weight:700;letter-spacing:0}
+
+/* Recent orders */
+body.dip-account-app .dipapp-orders{overflow:hidden;border:1px solid var(--dipapp-border);border-radius:21px;background:var(--dipapp-surface)}
+body.dip-account-app .dipapp-order{position:relative;display:flex!important;align-items:center;gap:13px;min-width:0;padding:13px 16px!important;color:var(--dipapp-text)!important;text-decoration:none!important;transition:background-color .15s ease}
+body.dip-account-app .dipapp-order:not(:last-child)::after{content:"";position:absolute;right:16px;bottom:0;left:77px;height:1px;background:var(--dipapp-border);pointer-events:none}
+body.dip-account-app .dipapp-order:hover{background:var(--dipapp-hover)}
+body.dip-account-app .dipapp-order:active{opacity:.78}
+body.dip-account-app .dipapp-order-thumb{display:grid;flex:0 0 48px;place-items:center;width:48px;height:48px;overflow:hidden;border:1px solid var(--dipapp-border);border-radius:14px;background:var(--dipapp-grey-soft);color:var(--dipapp-muted)}
+body.dip-account-app .dipapp-order-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+body.dip-account-app .dipapp-order-glyph{width:22px;height:22px}
+body.dip-account-app .dipapp-order-main{display:flex;flex:1 1 auto;flex-direction:column;gap:6px;min-width:0}
+body.dip-account-app .dipapp-order-line{display:flex;align-items:center;justify-content:space-between;gap:10px;min-width:0}
+body.dip-account-app .dipapp-order-main strong{overflow:hidden;font-size:15.5px;font-weight:600;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}
+body.dip-account-app .dipapp-order-main small{overflow:hidden;color:var(--dipapp-muted);font-size:12.5px;line-height:1.35;text-overflow:ellipsis;white-space:nowrap}
+body.dip-account-app .dipapp-order-total{flex:0 0 auto;font-size:15px;font-weight:650;line-height:1.2;white-space:nowrap}
+body.dip-account-app .dipapp-order-line .dipapp-status{flex:0 0 auto}
+body.dip-account-app .dipapp-order-total .woocommerce-Price-amount{color:inherit;font:inherit}
+
+/* Status chip: glyph + words, never colour alone */
+.dipapp-status{display:inline-flex;align-items:center;gap:5px;min-height:24px;padding:2px 9px 2px 6px;border-radius:999px;background:var(--dipapp-grey-soft,#f0f1f4);color:var(--dipapp-muted,#5f6472);font-size:12px;font-weight:650;line-height:1.2;white-space:nowrap}
+.dipapp-status-glyph{width:15px;height:15px;flex:0 0 auto}
+.dipapp-status[data-tone="success"]{background:var(--dipapp-green-soft,#e7f6ee);color:var(--dipapp-green,#0f8a4b)}
+.dipapp-status[data-tone="warning"]{background:var(--dipapp-amber-soft,#fef3e2);color:var(--dipapp-amber,#b45309)}
+.dipapp-status[data-tone="accent"]{background:var(--dipapp-blue-soft,#e8f2ff);color:var(--dipapp-blue,#1683ff)}
+.dipapp-status[data-tone="danger"]{background:var(--dipapp-redsoft,#fdecee);color:var(--dipapp-red,#cf3542)}
+body.dip-account-app .woocommerce-orders-table__cell-order-status .dipapp-status{font-size:12px}
+
+/* Favourites rail */
+body.dip-account-app .dipapp-fav-rail{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(132px,38%);gap:10px;margin:0!important;padding:2px 2px 6px!important;list-style:none!important;overflow-x:auto;overscroll-behavior-inline:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+body.dip-account-app .dipapp-fav-rail::-webkit-scrollbar{display:none}
+body.dip-account-app .dipapp-fav-rail li{margin:0!important;padding:0!important;scroll-snap-align:start;list-style:none!important}
+body.dip-account-app .dipapp-fav{display:flex!important;flex-direction:column;gap:6px;height:100%;padding:8px 8px 11px!important;border:1px solid var(--dipapp-border);border-radius:18px;background:var(--dipapp-surface);color:var(--dipapp-text)!important;text-decoration:none!important}
+body.dip-account-app .dipapp-fav:active{transform:scale(.98)}
+body.dip-account-app .dipapp-fav-img{position:relative;display:grid;place-items:center;aspect-ratio:1/1;overflow:hidden;border-radius:12px;background:var(--dipapp-grey-soft);color:var(--dipapp-muted)}
+body.dip-account-app .dipapp-fav-img img{width:100%;height:100%;object-fit:cover;display:block}
+body.dip-account-app .dipapp-fav-heart{position:absolute;top:6px;right:6px;width:22px;height:22px;padding:4px;border-radius:50%;background:#fff;color:#e11d48;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+body.dip-account-app .dipapp-fav-name{display:-webkit-box;overflow:hidden;font-size:13.5px;font-weight:600;line-height:1.3;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+body.dip-account-app .dipapp-fav-price{color:var(--dipapp-muted);font-size:13px;font-weight:600}
+body.dip-account-app .dipapp-fav-price .woocommerce-Price-amount{color:var(--dipapp-text)}
+body.dip-account-app .dipapp-fav-price del{opacity:.6;margin-right:4px}
+
+/* Empty states */
+body.dip-account-app .dipapp-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:22px 18px;border:1px dashed var(--dipapp-border);border-radius:21px;background:var(--dipapp-surface);color:var(--dipapp-muted);text-align:center}
+body.dip-account-app .dipapp-empty p{margin:0!important;font-size:14px;line-height:1.45}
+body.dip-account-app .dipapp-empty a{display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border-radius:999px;background:var(--dipapp-blue-soft);color:var(--dipapp-blue)!important;font-size:14px;font-weight:600;text-decoration:none!important}
+body.dip-account-app .dipapp-empty-glyph{width:30px;height:30px;color:var(--dipapp-muted);opacity:.7}
+body.dip-account-app .dipapp-empty-glyph.dipapp-heart{color:#e11d48;opacity:.55}
+
+@media(min-width:720px){
+  body.dip-account-app .dipapp-fav-rail{grid-auto-columns:minmax(150px,1fr);grid-auto-flow:column}
+}
+@media(max-width:360px){
+  body.dip-account-app .dipapp-summary{gap:9px}
+  body.dip-account-app .dipapp-stat{padding:13px 12px 11px}
+  body.dip-account-app .dipapp-stat-value{font-size:22px}
+}
+@media(prefers-reduced-motion:reduce){body.dip-account-app .dipapp-order{transition:none}body.dip-account-app .dipapp-stat:active,body.dip-account-app .dipapp-fav:active{transform:none}}
+
+/* Visually hidden labels, whatever the theme provides. */
+body.dip-account-app .dipapp-stat .screen-reader-text,body.dip-account-app .dipapp-dashboard .screen-reader-text{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;border:0!important;white-space:nowrap!important}
+@media(max-width:480px){body.dip-account-app .dipapp-stat-value{font-size:22px}}

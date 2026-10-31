@@ -1,0 +1,804 @@
+/*
+ * Delicat Builder V9 — engine chrome layer.
+ *
+ * Navigation progress, soft-navigation placeholders, view transitions,
+ * low-power overrides and the chrome guard that keeps the header, drawer and
+ * bottom bar independent from theme typography. Bundled into the chrome
+ * stylesheet after currency.css (see assets/dist/manifest.json).
+ */
+:where(.dlc-progress) {
+  z-index: 99999;
+  pointer-events: none;
+  opacity: 0;
+  height: 2px;
+  transition: opacity 0.16s linear;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+:where(.dlc-progress) > i {
+  background: linear-gradient(
+    90deg,
+    var(--dbp-royal, #284696),
+    var(--dbp-orange, #ff5a1f)
+  );
+  transform-origin: 0;
+  width: 0;
+  height: 100%;
+  display: block;
+}
+:where(.dlc-progress.is-active) {
+  opacity: 1;
+}
+:where(.dlc-progress.is-active) > i {
+  width: 100%;
+  animation: 1.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards dlc-progress-run;
+}
+:where(.dlc-progress.is-done) {
+  opacity: 1;
+}
+:where(.dlc-progress.is-done) > i {
+  opacity: 0;
+  width: 100%;
+  transition: opacity 0.2s linear;
+  animation: none;
+}
+@keyframes dlc-progress-run {
+  0% {
+    transform: scaleX(0.02);
+  }
+  40% {
+    transform: scaleX(0.55);
+  }
+  75% {
+    transform: scaleX(0.82);
+  }
+  to {
+    transform: scaleX(0.94);
+  }
+}
+html.delicat-scroll-locked {
+  overflow: hidden;
+}
+html.delicat-scroll-locked body {
+  overscroll-behavior: none;
+  width: 100%;
+  position: fixed;
+  left: 0;
+  right: 0;
+  overflow: hidden;
+}
+html.delicat-navigating-slow
+  main[data-delicat-server-render]:not([data-delicat-placeholder]),
+html.delicat-navigating-slow
+  main[data-delicat-native-document]:not([data-delicat-placeholder]) {
+  opacity: 0.62;
+  transition: opacity 0.18s linear;
+}
+.dlc-sr-only {
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  position: absolute;
+  overflow: hidden;
+}
+:where(.delicat-bottom-nav .dbn-item.is-pressed) {
+  transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: scale(0.92);
+}
+:where(.delicat-bottom-nav .dbn-item) {
+  transition: transform 0.16s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root) {
+  animation: 0.14s cubic-bezier(0.2, 0.8, 0.2, 1) both dlc-vt-out;
+}
+::view-transition-new(root) {
+  animation: 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both dlc-vt-in;
+}
+::view-transition-group(delicat-product-image) {
+  z-index: 2;
+  animation-duration: 0.28s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-old(delicat-product-image),
+::view-transition-new(delicat-product-image) {
+  mix-blend-mode: normal;
+  object-fit: cover;
+  border-radius: inherit;
+  width: 100%;
+  height: 100%;
+  animation: none;
+  overflow: clip;
+}
+@keyframes dlc-vt-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes dlc-vt-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  html.delicat-navigating-slow main[data-delicat-server-render],
+  html.delicat-navigating-slow main[data-delicat-native-document] {
+    transition: none;
+  }
+}
+.delicat-placeholder-main {
+  min-height: 100dvh;
+  color: var(--dn-text, #171923);
+  overflow-anchor: none;
+  animation: 0.16s ease-out both dph-in;
+}@supports not (height:100dvh){.delicat-placeholder-main{min-height:100vh}}
+html.delicat-placeholder {
+  overflow-anchor: none;
+}
+.dph__body {
+  flex-direction: column;
+  gap: 12px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 14px 14px 140px;
+  display: flex;
+}
+.dph__hero {
+  aspect-ratio: 16/10;
+  background: #787e9624;
+  border-radius: 0 0 24px 24px;
+  width: 100%;
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+.dph__hero img {
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.dph__hero--home {
+  aspect-ratio: 39/40;
+  border-radius: 22px;
+}
+.dph__title {
+  letter-spacing: -0.01em;
+  margin: 4px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.dph__price {
+  color: var(--dn-primary, #6755f5);
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+.dph__bar,
+.dph__chip,
+.dph__thumb {
+  background: linear-gradient(
+      90deg,
+      #787e9624 25%,
+      #787e9642 37%,
+      #787e9624 63%
+    )
+    0 0/400% 100%;
+  border-radius: 10px;
+  animation: 1.4s infinite dph-shimmer;
+  display: block;
+}
+.dph__bar {
+  width: 100%;
+  height: 14px;
+}
+.dph__bar--w80 {
+  width: 80%;
+}
+.dph__bar--w60 {
+  width: 60%;
+}
+.dph__bar--w40 {
+  width: 40%;
+}
+.dph__bar--w30 {
+  width: 30%;
+}
+.dph__bar--title {
+  height: 24px;
+}
+.dph__bar--btn {
+  border-radius: 14px;
+  height: 48px;
+}
+.dph__chips {
+  gap: 8px;
+  display: flex;
+  overflow: hidden;
+}
+.dph__chip {
+  border-radius: 999px;
+  flex: 0 0 76px;
+  width: 76px;
+  height: 34px;
+}
+.dph__grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  display: grid;
+}
+.dph__rail {
+  grid-auto-columns: 46%;
+  grid-auto-flow: column;
+  gap: 10px;
+  display: grid;
+  overflow: hidden;
+}
+.dph__card {
+  background: var(--dlc-bg-elevated, #fff);
+  border: 1px solid #1418280f;
+  border-radius: 14px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  display: flex;
+}
+.dph__thumb {
+  aspect-ratio: 16/10;
+  border-radius: 10px;
+  width: 100%;
+}
+/* 9.5.0: a tab that opens a full page (Panier, Compte, Wallet) answers the tap at
+   once: the screen below the header turns into the page's skeleton while the real
+   page loads, and the new page cross-fades in over it. Removed on bfcache return. */
+.dph-leave {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 399;
+  overflow: hidden;
+  background: var(--dlc-bg, #f6f7fb);
+  color: var(--dn-text, #171923);
+  animation: 0.12s ease-out both dph-leave-in;
+  pointer-events: auto;
+}
+.dph-leave .dph__body {
+  padding-top: 18px;
+}
+.dph__row,
+.dph__profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--dlc-bg-elevated, #fff);
+  border: 1px solid #1418280f;
+}
+.dph__row .dph__thumb {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  aspect-ratio: auto;
+  border-radius: 14px;
+}
+.dph__lines {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.dph__profile {
+  padding: 16px;
+  margin-bottom: 4px;
+}
+.dph__avatar {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #787e9629;
+}
+html[data-delicat-theme="dark"] .dph__row,
+html[data-delicat-theme="dark"] .dph__profile,
+html.dlc-theme-dark .dph__row,
+html.dlc-theme-dark .dph__profile {
+  border-color: rgba(255, 255, 255, 0.06);
+}
+@keyframes dph-leave-in {
+  0% {
+    opacity: 0;
+  }
+}
+html.delicat-low-power .dph-leave,
+html.delicat-reduce-motion .dph-leave {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dph-leave {
+    animation: none;
+  }
+}
+@media (min-width: 640px) {
+  .dph__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .dph__rail {
+    grid-auto-columns: 23%;
+  }
+  .dph__hero {
+    aspect-ratio: 21/9;
+  }
+}
+@keyframes dph-shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0 0;
+  }
+}
+@keyframes dph-in {
+  0% {
+    opacity: 0.4;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dph__bar,
+  .dph__chip,
+  .dph__thumb {
+    animation: none;
+  }
+}
+html.delicat-low-power .dph__bar,
+html.delicat-low-power .dph__chip,
+html.delicat-low-power .dph__thumb {
+  background: #787e9629;
+  animation: none;
+}
+html.delicat-low-power .delicat-placeholder-main {
+  animation: none;
+}
+html.delicat-low-power .delicat-product-card,
+html.delicat-low-power .delicat-category-tile,
+html.delicat-low-power .dlx-account,
+html.delicat-low-power .dlx-wallet,
+html.delicat-low-power .dlx-section,
+html.delicat-low-power .dlx-item__icon {
+  box-shadow: none !important;
+}
+html.delicat-low-power .dbv9-reveal {
+  transition-duration: 0.16s !important;
+}
+html.delicat-low-power .delicat-product-card__image,
+html.delicat-low-power .delicat-category-tile img {
+  transition: none !important;
+}
+html.delicat-low-power .dsb8-header--glass,
+html.delicat-low-power .dsb8-header--glass:before,
+html.delicat-low-power .dsb8-header--glass:after,
+html.delicat-low-power .delicat-design-buybar__inner,
+html.delicat-low-power .delicat-shell__search-layer,
+html.delicat-low-power .delicat-shell__drawer-layer,
+html.delicat-low-power .dbv9-push-help__backdrop,
+html.delicat-low-power .delicat-woo-card-glass li.product {
+  backdrop-filter: none !important;
+}
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+.dlx-drawer__scroll,
+.dsb8-cart-list,
+[data-delicat-track] {
+  -webkit-overflow-scrolling: touch;
+}
+html .dlx-drawer,
+html .dlx-drawer *,
+html .dlx-drawer :before,
+html .dlx-drawer :after,
+html .delicat-bottom-nav,
+html .delicat-bottom-nav *,
+html .delicat-bottom-nav :before,
+html .delicat-bottom-nav :after {
+  box-sizing: border-box;
+}
+html .dlx-drawer .dlx-account {
+  margin: 0;
+  padding: 0;
+}
+html .dlx-drawer .dlx-account.is-guest {
+  padding: 14px;
+}
+html .dlx-drawer .dlx-wallet {
+  margin: 0;
+  padding: 12px;
+}
+html .dlx-drawer .dlx-section {
+  margin: 0;
+  padding: 0;
+}
+html .dlx-drawer .dlx-list {
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+}
+html .dlx-drawer .dlx-list > li {
+  background: 0 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+html .dlx-drawer .dlx-section__title {
+  background: 0 0;
+  border: 0;
+  margin: 0;
+  padding: 12px 16px 6px;
+}
+html .dlx-drawer .dlx-section__toggle {
+  margin: 0;
+  padding: 12px 16px 10px;
+}
+html .dlx-drawer .dlx-empty {
+  margin: 0;
+}
+html .dlx-drawer .dlx-social {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+html .dlx-drawer .dlx-foot,
+html .dlx-drawer .dlx-foot__links {
+  margin: 0;
+  padding: 0;
+}
+html .dlx-drawer .dlx-account__code code {
+  font-size: inherit;
+  color: inherit;
+  background: 0 0;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 0;
+}
+html .dlx-drawer .dlx-drawer__top {
+  margin: 0;
+}
+@media (max-width: 480px) {
+  html .dlx-drawer .dlx-account.is-guest {
+    padding: 10px;
+  }
+}
+html .dlx-drawer button,
+html .dlx-drawer a {
+  text-transform: none;
+  text-shadow: none;
+  font-family: inherit;
+}
+html .dlx-drawer a {
+  text-decoration: none !important;
+}
+html .dlx-drawer button {
+  box-shadow: none;
+}
+html .dlx-drawer .dlx-account.is-guest .dlx-account__login {
+  box-shadow: 0 10px 22px #8b5cf647;
+}
+html .dlx-drawer svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 20px;
+  height: 20px;
+}
+html .dlx-drawer .dlx-account__code svg {
+  width: 15px;
+  height: 15px;
+}
+html .dlx-drawer .dlx-account__logout svg,
+html .dlx-drawer .dlx-section__toggle svg {
+  width: 16px;
+  height: 16px;
+}
+html .dlx-drawer .dlx-item__icon svg {
+  stroke-width: 1.9px;
+  width: 22px;
+  height: 22px;
+}
+html .dlx-drawer .dlx-item__chevron svg {
+  width: 16px;
+  height: 16px;
+}
+html .dlx-drawer .dlx-wallet__points svg {
+  width: 13px;
+  height: 13px;
+}
+html .dlx-drawer .dlx-search__icon svg {
+  width: 18px;
+  height: 18px;
+}
+html .dlx-drawer .dlx-social__link svg {
+  width: 21px;
+  height: 21px;
+}
+html .dlx-drawer img {
+  max-width: none;
+  height: auto;
+  box-shadow: none;
+  border: 0;
+}
+html .dlx-drawer .dlx-brand__logo {
+  width: 40px;
+  height: 40px;
+}
+html .dlx-drawer .dlx-quick__icon img {
+  width: 24px;
+  height: 24px;
+}
+html .dlx-drawer .dlx-item__icon img {
+  width: 26px;
+  height: 26px;
+}
+@media (max-width: 480px) {
+  html .dlx-drawer svg,
+  html .dlx-drawer .dlx-item__icon svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+html .dlx-drawer,
+html .dlx-drawer *,
+html .delicat-bottom-nav,
+html .delicat-bottom-nav *,
+html .dsb8-header,
+html .dsb8-header * {
+  -webkit-text-fill-color: currentColor !important;
+}
+html .dlx-drawer,
+html .dlx-drawer .dlx-brand,
+html .dlx-drawer .dlx-brand__copy strong,
+html .dlx-drawer .dlx-account__row,
+html .dlx-drawer .dlx-account__copy strong,
+html .dlx-drawer .dlx-wallet__main,
+html .dlx-drawer .dlx-wallet__copy strong,
+html .dlx-drawer .dlx-quick__tile,
+html .dlx-drawer .dlx-item,
+html .dlx-drawer .dlx-item__copy strong,
+html .dlx-drawer .dlx-account__code,
+html .dlx-drawer .dlx-theme,
+html .dlx-drawer .dlx-search input,
+html .dlx-drawer .dlx-drawer__close {
+  color: var(--dlx-text) !important;
+}
+html .dlx-drawer .dlx-brand__copy small,
+html .dlx-drawer .dlx-account__copy small,
+html .dlx-drawer .dlx-wallet__copy small,
+html .dlx-drawer .dlx-item__copy small,
+html .dlx-drawer .dlx-wallet__points {
+  opacity: 0.66;
+  color: inherit !important;
+}
+html .dlx-drawer .dlx-section__title,
+html .dlx-drawer .dlx-section__toggle {
+  opacity: 0.62;
+  color: inherit !important;
+}
+html .dlx-drawer .dlx-account__chevron,
+html .dlx-drawer .dlx-item__chevron,
+html .dlx-drawer .dlx-account__logout,
+html .dlx-drawer .dlx-search__icon,
+html .dlx-drawer .dlx-empty,
+html .dlx-drawer .dlx-foot__links a {
+  color: var(--dlx-muted) !important;
+}
+html .dlx-drawer .dlx-brand__mark,
+html .dlx-drawer .dlx-account__avatar,
+html .dlx-drawer .dlx-account__copy strong em,
+html .dlx-drawer .dlx-item__icon,
+html .dlx-drawer .dlx-wallet__cta,
+html .dlx-drawer .dlx-account.is-guest .dlx-account__login {
+  color: #fff !important;
+}
+html .dlx-drawer .dlx-account__avatar.is-guest,
+html .dlx-drawer .dlx-account__code svg,
+html .dlx-drawer .dlx-wallet__icon,
+html .dlx-drawer .dlx-quick__icon,
+html .dlx-drawer .dlx-item.is-current .dlx-item__copy strong,
+html .dlx-drawer .dlx-item__badge,
+html .dlx-drawer .dlx-social__link,
+html .dlx-drawer .dlx-wallet__copy strong.is-fresh {
+  color: var(--dlx-primary) !important;
+}
+html .dlx-drawer .dlx-wallet__points svg {
+  color: #f59e0b !important;
+}
+html .dlx-drawer .dlx-account__code.is-done {
+  color: #1fb36b !important;
+}
+html .dlx-drawer .dlx-social__link.is-whatsapp {
+  color: #25d366 !important;
+}
+html .dlx-drawer .dlx-social__link.is-telegram {
+  color: #2aabee !important;
+}
+html .dlx-drawer .dlx-social__link.is-instagram {
+  color: #e1306c !important;
+}
+html .dlx-drawer .dlx-social__link.is-facebook {
+  color: #1877f2 !important;
+}
+html .dlx-drawer .dlx-social__link.is-tiktok {
+  color: #111 !important;
+}
+html .dlx-drawer .dlx-social__link.is-youtube {
+  color: red !important;
+}
+html[data-delicat-theme="dark"] .dlx-drawer .dlx-social__link.is-tiktok,
+html.dlc-theme-dark .dlx-drawer .dlx-social__link.is-tiktok {
+  color: #fff !important;
+}
+html .dsb8-header .dsb8-header__brand {
+  color: inherit !important;
+}
+html .dsb8-header .dsb8-header__back svg {
+  width: 26px;
+  height: 26px;
+}
+html .dsb8-header .dsb8-header__back[hidden] {
+  display: none !important;
+}
+html .delicat-bottom-nav .dbn-item {
+  text-transform: none;
+  font-family: inherit;
+  text-decoration: none !important;
+}
+html .delicat-bottom-nav .dbn-center,
+html .delicat-bottom-nav .dbn-badge {
+  color: #fff !important;
+}
+html .delicat-bottom-nav .dbn-badge {
+  font-style: normal;
+}
+html .delicat-bottom-nav .dbn-icon svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  width: 24px;
+  height: 24px;
+}
+html .dsb8-header.has-back .dsb8-header__theme {
+  display: none !important;
+}
+html .dsb8-header.has-back .dsb8-header__logo {
+  overflow: hidden;
+  flex: 0 auto !important;
+  min-width: 0 !important;
+}
+html .dsb8-header.has-back .dsb8-header__logo img {
+  max-width: 100%;
+  height: auto;
+}
+html .dsb8-header.has-back .dsb8-header__brand {
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+  overflow: hidden;
+}
+/* 9.3.14: the spacer keeps growing when the back button is shown, so the bell
+   and cart stay pinned to the right edge (they used to bunch up after the logo). */
+html .dsb8-header.has-back .dsb8-header__spacer {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* Scoped installed-app layout, including first paint before the JS class. */
+@media (display-mode: standalone) {
+  .dsb8-header {
+    padding-top: env(safe-area-inset-top, 0px) !important;
+  }
+  .dsb8-header.is-sticky,
+  body.admin-bar .dsb8-header.is-sticky {
+    top: 0 !important;
+  }
+}
+html.delicat-standalone .dsb8-header.is-sticky {
+  top: 0 !important;
+}
+html.delicat-standalone .dsb8-header--floating {
+  width: 100%;
+  margin: 0 !important;
+  border-radius: 0;
+}
+html.delicat-standalone .dsb8-header__row {
+  padding-left: max(
+    var(--dsb8-mobile-padding, 12px),
+    env(safe-area-inset-left, 0px)
+  ) !important;
+  padding-right: max(
+    var(--dsb8-mobile-padding, 12px),
+    env(safe-area-inset-right, 0px)
+  ) !important;
+}
+html.delicat-standalone .delicat-shell--header {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+html.delicat-standalone .delicat-shell--header.is-sticky {
+  top: 0 !important;
+}
+
+/* 9.4.3 ------------------------------------------------------------------ */
+/* Back restores the scroll position with every lazy (content-visibility:auto)
+   section drawn for that moment, so it lands where the shopper left. */
+html.dlc-restoring * {
+  content-visibility: visible !important;
+}
+/* The new page's <main> takes focus for screen readers; no ring on old WebViews. */
+main[tabindex="-1"]:focus {
+  outline: none;
+}
+/* On-screen keyboard up: the bottom bar steps aside instead of covering the field. */
+html.dlc-kb .delicat-bottom-nav {
+  visibility: hidden;
+}
+/* Offline banner (engine netFx). */
+.dlc-offline {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+  z-index: 2147482500;
+  margin: 0 auto;
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #1f2433;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  animation: dlc-offline-in 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+html.dlc-theme-dark .dlc-offline {
+  background: #2b3142;
+}
+@keyframes dlc-offline-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dlc-offline { animation: none; }
+}
+
+/* 9.4.4: the order page's printable receipt (printed after the footer) is never shown
+   on screen, on any page; order-confirmation-print.css shows it on paper only. */
+@media screen {
+  .dlc-oc-print {
+    display: none !important;
+  }
+}
