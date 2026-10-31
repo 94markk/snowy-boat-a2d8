@@ -1,3 +1,35 @@
+9.5.1 — Détails de la commande redessinés et compte instantané
+(1) Page « Détails de la commande » (Mon compte › Commandes › une commande) entièrement redessinée
+comme une application : carte « Commande #… » avec la date, l’état en pastille colorée et pictogramme
+(style Material) et une illustration ; suivi en 4 étapes avec la date et l’heure de chaque étape ;
+« Articles commandés » avec image, quantité, ID joueur et état de livraison de chaque article ;
+« Vos codes » avec bouton « Copier le code » ; vos coordonnées ; mode de paiement avec pastille
+« Payé » / « À payer » / « Remboursé » ; « Résumé du paiement » ; messages de la boutique ; boutons
+« Payer maintenant » (si le paiement est dû), « Contacter le support » (WhatsApp) et « Commander à
+nouveau ». Clair et sombre, téléphone et ordinateur.
+(2) Une commande en cours se met à jour toute seule : dès que son état change, la page se recharge et
+affiche les codes (vérification sécurisée, en pause quand l’écran est caché, arrêt automatique).
+(3) Compte instantané : Accueil du compte, Mes commandes et le détail d’une commande s’ouvrent sans
+recharger la page (comme une application), retour arrière compris. Les autres rubriques (profil,
+sécurité, portefeuille, déconnexion) et une commande qui affiche des codes s’ouvrent toujours en page
+complète, pour que leurs propres scripts démarrent normalement.
+(4) Retour arrière corrigé : quand une page s’ouvrait en page complète alors que son squelette de
+chargement était déjà affiché, Retour restait sur cette page (l’adresse changeait seule) ; la page
+précédente revient maintenant normalement.
+Technique : module Delicat_Builder_V9_Order_View (filtre wc_get_template sur myaccount/view-order.php,
+modèle templates/order-confirmation/view-order.php, order-view.css/js) bâti sur
+Delicat_Builder_V9_Order_Status ; WooCommerce vérifie l’accès et la page revérifie le propriétaire ;
+page privée jamais mise en cache (DONOTCACHEPAGE, Referrer-Policy same-origin, noindex) ; codes
+uniquement par les crochets WooCommerce (Digital Gateway, Shop2TopUp) ; zones d’extensions marquées
+data-delicat-nav-full. Moteur : nav.account (base + chemins, filtre
+delicat_builder_v9_account_soft_paths), changement sur place seulement d’une rubrique autorisée vers
+une autre, connecté, sans nouveau script ; pages du compte jamais gardées en mémoire, téléchargées à
+l’avance seulement à l’appui du doigt (réutilisées 3 s) ; règles de préchargement du navigateur sans
+ces rubriques sur le compte ; une commande à page complète répond 204 + X-Delicat-Nav: full à la
+demande du moteur (X-Delicat-Nav: 1), sans être construite deux fois ; repli en page complète après
+squelette : history.back() puis chargement (plus de location.replace sur l’entrée du squelette).
+Installer cette archive en remplacement du builder existant, puis purger LiteSpeed / Cloudflare.
+
 9.5.0 — Comme une application : pages instantanées, application installée et nouveau pied de page
 (1) Changer de page est instantané pour les clients connectés : les pages déjà préparées (au toucher
 d’un lien, au survol, les onglets du bas) restent prêtes en mémoire 90 s au lieu d’être téléchargées

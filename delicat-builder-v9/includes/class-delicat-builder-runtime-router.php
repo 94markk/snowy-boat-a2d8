@@ -186,6 +186,16 @@ final class Delicat_Builder_V9_Runtime_Router {
                 self::load('includes/lib/class-delicat-builder-qr.php');
                 self::load('includes/class-delicat-builder-order-confirmation.php','Delicat_Builder_V9_Order_Confirmation');
             }
+            /* 9.5.1: order details (Mon compte › Commandes › Commande #…). Its style and script
+             * also load on the dashboard and the orders list, which the engine switches in
+             * place; the confirmation class is only read for its helpers there (not booted). */
+            if ( function_exists('is_account_page') && is_account_page() && is_user_logged_in()
+                && class_exists( 'Delicat_Builder_V9_Order_Confirmation_Compat', false )
+                && Delicat_Builder_V9_Order_Confirmation_Compat::enabled() ) {
+                self::load('includes/class-delicat-builder-order-status.php');
+                self::load('includes/class-delicat-builder-order-confirmation.php');
+                self::load('includes/class-delicat-builder-order-view.php','Delicat_Builder_V9_Order_View');
+            }
             self::load('includes/class-delicat-builder-site.php','Delicat_Builder_V9_Site');
         }
 

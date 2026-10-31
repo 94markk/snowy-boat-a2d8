@@ -348,19 +348,36 @@ final class Delicat_Builder_V9_TurboNav {
 		if ( empty( $targets ) ) {
 			return;
 		}
+		/* 9.5.1: on an account section the engine switches the dashboard, the orders list and
+		 * an order's details in place; the browser must not download them a second time. */
+		$in_place = array();
+		if ( function_exists( 'is_account_page' ) && is_account_page() && is_callable( array( 'Delicat_Builder_V9_Engine', 'account_sections' ) ) ) {
+			$soft = Delicat_Builder_V9_Engine::account_sections();
+			if ( ! empty( $soft['base'] ) ) {
+				$in_place[] = $soft['base'];
+				foreach ( (array) $soft['paths'] as $path ) {
+					$in_place[] = $path . '*';
+				}
+			}
+		}
+		$where = array(
+			array( 'href_matches' => $targets ),
+		);
+		if ( $in_place ) {
+			$where[] = array( 'not' => array( 'href_matches' => $in_place ) );
+		}
 		$rules = array(
 			'prefetch' => array(
 				array(
 					'source'    => 'document',
 					'where'     => array(
-						'and' => array(
-							array( 'href_matches' => $targets ),
+						'and' => array_merge( $where, array(
 							/* Attribute selectors, not URL patterns: a query string (logout
 							 * nonces, add-to-cart, payment keys) excludes the link whatever
 							 * the pattern syntax of the browser. */
 							array( 'not' => array( 'selector_matches' => 'a[href*="?"], a[href*="logout"], a[href*="lost-password"], a[href*="order-pay"], a[href*="order-received"]' ) ),
 							array( 'not' => array( 'selector_matches' => 'a[data-no-turbo], .no-prerender a, a.no-prerender, a[rel~="nofollow"], a[download], a[target="_blank"]' ) ),
-						),
+						) ),
 					),
 					'eagerness' => 'moderate',
 				),

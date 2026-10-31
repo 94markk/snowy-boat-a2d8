@@ -624,6 +624,7 @@ final class Delicat_Builder_V9_Engine {
 			'home'        => home_url( '/' ),
 			'hardPaths'   => self::hard_paths(),
 			'productPaths'=> self::product_paths(),
+			'account'     => self::account_sections(),
 		);
 		if ( class_exists( 'DBP_Kernel', false ) && is_callable( array( 'DBP_Kernel', 'settings' ) ) ) {
 			$settings           = (array) DBP_Kernel::settings();
@@ -694,6 +695,52 @@ final class Delicat_Builder_V9_Engine {
 			}
 		}
 		return array_values( array_unique( $paths ) );
+	}
+
+	/**
+	 * 9.5.1: account sections the engine may switch in place, signed in only: the dashboard
+	 * (base, exact path) and the paths of the orders list and of an order's details. Every
+	 * other account page (forms, security, wallet, logout) keeps loading as a full page.
+	 * Filter delicat_builder_v9_account_soft_paths; an empty base turns it off.
+	 */
+	public static function account_sections(): array {
+		if ( ! is_user_logged_in() || ! function_exists( 'wc_get_page_permalink' ) || ! function_exists( 'wc_get_endpoint_url' ) ) {
+			return array();
+		}
+		if ( class_exists( 'DBP_Kernel', false ) && is_callable( array( 'DBP_Kernel', 'on' ) ) && ! DBP_Kernel::on( 'navigation' ) ) {
+			return array();
+		}
+		$page = (string) wc_get_page_permalink( 'myaccount' );
+		$base = wp_parse_url( $page, PHP_URL_PATH );
+		if ( ! is_string( $base ) || '' === $base || '/' === $base ) {
+			return array();
+		}
+		$base  = trailingslashit( $base );
+		$paths = array();
+		foreach ( array( 'orders', 'view-order' ) as $endpoint ) {
+			$url  = (string) wc_get_endpoint_url( $endpoint, '', $page );
+			$path = wp_parse_url( $url, PHP_URL_PATH );
+			if ( false === strpos( $url, '?' ) && is_string( $path ) && '' !== $path ) {
+				$path = trailingslashit( $path );
+				if ( 0 === strpos( $path, $base ) && $path !== $base ) {
+					$paths[] = $path;
+				}
+			}
+		}
+		$soft = apply_filters( 'delicat_builder_v9_account_soft_paths', array( 'base' => $base, 'paths' => $paths ) );
+		if ( ! is_array( $soft ) || empty( $soft['base'] ) || ! is_string( $soft['base'] ) ) {
+			return array();
+		}
+		$clean = array();
+		foreach ( (array) ( $soft['paths'] ?? array() ) as $path ) {
+			if ( is_string( $path ) && 0 === strpos( $path, $soft['base'] ) && $path !== $soft['base'] ) {
+				$clean[] = $path;
+			}
+		}
+		return array(
+			'base'  => $soft['base'],
+			'paths' => array_values( array_unique( $clean ) ),
+		);
 	}
 
 	/** Product permalink bases, so the engine can tell a product tap apart. */
