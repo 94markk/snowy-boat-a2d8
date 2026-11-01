@@ -22,11 +22,11 @@ body.delicat-bottom-nav-active.dnp-dock-visible{--dbv9-nav-band:calc(182px + env
 .dbn-icon svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .dbn-item.is-active{color:var(--dbn-active)}
 .dbn-item.is-active .dbn-label{font-weight:850}
-.dbn-badge{position:absolute;top:-6px;right:-9px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--dbn-active);color:#fff;font-size:10.5px;font-weight:800;font-style:normal;line-height:18px;text-align:center;box-shadow:0 0 0 2px var(--dbn-bg)}
+.dbn-badge{position:absolute;top:-6px;right:-9px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:var(--ds-color-primary-fill,var(--dbn-active));color:#fff;font-size:10.5px;font-weight:800;font-style:normal;line-height:18px;text-align:center;box-shadow:0 0 0 2px var(--dbn-bg)}
 .dbn-badge[hidden]{display:none}
 /* raised centre action */
 .dbn-item--center{justify-content:flex-end;padding-bottom:9px;color:var(--dbn-text)}
-.dbn-item--center .dbn-center{position:absolute;top:-24px;left:50%;width:58px;height:58px;margin-left:-29px;border-radius:20px;background:linear-gradient(135deg,var(--dbn-start),var(--dbn-end));color:#fff;box-shadow:0 12px 26px rgba(37,99,235,.36),0 0 0 4px var(--dbn-bg)}
+.dbn-item--center .dbn-center{position:absolute;top:-24px;left:50%;width:58px;height:58px;margin-left:-29px;border-radius:20px;background:linear-gradient(135deg,var(--ds-color-primary-fill,var(--dbn-start)),var(--ds-color-primary-fill-hover,var(--dbn-end)));color:#fff;box-shadow:0 12px 26px rgba(37,99,235,.36),0 0 0 4px var(--dbn-bg)}
 .dbn-item--center .dbn-center svg{width:26px;height:26px;stroke-width:1.8}
 .dbn-item--center.is-active{color:var(--dbn-active)}
 /* page space + coexistence — the product/purchase docks stack above the bar (these offsets lived in the retired bar's stylesheet) */body.delicat-bottom-nav-active .dnp-mobile-dock{bottom:calc(108px + env(safe-area-inset-bottom,0px))!important}body.delicat-bottom-nav-active .delicat-mobile-purchase{bottom:calc(112px + env(safe-area-inset-bottom,0px))!important}

@@ -4,11 +4,11 @@
  * backdrop-filter. Only transform and opacity animate; one-shot motion stays within 150-450 ms (the
  * delivery burst excepted); late content has reserved space (no layout shift). Print rules:
  * order-confirmation-print.css (media="print"). */
-.dlc-oc{--oc-card:var(--dlc-bg-elevated,#fff);--oc-text:var(--dlc-text,#111827);--oc-muted:var(--dlc-muted,#667085);--oc-hero-muted:var(--dlc-text-soft,#475467);--oc-border:var(--dlc-border,rgba(42,48,68,.1));--oc-accent:var(--dlc-accent,var(--ds-color-primary,#2563eb));--oc-ok:var(--dlc-success,#0f9f6e);--oc-bad:var(--dlc-danger,#dc3d4f);--oc-soft:#f2f4f7;--oc-primary:var(--oc-accent);--oc-ink:var(--ds-color-text,#fff);--dlc-oc-warn:var(--ds-color-warning-text,#b45309);--dlc-oc-ease-out:cubic-bezier(.2,.8,.2,1);--dlc-oc-ease-inout:cubic-bezier(.65,0,.35,1);--dlc-oc-ease-pop:cubic-bezier(.34,1.56,.64,1);
---oc-t-accent:var(--ds-color-primary,#f1f0ff);--oc-b-accent:var(--ds-color-primary,rgba(37,99,235,.25));--oc-p-accent:var(--ds-color-primary,#4f43d9);--oc-t-success:var(--ds-color-success-text,#ecfdf3);--oc-b-success:var(--ds-color-success-text,#abefc6);--oc-p-success:var(--ds-color-success-text,#067647);--oc-t-warning:var(--ds-color-warning-text,#fffaeb);--oc-b-warning:var(--ds-color-warning-text,#fedf89);--oc-p-warning:var(--ds-color-warning-text,#92400e);--oc-t-danger:var(--ds-color-danger-text,#fef3f2);--oc-b-danger:var(--ds-color-danger-text,#fecdca);--oc-p-danger:var(--ds-color-danger-text,#b42318);--oc-t-neutral:#f2f4f7;--oc-b-neutral:var(--oc-border);--oc-p-neutral:#344054;
+.dlc-oc{--oc-card:var(--dlc-bg-elevated,#fff);--oc-text:var(--dlc-text,#111827);--oc-muted:var(--dlc-muted,#667085);--oc-hero-muted:var(--dlc-text-soft,#475467);--oc-border:var(--dlc-border,rgba(42,48,68,.1));--oc-accent:var(--dlc-accent,var(--ds-color-primary,#2563eb));--oc-ok:var(--dlc-success,#0f9f6e);--oc-bad:var(--dlc-danger,#dc3d4f);--oc-soft:#f2f4f7;--oc-primary:var(--oc-accent);--oc-ink:#fff;--dlc-oc-warn:var(--ds-color-warning-text,#b45309);--dlc-oc-ease-out:cubic-bezier(.2,.8,.2,1);--dlc-oc-ease-inout:cubic-bezier(.65,0,.35,1);--dlc-oc-ease-pop:cubic-bezier(.34,1.56,.64,1);
+--oc-t-accent:var(--ds-color-primary-subtle,#eff6ff);--oc-b-accent:rgba(37,99,235,.25);--oc-p-accent:var(--ds-color-primary,#4f43d9);--oc-t-success:#ecfdf3;--oc-b-success:#abefc6;--oc-p-success:var(--ds-color-success-text,#067647);--oc-t-warning:#fffaeb;--oc-b-warning:#fedf89;--oc-p-warning:var(--ds-color-warning-text,#92400e);--oc-t-danger:#fef3f2;--oc-b-danger:#fecdca;--oc-p-danger:var(--ds-color-danger-text,#b42318);--oc-t-neutral:#f2f4f7;--oc-b-neutral:var(--oc-border);--oc-p-neutral:#344054;
 box-sizing:border-box;max-width:680px;margin:0 auto;padding:8px 16px 96px;display:flex;flex-direction:column;gap:12px;color:var(--oc-text);font-size:15px;line-height:1.45;font-family:var(--delicat-font,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);-webkit-text-size-adjust:100%}
 /* Dark: bright fills carry a dark glyph (white on #42d59c / #fbbf24 / #ff7b86 / #9da4b6 is under 3:1). */
-html[data-delicat-theme="dark"] .dlc-oc,html.dlc-theme-dark .dlc-oc{--oc-soft:rgba(255,255,255,.06);--oc-primary:var(--ds-color-primary,var(--ds-color-primary,#2563eb));--oc-ink:var(--dlc-bg-elevated,#0d1020);--dlc-oc-warn:var(--ds-color-warning-text,#fbbf24);--oc-t-accent:var(--ds-color-primary,rgba(37,99,235,.1));--oc-b-accent:var(--ds-color-primary,rgba(37,99,235,.28));--oc-p-accent:var(--ds-color-primary,#93c5fd);--oc-t-success:var(--ds-color-success-text,rgba(66,213,156,.1));--oc-b-success:var(--ds-color-success-text,rgba(66,213,156,.3));--oc-p-success:var(--ds-color-success-text,#7ee2b8);--oc-t-warning:var(--ds-color-warning-text,rgba(251,191,36,.1));--oc-b-warning:var(--ds-color-warning-text,rgba(251,191,36,.3));--oc-p-warning:var(--ds-color-warning-text,#fcd34d);--oc-t-danger:var(--ds-color-danger-text,rgba(255,123,134,.1));--oc-b-danger:var(--ds-color-danger-text,rgba(255,123,134,.3));--oc-p-danger:var(--ds-color-danger-text,#fda29b);--oc-t-neutral:rgba(255,255,255,.04);--oc-p-neutral:#d0d5dd}
+html[data-delicat-theme="dark"] .dlc-oc,html.dlc-theme-dark .dlc-oc{--oc-soft:rgba(255,255,255,.06);--oc-primary:var(--ds-color-primary,var(--ds-color-primary,#2563eb));--oc-ink:var(--dlc-bg-elevated,#0d1020);--dlc-oc-warn:var(--ds-color-warning-text,#fbbf24);--oc-t-accent:rgba(37,99,235,.1);--oc-b-accent:rgba(37,99,235,.28);--oc-p-accent:var(--ds-color-primary,#93c5fd);--oc-t-success:rgba(66,213,156,.1);--oc-b-success:rgba(66,213,156,.3);--oc-p-success:var(--ds-color-success-text,#7ee2b8);--oc-t-warning:rgba(251,191,36,.1);--oc-b-warning:rgba(251,191,36,.3);--oc-p-warning:var(--ds-color-warning-text,#fcd34d);--oc-t-danger:rgba(255,123,134,.1);--oc-b-danger:rgba(255,123,134,.3);--oc-p-danger:var(--ds-color-danger-text,#fda29b);--oc-t-neutral:rgba(255,255,255,.04);--oc-p-neutral:#d0d5dd}
 @media (min-width:600px){.dlc-oc{gap:16px}}
 .dlc-oc *,.dlc-oc *::before,.dlc-oc *::after{box-sizing:border-box}
 .dlc-oc :where(h1,h2,h3,p,ul,ol,dl,dd){margin:0;padding:0}.dlc-oc :where(ul,ol){list-style:none}
@@ -30,7 +30,7 @@ body.dlc-oc-page .delicat-native-page-main>h1,body.dlc-oc-page .page-header>h1,b
 .dlc-oc-chip{display:inline-flex;align-items:center;min-height:24px;padding:2px 10px;border-radius:999px;background:var(--oc-soft);color:var(--oc-text);font-size:12px;font-weight:650;line-height:1.3;white-space:nowrap}
 /* Buttons */
 .dlc-oc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid var(--oc-border);border-radius:13px;background:var(--oc-card);color:var(--oc-text);font:inherit;font-weight:650;line-height:1.3;text-decoration:none;cursor:pointer;transition:transform .15s var(--dlc-oc-ease-out);-webkit-tap-highlight-color:transparent}
-.dlc-oc-btn--primary{background:var(--oc-primary);border-color:transparent;color:#fff}
+.dlc-oc-btn--primary{background:var(--ds-color-primary-fill,var(--oc-primary));border-color:transparent;color:var(--ds-color-on-fill,#fff)}
 .dlc-oc-btn--ghost{background:transparent}
 .dlc-oc-btn--soft{border-color:var(--oc-edge,var(--oc-border))}
 .dlc-oc-btn:active,.dlc-oc-iconbtn:active{transform:scale(.97)}
@@ -119,7 +119,7 @@ body.dlc-oc-page .delicat-native-page-main>h1,body.dlc-oc-page .page-header>h1,b
 @media (min-width:375px){.dlc-oc-step__long{position:static!important;width:auto;height:auto;margin:0;overflow:visible;clip:auto;white-space:normal}}
 @media (max-width:359px){.dlc-oc-step__badge{width:17px;height:17px;right:-6px;bottom:-6px}.dlc-oc-step__node{width:34px;height:34px}.dlc-oc-track__rail{top:15px}.dlc-oc .dlc-oc-step__node .dlc-oc-step__icon{width:17px;height:17px}.dlc-oc-step__spin{width:42px;height:42px;top:-6px;left:-6px}}
 .dlc-oc-step.is-done .dlc-oc-step__node{background:var(--oc-ok);border-color:var(--oc-ok);color:var(--oc-ink)}
-.dlc-oc-step.is-current .dlc-oc-step__node{background:var(--oc-primary);border-color:var(--oc-primary);color:#fff;box-shadow:0 6px 16px -6px var(--oc-accent)}
+.dlc-oc-step.is-current .dlc-oc-step__node{background:var(--ds-color-primary-fill,var(--oc-primary));border-color:var(--oc-primary);color:#fff;box-shadow:0 6px 16px -6px var(--oc-accent)}
 .dlc-oc-step.is-alert .dlc-oc-step__node{background:var(--dlc-oc-warn);border-color:var(--dlc-oc-warn);color:var(--oc-ink)}
 .dlc-oc-step.is-ended .dlc-oc-step__node{background:var(--oc-muted);border-color:var(--oc-muted);color:var(--oc-ink)}
 .dlc-oc[data-phase="failed"] .dlc-oc-step.is-ended .dlc-oc-step__node{background:var(--oc-bad);border-color:var(--oc-bad)}
@@ -173,7 +173,7 @@ body.dlc-oc-page .delicat-native-page-main>h1,body.dlc-oc-page .page-header>h1,b
 .dlc-oc-codes .dfr-digital-delivery [style*="15803d"]{color:var(--oc-p-success)!important}
 .dlc-oc-codes .dfr-digital-delivery [style*="edf2f7"]{border-color:var(--oc-border)!important}
 .dlc-oc-codes .dfr-secure-order-reveal,.dlc-oc-codes button{min-height:44px;border-radius:13px}
-.dlc-oc-codes .dfr-secure-order-reveal{padding:10px 16px;border:0;background:var(--oc-primary);color:#fff;font:inherit;font-weight:650;cursor:pointer;transition:transform .15s var(--dlc-oc-ease-out)}
+.dlc-oc-codes .dfr-secure-order-reveal{padding:10px 16px;border:0;background:var(--ds-color-primary-fill,var(--oc-primary));color:#fff;font:inherit;font-weight:650;cursor:pointer;transition:transform .15s var(--dlc-oc-ease-out)}
 .dlc-oc-codes .dfr-secure-order-reveal:active{transform:scale(.97)}
 .dlc-oc-codes .dfr-secure-order-output>div{background:var(--oc-card)!important;border-color:var(--oc-border)!important;border-radius:12px!important;animation:dlc-oc-rise .3s var(--dlc-oc-ease-out) both}
 .dlc-oc-codes .dfr-secure-order-output>div>div:first-child{color:var(--oc-muted)!important}
@@ -351,7 +351,7 @@ body.dlc-oc-page .delicat-native-page-main>h1,body.dlc-oc-page .page-header>h1,b
 /* Theme buttons (`button`, `.woocommerce button`, `.woocommerce-page a`) no longer restyle the module's buttons. */
 .dlc-oc .dlc-oc-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border:1px solid var(--oc-border);border-radius:13px;background:var(--oc-card);color:var(--oc-text);font:inherit;font-weight:650;line-height:1.3;text-align:center;text-transform:none;text-decoration:none;box-shadow:none}
 .dlc-oc .dlc-oc-btn:hover,.dlc-oc .dlc-oc-btn:focus{background:var(--oc-card);color:var(--oc-text);border-color:var(--oc-border)}
-.dlc-oc .dlc-oc-btn--primary,.dlc-oc .dlc-oc-btn--primary:hover,.dlc-oc .dlc-oc-btn--primary:focus{background:var(--oc-primary);border-color:transparent;color:#fff}
+.dlc-oc .dlc-oc-btn--primary,.dlc-oc .dlc-oc-btn--primary:hover,.dlc-oc .dlc-oc-btn--primary:focus{background:var(--ds-color-primary-fill,var(--oc-primary));border-color:transparent;color:var(--ds-color-on-fill,#fff)}
 .dlc-oc .dlc-oc-btn--ghost,.dlc-oc .dlc-oc-btn--ghost:hover,.dlc-oc .dlc-oc-btn--ghost:focus{background:transparent}
 .dlc-oc .dlc-oc-btn--soft,.dlc-oc .dlc-oc-btn--soft:hover,.dlc-oc .dlc-oc-btn--soft:focus{border-color:var(--oc-edge,var(--oc-border))}
 .dlc-oc .dlc-oc-copy{display:inline-grid;min-height:36px;padding:6px 12px;font-size:13px}
@@ -368,7 +368,7 @@ body.dlc-oc-page .delicat-native-page-main>h1,body.dlc-oc-page .page-header>h1,b
 /* « 1 sur 2 articles » may take two lines on phones; the tracker keeps one fixed height. */
 @media (max-width:479px){.dlc-oc-steps{min-height:110px}.dlc-oc-step__sub{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}}
 /* Dark: warning borders the dark adapter would repaint (and leave stale after a live change). */
-html[data-delicat-theme="dark"] .dlc-oc,html.dlc-theme-dark .dlc-oc{--oc-b-warning:var(--ds-color-warning-text,#544521)}
+html[data-delicat-theme="dark"] .dlc-oc,html.dlc-theme-dark .dlc-oc{--oc-b-warning:#544521}
 html[data-delicat-theme="dark"] .dlc-oc-step.is-alert .dlc-oc-step__node,html.dlc-theme-dark .dlc-oc-step.is-alert .dlc-oc-step__node{border-color:transparent}
 /* Skipped steps stay readable (opacity .7 gave 3.46:1). */
 .dlc-oc-step.is-skipped .dlc-oc-step__title{opacity:1;color:var(--oc-muted)}

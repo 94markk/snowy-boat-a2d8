@@ -123,6 +123,16 @@ final class Delicat_Builder_V9_Design_System {
 			}
 		}
 
+		/* 9.7.1: fills for white text. The dark-mode primary/success/danger are light tints (they must read as
+		 * text on dark surfaces), so white text on them fails (2.5:1 on #60A5FA). In dark mode a filled button,
+		 * badge or pill uses the *-fill tokens: the light-mode colours (>= 4.8:1 with white). They are defined in
+		 * the dark palette only, so in light mode `var(--ds-color-primary-fill, <original>)` keeps the original
+		 * colour — including any colour the owner chose in the settings. */
+		foreach ( array( 'primary-fill' => 'primary', 'primary-fill-hover' => 'primary-hover', 'success-fill' => 'success-text', 'danger-fill' => 'danger' ) as $fill => $source ) {
+			$dark[ $fill ] = $light[ $source ];
+		}
+		$dark['on-fill'] = '#FFFFFF';
+
 		$tokens = apply_filters( 'delicat_ds_colors', array( 'light' => $light, 'dark' => $dark ) );
 		return is_array( $tokens ) && isset( $tokens['light'], $tokens['dark'] ) ? $tokens : array( 'light' => $light, 'dark' => $dark );
 	}

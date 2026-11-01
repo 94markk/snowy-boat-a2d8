@@ -47,11 +47,14 @@ html.dlc-theme-dark .delicat-legal__body thead td {
 }
 html[data-delicat-theme="dark"] body.dpn-checkout,
 html.dlc-theme-dark body.dpn-checkout {
-  --dpn-bg: var(--ds-color-background,#eef0f4);
-  --dpn-card: var(--ds-color-surface,#fff);
-  --dpn-text: var(--ds-color-text,#171922);
-  --dpn-muted: var(--ds-color-text-muted,#737887);
-  --dpn-line: var(--ds-color-border,#e5e7ed);
+  /* 9.7.1: checkout stays a light island in dark mode (payment fields assume light); literal on purpose. */
+  --dpn-bg: #eef0f4;
+  --dpn-card: #fff;
+  --dpn-text: #171922;
+  --dpn-muted: #5f6b7e;
+  --dpn-line: #e5e7ed;
+  --dpn-checkout-accent: var(--ds-color-primary-fill, #2563eb);
+  --dpn-checkout-green: var(--ds-color-success-fill, #15803d);
   --dpn-soft: #f7f8fa;
   --dpn-shadow: 0 12px 34px #1a1d2a12;
   color: var(--dpn-text);
@@ -105,4 +108,12 @@ body.single-product .pswp[aria-hidden="true"] {
   height: auto !important;
   min-height: 38px !important;
   line-height: 1.2 !important;
+}
+
+/* 9.7.1: the checkout bar keeps its own dark surface in dark mode inside the light checkout island,
+ * so its text must not inherit the island's dark ink (the total read 1.1:1). */
+html[data-delicat-theme="dark"] body.dpn-checkout .dpn-checkout-dock,
+html.dlc-theme-dark body.dpn-checkout .dpn-checkout-dock {
+  --dpn-text: var(--ds-color-text, #f8fafc);
+  --dpn-muted: var(--ds-color-text-muted, #94a3b8);
 }

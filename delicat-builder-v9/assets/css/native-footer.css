@@ -141,7 +141,7 @@ html.dlc-theme-dark .dbv9-footer {
   height: 38px;
   place-items: center;
   border-radius: 12px;
-  background: linear-gradient(135deg, var(--ft-primary), var(--ft-primary-2));
+  background: linear-gradient(135deg, var(--ds-color-primary-fill, var(--ds-color-primary-fill,var(--ft-primary))), var(--ds-color-primary-fill-hover, var(--ds-color-primary-fill-hover,var(--ft-primary-2))));
   color: #fff;
   font-size: 16px;
   font-weight: 900;
@@ -229,7 +229,7 @@ html.dlc-theme-dark .dbv9-footer-logo.has-dark-logo .dbv9-footer-logo-image--dar
 }
 
 #dbv9-universal-footer .dbv9-ft__btn--primary {
-  background: linear-gradient(110deg, var(--ft-primary), var(--ft-primary-2));
+  background: linear-gradient(110deg, var(--ds-color-primary-fill, var(--ds-color-primary-fill,var(--ft-primary))), var(--ds-color-primary-fill-hover, var(--ds-color-primary-fill-hover,var(--ft-primary-2))));
   color: #fff;
 }
 

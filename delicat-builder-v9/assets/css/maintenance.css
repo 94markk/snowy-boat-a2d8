@@ -383,8 +383,8 @@ body.dm {
 
 .dm--midnight {
 	--dm-bg: linear-gradient(160deg, var(--dm-bg-start) 0%, var(--dm-bg-end) 62%, var(--dm-bg-start) 100%);
-	--dm-text: var(--ds-color-text,#ffffff);
-	--dm-muted: var(--ds-color-text-muted,rgba(233, 238, 255, 0.74));
+	--dm-text: #ffffff;
+	--dm-muted: rgba(233, 238, 255, 0.74);
 	--dm-faint: rgba(233, 238, 255, 0.5);
 	--dm-chip-bg: rgba(255, 255, 255, 0.1);
 	--dm-chip-border: rgba(255, 255, 255, 0.2);
@@ -554,8 +554,8 @@ body.dm {
 
 .dm--spotlight {
 	--dm-bg: #07070d;
-	--dm-text: var(--ds-color-text,#f6f7fb);
-	--dm-muted: var(--ds-color-text-muted,rgba(246, 247, 251, 0.66));
+	--dm-text: #f6f7fb;
+	--dm-muted: rgba(246, 247, 251, 0.66);
 	--dm-faint: rgba(246, 247, 251, 0.42);
 	--dm-chip-bg: rgba(255, 255, 255, 0.06);
 	--dm-chip-border: rgba(255, 255, 255, 0.14);
@@ -685,8 +685,8 @@ body.dm {
 
 .dm--flash {
 	--dm-bg: linear-gradient(180deg, #0a0f1d 0%, var(--dm-bg-start) 52%, #070b16 100%);
-	--dm-text: var(--ds-color-text,#ffffff);
-	--dm-muted: var(--ds-color-text-muted,rgba(226, 232, 244, 0.72));
+	--dm-text: #ffffff;
+	--dm-muted: rgba(226, 232, 244, 0.72);
 	--dm-faint: rgba(226, 232, 244, 0.44);
 	--dm-chip-bg: rgba(0, 0, 0, 0);
 	--dm-chip-border: var(--dm-accent);

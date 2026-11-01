@@ -1,3 +1,19 @@
+9.7.1 — Correctif : page de confirmation de commande illisible et contrastes en mode sombre
+(1) Page « Merci / Commande livrée / Livraison en cours » : le bandeau était vert ou bleu vif avec un texte
+sombre presque invisible (depuis la 9.6.0). Il retrouve son fond clair (vert pâle, bleu pâle) avec un texte
+lisible ; en mode sombre, fond sombre avec une teinte légère. Les pastilles des étapes et le lien « Actualiser »
+sont de nouveau lisibles.
+(2) Mode sombre : les boutons et pastilles colorés gardent un texte blanc lisible (contraste ≥ 4,5:1) : « Ajouter
+au panier », « Acheter maintenant », « Passer la commande », « Voir » (commandes), « Partager le reçu », le bouton
+Support du pied de page, le compteur de notifications, l’étiquette « Livrée » et les boutons du formulaire de
+recharge. En mode clair, rien ne change (vos couleurs personnalisées restent appliquées).
+(3) Les pages restées volontairement sombres ou claires retrouvent leurs couleurs : thèmes de la page de
+maintenance « Midnight », « Spotlight » et « Flash » (texte blanc), paiement en mode sombre, préréglages de menu
+sombres. Le total de la barre de paiement est lisible en mode sombre ; ses libellés gris sont plus foncés.
+(4) Badge du panier en rouge plus foncé (lisible) ; le compteur de notifications et le bouton « Laisser un avis »
+passent aux couleurs de la marque.
+Installer avec Delicat Identity 6.17.2 et Delicat Recharge 6.6.3, puis purger LiteSpeed / Cloudflare.
+
 9.7.0 — Navigation globale unifiée (phase 3 de la refonte)
 (1) Un seul en-tête et un seul pied de page : avec un thème « blocs » (Twenty Twenty-Five et les autres thèmes
 récents), l’en-tête et le pied de page du thème s’affichaient sous ceux du Builder sur l’accueil, le blog et la

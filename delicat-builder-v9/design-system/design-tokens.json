@@ -48,7 +48,12 @@
             "danger": "#F87171",
             "danger-text": "#F87171",
             "focus": "#60A5FA",
-            "overlay": "rgba(0,0,0,.6)"
+            "overlay": "rgba(0,0,0,.6)",
+            "primary-fill": "#2563EB",
+            "primary-fill-hover": "#1D4ED8",
+            "success-fill": "#15803D",
+            "danger-fill": "#DC2626",
+            "on-fill": "#FFFFFF"
         }
     },
     "shadows": {

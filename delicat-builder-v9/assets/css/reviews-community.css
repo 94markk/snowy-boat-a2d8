@@ -350,7 +350,7 @@ html .dlc-rv-chip[aria-pressed="true"] {
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  background: var(--ds-color-primary,#2563eb);
+  background: var(--ds-color-primary-fill,var(--ds-color-primary,#2563eb));
   color: #fff;
   font-size: 13px;
   font-weight: 850;

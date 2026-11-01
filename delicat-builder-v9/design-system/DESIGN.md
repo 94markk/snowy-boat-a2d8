@@ -28,7 +28,8 @@ Audit and phase plan: [AUDIT.md](AUDIT.md). Machine-readable tokens: [design-tok
 Colours (`--ds-color-*`, light / dark): `primary`, `primary-hover`, `primary-subtle`, `primary-contrast`,
 `brand`, `brand-contrast`, `background`, `surface`, `surface-2`, `surface-elevated`, `text`, `text-muted`,
 `border` (decorative), `border-strong` (inputs, 3:1), `success`/`success-text`, `warning`/`warning-text`,
-`danger`/`danger-text`, `focus`, `overlay`.
+`danger`/`danger-text`, `focus`, `overlay`; dark palette only: `primary-fill`, `primary-fill-hover`,
+`success-fill`, `danger-fill`, `on-fill` (see rule 7).
 
 Scale (theme-independent): `--ds-font-sans`, `--ds-font-mono`, `--ds-font-weight-{regular,medium,semibold,bold}`,
 `--ds-text-{meta 12, secondary 13, body 15, button 15, card-title 15, section 21, page 28}` (mobile; components
@@ -43,6 +44,11 @@ step up on desktop), `--ds-space-{1,2,3,4,5,6,8,10,12,16}` = 4–64 px, `--ds-sp
 3. Icons come from `delicat_ds_icon()` (Material Symbols names with hyphens); no emoji anywhere in the interface or messages.
    To add one: take `rounded/<name>.svg` from the pinned `@material-symbols/svg-400@0.48.2` (npm, verify the shasum), run it
    through SVGO with `floatPrecision: 0` (1 if it differs at 48 px) and add the inner `<path>` to `includes/lib/icons-material.php`.
+7. White text on a coloured fill (button, badge, pill): `background: var(--ds-color-primary-fill, <original>)`.
+   In dark mode `primary` is a light tint made for text (2.5:1 under white); the `*-fill` tokens exist only in
+   the dark palette and hold the light-mode colours, so light mode keeps the original (and owner) colours.
+   Tints (`--x-soft`, hero washes) stay tints: never map a pale or translucent colour to a saturated token.
+   `tests/redesign/contrast-scan.cjs` checks rendered text against WCAG AA in both themes.
 6. One global navigation: the native header (`.dsb8-header`), the drawer (`.dlx-drawer`), the bottom bar
    (`.delicat-bottom-nav`) and the universal footer. Theme headers/footers (classic, Elementor, block template parts) are
    suppressed while they render; legacy shortcodes print nothing. Panels that open over the page take focus on open and give

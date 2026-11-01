@@ -2,10 +2,15 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.1
+Stable tag: 6.17.2
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.2 ==
+* Mode sombre : les boutons de l’espace client (« Voir » dans les commandes, actions du compte, menu actif) gardent
+  un texte blanc lisible ; ils utilisaient le bleu clair du mode sombre (contraste 2,5:1). Mode clair inchangé.
+* Écran de connexion (Visual Builder) : fond uni bleu nuit d’origine rétabli.
 
 == Version 6.17.1 ==
 * Correctif : les contrôles de santé, de sécurité et des fournisseurs (administration) et le résumé de
