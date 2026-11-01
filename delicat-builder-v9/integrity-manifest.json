@@ -1,17 +1,17 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-01T12:08:34.448Z",
- "version": "9.7.2",
- "bytes": 6934190,
+ "built": "2026-11-01T14:00:14.687Z",
+ "version": "9.7.3",
+ "bytes": 6936895,
  "count": 303,
  "files": {
   "README.txt": {
-   "bytes": 75449,
-   "sha256": "f6dbae11f79fde08d9ef69aa339a715c4af95c82e92826486c8deb7200decc0e"
+   "bytes": 76249,
+   "sha256": "e3cd3d37e20862783d0bf24e180aa1972fe6abf47bdee26643d60136c1aed4ac"
   },
   "asset-versions.php": {
    "bytes": 6685,
-   "sha256": "71c77f5c482207e58126d51d4354f059769fd65ec4225f4beb7d61c47de1c5c3"
+   "sha256": "4a0f40262a6e93ad7cd529f94bcc435d8705ea1e04994ffaa173178eff01dcf4"
   },
   "assets/components/banner.css": {
    "bytes": 5514,
@@ -150,8 +150,8 @@
    "sha256": "898bacd9b961c332b866fb9c8eec32205666df8df027c2df257df05298feb5da"
   },
   "assets/css/dark-glass.css": {
-   "bytes": 23408,
-   "sha256": "8df9e433a7333403189d5b5eff3a80fd6fa63f3a63f23febbaf711c674e2952a"
+   "bytes": 24694,
+   "sha256": "5b9268358ad246848ae9b5e62426d9f5da3e6a99c73c33abcc6bb248ab6e8803"
   },
   "assets/css/dark-mode.css": {
    "bytes": 6669,
@@ -317,9 +317,9 @@
    "bytes": 213669,
    "sha256": "6818d3a1df034439d0b0e4e5ca42496384a47eafcae794e9890d405a6a2bc23b"
   },
-  "assets/dist/chrome.11e3a56e47f9.css": {
-   "bytes": 167152,
-   "sha256": "11e3a56e47f9fcba39e224bf47927354e859785e43ab1d1016f52fd3f94734c8"
+  "assets/dist/chrome.8867da37a8db.css": {
+   "bytes": 167771,
+   "sha256": "8867da37a8db593e539d7e48847d5f8de85ef684a2e4e50781cdcf66f169a962"
   },
   "assets/dist/chunks/chunk.385b5371c4d9.js": {
    "bytes": 1279,
@@ -387,7 +387,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9717,
-   "sha256": "97db49edb80959438fb14d63e6d58549bb53992d4506a69f22457a76e15603c9"
+   "sha256": "7f58a8e7518cc32372c2dd16716a687f3dd6608f88d3b2a544ff1601ec4bf780"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -639,7 +639,7 @@
   },
   "delicat-builder-v9.php": {
    "bytes": 101181,
-   "sha256": "70da8459106276038e5f33c3d446501733367c817ad85db8a15620f01fe881b6"
+   "sha256": "41dbb8c7d84b0beb33f3badf6c8313d04156c97c9b9f6ec336f8d2d980d1434a"
   },
   "design-system/AUDIT.md": {
    "bytes": 7078,

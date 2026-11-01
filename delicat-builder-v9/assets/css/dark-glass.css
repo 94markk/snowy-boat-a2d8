@@ -147,8 +147,6 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bottom-nav {
 }
 
 /* 5 ---------------------------------------------------- product page */
-html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-hero,
-html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase,
 html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-section {
   background: var(--g-card) !important;
   border: 1px solid var(--g-edge) !important;
@@ -277,7 +275,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-rv-chip[aria-pressed="t
 }
 
 /* 9 --------------------------------------------- account, cart, checkout */
-html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.woocommerce-MyAccount-navigation, .woocommerce-MyAccount-content, .woocommerce-cart-form, .cart_totals, .woocommerce-checkout-review-order, .woocommerce form.login, .woocommerce form.register, .wc-block-components-sidebar, .wc-block-checkout__main, .dsb-wallet-card, .dsb-menu-card) {
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.woocommerce-MyAccount-navigation, .woocommerce-cart-form, .cart_totals, .woocommerce-checkout-review-order, .woocommerce form.login, .woocommerce form.register, .wc-block-components-sidebar, .wc-block-checkout__main, .dsb-wallet-card, .dsb-menu-card) {
   background: var(--g-card) !important;
   border: 1px solid var(--g-edge) !important;
   box-shadow: var(--g-depth) !important;
@@ -402,4 +400,33 @@ html.delicat-low-power.dlc-theme-dark .dlc-oc .dlc-oc-card {
   background-color: #121633;
   background-image: none;
   box-shadow: none;
+}
+
+/* 14 ------------------------------------------- 9.7.3: one container, not two */
+/* Dark mode drew a glass frame around sections whose cards already carry the design (a box in a box):
+ * the product hero, the purchase options around the PACKAGE card, the account content around the
+ * account cards, and the orders table around order rows that are cards on phones. The frame is not
+ * drawn any more; the cards inside are unchanged. Light mode is unchanged. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-hero,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+@media (max-width: 768px) {
+  html.dlc-theme-dark[data-delicat-theme="dark"] body table.woocommerce-orders-table.shop_table {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+}
+/* WooCommerce block notices (e.g. "Confirm your email address" above the orders) were left white in dark mode. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .wc-block-components-notice-banner {
+  background: var(--g-card-2) !important;
+  border-color: var(--g-edge) !important;
+  color: var(--g-text) !important;
 }

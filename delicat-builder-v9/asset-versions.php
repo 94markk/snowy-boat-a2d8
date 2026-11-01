@@ -35,7 +35,7 @@ return array(
  'assets/css/bottom-nav.css' => '7c273eda780d',
  'assets/css/chrome-fixes.css' => '8cd77416e301',
  'assets/css/currency.css' => '898bacd9b961',
- 'assets/css/dark-glass.css' => '8df9e433a733',
+ 'assets/css/dark-glass.css' => '5b9268358ad2',
  'assets/css/dark-mode.css' => '747b5fc7f9de',
  'assets/css/design-studio.css' => '29715a8b6636',
  'assets/css/drawer.css' => '9fdbe75b64ad',

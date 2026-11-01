@@ -168,7 +168,7 @@ body.dip-account-app .dipapp-row-label{
   line-height:1.35;
   overflow-wrap:anywhere;
 }
-body.dip-account-app .dipapp-row:hover,body.dip-account-app .dipapp-profile:hover{background:var(--dipapp-hover)!important}
+@media (hover:hover){body.dip-account-app .dipapp-row:hover,body.dip-account-app .dipapp-profile:hover{background:var(--dipapp-hover)!important}}
 body.dip-account-app .dipapp-row:active,body.dip-account-app .dipapp-logout:active{opacity:.76}
 body.dip-account-app .dipapp-logout{
   display:flex!important;
@@ -210,7 +210,7 @@ body.dip-account-app.dip-account-home .woocommerce-MyAccount-content>.dipma-dash
 html[data-dip-account-theme="dark"] body.dip-account-app{
   --dipapp-bg:var(--ds-color-background,#19191b);
   --dipapp-surface:var(--ds-color-surface,#2b2b2d);
-  --dipapp-hover:#353539;
+  --dipapp-hover:var(--ds-color-surface-2,#353539);
   --dipapp-text:var(--ds-color-text,#f5f5f6);
   --dipapp-muted:var(--ds-color-text-muted,#ababaf);
   --dipapp-border:var(--ds-color-border,#38383c);
@@ -221,7 +221,7 @@ html[data-dip-account-theme="dark"] body.dip-account-app{
 html[data-dip-account-theme="light"] body.dip-account-app{color-scheme:light}
 @media (prefers-color-scheme:dark){
   html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light){
-    --dipapp-bg:var(--ds-color-background,#19191b);--dipapp-surface:var(--ds-color-surface,#2b2b2d);--dipapp-hover:#353539;--dipapp-text:var(--ds-color-text,#f5f5f6);--dipapp-muted:var(--ds-color-text-muted,#ababaf);--dipapp-border:var(--ds-color-border,#38383c);--dipapp-blue:var(--ds-color-primary,#168aff);--dipapp-red:var(--ds-color-danger-text,#ff4756);color-scheme:dark;
+    --dipapp-bg:var(--ds-color-background,#19191b);--dipapp-surface:var(--ds-color-surface,#2b2b2d);--dipapp-hover:var(--ds-color-surface-2,#353539);--dipapp-text:var(--ds-color-text,#f5f5f6);--dipapp-muted:var(--ds-color-text-muted,#ababaf);--dipapp-border:var(--ds-color-border,#38383c);--dipapp-blue:var(--ds-color-primary,#168aff);--dipapp-red:var(--ds-color-danger-text,#ff4756);color-scheme:dark;
   }
 }
 @media(max-width:640px){
@@ -317,7 +317,7 @@ body.dip-account-app .dipapp-count{display:inline-grid;place-items:center;min-wi
 body.dip-account-app .dipapp-orders{overflow:hidden;border:1px solid var(--dipapp-border);border-radius:21px;background:var(--dipapp-surface)}
 body.dip-account-app .dipapp-order{position:relative;display:flex!important;align-items:center;gap:13px;min-width:0;padding:13px 16px!important;color:var(--dipapp-text)!important;text-decoration:none!important;transition:background-color .15s ease}
 body.dip-account-app .dipapp-order:not(:last-child)::after{content:"";position:absolute;right:16px;bottom:0;left:77px;height:1px;background:var(--dipapp-border);pointer-events:none}
-body.dip-account-app .dipapp-order:hover{background:var(--dipapp-hover)}
+@media (hover:hover){body.dip-account-app .dipapp-order:hover{background:var(--dipapp-hover)}}
 body.dip-account-app .dipapp-order:active{opacity:.78}
 body.dip-account-app .dipapp-order-thumb{display:grid;flex:0 0 48px;place-items:center;width:48px;height:48px;overflow:hidden;border:1px solid var(--dipapp-border);border-radius:14px;background:var(--dipapp-grey-soft);color:var(--dipapp-muted)}
 body.dip-account-app .dipapp-order-thumb img{width:100%;height:100%;object-fit:cover;display:block}

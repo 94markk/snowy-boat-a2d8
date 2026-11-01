@@ -69,6 +69,11 @@ add_action( 'dsa2_daily_cleanup', static function() {
     if ( class_exists( 'DSA2_Groups', false ) ) DSA2_Groups::cleanup();
 } );
 
+add_action( 'dsa2_group_question_alert', static function( $group_id, $message_id ) {
+    if ( ! class_exists( 'DSA2_Groups', false ) ) dsa2_load_full_engine();
+    if ( class_exists( 'DSA2_Groups', false ) && ! has_action( 'dsa2_group_question_alert', array( 'DSA2_Groups', 'send_question_alert' ) ) ) DSA2_Groups::send_question_alert( $group_id, $message_id );
+}, 10, 2 );
+
 add_action( 'plugins_loaded', static function() {
     $action = ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() && isset( $_REQUEST['action'] ) )
         ? sanitize_key( wp_unslash( $_REQUEST['action'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended

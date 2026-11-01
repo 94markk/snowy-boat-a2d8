@@ -224,12 +224,26 @@ final class DSA7_Launcher {
     public static function ajax_boot() {
         self::no_cache();
         dsa2_load_full_engine();
-        $ip = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
-        $hits = get_transient( 'dsa7_boot_' . md5( $ip ) );
-        $hits = is_array( $hits ) && isset( $hits['t'] ) && time() - (int) $hits['t'] < MINUTE_IN_SECONDS ? $hits : array( 't' => time(), 'c' => 0 );
-        $hits['c']++;
-        set_transient( 'dsa7_boot_' . md5( $ip ), $hits, 2 * MINUTE_IN_SECONDS );
-        if ( $hits['c'] > 120 ) wp_send_json_error( array( 'code' => 'rate_limited' ), 429 ); // carrier-NAT: many customers share one address
+        // Two limits: per address (generous, carrier-NAT puts many customers behind one) and per visitor (address
+        // + account or guest cookie), so one client cannot use up the address's budget; a rotated cookie still
+        // counts against the address. Both are checked before anything is written.
+        $ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+        $who = get_current_user_id() ? 'u' . get_current_user_id() : ( isset( $_COOKIE['dap_session'] ) ? 'g' . substr( preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['dap_session'] ) ), 0, 100 ) : 'n' );
+        $limits = array(
+            'dsa7_boot_' . md5( $ip )               => 120,
+            'dsa7_boot_' . md5( $ip . '|' . $who ) => 30,
+        );
+        $windows = array();
+        foreach ( $limits as $key => $max ) {
+            $hits = get_transient( $key );
+            $hits = is_array( $hits ) && isset( $hits['t'] ) && time() - (int) $hits['t'] < MINUTE_IN_SECONDS ? $hits : array( 't' => time(), 'c' => 0 );
+            if ( (int) $hits['c'] >= $max ) wp_send_json_error( array( 'code' => 'rate_limited' ), 429 );
+            $windows[ $key ] = $hits;
+        }
+        foreach ( $windows as $key => $hits ) {
+            $hits['c'] = (int) $hits['c'] + 1;
+            set_transient( $key, $hits, 2 * MINUTE_IN_SECONDS );
+        }
 
         $s       = wp_parse_args( (array) get_option( 'dap_settings', array() ), array( 'whatsapp' => '', 'show_whatsapp' => 1, 'business_hours' => '', 'order_support_enabled' => 1, 'brand_name' => 'Delicat Assistant' ) );
         $user    = wp_get_current_user();

@@ -479,7 +479,7 @@ function renderHome() {
       h('span', { class: 'ico' }, icon('groups')), h('span', null, h('b', null, t('commTitle')), h('small', null, t('commSub'))), icon('chevron_right', 'go')) : null,
     h('p', { class: 'sec' }, t('topics')),
     h('div', { class: 'grid' }, tiles.map(([ic, key, action]) => h('button', { class: 'tile', type: 'button', onclick: () => quick(action) }, icon(ic), t(key)))),
-    boot && boot.whatsapp ? h('a', { class: 'wa', href: waLink(boot.whatsapp), target: '_blank', rel: 'noopener' }, waIcon(), t('whatsapp')) : null,
+    boot && boot.whatsapp ? h('a', { class: 'wa', href: waLink(boot.whatsapp), target: '_blank', rel: 'noopener noreferrer' }, waIcon(), t('whatsapp')) : null,
     h('div', { class: 'langs', role: 'group', 'aria-label': t('language') }, [['fr', 'FR'], ['en', 'EN'], ['ht', 'KR']].map(([code, label]) =>
       h('button', { type: 'button', 'aria-pressed': lang === code ? 'true' : 'false', lang: code, onclick: () => setLang(code) }, label))),
     h('p', { class: 'secure' }, icon('lock', 's'), t('secure')),
@@ -747,7 +747,7 @@ function messageEl(m, kind) {
   if (type === 'image') {
     const url = safeUrl(m.meta && m.meta.url);
     return h('div', { class: 'msg img' + (me ? ' me' : '') },
-      url ? h('a', { href: url, target: '_blank', rel: 'noopener' }, h('img', { src: url, alt: t('image'), loading: 'lazy', decoding: 'async' })) : h('div', { class: 'bub' }, t('image')),
+      url ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer' }, h('img', { src: url, alt: t('image'), loading: 'lazy', decoding: 'async' })) : h('div', { class: 'bub' }, t('image')),
       metaLine(m, me, kind));
   }
   if (type === 'deleted') return h('div', { class: 'msg' + (me ? ' me' : '') }, h('div', { class: 'bub', style: 'font-style:italic;opacity:.7' }, t('deleted')));
@@ -778,11 +778,11 @@ function actionButtons(list, primaryFirst) {
     if (a === 'url') {
       const mapped = (boot && boot.urls && boot.urls[v]) || v;
       const href = safeUrl(mapped);
-      return href ? h('a', { class: cls, href, target: sameSite(href) ? null : '_blank', rel: 'noopener' }, label) : null;
+      return href ? h('a', { class: cls, href, target: sameSite(href) ? null : '_blank', rel: 'noopener noreferrer' }, label) : null;
     }
     if (a === 'whatsapp') {
       const wa = (boot && boot.whatsapp) || v;
-      return safeUrl(wa) ? h('a', { class: 'btn', href: waLink(wa), target: '_blank', rel: 'noopener' }, waIcon(), label) : null;
+      return safeUrl(wa) ? h('a', { class: 'btn', href: waLink(wa), target: '_blank', rel: 'noopener noreferrer' }, waIcon(), label) : null;
     }
     return h('button', { class: cls, type: 'button', data: { act: a, val: v } }, label);
   });
@@ -815,7 +815,7 @@ function card(m) {
     put(el, head(x.title), x.eta ? h('span', { class: 'chip-s' }, icon('schedule', 's'), clean(x.eta)) : null, x.description ? h('p', null, clean(x.description)) : null,
       x.order ? h('div', { class: 'order' }, h('b', null, clean(x.order.title)), h('span', null, [x.order.status, x.order.total, x.order.date].map(clean).filter(Boolean).join(' · ')), x.order.url ? linkBtn(x.order.url, t('viewOrder')) : null) : null,
       x.hint ? h('div', { class: 'tip' }, icon('lightbulb', 's'), clean(x.hint)) : null,
-      x.whatsapp && safeUrl(x.whatsapp) ? h('div', { class: 'acts' }, h('a', { class: 'btn', href: waLink(x.whatsapp), target: '_blank', rel: 'noopener' }, waIcon(), 'WhatsApp')) : null);
+      x.whatsapp && safeUrl(x.whatsapp) ? h('div', { class: 'acts' }, h('a', { class: 'btn', href: waLink(x.whatsapp), target: '_blank', rel: 'noopener noreferrer' }, waIcon(), 'WhatsApp')) : null);
   } else if (type === 'guide_card') {
     const steps = h('ol', { class: 'steps' }, (x.steps || []).map((s, i) => {
       const img = safeUrl((x.images || [])[i]);
@@ -868,7 +868,7 @@ function actsRow(list) {
 }
 function linkBtn(url, label) {
   const href = safeUrl(url);
-  return href ? h('a', { class: 'btn pri', href, target: sameSite(href) ? null : '_blank', rel: 'noopener' }, clean(label) || t('open')) : null;
+  return href ? h('a', { class: 'btn pri', href, target: sameSite(href) ? null : '_blank', rel: 'noopener noreferrer' }, clean(label) || t('open')) : null;
 }
 function shake(el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
 function onCardClick(e) {
@@ -892,16 +892,17 @@ async function shareGuide(s) {
   if (navigator.share) {
     try { await navigator.share({ title: s.title || '', text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
   }
-  if (!W.open('https://wa.me/?text=' + encodeURIComponent(text + '\n' + url), '_blank', 'noopener') && navigator.clipboard) {
-    navigator.clipboard.writeText(text + '\n' + url).then(() => toast(t('shared')), () => {});
-  }
+  // No 'noopener' feature here: with it window.open always returns null and the fallback would always run.
+  const w = W.open('https://wa.me/?text=' + encodeURIComponent(text + '\n' + url), '_blank');
+  if (w) { try { w.opener = null; } catch (e) { /* cross-origin already */ } }
+  else if (navigator.clipboard) navigator.clipboard.writeText(text + '\n' + url).then(() => toast(t('shared')), () => {});
 }
 
 /* ================================================================ header menu (team / room) */
 function viewMenu() {
   if (S.view === 'agent') {
     const opts = [{ icon: 'check', label: t('endChat'), run: () => quick('end_chat') }];
-    if (boot && boot.whatsapp) opts.push({ icon: 'open_in_new', label: t('whatsapp'), run: () => W.open(waLink(boot.whatsapp), '_blank', 'noopener') });
+    if (boot && boot.whatsapp) opts.push({ icon: 'open_in_new', label: t('whatsapp'), run: () => W.open(waLink(boot.whatsapp), '_blank', 'noopener,noreferrer') });
     openSheet(t('teamTitle'), '', opts);
   } else if (S.view === 'community' && G.room) {
     roomMenu();
@@ -1100,7 +1101,7 @@ function groupMessageEl(m) {
   const who = h('div', { class: 'who' }, staff ? h('span', { class: 'staff' }, m.author, icon('verified', 's'), t('staff')) : m.author);
   const bub = h('div', { class: 'bub' },
     m.replyTo ? h('div', { class: 'quote' }, (m.replyTo.author || '') + ' : ' + (m.replyTo.excerpt || '')) : null,
-    m.type === 'image' && safeUrl(m.url) ? h('a', { href: safeUrl(m.url), target: '_blank', rel: 'noopener' }, h('img', { src: safeUrl(m.url), alt: t('image'), loading: 'lazy', style: 'max-width:220px;border-radius:12px;display:block' }))
+    m.type === 'image' && safeUrl(m.url) ? h('a', { href: safeUrl(m.url), target: '_blank', rel: 'noopener noreferrer' }, h('img', { src: safeUrl(m.url), alt: t('image'), loading: 'lazy', style: 'max-width:220px;border-radius:12px;display:block' }))
       : richText(+m.hidden && !(boot.groups && boot.groups.canModerate) ? t('removed') : String(m.body || '')));
   const meta = h('div', { class: 'meta' }, at,
     isQ ? h('span', { class: 'qtag' + (m.question === 'answered' ? ' ok' : '') }, icon(m.question === 'answered' ? 'check' : (m.question === 'private' ? 'lock' : 'campaign'), 's'),

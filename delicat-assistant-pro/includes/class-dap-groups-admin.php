@@ -99,6 +99,7 @@ class DSA2_Groups_Admin {
 
     public static function delete_group() {
         self::require_moderator();
+        if ( ! self::can_manage() ) wp_die( esc_html__( 'Réservé aux responsables.', 'delicat-assistant' ), '', array( 'response' => 403 ) );
         check_admin_referer( 'dap_group_delete' );
         $id = isset( $_GET['group_id'] ) ? absint( $_GET['group_id'] ) : 0;
         if ( ! $id ) self::redirect( 'rooms', 'error' );

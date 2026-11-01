@@ -140,6 +140,17 @@ class DSA2_Groups {
     public static function display_name( $user_id ) {
         $user_id = (int) $user_id;
         if ( ! $user_id ) return __( 'Invité', 'delicat-assistant' );
+        $name = self::raw_display_name( $user_id );
+        // 7.0: an account name (first name, display name, login) that claims to be the store or its staff is never
+        // shown for a customer, whatever spacing, digits or look-alike letters it uses.
+        if ( self::reserved_name( $name ) && ! self::is_staff( $user_id ) ) {
+            /* translators: %d: customer id */
+            return sprintf( __( 'Client #%d', 'delicat-assistant' ), $user_id );
+        }
+        return $name;
+    }
+
+    private static function raw_display_name( $user_id ) {
         $custom = trim( (string) get_user_meta( $user_id, 'dap_group_name', true ) );
         if ( '' !== $custom ) return $custom;
         $user = get_userdata( $user_id );
@@ -157,9 +168,17 @@ class DSA2_Groups {
 
     /** Words a customer may not put in their group name. */
     private static function reserved_name( $name ) {
-        $probe = self::fold( $name );
-        foreach ( array( 'delicat', 'admin', 'support', 'officiel', 'official', 'moderateur', 'moderator', 'agent', 'staff', 'equipe delicat', 'service client' ) as $needle ) {
-            if ( false !== strpos( $probe, $needle ) ) return true;
+        // Compared without spaces or separators ("D e l i c a t", "D.elicat") and after mapping digits and
+        // look-alike letters ("Sup0rt", "Adm1n", Cyrillic "Dеlicat").
+        $probe = str_replace( ' ', '', self::fold( strtr( (string) $name, array(
+            'а' => 'a', 'е' => 'e', 'о' => 'o', 'р' => 'p', 'с' => 'c', 'у' => 'y', 'х' => 'x', 'і' => 'i', 'ј' => 'j', 'к' => 'k', 'м' => 'm', 'т' => 't', 'н' => 'h', 'в' => 'b', 'ѕ' => 's', 'ԁ' => 'd', 'ӏ' => 'l',
+            'А' => 'a', 'Е' => 'e', 'О' => 'o', 'Р' => 'p', 'С' => 'c', 'У' => 'y', 'Х' => 'x', 'І' => 'i', 'К' => 'k', 'М' => 'm', 'Т' => 't', 'Н' => 'h', 'В' => 'b', 'Ѕ' => 's',
+            'α' => 'a', 'ε' => 'e', 'ο' => 'o', 'ρ' => 'p', 'ι' => 'i', 'κ' => 'k', 'ν' => 'v', 'τ' => 't', 'Α' => 'a', 'Ε' => 'e', 'Ο' => 'o', 'Ρ' => 'p', 'Ι' => 'i', 'Κ' => 'k', 'Τ' => 't', 'Μ' => 'm', 'Ν' => 'n',
+        ) ) ) );
+        $probe = strtr( $probe, array( '0' => 'o', '1' => 'i', '3' => 'e', '4' => 'a', '5' => 's', '7' => 't', '8' => 'b', '9' => 'g' ) );
+        $loose = strtr( $probe, array( 'l' => 'i' ) ); // "suppl0rt", "adm|n" and friends
+        foreach ( array( 'delicat', 'admin', 'support', 'officiel', 'official', 'moderateur', 'moderator', 'agent', 'staff', 'equipe', 'serviceclient', 'sipo' ) as $needle ) {
+            if ( false !== strpos( $probe, $needle ) || false !== strpos( $loose, strtr( $needle, array( 'l' => 'i' ) ) ) ) return true;
         }
         return false;
     }
@@ -174,6 +193,21 @@ class DSA2_Groups {
             if ( false !== $plain && '' !== $plain ) $value = strtolower( $plain );
         }
         return preg_replace( '/[^a-z0-9\s]/', ' ', $value );
+    }
+
+    /** Statuses of the messages that replies quote, so a quote never outlives its original (L5). */
+    private static function quoted_status( $rows ) {
+        $ids = array();
+        foreach ( (array) $rows as $row ) {
+            $meta = $row->meta ? json_decode( $row->meta, true ) : array();
+            if ( is_array( $meta ) && ! empty( $meta['reply_to']['id'] ) ) $ids[] = (int) $meta['reply_to']['id'];
+        }
+        if ( ! $ids ) return array();
+        global $wpdb;
+        $in = implode( ',', array_map( 'absint', array_unique( $ids ) ) );
+        $out = array();
+        foreach ( (array) $wpdb->get_results( 'SELECT id,status FROM ' . self::table( 'messages' ) . " WHERE id IN ($in)" ) as $r ) $out[ (int) $r->id ] = (string) $r->status; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        return $out;
     }
 
     public static function initials( $name ) {
@@ -437,6 +471,7 @@ class DSA2_Groups {
     public static function format_messages( $rows, $user_id ) {
         $out = array();
         $can_moderate = self::can_moderate();
+        $quoted = self::quoted_status( $rows );
         foreach ( (array) $rows as $row ) {
             $meta = $row->meta ? json_decode( $row->meta, true ) : array();
             if ( ! is_array( $meta ) ) $meta = array();
@@ -445,6 +480,8 @@ class DSA2_Groups {
             $body = $row->body;
             if ( $hidden && ! $can_moderate ) $body = __( 'Message retiré par la modération.', 'delicat-assistant' );
             $author = isset( $meta['author'] ) ? (string) $meta['author'] : self::display_name( (int) $row->user_id );
+            // Names frozen by earlier versions are checked too: a customer never appears under a staff-like name.
+            if ( self::ROLE_AGENT !== $row->author_role && self::reserved_name( $author ) ) $author = sprintf( __( 'Client #%d', 'delicat-assistant' ), (int) $row->user_id ); // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment
             $flags = array_filter( explode( ',', (string) $row->flags ) );
             $question = '';
             if ( 'question' === $row->message_type ) {
@@ -452,10 +489,12 @@ class DSA2_Groups {
             }
             $reply = null;
             if ( ! empty( $meta['reply_to'] ) && is_array( $meta['reply_to'] ) && ! $hidden ) {
+                $rid = (int) ( $meta['reply_to']['id'] ?? 0 );
+                $alive = isset( $quoted[ $rid ] ) && 'visible' === $quoted[ $rid ];
                 $reply = array(
-                    'id'      => (int) ( $meta['reply_to']['id'] ?? 0 ),
-                    'author'  => (string) ( $meta['reply_to']['author'] ?? '' ),
-                    'excerpt' => (string) ( $meta['reply_to']['excerpt'] ?? '' ),
+                    'id'      => $rid,
+                    'author'  => $alive ? (string) ( $meta['reply_to']['author'] ?? '' ) : '',
+                    'excerpt' => $alive ? (string) ( $meta['reply_to']['excerpt'] ?? '' ) : __( 'Message retiré', 'delicat-assistant' ),
                 );
             }
             $out[] = array(
@@ -803,8 +842,26 @@ class DSA2_Groups {
     /** Out-of-band e-mail to the support inbox: at most one per room every five minutes. */
     public static function send_question_alert( $group_id, $message_id ) {
         $group_id = absint( $group_id );
-        if ( get_transient( 'dapg_qalert_' . $group_id ) ) return;
+        if ( get_transient( 'dapg_qalert_' . $group_id ) ) {
+            // Inside the 5-minute window: one digest when it ends instead of silence (message id 0 = digest).
+            $at = (int) get_option( '_transient_timeout_dapg_qalert_' . $group_id );
+            $when = max( time() + 60, $at ? $at + 5 : time() + 5 * MINUTE_IN_SECONDS );
+            if ( absint( $message_id ) && ! wp_next_scheduled( 'dsa2_group_question_alert', array( $group_id, 0 ) ) ) wp_schedule_single_event( $when, 'dsa2_group_question_alert', array( $group_id, 0 ) );
+            return;
+        }
         set_transient( 'dapg_qalert_' . $group_id, 1, 5 * MINUTE_IN_SECONDS );
+        if ( ! absint( $message_id ) ) {
+            $open = self::open_questions( $group_id );
+            $group = self::get_group( $group_id );
+            $settings = (array) get_option( 'dap_settings', array() );
+            $to = sanitize_email( $settings['notify_email'] ?? '' );
+            if ( ! $to ) $to = get_option( 'admin_email' );
+            if ( $open && $group && is_email( $to ) ) {
+                /* translators: 1: number of questions, 2: group name */
+                wp_mail( $to, sprintf( __( '%1$d question(s) à l’équipe en attente dans « %2$s »', 'delicat-assistant' ), $open, $group->name ), admin_url( 'admin.php?page=delicat-assistant-groups&tab=questions' ) );
+            }
+            return;
+        }
         global $wpdb;
         $table = self::table( 'messages' );
         $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id=%d AND group_id=%d", absint( $message_id ), $group_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -919,11 +976,11 @@ class DSA2_Groups {
         ), array( '%d', '%d', '%d', '%s', '%s', '%s' ) );
 
         $reports = self::table( 'reports' );
-        $distinct = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(DISTINCT reporter_id) FROM $reports WHERE message_id=%d", $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $distinct = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(DISTINCT reporter_id) FROM $reports WHERE message_id=%d AND status='open'", $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         // Only accounts at least two days old count towards hiding (a burst of new accounts
         // cannot silence someone); every report still reaches the review queue.
         $established = (int) $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(DISTINCT r.reporter_id) FROM $reports r INNER JOIN {$wpdb->users} u ON u.ID=r.reporter_id WHERE r.message_id=%d AND u.user_registered<=%s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            "SELECT COUNT(DISTINCT r.reporter_id) FROM $reports r INNER JOIN {$wpdb->users} u ON u.ID=r.reporter_id WHERE r.message_id=%d AND r.status='open' AND u.user_registered<=%s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $message_id, gmdate( 'Y-m-d H:i:s', time() - 2 * DAY_IN_SECONDS )
         ) );
         $threshold = max( 1, (int) $s['groups_report_hide'] );
@@ -961,6 +1018,7 @@ class DSA2_Groups {
 
         switch ( $action ) {
             case 'delete':
+                self::delete_message_files( $wpdb->get_results( $wpdb->prepare( "SELECT meta FROM $messages WHERE id=%d AND message_type='image'", $message_id ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
                 $wpdb->update( $messages, array( 'status' => 'deleted' ), array( 'id' => $message_id ), array( '%s' ), array( '%d' ) );
                 break;
             case 'hide':
@@ -1033,8 +1091,7 @@ class DSA2_Groups {
         if ( empty( $s['groups_images'] ) ) {
             wp_send_json_error( array( 'message' => __( 'Les images sont désactivées dans les groupes.', 'delicat-assistant' ) ), 403 );
         }
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
-        if ( ! $group ) wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
+        $group = self::requested_group( $user_id );
         list( $can_post, $reason, $message ) = self::post_state( $group, $user_id );
         if ( ! $can_post ) wp_send_json_error( array( 'code' => $reason, 'message' => $message ), 403 );
 
@@ -1128,9 +1185,8 @@ class DSA2_Groups {
         $wpdb->query( $wpdb->prepare( "DELETE r FROM " . self::table( 'reports' ) . " r INNER JOIN $messages m ON m.id=r.message_id WHERE m.user_id=%d", $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $removed = (int) $wpdb->query( $wpdb->prepare( "DELETE FROM $messages WHERE user_id=%d", $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $wpdb->delete( self::table( 'reports' ), array( 'reporter_id' => $user_id ), array( '%d' ) );
-        $wpdb->delete( self::table( 'members' ), array( 'user_id' => $user_id ), array( '%d' ) );
-        delete_user_meta( $user_id, 'dap_group_name' );
-        delete_user_meta( $user_id, 'dap_groups_banned' );
+        $wpdb->query( $wpdb->prepare( 'DELETE FROM ' . self::table( 'members' ) . " WHERE user_id=%d AND status<>'banned'", $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- room bans stay
+        delete_user_meta( $user_id, 'dap_group_name' ); // dap_groups_banned (global ban) is kept on purpose
         foreach ( $groups as $group_id ) self::refresh_counts( (int) $group_id );
         return $removed;
     }

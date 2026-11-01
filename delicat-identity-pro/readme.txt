@@ -2,10 +2,16 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.2
+Stable tag: 6.17.3
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.3 ==
+* Mode sombre, espace client : une ligne touchée sur iPhone ou Android (« Commandes récentes », menus du compte)
+  ne reste plus grise après le toucher ; le survol ne s'applique qu'avec une souris. Couleur de survol en mode
+  sombre alignée sur le bleu nuit du site au lieu du gris.
+* À installer avec Delicat Builder 9.7.3 (qui retire les cadres en double du mode sombre).
 
 == Version 6.17.2 ==
 * Mode sombre : les boutons de l’espace client (« Voir » dans les commandes, actions du compte, menu actif) gardent

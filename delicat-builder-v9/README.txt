@@ -1,3 +1,13 @@
+9.7.3 — Mode sombre : un seul cadre, plus de « carte dans une carte »
+(1) En mode sombre, les sections qui entouraient d'un second cadre des cartes déjà encadrées n'en dessinent
+plus : la zone du compte (Portefeuille, Commandes, commandes récentes, favoris, informations), la photo et le
+titre d'une fiche produit, le bloc des options d'achat autour de « Forfait / Package », et le tableau « Mes
+commandes » sur téléphone (chaque commande reste une carte). Les cartes elles-mêmes ne changent pas.
+(2) Le message WooCommerce « Confirmez votre adresse e-mail » au-dessus des commandes n'est plus blanc en mode sombre.
+(3) En mode clair, rien ne change.
+Installer avec Delicat Identity 6.17.3 (ligne grise restée après un toucher dans le compte), puis purger
+LiteSpeed / Cloudflare.
+
 9.7.2 — Pages de commande : retour à l’apparence de la 9.5.5
 (1) Page « Merci / Commande livrée / Livraison en cours » et page « Détails de la commande » : les couleurs
 propres à ces pages reprennent leurs valeurs de la 9.5.5 (vert des étapes terminées et de l’étiquette « Livrée »,
