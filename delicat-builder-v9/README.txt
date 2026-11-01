@@ -1,3 +1,12 @@
+9.7.2 — Pages de commande : retour à l’apparence de la 9.5.5
+(1) Page « Merci / Commande livrée / Livraison en cours » et page « Détails de la commande » : les couleurs
+propres à ces pages reprennent leurs valeurs de la 9.5.5 (vert des étapes terminées et de l’étiquette « Livrée »,
+rouge, orange, gris, bordures, confettis de la livraison), en mode clair comme en mode sombre. La couleur d’accent
+suit la couleur de la marque (bleu) au lieu de l’ancien violet ; le fond de « Détails de la commande » reste celui
+de l’espace client.
+(2) Mode sombre : le texte blanc des boutons et des étapes en cours reste lisible (contraste ≥ 4,5:1), comme en 9.7.1.
+Installer avec Delicat Identity 6.17.2 et Delicat Recharge 6.6.3 (inchangés), puis purger LiteSpeed / Cloudflare.
+
 9.7.1 — Correctif : page de confirmation de commande illisible et contrastes en mode sombre
 (1) Page « Merci / Commande livrée / Livraison en cours » : le bandeau était vert ou bleu vif avec un texte
 sombre presque invisible (depuis la 9.6.0). Il retrouve son fond clair (vert pâle, bleu pâle) avec un texte

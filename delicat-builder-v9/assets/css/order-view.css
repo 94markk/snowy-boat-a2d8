@@ -11,17 +11,17 @@
   --vo-bg: var(--dipapp-bg, #f7f8fa);
   --vo-card: var(--dipapp-surface, #fff);
   --vo-text: var(--dipapp-text, #1d2430);
-  --vo-muted: var(--ds-color-text-muted,#646a78); /* 9.5.4: 4.8:1 or more on every light surface (Lighthouse) */
+  --vo-muted: #646a78; /* 9.5.4: 4.8:1 or more on every light surface (Lighthouse) */
   --vo-border: var(--dipapp-border, #e8ebf1);
   --vo-hover: var(--dipapp-hover, #f4f6fa);
-  --vo-accent: var(--ds-color-primary,#0b6bdc); /* 5:1 with white text */
-  --vo-accent-soft: var(--ds-color-primary-subtle,#e8f2ff);
+  --vo-accent: var(--ds-color-primary-fill, var(--ds-color-primary, #0b6bdc)); /* the store's brand colour; 5:1 or more with white text */
+  --vo-accent-soft: #e8f2ff;
   --vo-accent-ink: #0b5cc2;
-  --vo-ok: var(--ds-color-success-text,#0b6e3c);
+  --vo-ok: #0b6e3c;
   --vo-ok-soft: #e7f6ee;
-  --vo-warn: var(--ds-color-warning-text,#9a4507);
+  --vo-warn: #9a4507;
   --vo-warn-soft: #fef3e2;
-  --vo-bad: var(--ds-color-danger-text,#b02a37);
+  --vo-bad: #b02a37;
   --vo-bad-soft: #fdecee;
   --vo-grey: #565c6a;
   --vo-grey-soft: #f0f1f4;
@@ -74,13 +74,17 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   --vo-border: var(--dipapp-border, #33363e);
   --vo-hover: var(--dipapp-hover, #2a2d35);
   --vo-accent: var(--dipapp-blue, #3b9bff);
-  --vo-accent-soft: var(--ds-color-primary-subtle,#13304f);
+  --vo-accent-soft: #13304f;
+  --vo-fill-accent: var(--ds-color-primary-fill, #2563eb);
+  --vo-fill-ok: #15803d;
+  --vo-fill-warn: #b45309;
+  --vo-fill-bad: #dc2626;
   --vo-accent-ink: #9ccbff;
-  --vo-ok: var(--ds-color-success-text,#4ade80);
+  --vo-ok: #4ade80;
   --vo-ok-soft: #173a26;
-  --vo-warn: var(--ds-color-warning-text,#fbbf24);
+  --vo-warn: #fbbf24;
   --vo-warn-soft: #3a2d12;
-  --vo-bad: var(--ds-color-danger-text,#ff6b78);
+  --vo-bad: #ff6b78;
   --vo-bad-soft: #3d1d22;
   --vo-grey: #b4b8c2;
   --vo-grey-soft: #33363e;
@@ -93,13 +97,17 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light) .dlc-vo {
     --vo-muted: var(--dipapp-muted, #a7abb5);
     --vo-accent: var(--dipapp-blue, #3b9bff);
-    --vo-accent-soft: var(--ds-color-primary-subtle,#13304f);
+    --vo-accent-soft: #13304f;
+    --vo-fill-accent: var(--ds-color-primary-fill, #2563eb);
+    --vo-fill-ok: #15803d;
+    --vo-fill-warn: #b45309;
+    --vo-fill-bad: #dc2626;
     --vo-accent-ink: #9ccbff;
-    --vo-ok: var(--ds-color-success-text,#4ade80);
+    --vo-ok: #4ade80;
     --vo-ok-soft: #173a26;
-    --vo-warn: var(--ds-color-warning-text,#fbbf24);
+    --vo-warn: #fbbf24;
     --vo-warn-soft: #3a2d12;
-    --vo-bad: var(--ds-color-danger-text,#ff6b78);
+    --vo-bad: #ff6b78;
     --vo-bad-soft: #3d1d22;
     --vo-grey: #b4b8c2;
     --vo-grey-soft: #38383c;
@@ -110,10 +118,10 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   }
 }
 
-.dlc-vo { --vo-tone-fill: var(--ds-color-primary-fill, #2563eb); }
-.dlc-vo[data-tone="success"] { --vo-tone: var(--vo-ok); --vo-tone-soft: var(--vo-ok-soft); --vo-tone-fill: var(--ds-color-success-fill, #15803d); }
-.dlc-vo[data-tone="warning"] { --vo-tone: var(--vo-warn); --vo-tone-soft: var(--vo-warn-soft); }
-.dlc-vo[data-tone="danger"] { --vo-tone: var(--vo-bad); --vo-tone-soft: var(--vo-bad-soft); --vo-tone-fill: var(--ds-color-danger-fill, #dc2626); }
+.dlc-vo { --vo-tone-fill: var(--vo-fill-accent); }
+.dlc-vo[data-tone="success"] { --vo-tone: var(--vo-ok); --vo-tone-soft: var(--vo-ok-soft); --vo-tone-fill: var(--vo-fill-ok); }
+.dlc-vo[data-tone="warning"] { --vo-tone: var(--vo-warn); --vo-tone-soft: var(--vo-warn-soft); --vo-tone-fill: var(--vo-fill-warn); }
+.dlc-vo[data-tone="danger"] { --vo-tone: var(--vo-bad); --vo-tone-soft: var(--vo-bad-soft); --vo-tone-fill: var(--vo-fill-bad); }
 .dlc-vo[data-tone="neutral"] { --vo-tone: var(--vo-grey); --vo-tone-soft: var(--vo-grey-soft); }
 
 .dlc-vo-sprite { display: none; }
@@ -218,8 +226,8 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   margin-top: 8px !important;
   padding: 6px 14px 6px 10px !important;
   border-radius: 18px;
-  /* 9.7.1: white text needs a fill colour; --vo-tone is a light tint in dark mode. */
-  background: var(--vo-tone-fill, var(--ds-color-primary-fill,var(--vo-tone)));
+  /* White text: in dark mode --vo-tone is a light tint, so the dark blocks supply a fill (--vo-fill-*). */
+  background: var(--vo-tone-fill, var(--vo-tone));
   color: #fff;
   font-size: 14px;
   font-weight: 700;
@@ -306,11 +314,11 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
 .dlc-vo-step__node .dlc-vo-i { width: 19px; height: 19px; }
 .dlc-vo-step[data-state="done"] .dlc-vo-step__node,
 .dlc-vo-step[data-state="current"] .dlc-vo-step__node {
-  background: var(--ds-color-primary-fill,var(--vo-tone));
+  background: var(--vo-tone-fill, var(--vo-tone));
   color: #fff;
 }
 .dlc-vo-step[data-state="alert"] .dlc-vo-step__node { background: #d97706; color: #fff; }
-.dlc-vo-step[data-state="ended"] .dlc-vo-step__node { background: var(--ds-color-danger-fill,var(--vo-bad)); color: #fff; }
+.dlc-vo-step[data-state="ended"] .dlc-vo-step__node { background: var(--vo-fill-bad, var(--vo-bad)); color: #fff; }
 .dlc-vo[data-phase="refunded"] .dlc-vo-step[data-state="ended"] .dlc-vo-step__node,
 .dlc-vo[data-phase="cancelled"] .dlc-vo-step[data-state="ended"] .dlc-vo-step__node { background: #5b6373; }
 .dlc-vo-step[data-state="current"] .dlc-vo-step__node::after {
@@ -486,7 +494,7 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
 .dlc-vo-codes .dfr-digital-delivery [style*="edf2f7"] { border-color: var(--vo-border) !important; }
 .dlc-vo-codes .dfr-secure-order-reveal,
 .dlc-vo-codes button { min-height: 44px; border-radius: 13px; }
-.dlc-vo-codes .dfr-secure-order-reveal { padding: 10px 16px; border: 0; background: var(--ds-color-primary-fill,var(--vo-accent)); color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+.dlc-vo-codes .dfr-secure-order-reveal { padding: 10px 16px; border: 0; background: var(--vo-fill-accent, var(--vo-accent)); color: #fff; font: inherit; font-weight: 650; cursor: pointer; }
 .dlc-vo-codes .dfr-secure-order-output > div { background: var(--vo-card) !important; border-color: var(--vo-border) !important; border-radius: 12px !important; }
 .dlc-vo-codes .dfr-secure-order-output > div > div:first-child { color: var(--vo-muted) !important; }
 .dlc-vo-codes .dfr-secure-order-output button { min-height: 44px !important; padding: 6px 12px !important; border: 1px solid var(--vo-border) !important; border-radius: 11px !important; background: var(--vo-card) !important; color: var(--vo-text) !important; font: inherit !important; font-size: 13px !important; font-weight: 650 !important; }
@@ -547,7 +555,7 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   width: 46px;
   height: 34px;
   border-radius: 9px;
-  background: var(--ds-color-primary-fill,var(--vo-accent));
+  background: var(--vo-fill-accent, var(--vo-accent));
   color: #fff;
 }
 .dlc-vo-pay__body { flex: 1 1 auto; min-width: 0; }
@@ -614,7 +622,7 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
 }
 .dlc-vo-btn:active { transform: scale(.97); }
 .dlc-vo-btn--wide { grid-column: 1 / -1; }
-.dlc-vo-btn--primary { background: var(--ds-color-primary-fill, var(--vo-accent)); color: var(--ds-color-on-fill, #fff) !important; }
+.dlc-vo-btn--primary { background: var(--vo-fill-accent, var(--vo-accent)); color: #fff !important; }
 .dlc-vo-btn--soft { border-color: var(--vo-accent-soft); background: var(--vo-accent-soft); color: var(--vo-accent-ink) !important; }
 .dlc-vo-btn--ghost { border-color: var(--vo-border); background: var(--vo-card); color: var(--vo-accent-ink) !important; }
 .dlc-vo a:focus-visible,

@@ -1,5 +1,7 @@
 # build output
 dist/
+# ...except the WordPress plugin's shipped bundles (part of the installable plugin)
+!delicat-builder-v9/assets/dist/
 # generated types
 .astro/
 

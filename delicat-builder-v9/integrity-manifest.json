@@ -1,17 +1,17 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-01T11:42:46.957Z",
- "version": "9.7.1",
- "bytes": 6933755,
+ "built": "2026-11-01T12:08:34.448Z",
+ "version": "9.7.2",
+ "bytes": 6934190,
  "count": 303,
  "files": {
   "README.txt": {
-   "bytes": 74649,
-   "sha256": "f75d047ec70379aa15f486225a88c69098970c033d0023f5c7ef7699fe485930"
+   "bytes": 75449,
+   "sha256": "f6dbae11f79fde08d9ef69aa339a715c4af95c82e92826486c8deb7200decc0e"
   },
   "asset-versions.php": {
    "bytes": 6685,
-   "sha256": "0c7ff482da61289346ca25dd635211cead53096508b75bf3aff697727a4e9203"
+   "sha256": "71c77f5c482207e58126d51d4354f059769fd65ec4225f4beb7d61c47de1c5c3"
   },
   "assets/components/banner.css": {
    "bytes": 5514,
@@ -222,12 +222,12 @@
    "sha256": "570087532ca71774d726d2ffc1eb272d6fd7bb775aa6417cb02e3dd0d3a0bc4a"
   },
   "assets/css/order-confirmation.css": {
-   "bytes": 50707,
-   "sha256": "43cb388b7c70eb3f9a30973565bb9ff0b06ac68f309e0e2477331c6cdb0377bf"
+   "bytes": 50458,
+   "sha256": "a929afe4bb9f9d23ac16160be39a0f6ff176f23091eeb905d7f06514486100b3"
   },
   "assets/css/order-view.css": {
-   "bytes": 27575,
-   "sha256": "635eceb1357851975870cf7f526eb64dcccff2095f41ac285599609f35c2de61"
+   "bytes": 27459,
+   "sha256": "787fce253aa0159fd15dc7116cc4f83c3d5e59d056e677543b37b651eae792b6"
   },
   "assets/css/polish-fixes.css": {
    "bytes": 4383,
@@ -387,7 +387,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9717,
-   "sha256": "b66bdce8bb641ec002d6b0478fa8e5a6e1f3049bc032a140d0f4f8bd5cee903d"
+   "sha256": "97db49edb80959438fb14d63e6d58549bb53992d4506a69f22457a76e15603c9"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -639,7 +639,7 @@
   },
   "delicat-builder-v9.php": {
    "bytes": 101181,
-   "sha256": "2b9484e5ff16a7dcd15414d549c5d83c7fbefbb3a4d7c87dcc9311fa8a4297b8"
+   "sha256": "70da8459106276038e5f33c3d446501733367c817ad85db8a15620f01fe881b6"
   },
   "design-system/AUDIT.md": {
    "bytes": 7078,
