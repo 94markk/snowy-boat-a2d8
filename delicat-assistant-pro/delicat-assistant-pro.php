@@ -2,18 +2,21 @@
 /**
  * Plugin Name: Delicat Assistant Pro
  * Description: Secure mobile-first customer assistant for WooCommerce with wallet, orders, multilingual FAQ, WhatsApp and live admin chat.
- * Version: 6.6.4
+ * Version: 7.0.0
  * Author: Delicat Store
  * Text Domain: delicat-assistant
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DSA2_VERSION', '6.6.4' );
+define( 'DSA2_VERSION', '7.0.0' );
 define( 'DSA2_FILE', __FILE__ );
 define( 'DSA2_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DSA2_URL', plugin_dir_url( __FILE__ ) );
 
 /**
+ * v7.0.0 Rebuilt storefront: a 3 KB launcher (no request, no nonce in the HTML), a new chat app loaded on the
+ *        first tap (isolated from the theme CSS), rebuilt community groups with "Ask the team" and a private
+ *        follow-up, membership checks on every group read, report rules that cannot hide staff messages.
  * v6.6.4 Builder FAQ buttons the widget and the app can follow (with Delicat App API 2.33.1).
  * v6.6.3 Google Play: no financial service in the app. « Change et transfert » guide retired, « Crédit boutique » guide, Exchange / Finance products kept out of app answers.
  * v6.6.0 Community groups: moderated client-to-client rooms, members only.
@@ -30,23 +33,21 @@ function dsa2_require_file( $relative ) {
     $path = DSA2_DIR . 'includes/' . ltrim( (string) $relative, '/\\' );
     if ( is_file( $path ) ) require_once $path;
 }
+/**
+ * 7.0: a page view parses two small files. The chat engine (data, guides, bot) is only
+ * loaded by the chat's own requests; the launcher prints no nonce and no user id, so the
+ * page HTML stays cacheable for everyone.
+ */
 function dsa2_load_frontend_kernel() {
-    dsa2_require_file( 'class-dap-compat.php' );
-    dsa2_require_file( 'class-dap-guides.php' );
-    // class-dap-smalltalk.php is deliberately NOT here. v6.3.0 added it to this kernel,
-    // so every storefront page view parsed 63 KB of PHP that only the chat AJAX path
-    // ever calls. DSA2_Data guards its use with class_exists(), and the AJAX and admin
-    // requests that need it go through dsa2_load_full_engine().
-    dsa2_require_file( 'class-dap-data.php' );
-    dsa2_require_file( 'class-dap-frontend.php' );
     dsa2_require_file( 'class-dap-system-sync.php' );
+    dsa2_require_file( 'class-dsa7-launcher.php' );
 }
 function dsa2_load_full_engine() {
     static $loaded = false;
     if ( $loaded ) return;
     foreach ( array(
         'class-dap-compat.php','class-dap-install.php','class-dap-guides.php','class-dap-products.php',
-        'class-dap-recommend.php','class-dap-training.php','class-dap-smalltalk.php','class-dap-data.php','class-dap-frontend.php',
+        'class-dap-recommend.php','class-dap-training.php','class-dap-smalltalk.php','class-dap-data.php','class-dsa7-launcher.php',
         'class-dap-quickreplies.php','class-dap-admin.php','class-dap-mobile-api.php','class-dap-admin-mobile-api.php',
         'class-dap-system-sync.php','class-dap-enterprise.php','class-dap-production.php',
         'class-dap-diagnostics.php','class-dap-groups.php','class-dap-groups-admin.php'
@@ -99,42 +100,42 @@ add_action( 'plugins_loaded', static function() {
         if ( class_exists( 'DSA2_Enterprise', false ) ) DSA2_Enterprise::init();
         if ( class_exists( 'DSA2_Production', false ) ) DSA2_Production::init();
         if ( class_exists( 'DSA2_Diagnostics', false ) ) DSA2_Diagnostics::init();
-        if ( class_exists( 'DSA2_Frontend', false ) ) DSA2_Frontend::init();
         if ( class_exists( 'DSA2_Groups', false ) ) DSA2_Groups::init();
         if ( $real_admin && class_exists( 'DSA2_Groups_Admin', false ) ) DSA2_Groups_Admin::init();
         // admin-ajax.php is an AJAX request, not a "real" admin screen. Registering
         // these callbacks only for the latter made every inbox request return "0".
         if ( ( $real_admin || $assistant_ajax ) && class_exists( 'DSA2_Admin', false ) ) DSA2_Admin::init();
     } else {
+        // Storefront pages and the launcher's own dsa7_* requests. Groups no longer print
+        // anything on page views: the community lives inside the chat app.
         dsa2_load_frontend_kernel();
-        if ( class_exists( 'DSA2_Frontend', false ) ) DSA2_Frontend::init();
         if ( class_exists( 'DSA2_System_Sync', false ) ) DSA2_System_Sync::init();
-        // Groups are members-only, so a logged-out page view never parses that file.
-        // Deliberately deferred to init: calling is_user_logged_in() during plugins_loaded
-        // resolves the current user before other plugins can filter determine_current_user.
-        add_action( 'init', static function() {
-            if ( ! is_user_logged_in() ) return;
-            dsa2_require_file( 'class-dap-groups.php' );
-            if ( class_exists( 'DSA2_Groups', false ) ) DSA2_Groups::init();
-        }, 5 );
+        if ( class_exists( 'DSA7_Launcher', false ) ) DSA7_Launcher::init();
     }
 
-    // Prevent the Builder's legacy assistant from rendering a second widget.
-    if ( class_exists( 'Delicat_Assistant_Pro', false ) && method_exists( 'Delicat_Assistant_Pro', 'instance' ) ) {
-        $legacy = Delicat_Assistant_Pro::instance();
-        remove_action( 'wp_footer', array( $legacy, 'render_widget' ) );
+    // Prevent an old Builder's legacy assistant (class Delicat_Assistant_Pro, Builder 8 and
+    // earlier) from rendering a second widget, whatever priority it hooked wp_footer at.
+    if ( class_exists( 'Delicat_Assistant_Pro', false ) ) {
+        add_action( 'template_redirect', 'dsa2_suppress_legacy_widget', 1 );
     }
+    // Both shortcodes embed the new app inline (help centre, or the community).
     remove_shortcode( 'delicat_assistant' );
-    if ( class_exists( 'DSA2_Frontend', false ) ) add_shortcode( 'delicat_assistant', array( 'DSA2_Frontend', 'shortcode' ) );
-    // Registered unconditionally, resolved lazily: the groups module is only parsed if the
-    // shortcode is actually on the page being rendered.
-    if ( ! shortcode_exists( 'delicat_groups' ) ) {
-        add_shortcode( 'delicat_groups', static function( $atts = array() ) {
-            dsa2_require_file( 'class-dap-groups.php' );
-            return class_exists( 'DSA2_Groups', false ) ? DSA2_Groups::shortcode( $atts ) : '';
-        } );
+    remove_shortcode( 'delicat_groups' );
+    if ( class_exists( 'DSA7_Launcher', false ) ) {
+        add_shortcode( 'delicat_assistant', array( 'DSA7_Launcher', 'shortcode' ) );
+        add_shortcode( 'delicat_groups', array( 'DSA7_Launcher', 'shortcode' ) );
     }
 }, 99 );
+
+function dsa2_suppress_legacy_widget() {
+    if ( empty( $GLOBALS['wp_filter']['wp_footer'] ) || ! isset( $GLOBALS['wp_filter']['wp_footer']->callbacks ) ) return;
+    foreach ( (array) $GLOBALS['wp_filter']['wp_footer']->callbacks as $priority => $callbacks ) {
+        foreach ( (array) $callbacks as $cb ) {
+            $fn = isset( $cb['function'] ) ? $cb['function'] : null;
+            if ( is_array( $fn ) && isset( $fn[0] ) && $fn[0] instanceof Delicat_Assistant_Pro ) remove_action( 'wp_footer', $fn, $priority );
+        }
+    }
+}
 
 /**
  * 6.6.1 (ported from 6.2.2) -- account deletion erases the customer's support history.

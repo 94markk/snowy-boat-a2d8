@@ -16,6 +16,16 @@
  *     duplicate-message rejection.
  *  5. Harassment. Countermeasure: report button with distinct-reporter threshold and
  *     automatic hiding, plus mute / ban / delete / lock for support staff.
+ *  6. (7.0) Fresh accounts mass-reporting to silence someone (or the team). Countermeasure:
+ *     only members of the room can report, only reporters whose account is at least two
+ *     days old count towards automatic hiding, and staff or pinned messages are never
+ *     hidden automatically (they go to the review queue instead).
+ *  7. (7.0) Reading a hidden or archived room by guessing its id. Countermeasure: every
+ *     read (open, poll, read marker, report) checks that the member may see that room.
+ *
+ * "Ask the team" (7.0): a member can post a question flagged for the team; staff answer in
+ * the room (the answer quotes the question) or the member moves it to their private
+ * support chat, where only they and the team can read it.
  *
  * Everything the customer sends is stored already masked. Nothing is trusted on render:
  * the client escapes, the server sanitises.
@@ -68,21 +78,19 @@ class DSA2_Groups {
     /* ------------------------------------------------------------------ init */
 
     public static function init() {
-        add_shortcode( 'delicat_groups', array( __CLASS__, 'shortcode' ) );
+        add_action( 'dsa2_group_question_alert', array( __CLASS__, 'send_question_alert' ), 10, 2 );
         if ( ! self::enabled() ) return;
-
-        add_action( 'wp_enqueue_scripts', array( __CLASS__, 'register_assets' ) );
-        add_action( 'wp_enqueue_scripts', array( __CLASS__, 'maybe_enqueue_widget' ), 20 );
-        add_filter( 'style_loader_tag', array( __CLASS__, 'asset_tag' ), 10, 2 );
-        add_filter( 'script_loader_tag', array( __CLASS__, 'asset_tag' ), 10, 2 );
 
         // Members only. There is deliberately no wp_ajax_nopriv_* twin for any of these:
         // an unauthenticated request must not be able to read or write a single row.
+        // 7.0: the storefront UI lives in the chat app (assets/app); nothing is enqueued here.
         foreach ( array(
             'list'     => 'ajax_list',
             'open'     => 'ajax_open',
             'poll'     => 'ajax_poll',
             'send'     => 'ajax_send',
+            'ask'      => 'ajax_ask',
+            'private'  => 'ajax_private',
             'join'     => 'ajax_join',
             'leave'    => 'ajax_leave',
             'read'     => 'ajax_read',
@@ -93,78 +101,6 @@ class DSA2_Groups {
         ) as $slug => $method ) {
             add_action( 'wp_ajax_dsa2_groups_' . $slug, array( __CLASS__, $method ) );
         }
-    }
-
-    /* ---------------------------------------------------------------- assets */
-
-    private static function asset_version( $relative ) {
-        $path = DSA2_DIR . $relative;
-        return file_exists( $path ) ? DSA2_VERSION . '.' . filemtime( $path ) : DSA2_VERSION;
-    }
-
-    public static function register_assets() {
-        wp_register_style( 'dap-groups', DSA2_URL . 'assets/css/groups.css', array(), self::asset_version( 'assets/css/groups.css' ) );
-        wp_register_script( 'dap-groups', DSA2_URL . 'assets/js/groups.js', array(), self::asset_version( 'assets/js/groups.js' ), true );
-    }
-
-    /** Nothing is printed for logged-out visitors, so guest pages stay exactly as fast as before. */
-    public static function enqueue() {
-        static $done = false;
-        if ( $done || ! is_user_logged_in() || ! self::enabled() ) return;
-        $done = true;
-        if ( ! wp_style_is( 'dap-groups', 'registered' ) ) self::register_assets();
-        wp_enqueue_style( 'dap-groups' );
-        wp_enqueue_script( 'dap-groups' );
-        wp_localize_script( 'dap-groups', 'DAP_GROUPS', self::config() );
-    }
-
-    /** Off-limits to JS/CSS combining, exactly like the main widget bundle. */
-    public static function asset_tag( $tag, $handle ) {
-        if ( 'dap-groups' !== $handle || false !== strpos( $tag, 'data-no-optimize' ) ) return $tag;
-        return preg_replace( '/<(script|link)\s/', '<$1 data-no-optimize="1" data-no-defer="1" data-cfasync="false" ', $tag, 1 );
-    }
-
-    public static function maybe_enqueue_widget() {
-        if ( is_admin() || ! is_user_logged_in() ) return;
-        $s = (array) get_option( 'dap_settings', array() );
-        if ( empty( $s['enabled'] ) ) return; // widget itself is off
-        self::enqueue();
-    }
-
-    public static function config() {
-        $s = self::settings();
-        $user = wp_get_current_user();
-        return array(
-            'ajax'      => admin_url( 'admin-ajax.php' ),
-            'nonce'     => wp_create_nonce( self::NONCE ),
-            'userId'    => (int) $user->ID,
-            'canModerate' => self::can_moderate(),
-            'maxLength' => max( 40, min( 2000, (int) $s['groups_max_length'] ) ),
-            'images'    => ! empty( $s['groups_images'] ) ? 1 : 0,
-            'links'     => ! empty( $s['groups_links'] ) ? 1 : 0,
-            'rules'     => array_values( array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', (string) $s['groups_rules'] ) ) ) ),
-            'displayName' => self::display_name( (int) $user->ID ),
-            'banned'    => self::is_banned( (int) $user->ID ),
-        );
-    }
-
-    /* ------------------------------------------------------------- shortcode */
-
-    public static function shortcode( $atts = array() ) {
-        if ( ! self::enabled() ) return '';
-        if ( ! is_user_logged_in() ) {
-            $login = wp_login_url( get_permalink() ?: home_url( '/' ) );
-            return '<div class="dapg-standalone dapg-locked"><div class="dapg-locked-card"><span aria-hidden="true">🔒</span><strong>' .
-                esc_html__( 'Communauté Delicat', 'delicat-assistant' ) . '</strong><p>' .
-                esc_html__( 'Connectez-vous à votre compte pour rejoindre les groupes.', 'delicat-assistant' ) .
-                '</p><a class="dapg-btn" href="' . esc_url( $login ) . '">' . esc_html__( 'Se connecter', 'delicat-assistant' ) . '</a></div></div>';
-        }
-        self::enqueue();
-        $atts = shortcode_atts( array( 'height' => '640', 'group' => '' ), $atts, 'delicat_groups' );
-        $height = max( 380, min( 1200, (int) $atts['height'] ) );
-        return '<div class="dapg-standalone" data-dapg-standalone data-dapg-group="' . esc_attr( sanitize_title( $atts['group'] ) ) .
-            '" style="--dapg-height:' . esc_attr( $height ) . 'px"><div class="dapg-boot">' .
-            esc_html__( 'Chargement des groupes…', 'delicat-assistant' ) . '</div></div>';
     }
 
     /* ------------------------------------------------------------- identities */
@@ -412,6 +348,8 @@ class DSA2_Groups {
     private static function post_state( $group, $user_id ) {
         if ( ! $group || 'active' !== $group->status ) return array( false, 'archived', __( 'Ce groupe est archivé.', 'delicat-assistant' ) );
         if ( (int) $group->locked && ! self::can_moderate() ) return array( false, 'locked', __( 'Le groupe est en lecture seule.', 'delicat-assistant' ) );
+        // 7.0: the team answers in any room without joining it first.
+        if ( self::can_moderate( $user_id ) ) return array( true, '', '' );
         $m = self::membership( $group->id, $user_id );
         if ( ! $m || 'active' !== $m->status ) {
             if ( $m && 'banned' === $m->status ) return array( false, 'banned', __( 'Vous ne pouvez plus écrire dans ce groupe.', 'delicat-assistant' ) );
@@ -421,6 +359,45 @@ class DSA2_Groups {
             return array( false, 'muted', __( 'Vous êtes temporairement en sourdine.', 'delicat-assistant' ) );
         }
         return array( true, '', '' );
+    }
+
+    /**
+     * 7.0: who may read a room. Staff: every room. Others: active public rooms, plus hidden
+     * or archived rooms they are an active member of. A banned member reads nothing.
+     */
+    public static function can_view( $group, $user_id ) {
+        if ( ! $group ) return false;
+        if ( self::can_moderate( $user_id ) ) return true;
+        $m = self::membership( $group->id, $user_id );
+        if ( $m && 'banned' === $m->status ) return false;
+        if ( 'active' === $group->status && 'public' === $group->visibility ) return true;
+        return $m && 'active' === $m->status;
+    }
+
+    /** Group rows are written in UTC (current_time( 'mysql', 1 )). */
+    public static function iso( $mysql_utc ) {
+        if ( ! $mysql_utc || 0 === strpos( (string) $mysql_utc, '0000' ) ) return '';
+        $ts = strtotime( $mysql_utc . ' UTC' );
+        return $ts ? gmdate( 'Y-m-d\TH:i:s\Z', $ts ) : '';
+    }
+
+    /** Resolves the group named in the request and stops unless this user may read it. */
+    private static function requested_group( $user_id, $field = 'group' ) {
+        $raw = isset( $_POST[ $field ] ) ? sanitize_text_field( wp_unslash( $_POST[ $field ] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- guard() checked the nonce
+        $group = self::get_group( $raw );
+        if ( ! $group || ! self::can_view( $group, $user_id ) ) {
+            wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
+        }
+        return $group;
+    }
+
+    private static function open_questions( $group_id ) {
+        global $wpdb;
+        $table = self::table( 'messages' );
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(*) FROM $table WHERE group_id=%d AND message_type='question' AND status='visible' AND flags NOT LIKE %s AND flags NOT LIKE %s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            (int) $group_id, '%answered%', '%private%'
+        ) );
     }
 
     public static function group_payload( $group, $user_id ) {
@@ -435,23 +412,25 @@ class DSA2_Groups {
             ) );
         }
         list( $can_post, $reason, $message ) = self::post_state( $group, $user_id );
+        $staff = self::can_moderate( $user_id );
         return array(
             'id'          => (int) $group->id,
             'slug'        => (string) $group->slug,
             'name'        => (string) $group->name,
             'description' => (string) $group->description,
-            'icon'        => (string) $group->icon,
             'members'     => (int) $group->member_count,
             'locked'      => (int) $group->locked,
             'archived'    => 'active' !== $group->status ? 1 : 0,
+            'private'     => 'public' !== $group->visibility ? 1 : 0,
             'slow'        => (int) $group->slow_mode,
             'joined'      => ( $m && 'active' === $m->status ) ? 1 : 0,
             'role'        => self::member_role( $group->id, $user_id ),
             'unread'      => min( 99, $unread ),
-            'lastAt'      => $group->last_message_at ? (string) $group->last_message_at : '',
+            'lastAt'      => self::iso( $group->last_message_at ),
             'canPost'     => $can_post ? 1 : 0,
             'blockReason' => $reason,
             'blockText'   => $message,
+            'questions'   => $staff ? self::open_questions( (int) $group->id ) : 0,
         );
     }
 
@@ -466,23 +445,37 @@ class DSA2_Groups {
             $body = $row->body;
             if ( $hidden && ! $can_moderate ) $body = __( 'Message retiré par la modération.', 'delicat-assistant' );
             $author = isset( $meta['author'] ) ? (string) $meta['author'] : self::display_name( (int) $row->user_id );
+            $flags = array_filter( explode( ',', (string) $row->flags ) );
+            $question = '';
+            if ( 'question' === $row->message_type ) {
+                $question = in_array( 'answered', $flags, true ) ? 'answered' : ( in_array( 'private', $flags, true ) ? 'private' : 'open' );
+            }
+            $reply = null;
+            if ( ! empty( $meta['reply_to'] ) && is_array( $meta['reply_to'] ) && ! $hidden ) {
+                $reply = array(
+                    'id'      => (int) ( $meta['reply_to']['id'] ?? 0 ),
+                    'author'  => (string) ( $meta['reply_to']['author'] ?? '' ),
+                    'excerpt' => (string) ( $meta['reply_to']['excerpt'] ?? '' ),
+                );
+            }
             $out[] = array(
-                'id'      => (int) $row->id,
-                'groupId' => (int) $row->group_id,
-                'userId'  => (int) $row->user_id,
-                'author'  => $author,
-                'initials'=> self::initials( $author ),
-                'role'    => (string) $row->author_role,
-                'type'    => (string) $row->message_type,
-                'body'    => (string) $body,
-                'url'     => isset( $meta['url'] ) ? esc_url_raw( (string) $meta['url'] ) : '',
-                'time'    => mysql2date( 'H:i', $row->created_at ),
-                'day'     => mysql2date( 'Y-m-d', $row->created_at ),
-                'mine'    => $mine ? 1 : 0,
-                'pinned'  => (int) $row->pinned,
-                'hidden'  => $hidden ? 1 : 0,
-                'flags'   => $can_moderate ? (string) $row->flags : '',
-                'reports' => $can_moderate ? (int) $row->report_count : 0,
+                'id'       => (int) $row->id,
+                'groupId'  => (int) $row->group_id,
+                'userId'   => $can_moderate || $mine ? (int) $row->user_id : 0,
+                'author'   => $author,
+                'initials' => self::initials( $author ),
+                'role'     => (string) $row->author_role,
+                'type'     => $hidden ? 'text' : (string) $row->message_type,
+                'body'     => (string) $body,
+                'url'      => ( ! $hidden && isset( $meta['url'] ) ) ? esc_url_raw( (string) $meta['url'] ) : '',
+                'at'       => self::iso( $row->created_at ),
+                'mine'     => $mine ? 1 : 0,
+                'pinned'   => (int) $row->pinned,
+                'hidden'   => $hidden ? 1 : 0,
+                'question' => $hidden ? '' : $question,
+                'replyTo'  => $reply,
+                'flags'    => $can_moderate ? (string) $row->flags : '',
+                'reports'  => $can_moderate ? (int) $row->report_count : 0,
             );
         }
         return $out;
@@ -506,13 +499,33 @@ class DSA2_Groups {
         return array_reverse( $rows );
     }
 
+    /** Older history, for "load earlier messages". */
+    private static function fetch_before( $group_id, $before_id, $limit = 40 ) {
+        global $wpdb;
+        $table = self::table( 'messages' );
+        $rows = (array) $wpdb->get_results( $wpdb->prepare(
+            "SELECT * FROM $table WHERE group_id=%d AND id<%d AND status<>'deleted' ORDER BY id DESC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            (int) $group_id, (int) $before_id, max( 1, min( 100, (int) $limit ) )
+        ) );
+        return array_reverse( $rows );
+    }
+
     /* ------------------------------------------------------------- endpoints */
 
     public static function ajax_list() {
         $user_id = self::guard( 120 );
         global $wpdb;
-        $table = self::table( 'groups' );
-        $rows = (array) $wpdb->get_results( "SELECT * FROM $table WHERE status='active' AND visibility='public' ORDER BY sort_order ASC, last_message_at DESC, id ASC LIMIT 60" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $groups_t  = self::table( 'groups' );
+        $members_t = self::table( 'members' );
+        if ( self::can_moderate() ) {
+            $rows = (array) $wpdb->get_results( "SELECT * FROM $groups_t WHERE status='active' ORDER BY sort_order ASC, last_message_at DESC, id ASC LIMIT 60" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        } else {
+            // Public rooms, plus the hidden rooms this member was added to.
+            $rows = (array) $wpdb->get_results( $wpdb->prepare(
+                "SELECT g.* FROM $groups_t g WHERE g.status='active' AND ( g.visibility='public' OR EXISTS ( SELECT 1 FROM $members_t m WHERE m.group_id=g.id AND m.user_id=%d AND m.status='active' ) ) ORDER BY g.sort_order ASC, g.last_message_at DESC, g.id ASC LIMIT 60", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+                $user_id
+            ) );
+        }
         $groups = array();
         foreach ( $rows as $row ) $groups[] = self::group_payload( $row, $user_id );
         wp_send_json_success( array(
@@ -526,23 +539,25 @@ class DSA2_Groups {
     public static function ajax_open() {
         $user_id = self::guard( 120 );
         $s = self::settings();
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
-        if ( ! $group || 'public' !== $group->visibility ) {
-            wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
-        }
+        $group = self::requested_group( $user_id );
         $rows = self::fetch_messages( (int) $group->id, 0, (int) $s['groups_history'] );
         wp_send_json_success( array(
             'group'    => self::group_payload( $group, $user_id ),
             'messages' => self::format_messages( $rows, $user_id ),
+            'more'     => count( $rows ) >= (int) $s['groups_history'] ? 1 : 0,
             'rules'    => array_values( array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', (string) $s['groups_rules'] ) ) ) ),
         ) );
     }
 
     public static function ajax_poll() {
         $user_id = self::guard( 240 );
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
-        if ( ! $group ) wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
-        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0;
+        $group = self::requested_group( $user_id );
+        $before = isset( $_POST['before_id'] ) ? absint( $_POST['before_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        if ( $before ) {
+            $rows = self::fetch_before( (int) $group->id, $before, 40 );
+            wp_send_json_success( array( 'messages' => self::format_messages( $rows, $user_id ), 'more' => count( $rows ) >= 40 ? 1 : 0, 'older' => 1 ) );
+        }
+        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
         $rows = self::fetch_messages( (int) $group->id, $after, 60 );
         wp_send_json_success( array(
             'messages' => self::format_messages( $rows, $user_id ),
@@ -552,7 +567,7 @@ class DSA2_Groups {
 
     public static function ajax_join() {
         $user_id = self::guard( 40 );
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
+        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
         if ( ! $group || 'active' !== $group->status || 'public' !== $group->visibility ) {
             wp_send_json_error( array( 'message' => __( 'Groupe indisponible.', 'delicat-assistant' ) ), 404 );
         }
@@ -567,10 +582,9 @@ class DSA2_Groups {
 
     public static function ajax_leave() {
         $user_id = self::guard( 40 );
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
-        if ( ! $group ) wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
+        $group = self::requested_group( $user_id );
         global $wpdb;
-        $wpdb->update( self::table( 'members' ), array( 'status' => 'left' ), array( 'group_id' => (int) $group->id, 'user_id' => $user_id ), array( '%s' ), array( '%d', '%d' ) );
+        $wpdb->update( self::table( 'members' ), array( 'status' => 'left' ), array( 'group_id' => (int) $group->id, 'user_id' => $user_id, 'status' => 'active' ), array( '%s' ), array( '%d', '%d', '%s' ) );
         self::refresh_counts( (int) $group->id );
         $group = self::get_group( (int) $group->id );
         wp_send_json_success( array( 'group' => self::group_payload( $group, $user_id ) ) );
@@ -582,7 +596,8 @@ class DSA2_Groups {
         $existing = self::membership( $group_id, $user_id );
         $now = current_time( 'mysql', 1 );
         if ( $existing ) {
-            $wpdb->update( $table, array( 'status' => 'active', 'muted_until' => null, 'last_seen_at' => $now ), array( 'id' => (int) $existing->id ), array( '%s', '%s', '%s' ), array( '%d' ) );
+            if ( 'banned' === $existing->status ) return false;
+            $wpdb->update( $table, array( 'status' => 'active', 'last_seen_at' => $now ), array( 'id' => (int) $existing->id ), array( '%s', '%s' ), array( '%d' ) );
         } else {
             $wpdb->insert( $table, array(
                 'group_id'     => absint( $group_id ),
@@ -608,16 +623,16 @@ class DSA2_Groups {
         $wpdb->update( $groups, array( 'member_count' => $count, 'message_count' => $total ), array( 'id' => absint( $group_id ) ), array( '%d', '%d' ), array( '%d' ) );
     }
 
-    public static function ajax_send() {
-        $user_id = self::guard( 60 );
-        $s = self::settings();
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
-        if ( ! $group ) wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
-
+    /**
+     * Shared checks of every member write (message or question): post rights, slow mode,
+     * masking, duplicates. Returns array( group, cleaned body, flags ).
+     */
+    private static function prepare_post( $user_id, $max_len_field = 'message' ) {
+        $group = self::requested_group( $user_id );
         list( $can_post, $reason, $message ) = self::post_state( $group, $user_id );
         if ( ! $can_post ) wp_send_json_error( array( 'code' => $reason, 'message' => $message ), 403 );
 
-        $raw = isset( $_POST['message'] ) ? (string) wp_unslash( $_POST['message'] ) : '';
+        $raw = isset( $_POST[ $max_len_field ] ) ? (string) wp_unslash( $_POST[ $max_len_field ] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitize_body() below
         $raw = sanitize_textarea_field( $raw );
         if ( '' === trim( $raw ) ) wp_send_json_error( array( 'message' => __( 'Message vide.', 'delicat-assistant' ) ), 400 );
 
@@ -630,6 +645,7 @@ class DSA2_Groups {
                 wp_send_json_error( array(
                     'code'    => 'slow_mode',
                     'wait'    => $slow - ( time() - $last ),
+                    /* translators: %d: seconds to wait */
                     'message' => sprintf( __( 'Mode lent : attendez %d s.', 'delicat-assistant' ), $slow - ( time() - $last ) ),
                 ), 429 );
             }
@@ -642,9 +658,42 @@ class DSA2_Groups {
         if ( self::is_duplicate( (int) $group->id, $user_id, $clean['body'] ) ) {
             wp_send_json_error( array( 'code' => 'duplicate', 'message' => __( 'Vous venez d’envoyer ce message.', 'delicat-assistant' ) ), 429 );
         }
+        return array( $group, $clean['body'], $clean['flags'], $slow );
+    }
 
-        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0;
-        $id = self::insert_message( (int) $group->id, $user_id, $clean['body'], 'text', array(), $clean['flags'] );
+    /** A visible message of this group that a reply may quote. */
+    private static function reply_target( $group_id ) {
+        $reply_id = isset( $_POST['reply_to'] ) ? absint( $_POST['reply_to'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        if ( ! $reply_id ) return null;
+        global $wpdb;
+        $table = self::table( 'messages' );
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id=%d AND group_id=%d AND status='visible'", $reply_id, (int) $group_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        return $row ? $row : null;
+    }
+
+    public static function ajax_send() {
+        $user_id = self::guard( 60 );
+        list( $group, $body, $flags, $slow ) = self::prepare_post( $user_id );
+
+        $meta = array();
+        $type = 'text';
+        $reply = self::reply_target( (int) $group->id );
+        if ( $reply ) {
+            $rmeta = $reply->meta ? json_decode( $reply->meta, true ) : array();
+            $meta['reply_to'] = array(
+                'id'      => (int) $reply->id,
+                'author'  => isset( $rmeta['author'] ) ? (string) $rmeta['author'] : self::display_name( (int) $reply->user_id ),
+                'excerpt' => DSA2_Compat::substr( (string) $reply->body, 0, 140 ),
+            );
+            // The team answering a member's question: the question is marked answered.
+            if ( 'question' === $reply->message_type && self::can_moderate() ) {
+                $type = 'answer';
+                self::set_question_state( (int) $reply->id, 'answered', $user_id );
+            }
+        }
+
+        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $id = self::insert_message( (int) $group->id, $user_id, $body, $type, $meta, $flags );
         if ( ! $id ) wp_send_json_error( array( 'message' => __( 'Envoi impossible. Réessayez.', 'delicat-assistant' ) ), 500 );
         if ( $slow ) set_transient( 'dapg_slow_' . (int) $group->id . '_' . $user_id, time(), max( 60, $slow * 3 ) );
 
@@ -653,8 +702,127 @@ class DSA2_Groups {
         wp_send_json_success( array(
             'messages' => self::format_messages( $rows, $user_id ),
             'group'    => self::group_payload( $group, $user_id ),
-            'filtered' => $clean['flags'] ? 1 : 0,
+            'filtered' => $flags ? 1 : 0,
         ) );
+    }
+
+    /**
+     * "Ask the team": the question is posted in the room (so other members see the answer
+     * too), flagged for the team, and staff are alerted out of band.
+     */
+    public static function ajax_ask() {
+        $user_id = self::guard( 30 );
+        if ( self::bump( 'dapg_ask_' . $user_id, HOUR_IN_SECONDS ) > 10 ) {
+            wp_send_json_error( array( 'code' => 'rate_limited', 'message' => __( 'Vous avez posé beaucoup de questions. Écrivez à l’équipe en privé.', 'delicat-assistant' ) ), 429 );
+        }
+        list( $group, $body, $flags, $slow ) = self::prepare_post( $user_id );
+        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $id = self::insert_message( (int) $group->id, $user_id, $body, 'question', array(), $flags );
+        if ( ! $id ) wp_send_json_error( array( 'message' => __( 'Envoi impossible. Réessayez.', 'delicat-assistant' ) ), 500 );
+        if ( $slow ) set_transient( 'dapg_slow_' . (int) $group->id . '_' . $user_id, time(), max( 60, $slow * 3 ) );
+        if ( ! wp_next_scheduled( 'dsa2_group_question_alert', array( (int) $group->id, $id ) ) ) {
+            wp_schedule_single_event( time(), 'dsa2_group_question_alert', array( (int) $group->id, $id ) );
+        }
+        $rows = self::fetch_messages( (int) $group->id, $after, 60 );
+        $group = self::get_group( (int) $group->id );
+        wp_send_json_success( array(
+            'messages' => self::format_messages( $rows, $user_id ),
+            'group'    => self::group_payload( $group, $user_id ),
+            'filtered' => $flags ? 1 : 0,
+        ) );
+    }
+
+    /**
+     * Moves one of the member's own room messages into their private support chat with
+     * the team (only they and the team can read it there) and asks for an agent. The room
+     * copy is marked so the team does not answer it twice.
+     */
+    public static function ajax_private() {
+        $user_id = self::guard( 20 );
+        $message_id = isset( $_POST['message_id'] ) ? absint( $_POST['message_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        global $wpdb;
+        $table = self::table( 'messages' );
+        $row = $message_id ? $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id=%d AND user_id=%d AND status='visible'", $message_id, $user_id ) ) : null; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $group = $row ? self::get_group( (int) $row->group_id ) : null;
+        if ( ! $row || ! self::can_view( $group, $user_id ) ) {
+            wp_send_json_error( array( 'message' => __( 'Message introuvable.', 'delicat-assistant' ) ), 404 );
+        }
+        if ( ! class_exists( 'DSA2_Data', false ) ) dsa2_load_full_engine();
+        $lang = isset( $_POST['language'] ) && in_array( $_POST['language'], array( 'fr', 'en', 'ht' ), true ) ? sanitize_key( wp_unslash( $_POST['language'] ) ) : 'fr'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $conv = DSA2_Data::get_or_create_conversation( $lang );
+        if ( ! $conv ) wp_send_json_error( array( 'message' => __( 'Service momentanément indisponible.', 'delicat-assistant' ) ), 503 );
+        $intro = 'en' === $lang ? 'Question from the group « %s »:' : ( 'ht' === $lang ? 'Kesyon nan gwoup « %s » :' : 'Question posée dans le groupe « %s » :' );
+        // The body was masked when it entered the room; it stays masked here.
+        $body = sprintf( $intro, $group->name ) . "\n" . (string) $row->body;
+        DSA2_Data::add_message( (int) $conv->id, 'customer', $body, 'text', array( 'source' => 'group', 'group_id' => (int) $group->id, 'group_message_id' => (int) $row->id ), 'agent' );
+        DSA2_Data::request_agent( (int) $conv->id );
+        if ( 'question' === $row->message_type ) self::set_question_state( (int) $row->id, 'private', $user_id );
+        wp_send_json_success( array( 'ok' => 1, 'conversation' => (int) $conv->id ) );
+    }
+
+    /** Staff answer from wp-admin: posted in the room as a reply quoting the question. */
+    public static function answer_question( $question_id, $staff_id, $raw ) {
+        global $wpdb;
+        $table = self::table( 'messages' );
+        $q = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id=%d AND message_type='question' AND status='visible'", absint( $question_id ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        if ( ! $q || ! self::is_staff( $staff_id ) ) return 0;
+        $group = self::get_group( (int) $q->group_id );
+        if ( ! $group || 'active' !== $group->status ) return 0;
+        $clean = self::sanitize_body( sanitize_textarea_field( (string) $raw ), $staff_id );
+        if ( '' === $clean['body'] ) return 0;
+        $qmeta = $q->meta ? json_decode( $q->meta, true ) : array();
+        $meta = array( 'reply_to' => array(
+            'id'      => (int) $q->id,
+            'author'  => isset( $qmeta['author'] ) ? (string) $qmeta['author'] : self::display_name( (int) $q->user_id ),
+            'excerpt' => DSA2_Compat::substr( (string) $q->body, 0, 140 ),
+        ) );
+        $id = self::insert_message( (int) $q->group_id, $staff_id, $clean['body'], 'answer', $meta, $clean['flags'] );
+        if ( $id ) self::set_question_state( (int) $q->id, 'answered', $staff_id );
+        return $id;
+    }
+
+    public static function mark_question( $question_id, $state, $staff_id ) {
+        if ( ! self::is_staff( $staff_id ) ) return;
+        self::set_question_state( absint( $question_id ), in_array( $state, array( 'answered', 'open' ), true ) ? $state : 'answered', $staff_id );
+    }
+
+    /** answered | private | open: kept in the flags column (staff-only), plus who and when in meta. */
+    private static function set_question_state( $message_id, $state, $by ) {
+        global $wpdb;
+        $table = self::table( 'messages' );
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT flags,meta FROM $table WHERE id=%d AND message_type='question'", (int) $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        if ( ! $row ) return;
+        $flags = array_diff( array_filter( explode( ',', (string) $row->flags ) ), array( 'answered', 'private' ) );
+        if ( 'open' !== $state ) $flags[] = $state;
+        $meta = $row->meta ? json_decode( $row->meta, true ) : array();
+        if ( ! is_array( $meta ) ) $meta = array();
+        $meta['question_state'] = array( 'state' => $state, 'by' => (int) $by, 'at' => current_time( 'mysql', 1 ) );
+        $wpdb->update( $table, array( 'flags' => implode( ',', array_unique( $flags ) ), 'meta' => wp_json_encode( $meta ) ), array( 'id' => (int) $message_id ), array( '%s', '%s' ), array( '%d' ) );
+    }
+
+    /** Out-of-band e-mail to the support inbox: at most one per room every five minutes. */
+    public static function send_question_alert( $group_id, $message_id ) {
+        $group_id = absint( $group_id );
+        if ( get_transient( 'dapg_qalert_' . $group_id ) ) return;
+        set_transient( 'dapg_qalert_' . $group_id, 1, 5 * MINUTE_IN_SECONDS );
+        global $wpdb;
+        $table = self::table( 'messages' );
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $table WHERE id=%d AND group_id=%d", absint( $message_id ), $group_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $group = self::get_group( $group_id );
+        if ( ! $row || ! $group ) return;
+        $settings = (array) get_option( 'dap_settings', array() );
+        if ( isset( $settings['notify_enabled'] ) && empty( $settings['notify_enabled'] ) ) return;
+        $to = sanitize_email( $settings['notify_email'] ?? '' );
+        if ( ! $to ) $to = get_option( 'admin_email' );
+        if ( ! is_email( $to ) ) return;
+        $meta = $row->meta ? json_decode( $row->meta, true ) : array();
+        $author = is_array( $meta ) && isset( $meta['author'] ) ? (string) $meta['author'] : '';
+        $preview = class_exists( 'DSA2_Data', false ) ? DSA2_Data::redact_secrets( (string) $row->body ) : (string) $row->body;
+        $link = admin_url( 'admin.php?page=delicat-assistant-groups&tab=questions' );
+        /* translators: %s: group name */
+        $subject = sprintf( __( 'Question à l’équipe dans « %s »', 'delicat-assistant' ), $group->name );
+        $text = $author . ' : ' . DSA2_Compat::substr( $preview, 0, 300 ) . "\n\n" . __( 'Répondre dans le groupe :', 'delicat-assistant' ) . ' ' . $link;
+        wp_mail( $to, $subject, $text );
     }
 
     private static function is_duplicate( $group_id, $user_id, $body ) {
@@ -698,9 +866,8 @@ class DSA2_Groups {
 
     public static function ajax_read() {
         $user_id = self::guard( 240 );
-        $group = self::get_group( isset( $_POST['group'] ) ? sanitize_text_field( wp_unslash( $_POST['group'] ) ) : 0 );
-        if ( ! $group ) wp_send_json_error( array( 'message' => __( 'Groupe introuvable.', 'delicat-assistant' ) ), 404 );
-        $last = isset( $_POST['last_id'] ) ? absint( $_POST['last_id'] ) : 0;
+        $group = self::requested_group( $user_id );
+        $last = isset( $_POST['last_id'] ) ? absint( $_POST['last_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
         global $wpdb;
         $wpdb->query( $wpdb->prepare(
             'UPDATE ' . self::table( 'members' ) . ' SET last_read_id=%d, last_seen_at=%s WHERE group_id=%d AND user_id=%d AND last_read_id<%d',
@@ -727,13 +894,18 @@ class DSA2_Groups {
     public static function ajax_report() {
         $user_id = self::guard( 20 );
         $s = self::settings();
-        $message_id = isset( $_POST['message_id'] ) ? absint( $_POST['message_id'] ) : 0;
-        $reason = isset( $_POST['reason'] ) ? sanitize_key( wp_unslash( $_POST['reason'] ) ) : 'other';
+        $message_id = isset( $_POST['message_id'] ) ? absint( $_POST['message_id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $reason = isset( $_POST['reason'] ) ? sanitize_key( wp_unslash( $_POST['reason'] ) ) : 'other'; // phpcs:ignore WordPress.Security.NonceVerification.Missing
         if ( ! in_array( $reason, array( 'scam', 'abuse', 'spam', 'other' ), true ) ) $reason = 'other';
         global $wpdb;
         $messages = self::table( 'messages' );
-        $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $messages WHERE id=%d", $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        if ( ! $row ) wp_send_json_error( array( 'message' => __( 'Message introuvable.', 'delicat-assistant' ) ), 404 );
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $messages WHERE id=%d AND status<>'deleted'", $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $group = $row ? self::get_group( (int) $row->group_id ) : null;
+        // 7.0: only a member who can see that room may report in it.
+        $member = $group ? self::membership( (int) $group->id, $user_id ) : null;
+        if ( ! $row || ! self::can_view( $group, $user_id ) || ! $member || 'active' !== $member->status ) {
+            wp_send_json_error( array( 'message' => __( 'Message introuvable.', 'delicat-assistant' ) ), 404 );
+        }
         if ( (int) $row->user_id === $user_id ) wp_send_json_error( array( 'message' => __( 'Vous ne pouvez pas signaler votre propre message.', 'delicat-assistant' ) ), 400 );
 
         // UNIQUE(message_id, reporter_id) makes a second report from the same account a no-op.
@@ -748,15 +920,23 @@ class DSA2_Groups {
 
         $reports = self::table( 'reports' );
         $distinct = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(DISTINCT reporter_id) FROM $reports WHERE message_id=%d", $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        // Only accounts at least two days old count towards hiding (a burst of new accounts
+        // cannot silence someone); every report still reaches the review queue.
+        $established = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(DISTINCT r.reporter_id) FROM $reports r INNER JOIN {$wpdb->users} u ON u.ID=r.reporter_id WHERE r.message_id=%d AND u.user_registered<=%s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $message_id, gmdate( 'Y-m-d H:i:s', time() - 2 * DAY_IN_SECONDS )
+        ) );
         $threshold = max( 1, (int) $s['groups_report_hide'] );
+        $protected = (int) $row->pinned || self::is_staff( (int) $row->user_id );
+        $hide = ! $protected && $established >= $threshold && 'visible' === $row->status;
         $update = array( 'report_count' => $distinct );
         $format = array( '%d' );
-        if ( $distinct >= $threshold && 'visible' === $row->status ) {
+        if ( $hide ) {
             $update['status'] = 'hidden';
             $format[] = '%s';
         }
         $wpdb->update( $messages, $update, array( 'id' => $message_id ), $format, array( '%d' ) );
-        wp_send_json_success( array( 'reported' => 1, 'hidden' => $distinct >= $threshold ? 1 : 0 ) );
+        wp_send_json_success( array( 'reported' => 1, 'hidden' => $hide ? 1 : 0 ) );
     }
 
     /* ------------------------------------------------------------ moderation */
@@ -772,6 +952,12 @@ class DSA2_Groups {
         $target = isset( $_POST['target_id'] ) ? absint( $_POST['target_id'] ) : 0;
         global $wpdb;
         $messages = self::table( 'messages' );
+        if ( $message_id ) {
+            $owner = $wpdb->get_row( $wpdb->prepare( "SELECT group_id,user_id FROM $messages WHERE id=%d", $message_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            if ( ! $owner ) wp_send_json_error( array( 'message' => __( 'Message introuvable.', 'delicat-assistant' ) ), 404 );
+            $group_id = (int) $owner->group_id; // never trust a group id that disagrees with the message
+            if ( ! $target ) $target = (int) $owner->user_id;
+        }
 
         switch ( $action ) {
             case 'delete':
@@ -814,6 +1000,10 @@ class DSA2_Groups {
                 if ( ! $target ) break;
                 delete_user_meta( $target, 'dap_groups_banned' );
                 if ( $group_id ) $wpdb->update( self::table( 'members' ), array( 'status' => 'active' ), array( 'group_id' => $group_id, 'user_id' => $target ), array( '%s' ), array( '%d', '%d' ) );
+                break;
+            case 'answered':
+            case 'reopen':
+                if ( $message_id ) self::set_question_state( $message_id, 'answered' === $action ? 'answered' : 'open', $user_id );
                 break;
             case 'lock':
                 if ( ! $group_id ) break;
@@ -884,6 +1074,28 @@ class DSA2_Groups {
 
     /* ---------------------------------------------------------- housekeeping */
 
+    /**
+     * Deletes the files behind image messages. Only our own upload names (dapg- plus 20
+     * characters) inside the uploads folder are touched, whatever host or scheme the
+     * stored URL carries (the site may have moved to https or another domain since).
+     */
+    public static function delete_message_files( $rows ) {
+        $uploads = wp_get_upload_dir();
+        $base = realpath( $uploads['basedir'] );
+        if ( ! $base ) return;
+        $base_path = (string) wp_parse_url( $uploads['baseurl'], PHP_URL_PATH );
+        foreach ( (array) $rows as $row ) {
+            $meta = is_object( $row ) && $row->meta ? json_decode( $row->meta, true ) : array();
+            if ( empty( $meta['url'] ) ) continue;
+            $path = (string) wp_parse_url( (string) $meta['url'], PHP_URL_PATH );
+            if ( ! preg_match( '#/dapg-[A-Za-z0-9]{20}\.(?:jpg|png|gif|webp)$#', $path ) ) continue;
+            $relative = ( $base_path && 0 === strpos( $path, $base_path ) ) ? substr( $path, strlen( $base_path ) ) : '';
+            if ( '' === $relative || false !== strpos( $relative, '..' ) ) continue;
+            $file = realpath( $base . '/' . ltrim( $relative, '/' ) );
+            if ( $file && 0 === strpos( $file, $base . DIRECTORY_SEPARATOR ) && is_file( $file ) ) wp_delete_file( $file );
+        }
+    }
+
     /** Called from the plugin's daily cleanup so group history cannot grow forever. */
     public static function cleanup() {
         $s = self::settings();
@@ -896,16 +1108,31 @@ class DSA2_Groups {
         if ( ! $ids ) return;
         $in = implode( ',', array_map( 'absint', $ids ) );
         // Remove the uploaded files before the rows that point at them.
-        $rows = (array) $wpdb->get_results( "SELECT meta FROM $messages WHERE id IN ($in) AND message_type='image'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-        $uploads = wp_get_upload_dir();
-        foreach ( $rows as $row ) {
-            $meta = $row->meta ? json_decode( $row->meta, true ) : array();
-            if ( empty( $meta['url'] ) ) continue;
-            $path = str_replace( $uploads['baseurl'], $uploads['basedir'], (string) $meta['url'] );
-            if ( 0 === strpos( $path, $uploads['basedir'] ) && is_file( $path ) ) wp_delete_file( $path );
-        }
+        self::delete_message_files( $wpdb->get_results( "SELECT meta FROM $messages WHERE id IN ($in) AND message_type='image'" ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $wpdb->query( "DELETE FROM " . self::table( 'reports' ) . " WHERE message_id IN ($in)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $wpdb->query( "DELETE FROM $messages WHERE id IN ($in)" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    }
+
+    /**
+     * 7.0: account deletion (Google Play flow and WordPress privacy eraser) also removes
+     * the customer's community data: their messages and images, memberships, reports and
+     * group profile. Returns the number of messages removed.
+     */
+    public static function erase_user( $user_id ) {
+        $user_id = absint( $user_id );
+        if ( ! $user_id ) return 0;
+        global $wpdb;
+        $messages = self::table( 'messages' );
+        self::delete_message_files( $wpdb->get_results( $wpdb->prepare( "SELECT meta FROM $messages WHERE user_id=%d AND message_type='image'", $user_id ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $groups = (array) $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT group_id FROM " . self::table( 'members' ) . " WHERE user_id=%d", $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $wpdb->query( $wpdb->prepare( "DELETE r FROM " . self::table( 'reports' ) . " r INNER JOIN $messages m ON m.id=r.message_id WHERE m.user_id=%d", $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $removed = (int) $wpdb->query( $wpdb->prepare( "DELETE FROM $messages WHERE user_id=%d", $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $wpdb->delete( self::table( 'reports' ), array( 'reporter_id' => $user_id ), array( '%d' ) );
+        $wpdb->delete( self::table( 'members' ), array( 'user_id' => $user_id ), array( '%d' ) );
+        delete_user_meta( $user_id, 'dap_group_name' );
+        delete_user_meta( $user_id, 'dap_groups_banned' );
+        foreach ( $groups as $group_id ) self::refresh_counts( (int) $group_id );
+        return $removed;
     }
 
     /** One room so the feature works the moment it is switched on. */
@@ -918,7 +1145,7 @@ class DSA2_Groups {
             'slug'            => 'communaute-delicat',
             'name'            => 'Communauté Delicat',
             'description'     => 'Échangez avec les autres clients : jeux, recharges, astuces.',
-            'icon'            => '🎮',
+            'icon'            => '',
             'visibility'      => 'public',
             'status'          => 'active',
             'locked'          => 0,

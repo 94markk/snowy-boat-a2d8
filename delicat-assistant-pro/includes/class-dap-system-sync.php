@@ -19,10 +19,30 @@ final class DSA2_System_Sync {
         add_action( 'woo_wallet_credit', array( __CLASS__, 'wallet_changed' ), 20, 2 );
         add_action( 'woo_wallet_debit', array( __CLASS__, 'wallet_changed' ), 20, 2 );
         // Identity Pro and wp-login.php do not use a dsa2_ AJAX action. Keep the
-        // guest-to-account merge active on those lightweight requests as well.
-        add_action( 'wp_login', array( 'DSA2_Data', 'link_guest_on_login' ), 10, 2 );
-        add_action( 'wp_logout', array( 'DSA2_Data', 'clear_session_cookies' ) );
+        // guest-to-account merge active on those lightweight requests as well. 7.0: a page
+        // view no longer parses DSA2_Data, so these wrappers load the engine on demand
+        // (login and logout are rare). Where the engine is already loaded, DSA2_Data::init()
+        // registered the same callbacks and the wrappers step aside.
+        if ( class_exists( 'DSA2_Data', false ) ) {
+            add_action( 'wp_login', array( 'DSA2_Data', 'link_guest_on_login' ), 10, 2 );
+            add_action( 'wp_logout', array( 'DSA2_Data', 'clear_session_cookies' ) );
+        } else {
+            add_action( 'wp_login', array( __CLASS__, 'login' ), 10, 2 );
+            add_action( 'wp_logout', array( __CLASS__, 'logout' ) );
+        }
         add_action( 'set_user_role', array( __CLASS__, 'role_changed' ), 20, 3 );
+    }
+
+    public static function login( $user_login, $user ) {
+        if ( empty( $_COOKIE['dap_session'] ) && empty( $_COOKIE['dap_has_chat'] ) ) return; // no guest thread to merge
+        dsa2_load_full_engine();
+        DSA2_Data::link_guest_on_login( $user_login, $user );
+    }
+
+    public static function logout() {
+        if ( empty( $_COOKIE['dap_session'] ) && empty( $_COOKIE['dap_has_chat'] ) ) return;
+        dsa2_load_full_engine();
+        DSA2_Data::clear_session_cookies();
     }
 
     public static function invalidate_product_cache( $product_id = 0 ) {
@@ -92,6 +112,7 @@ final class DSA2_System_Sync {
         ) );
         if ( ! $conversation ) return;
         set_transient( $dedupe, 1, 15 * MINUTE_IN_SECONDS );
+        dsa2_load_full_engine();
         $label = function_exists( 'wc_get_order_status_name' ) ? wp_strip_all_tags( wc_get_order_status_name( $status ) ) : $status;
         $number = sanitize_text_field( $order->get_order_number() );
         $body = 'en' === $conversation->language

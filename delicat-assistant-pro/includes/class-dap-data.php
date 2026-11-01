@@ -1012,6 +1012,11 @@ class DSA2_Data {
      */
     public static function erase_customer_data( $user_id, $email = '' ) {
         global $wpdb;
+        // 7.0: community data (group messages, images, memberships, reports, group name) too.
+        if ( absint( $user_id ) ) {
+            if ( ! class_exists( 'DSA2_Groups', false ) && function_exists( 'dsa2_require_file' ) ) dsa2_require_file( 'class-dap-groups.php' );
+            if ( class_exists( 'DSA2_Groups', false ) ) DSA2_Groups::erase_user( absint( $user_id ) );
+        }
         $ids = self::erasable_conversation_ids( $user_id, $email );
         if ( ! $ids ) return 0;
         $conv_table = $wpdb->prefix . 'dap_conversations';
@@ -1440,7 +1445,10 @@ class DSA2_Data {
             if ( $candidate instanceof WC_Order ) {
                 $proof_digits = preg_replace( '/\D+/', '', $proof );
                 $email_ok = is_email( $proof ) && 0 === strcasecmp( trim( $candidate->get_billing_email() ), $proof );
-                $phone_ok = strlen( $proof_digits ) >= 8 && false !== strpos( preg_replace( '/\D+/', '', $candidate->get_billing_phone() ), $proof_digits );
+                // 7.0: the digits must be the END of the billing phone (its last 8 or more),
+                // not any 8-digit run found inside it.
+                $billing_digits = preg_replace( '/\D+/', '', $candidate->get_billing_phone() );
+                $phone_ok = strlen( $proof_digits ) >= 8 && strlen( $billing_digits ) >= strlen( $proof_digits ) && substr( $billing_digits, - strlen( $proof_digits ) ) === $proof_digits;
                 if ( $email_ok || $phone_ok ) $order = $candidate;
             }
         }

@@ -15,6 +15,7 @@ class DSA2_Groups_Admin {
         add_action( 'admin_post_dap_group_delete', array( __CLASS__, 'delete_group' ) );
         add_action( 'admin_post_dap_group_settings', array( __CLASS__, 'save_settings' ) );
         add_action( 'admin_post_dap_group_report', array( __CLASS__, 'handle_report' ) );
+        add_action( 'admin_post_dap_group_answer', array( __CLASS__, 'handle_answer' ) );
     }
 
     public static function menu() {
@@ -102,11 +103,29 @@ class DSA2_Groups_Admin {
         $id = isset( $_GET['group_id'] ) ? absint( $_GET['group_id'] ) : 0;
         if ( ! $id ) self::redirect( 'rooms', 'error' );
         global $wpdb;
+        // 7.0: the room's uploaded images go with it.
+        DSA2_Groups::delete_message_files( $wpdb->get_results( $wpdb->prepare( 'SELECT meta FROM ' . DSA2_Groups::table( 'messages' ) . " WHERE group_id=%d AND message_type='image'", $id ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $wpdb->delete( DSA2_Groups::table( 'reports' ), array( 'group_id' => $id ), array( '%d' ) );
         $wpdb->delete( DSA2_Groups::table( 'messages' ), array( 'group_id' => $id ), array( '%d' ) );
         $wpdb->delete( DSA2_Groups::table( 'members' ), array( 'group_id' => $id ), array( '%d' ) );
         $wpdb->delete( DSA2_Groups::table( 'groups' ), array( 'id' => $id ), array( '%d' ) );
         self::redirect( 'rooms', 'deleted' );
+    }
+
+    /** "Questions à l'équipe": answer in the room, or mark as handled. */
+    public static function handle_answer() {
+        self::require_moderator();
+        check_admin_referer( 'dap_group_answer' );
+        $question_id = isset( $_POST['question_id'] ) ? absint( $_POST['question_id'] ) : 0;
+        $op = isset( $_POST['op'] ) ? sanitize_key( wp_unslash( $_POST['op'] ) ) : 'answer';
+        if ( ! $question_id ) self::redirect( 'questions', 'error' );
+        if ( 'answered' === $op || 'reopen' === $op ) {
+            DSA2_Groups::mark_question( $question_id, 'reopen' === $op ? 'open' : 'answered', get_current_user_id() );
+            self::redirect( 'questions', 'saved' );
+        }
+        $body = isset( $_POST['answer'] ) ? (string) wp_unslash( $_POST['answer'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- sanitized by answer_question()
+        $id = DSA2_Groups::answer_question( $question_id, get_current_user_id(), $body );
+        self::redirect( 'questions', $id ? 'answered' : 'error' );
     }
 
     public static function handle_report() {
@@ -168,7 +187,7 @@ class DSA2_Groups_Admin {
     public static function page() {
         self::require_moderator();
         $tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'rooms'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-        if ( ! in_array( $tab, array( 'rooms', 'reports', 'settings' ), true ) ) $tab = 'rooms';
+        if ( ! in_array( $tab, array( 'rooms', 'questions', 'reports', 'settings' ), true ) ) $tab = 'rooms';
         $notice = isset( $_GET['notice'] ) ? sanitize_key( wp_unslash( $_GET['notice'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $base = admin_url( 'admin.php?page=delicat-assistant-groups' );
         ?>
@@ -180,6 +199,7 @@ class DSA2_Groups_Admin {
                         'saved'        => 'Enregistré.',
                         'deleted'      => 'Groupe supprimé.',
                         'moderated'    => 'Action de modération appliquée.',
+                        'answered'     => 'Réponse publiée dans le groupe.',
                         'missing_name' => 'Le nom du groupe est obligatoire.',
                         'error'        => 'Action impossible.',
                     );
@@ -188,6 +208,10 @@ class DSA2_Groups_Admin {
             <?php endif; ?>
             <h2 class="nav-tab-wrapper">
                 <a class="nav-tab <?php echo 'rooms' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( $base . '&tab=rooms' ); ?>">Salons</a>
+                <a class="nav-tab <?php echo 'questions' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( $base . '&tab=questions' ); ?>">Questions à l’équipe<?php
+                    $questions = self::open_questions_count();
+                    if ( $questions ) echo ' <span class="awaiting-mod"><span class="pending-count">' . (int) $questions . '</span></span>';
+                ?></a>
                 <a class="nav-tab <?php echo 'reports' === $tab ? 'nav-tab-active' : ''; ?>" href="<?php echo esc_url( $base . '&tab=reports' ); ?>">Signalements<?php
                     $open = self::open_reports_count();
                     if ( $open ) echo ' <span class="awaiting-mod"><span class="pending-count">' . (int) $open . '</span></span>';
@@ -196,10 +220,82 @@ class DSA2_Groups_Admin {
             </h2>
             <?php
             if ( 'reports' === $tab ) self::reports_tab();
+            elseif ( 'questions' === $tab ) self::questions_tab();
             elseif ( 'settings' === $tab && self::can_manage() ) self::settings_tab();
             else self::rooms_tab();
             ?>
         </div>
+        <?php
+    }
+
+    private static function open_questions_count() {
+        global $wpdb;
+        $messages = DSA2_Groups::table( 'messages' );
+        return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $messages WHERE message_type='question' AND status='visible' AND flags NOT LIKE %s AND flags NOT LIKE %s", '%answered%', '%private%' ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+    }
+
+    private static function questions_tab() {
+        global $wpdb;
+        $messages = DSA2_Groups::table( 'messages' );
+        $groups   = DSA2_Groups::table( 'groups' );
+        $open = (array) $wpdb->get_results( $wpdb->prepare(
+            "SELECT m.*, g.name AS group_name FROM $messages m LEFT JOIN $groups g ON g.id=m.group_id WHERE m.message_type='question' AND m.status='visible' AND m.flags NOT LIKE %s AND m.flags NOT LIKE %s ORDER BY m.id ASC LIMIT 100", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            '%answered%', '%private%'
+        ) );
+        $done = (array) $wpdb->get_results( $wpdb->prepare(
+            "SELECT m.*, g.name AS group_name FROM $messages m LEFT JOIN $groups g ON g.id=m.group_id WHERE m.message_type='question' AND ( m.flags LIKE %s OR m.flags LIKE %s ) ORDER BY m.id DESC LIMIT 20", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            '%answered%', '%private%'
+        ) );
+        ?>
+        <p class="description">Questions posées par les clients avec « Demander à l’équipe ». Votre réponse est publiée dans le groupe avec le badge « Équipe » et cite la question. Vous pouvez aussi répondre directement depuis le groupe sur le site.</p>
+        <table class="widefat striped">
+            <thead><tr><th>Question</th><th>Client</th><th>Groupe</th><th style="width:40%">Réponse</th></tr></thead>
+            <tbody>
+            <?php if ( ! $open ) : ?><tr><td colspan="4">Aucune question en attente.</td></tr><?php endif; ?>
+            <?php foreach ( $open as $row ) :
+                $meta = $row->meta ? json_decode( $row->meta, true ) : array();
+                $author = is_array( $meta ) && isset( $meta['author'] ) ? $meta['author'] : DSA2_Groups::display_name( (int) $row->user_id ); ?>
+                <tr>
+                    <td style="max-width:360px"><?php echo esc_html( DSA2_Compat::substr( $row->body, 0, 400 ) ); ?><br><small><?php echo esc_html( get_date_from_gmt( $row->created_at, 'd/m/Y H:i' ) ); ?></small></td>
+                    <td><?php echo esc_html( $author ); ?></td>
+                    <td><?php echo esc_html( $row->group_name ?? '—' ); ?></td>
+                    <td>
+                        <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                            <input type="hidden" name="action" value="dap_group_answer">
+                            <input type="hidden" name="question_id" value="<?php echo (int) $row->id; ?>">
+                            <?php wp_nonce_field( 'dap_group_answer' ); ?>
+                            <textarea name="answer" rows="3" style="width:100%" maxlength="2000" required placeholder="Votre réponse au groupe…"></textarea>
+                            <button class="button button-primary button-small" type="submit" name="op" value="answer">Publier la réponse</button>
+                            <button class="button button-small" type="submit" name="op" value="answered" formnovalidate>Marquer comme traitée</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php if ( $done ) : ?>
+            <h3>Récemment traitées</h3>
+            <table class="widefat striped">
+                <thead><tr><th>Question</th><th>Groupe</th><th>État</th><th></th></tr></thead>
+                <tbody>
+                <?php foreach ( $done as $row ) : $private = false !== strpos( (string) $row->flags, 'private' ); ?>
+                    <tr>
+                        <td style="max-width:420px"><?php echo esc_html( DSA2_Compat::substr( $row->body, 0, 200 ) ); ?></td>
+                        <td><?php echo esc_html( $row->group_name ?? '—' ); ?></td>
+                        <td><?php echo esc_html( $private ? 'Continuée en privé (voir la boîte de réception)' : 'Répondue' ); ?></td>
+                        <td><?php if ( ! $private ) : ?>
+                            <form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+                                <input type="hidden" name="action" value="dap_group_answer">
+                                <input type="hidden" name="question_id" value="<?php echo (int) $row->id; ?>">
+                                <?php wp_nonce_field( 'dap_group_answer' ); ?>
+                                <button class="button button-small" type="submit" name="op" value="reopen">Rouvrir</button>
+                            </form>
+                        <?php endif; ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
         <?php
     }
 

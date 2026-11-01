@@ -86,7 +86,7 @@ class DSA2_Diagnostics {
             'checks' => $checks,
             'tables' => $table_state,
             'cache_plugins' => $cache_plugins,
-            'runtime_mode' => class_exists('DSA2_Frontend') ? DSA2_Frontend::runtime_mode() : 'unknown',
+            'runtime_mode' => 'demand (7.0 launcher)',
             'debug_enabled' => defined('WP_DEBUG') && WP_DEBUG,
             'memory_limit' => ini_get('memory_limit'),
             'timezone' => wp_timezone_string(),

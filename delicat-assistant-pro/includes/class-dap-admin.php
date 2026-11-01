@@ -654,6 +654,9 @@ class DSA2_Admin {
         $uid = absint( $_POST['user_id'] ?? 0 );
 
         if ( ! $cid && $uid ) {
+            // 7.0: starting a thread with any customer is a directory action, manager-only,
+            // like the directory half of ajax_find_customer().
+            if ( ! self::can_manage() ) wp_send_json_error( array( 'message' => 'Accès réservé aux responsables.' ), 403 );
             $conversation = DSA2_Data::conversation_for_user( $uid, 'fr' );
             if ( ! $conversation ) wp_send_json_error( array( 'message' => 'Impossible d’ouvrir une conversation avec ce client.' ), 400 );
             $cid = (int) $conversation->id;
@@ -895,8 +898,6 @@ class DSA2_Admin {
                     <label class="dap-toggle-row"><input type="checkbox" name="enabled" <?php checked($settings['enabled']); ?>><span><b>Widget flottant</b><small>Afficher l’assistant automatiquement sur le site.</small></span></label>
                     <label class="dap-toggle-row"><input type="checkbox" name="auto_open" <?php checked($settings['auto_open']); ?>><span><b>Ouverture automatique</b><small>Ouvrir une fois par session visiteur.</small></span></label>
                     <label><span>Nom affiché</span><input name="brand_name" value="<?php echo esc_attr($settings['brand_name']); ?>" maxlength="80"></label>
-                    <label><span>Couleur principale</span><input type="color" name="primary_color" value="<?php echo esc_attr($settings['primary_color']); ?>"></label>
-                    <label><span>Mode de chargement</span><select name="runtime_load"><option value="demand" <?php selected($settings['runtime_load'],'demand'); ?>>À la demande — recommandé</option><option value="auto" <?php selected($settings['runtime_load'],'auto'); ?>>Auto — préchargement au repos</option><option value="eager" <?php selected($settings['runtime_load'],'eager'); ?>>Immédiat</option></select></label>
                     <label><span>Côté du bouton</span><select name="launcher_side"><option value="right" <?php selected($settings['launcher_side'],'right'); ?>>Droite</option><option value="left" <?php selected($settings['launcher_side'],'left'); ?>>Gauche</option></select></label>
                     <label><span>Distance du bas (px)</span><input type="number" name="launcher_bottom" min="0" max="400" value="<?php echo esc_attr($settings['launcher_bottom']); ?>"></label>
                     <label class="dap-toggle-row"><input type="checkbox" name="launcher_label_enabled" <?php checked($settings['launcher_label_enabled']); ?>><span><b>Message sous l’icône</b><small>Afficher le petit appel à discuter avec nous.</small></span></label>
