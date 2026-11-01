@@ -275,7 +275,7 @@ class Delicat_Clients {
                         <td><?php echo esc_html( $r->trans_code ?: '—' ); ?></td>
                         <td><?php echo $r->preuve_url ? '<a href="' . esc_url( Delicat_Files::view_url( $r->preuve_url ) ) . '" target="_blank" rel="noopener noreferrer">Voir la preuve</a>' : '—'; ?></td>
                         <td><span style="background:<?php echo $sc[ $r->statut ] ?? '#999'; ?>;color:#fff;padding:3px 9px;border-radius:10px;font-size:11px;"><?php echo $sl[ $r->statut ] ?? $r->statut; ?></span></td>
-                        <td><?php echo $r->wallet_credited ? '' : '—'; ?></td>
+                        <td><?php echo $r->wallet_credited ? delicat_recharge_status_mark( true, 'Crédité', '' ) : '—'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside. ?></td>
                         <td style="white-space:nowrap;"><?php echo esc_html( $r->created_at ); ?></td>
                     </tr>
                 <?php endforeach; endif; ?>

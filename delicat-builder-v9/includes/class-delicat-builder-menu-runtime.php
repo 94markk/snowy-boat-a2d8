@@ -751,10 +751,10 @@ function delicat_builder_v9_menu_wallet_live_assets($from_render = false) {
 function delicat_builder_v9_menu_menu_quick_defaults() {
     $s = delicat_builder_v9_menu_get_menu_builder_settings();
     $out = array();
-    if (($s['quick_wallet']  ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Wallet','url'=>$s['wallet_url'],'visibility'=>'all');
-    if (($s['quick_orders']  ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Commandes','url'=>delicat_builder_v9_menu_menu_account_url('orders'),'visibility'=>'all');
-    if (($s['quick_support'] ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Support','url'=>$s['whatsapp_url'],'visibility'=>'all');
-    if (($s['quick_app']     ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'App','url'=>'#install-app','visibility'=>'all');
+    if (($s['quick_wallet']  ?? 'yes') === 'yes') $out[] = array('icon'=>'card','image'=>'','attachment_id'=>0,'label'=>'Wallet','url'=>$s['wallet_url'],'visibility'=>'all');
+    if (($s['quick_orders']  ?? 'yes') === 'yes') $out[] = array('icon'=>'package','image'=>'','attachment_id'=>0,'label'=>'Commandes','url'=>delicat_builder_v9_menu_menu_account_url('orders'),'visibility'=>'all');
+    if (($s['quick_support'] ?? 'yes') === 'yes') $out[] = array('icon'=>'chat','image'=>'','attachment_id'=>0,'label'=>'Support','url'=>$s['whatsapp_url'],'visibility'=>'all');
+    if (($s['quick_app']     ?? 'yes') === 'yes') $out[] = array('icon'=>'phone','image'=>'','attachment_id'=>0,'label'=>'App','url'=>'#install-app','visibility'=>'all');
     return $out;
 }
 

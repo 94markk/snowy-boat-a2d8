@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.6.1
+ * Version:     6.6.2
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
@@ -25,7 +25,7 @@ if ( ! defined( 'DELICAT_VERSION' ) ) {
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.6.1' );
+    define( 'DELICAT_ASSET_VERSION', '6.6.2' );
 }
 if ( ! function_exists( 'delicat_recharge_icon' ) ) {
     /**
@@ -34,6 +34,16 @@ if ( ! function_exists( 'delicat_recharge_icon' ) ) {
      */
     function delicat_recharge_icon( string $name, int $size = 18 ): string {
         return function_exists( 'delicat_ds_icon' ) ? delicat_ds_icon( $name, $size ) : '';
+    }
+}
+if ( ! function_exists( 'delicat_recharge_status_mark' ) ) {
+    /**
+     * 6.6.2: a yes/no state for admin tables, as a Material icon plus words (6.6.1 had removed
+     * the emoji and left both states blank). The words keep the meaning without the icon set.
+     */
+    function delicat_recharge_status_mark( bool $on, string $on_label, string $off_label ): string {
+        return '<span style="color:' . ( $on ? '#15803D' : '#B91C1C' ) . ';display:inline-flex;align-items:center;gap:4px;font-weight:600">'
+            . delicat_recharge_icon( $on ? 'check-circle' : 'block', 16 ) . esc_html( $on ? $on_label : $off_label ) . '</span>';
     }
 }
 if ( ! function_exists( 'delicat_recharge_finish_request' ) ) {

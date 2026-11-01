@@ -85,7 +85,7 @@ class Delicat_Natcash_Auto {
         $total = count( $entries );
         $ok_count = 0;
         foreach ( $entries as $e ) {
-            $is_ok = ( isset( $e['result'] ) && strpos( (string) $e['result'], '' ) !== false )
+            $is_ok = self::is_approved_result( (string) ( $e['result'] ?? '' ) )
                      || ! empty( $e['resolved'] );   // later fixed by hand counts as OK
             if ( $is_ok ) $ok_count++;
         }
@@ -191,7 +191,7 @@ class Delicat_Natcash_Auto {
                         <?php foreach ( $entries as $e ) :
                             $res      = (string) ( $e['result'] ?? '' );
                             $resolved = ! empty( $e['resolved'] );
-                            $ok       = strpos( $res, '' ) !== false;
+                            $ok       = self::is_approved_result( $res );
                             $trust    = (string) ( $e['trust'] ?? '' );
                             if ( $resolved )        $cls = 'res';
                             elseif ( $ok )          $cls = 'ok';
@@ -522,6 +522,16 @@ class Delicat_Natcash_Auto {
      * Single writer for the diagnostic log. Every entry gets a uid (needed by
      * the SMS Guard buttons) and a provider tag.
      */
+    /**
+     * 6.6.2: is this log line a credited approval? Only approvals start with "APPROUVÉ"; entries
+     * written before 6.6.1 started with a check-mark emoji instead and stay in the log after the
+     * upgrade. The 'trust' field cannot decide: it is 'ok' for any trusted SMS, credited or not.
+     */
+    private static function is_approved_result( string $res ): bool {
+        $res = ltrim( $res );
+        return 0 === strpos( $res, 'APPROUVÉ' ) || false !== strpos( $res, "\u{2705}" );
+    }
+
     public static function log_entry( string $raw, $result, array $extra = [] ): void {
         $entries = get_option( 'delicat_natcash_log', [] );
         if ( ! is_array( $entries ) ) $entries = [];

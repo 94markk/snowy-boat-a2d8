@@ -1,3 +1,12 @@
+9.6.2 — Correctif : états et icônes perdus lors du retrait des emojis
+(1) Notifications : chaque notification retrouve l’icône de sa catégorie (commande, portefeuille, message,
+promotion, sécurité) au lieu de la même cloche pour toutes ; les notifications déjà enregistrées aussi.
+(2) Menu : les raccourcis par défaut (Portefeuille, Commandes, Support, App) retrouvent chacun leur icône
+au lieu de la même maison.
+(3) Cloudflare › Dernière purge : « Réussie » ou « Échec » est de nouveau affiché (icône + mot).
+(4) Aperçu de l’annonce (administration) : icônes Material à la place des derniers emojis.
+Installer avec Delicat Identity 6.17.1 et Delicat Recharge 6.6.2, puis purger LiteSpeed / Cloudflare.
+
 9.6.1 — Icônes Material, plus aucun emoji, sécurité renforcée
 (1) Un seul jeu d’icônes : Material Symbols (Google), style arrondi, 96 icônes avec version pleine pour
 l’onglet actif ; elles suivent la couleur du texte en clair et en sombre (delicat_ds_icon).

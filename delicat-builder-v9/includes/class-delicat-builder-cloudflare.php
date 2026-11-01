@@ -509,7 +509,8 @@ final class Delicat_Builder_V9_Cloudflare {
 			<?php if ( ! empty( $status ) ) : ?>
 				<h2><?php esc_html_e( 'Dernière purge', 'delicat-builder-v9' ); ?></h2>
 				<p>
-					<?php echo ! empty( $status['ok'] ) ? '' : ''; ?>
+					<?php $dlc_cf_ok = ! empty( $status['ok'] ); /* 9.6.2: Material icon + words (the emoji left both states blank in 9.6.1). */ ?>
+					<span style="color:<?php echo $dlc_cf_ok ? '#15803D' : '#B91C1C'; ?>;display:inline-flex;align-items:center;gap:4px;font-weight:600;vertical-align:-4px"><?php echo Delicat_Builder_V9_Design_System::icon( $dlc_cf_ok ? 'check-circle' : 'error', 16 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?><?php echo esc_html( $dlc_cf_ok ? __( 'Réussie', 'delicat-builder-v9' ) : __( 'Échec', 'delicat-builder-v9' ) ); ?></span>
 					<code><?php echo esc_html( (string) ( $status['scope'] ?? '' ) ); ?></code>
 					— <?php echo esc_html( (string) ( $status['time'] ?? '' ) ); ?>
 					<?php if ( '' !== (string) ( $status['note'] ?? '' ) ) : ?>

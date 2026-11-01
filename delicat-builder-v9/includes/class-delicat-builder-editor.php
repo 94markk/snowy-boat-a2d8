@@ -484,7 +484,7 @@ final class Delicat_Builder_V9_Editor {
 							data-search="<?php echo esc_attr( strtolower( wp_strip_all_tags( get_the_title( $page ) . ' ' . $page->post_name . ' ' . $page->ID ) ) ); ?>"
 						>
 							<div class="delicat-page-card__top">
-								<div class="delicat-page-card__icon" aria-hidden="true"><?php echo esc_html( $is_home ? '' : '▤' ); ?></div>
+								<div class="delicat-page-card__icon" aria-hidden="true"><?php echo $is_home ? Delicat_Builder_V9_Design_System::icon( 'home', 22 ) : esc_html( '▤' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?></div>
 								<div class="delicat-page-card__badges">
 									<span class="delicat-page-badge <?php echo $is_enabled ? 'is-enabled' : 'is-disabled'; ?>">
 										<i aria-hidden="true"></i>

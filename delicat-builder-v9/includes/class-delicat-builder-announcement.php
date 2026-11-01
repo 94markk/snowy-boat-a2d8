@@ -803,11 +803,11 @@ final class Delicat_Builder_V9_Announcement {
 				<div class="dbv9-annc__overlay" data-dbv9-annc-admin-close></div>
 				<div class="dbv9-annc__dialog" role="dialog" aria-modal="true" aria-label="<?php esc_attr_e( 'Aperçu de l’annonce', 'delicat-builder-v9' ); ?>">
 					<div class="dbv9-annc__decor" aria-hidden="true">
-						<span class="dbv9-annc__float dbv9-annc__float--game">🎮</span>
-						<span class="dbv9-annc__float dbv9-annc__float--gift">🎁</span>
-						<span class="dbv9-annc__float dbv9-annc__float--bolt">⚡</span>
-						<span class="dbv9-annc__float dbv9-annc__float--diamond">💎</span>
-						<span class="dbv9-annc__float dbv9-annc__float--shield">🛡️</span>
+						<span class="dbv9-annc__float dbv9-annc__float--game"><?php echo Delicat_Builder_V9_Design_System::icon( 'sports-esports', 28 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?></span>
+						<span class="dbv9-annc__float dbv9-annc__float--gift"><?php echo Delicat_Builder_V9_Design_System::icon( 'redeem', 28 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?></span>
+						<span class="dbv9-annc__float dbv9-annc__float--bolt"><?php echo Delicat_Builder_V9_Design_System::icon( 'bolt', 28 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?></span>
+						<span class="dbv9-annc__float dbv9-annc__float--diamond"><?php echo Delicat_Builder_V9_Design_System::icon( 'workspace-premium', 28 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?></span>
+						<span class="dbv9-annc__float dbv9-annc__float--shield"><?php echo Delicat_Builder_V9_Design_System::icon( 'verified-user', 28 ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed icon set. ?></span>
 					</div>
 					<button type="button" class="dbv9-annc__close" data-dbv9-annc-admin-close aria-label="<?php esc_attr_e( 'Fermer', 'delicat-builder-v9' ); ?>">&times;</button>
 					<div class="dbv9-annc__media" data-dbv9-annc-preview-media hidden><img src="" alt=""></div>

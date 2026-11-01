@@ -268,7 +268,7 @@ class Delicat_Admin {
                                 <p style="margin:4px 0;">
                                     <code><?php echo esc_html( $did ); ?></code> —
                                     <strong><?php echo esc_html( $d['label'] ?? '' ); ?></strong>
-                                    <?php echo ! empty( $d['enabled'] ) ? '' : ''; ?>
+                                    <?php echo delicat_recharge_status_mark( ! empty( $d['enabled'] ), 'Actif', 'Désactivé' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside. ?>
                                     <small style="color:#888;">vu: <?php echo esc_html( $d['last_seen'] ?: 'jamais' ); ?></small>
                                     <label style="margin-left:10px;"><input type="checkbox" name="delicat_revoke_device[]" value="<?php echo esc_attr( $did ); ?>"> révoquer</label>
                                 </p>
@@ -452,7 +452,7 @@ class Delicat_Admin {
                         <button type="button" id="dr-me-verify" class="button"
                                 data-nonce="<?php echo esc_attr( $nonce ); ?>" data-ajax="<?php echo esc_url( $ajax ); ?>"
                                 style="background:#1565c0;color:#fff;border-color:#0d47a1;">
-                            ✔️ Vérifier via SMS & créditer
+                            Vérifier via SMS & créditer
                         </button>
                     </div>
                     <p style="margin:10px 0 0;color:#888;font-size:12px;">
@@ -540,7 +540,7 @@ class Delicat_Admin {
                                 <a href="<?php echo esc_url( Delicat_Files::view_url( $r->preuve_url ) ); ?>" target="_blank">Voir</a>
                             <?php else : echo '—'; endif; ?>
                         </td>
-                        <td><?php echo $r->wallet_credited ? '' : '—'; ?></td>
+                        <td><?php echo $r->wallet_credited ? delicat_recharge_status_mark( true, 'Crédité', '' ) : '—'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside. ?></td>
                         <td>
                             <span style="background:<?php echo $sc[$r->statut]??'#999'; ?>;
                                          color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;">
@@ -573,7 +573,7 @@ class Delicat_Admin {
                                     data-nonce="<?php echo esc_attr( $wf_nonce ); ?>"
                                     data-ajax="<?php echo $ajax; ?>"
                                     style="background:#6a1b9a;color:#fff;border-color:#4a148c;margin-top:4px;">
-                                ↩️ Rembourser
+                                Rembourser
                             </button>
                             <?php endif; ?>
                             <?php if ( $r->note_admin ) : ?>
@@ -740,7 +740,7 @@ class Delicat_Admin {
                         .text((res.data && res.data.message) || 'Terminé').show();
                     setTimeout(function(){ location.reload(); }, 1800);
                 }).fail(function(){
-                    btn.prop('disabled', false).text('↩️ Rembourser');
+                    btn.prop('disabled', false).text('Rembourser');
                     alert('Erreur réseau.');
                 });
             });
@@ -791,13 +791,13 @@ class Delicat_Admin {
                         $all.prop('disabled', false);
                         $('#dr-me-block').text('Bloquer ce code (déjà validé)');
                         $('#dr-me-credit').text('Créditer le wallet maintenant');
-                        $('#dr-me-verify').text('✔️ Vérifier via SMS & créditer');
+                        $('#dr-me-verify').text('Vérifier via SMS & créditer');
                     }
                 }).fail(function(){
                     $all.prop('disabled', false);
                     $('#dr-me-block').text('Bloquer ce code (déjà validé)');
                     $('#dr-me-credit').text('Créditer le wallet maintenant');
-                    $('#dr-me-verify').text('✔️ Vérifier via SMS & créditer');
+                    $('#dr-me-verify').text('Vérifier via SMS & créditer');
                     alert('Erreur réseau.');
                 });
             }

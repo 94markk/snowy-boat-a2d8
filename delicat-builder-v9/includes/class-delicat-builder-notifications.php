@@ -230,9 +230,12 @@ final class Delicat_Builder_V9_Notifications {
 		return in_array( $value, array( 'orders', 'wallet', 'chat', 'promotions', 'security', 'general' ), true ) ? $value : 'general';
 	}
 
+	/**
+	 * 9.6.2: the icon token is the category key itself (notifications.js draws the matching icon).
+	 * It was an emoji until 9.6.1; the script still understands those for stored notifications.
+	 */
 	private static function icon( string $category ): string {
-		$icons = array( 'orders' => '', 'wallet' => '', 'chat' => '', 'promotions' => '', 'security' => '', 'general' => '' );
-		return $icons[ $category ] ?? '';
+		return self::category( $category );
 	}
 
 	public static function normalize_item( $item ): array {
@@ -1097,7 +1100,7 @@ final class Delicat_Builder_V9_Notifications {
 			</div>
 			<h2>Historique récent</h2><table class="widefat striped"><thead><tr><th>Date</th><th>Visibilité</th><th>Catégorie</th><th>Titre</th><th>Message</th></tr></thead><tbody>
 			<?php foreach ( array_slice( self::items(), 0, 30 ) as $item ) : $visibility = empty( $item['bell'] ) ? 'Push privé' : ( 'user' === $item['audience'] ? 'Client concerné' : 'Public' ); ?>
-				<tr><td><?php echo esc_html( wp_date( 'd/m/Y H:i', (int) $item['created'] ) ); ?></td><td><?php echo esc_html( $visibility ); ?></td><td><?php echo esc_html( self::icon( $item['category'] ) . ' ' . $item['category'] ); ?></td><td><strong><?php echo esc_html( $item['title'] ); ?></strong></td><td><?php echo esc_html( $item['message'] ); ?></td></tr>
+				<tr><td><?php echo esc_html( wp_date( 'd/m/Y H:i', (int) $item['created'] ) ); ?></td><td><?php echo esc_html( $visibility ); ?></td><td><?php echo esc_html( self::category( $item['category'] ) ); ?></td><td><strong><?php echo esc_html( $item['title'] ); ?></strong></td><td><?php echo esc_html( $item['message'] ); ?></td></tr>
 			<?php endforeach; ?>
 			</tbody></table>
 			<p><code>[delicat_notifications]</code> / <code>[delicat_header_notifications]</code></p>

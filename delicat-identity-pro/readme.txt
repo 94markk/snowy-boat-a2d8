@@ -2,10 +2,16 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.0
+Stable tag: 6.17.1
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.1 ==
+* Correctif : les contrôles de santé, de sécurité et des fournisseurs (administration) et le résumé de
+  sécurité du client distinguent de nouveau « OK », « À vérifier » et « Échec » ; la 6.17.0 avait retiré
+  les emojis et laissé certains états vides. Icônes Material de forme et de couleur différentes, avec le
+  mot lu par les lecteurs d’écran (DIP_Status_Mark).
 
 == Version 6.17.0 ==
 

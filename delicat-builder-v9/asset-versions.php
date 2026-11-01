@@ -101,7 +101,7 @@ return array(
  'assets/js/mobile-dock.js' => 'e02c83c08732',
  'assets/js/motion.js' => 'dd0572fb8b2b',
  'assets/js/native-product.js' => 'af640107e323',
- 'assets/js/notifications.js' => 'b1eb1050231d',
+ 'assets/js/notifications.js' => 'e0370a83a704',
  'assets/js/order-confirmation-receipt.js' => '680be2e141ee',
  'assets/js/order-confirmation.js' => '5ecb6145056e',
  'assets/js/order-view.js' => '346be27cb551',
