@@ -102,8 +102,8 @@ html.dlc-theme-dark .dbv9-footer-logo.has-wordmark .dbv9-footer-wordmark {
 /* 2 ------------------------------------------------------------------ */
 html[data-delicat-theme="dark"] body .delicat-native-product,
 html.dlc-theme-dark body .delicat-native-product {
-  --dnp-surface: #161b35;
-  --dnp-border: rgba(255, 255, 255, 0.1);
+  --dnp-surface: var(--ds-color-surface,#161b35);
+  --dnp-border: var(--ds-color-border,rgba(255, 255, 255, 0.1));
 }
 html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review,
 html.dlc-theme-dark body .delicat-native-product .dnp-review {

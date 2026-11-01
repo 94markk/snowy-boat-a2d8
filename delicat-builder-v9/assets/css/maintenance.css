@@ -25,7 +25,7 @@ body.dm {
 }@supports not (height:100dvh){body.dm{min-height:100vh}}
 
 .dm-display {
-	font-family: "New York", "Playfair Display", Georgia, "Times New Roman", serif;
+	font-family:var(--ds-font-sans,system-ui,sans-serif);
 	letter-spacing: -0.01em;
 }
 
@@ -336,8 +336,8 @@ body.dm {
 
 .dm--aurora {
 	--dm-bg: #f5f7fd;
-	--dm-text: #101736;
-	--dm-muted: #5a6486;
+	--dm-text: var(--ds-color-text,#101736);
+	--dm-muted: var(--ds-color-text-muted,#5a6486);
 	--dm-faint: #8b93ac;
 	--dm-chip-bg: #ffffff;
 	--dm-chip-border: #e2e7f4;
@@ -383,8 +383,8 @@ body.dm {
 
 .dm--midnight {
 	--dm-bg: linear-gradient(160deg, var(--dm-bg-start) 0%, var(--dm-bg-end) 62%, var(--dm-bg-start) 100%);
-	--dm-text: #ffffff;
-	--dm-muted: rgba(233, 238, 255, 0.74);
+	--dm-text: var(--ds-color-text,#ffffff);
+	--dm-muted: var(--ds-color-text-muted,rgba(233, 238, 255, 0.74));
 	--dm-faint: rgba(233, 238, 255, 0.5);
 	--dm-chip-bg: rgba(255, 255, 255, 0.1);
 	--dm-chip-border: rgba(255, 255, 255, 0.2);
@@ -432,8 +432,8 @@ body.dm {
 
 .dm--minimal {
 	--dm-bg: #ffffff;
-	--dm-text: #14161f;
-	--dm-muted: #5f6472;
+	--dm-text: var(--ds-color-text,#14161f);
+	--dm-muted: var(--ds-color-text-muted,#5f6472);
 	--dm-faint: #9aa0ae;
 	--dm-chip-bg: #f4f5f8;
 	--dm-chip-border: #e8eaf0;
@@ -478,8 +478,8 @@ body.dm {
 
 .dm--boutique {
 	--dm-bg: #f2f4fb;
-	--dm-text: #101736;
-	--dm-muted: #59627f;
+	--dm-text: var(--ds-color-text,#101736);
+	--dm-muted: var(--ds-color-text-muted,#59627f);
 	--dm-faint: #8b93ac;
 	--dm-chip-bg: rgba(255, 255, 255, 0.16);
 	--dm-chip-border: rgba(255, 255, 255, 0.28);
@@ -554,8 +554,8 @@ body.dm {
 
 .dm--spotlight {
 	--dm-bg: #07070d;
-	--dm-text: #f6f7fb;
-	--dm-muted: rgba(246, 247, 251, 0.66);
+	--dm-text: var(--ds-color-text,#f6f7fb);
+	--dm-muted: var(--ds-color-text-muted,rgba(246, 247, 251, 0.66));
 	--dm-faint: rgba(246, 247, 251, 0.42);
 	--dm-chip-bg: rgba(255, 255, 255, 0.06);
 	--dm-chip-border: rgba(255, 255, 255, 0.14);
@@ -685,8 +685,8 @@ body.dm {
 
 .dm--flash {
 	--dm-bg: linear-gradient(180deg, #0a0f1d 0%, var(--dm-bg-start) 52%, #070b16 100%);
-	--dm-text: #ffffff;
-	--dm-muted: rgba(226, 232, 244, 0.72);
+	--dm-text: var(--ds-color-text,#ffffff);
+	--dm-muted: var(--ds-color-text-muted,rgba(226, 232, 244, 0.72));
 	--dm-faint: rgba(226, 232, 244, 0.44);
 	--dm-chip-bg: rgba(0, 0, 0, 0);
 	--dm-chip-border: var(--dm-accent);

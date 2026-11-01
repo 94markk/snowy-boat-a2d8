@@ -15,10 +15,10 @@
   --dbp-royal: #284696;
   --dbp-sky: #5b7ccc;
   --dbp-orange: #ff5a1f;
-  --dbp-ink: #10162e;
-  --dbp-muted: #6b7280;
-  --dbp-line: rgba(13, 27, 77, 0.10);
-  --dbp-surface: #ffffff;
+  --dbp-ink: var(--ds-color-text,#10162e);
+  --dbp-muted: var(--ds-color-text-muted,#6b7280);
+  --dbp-line: var(--ds-color-border,rgba(13, 27, 77, 0.10));
+  --dbp-surface: var(--ds-color-surface,#ffffff);
   --dbp-shell: #f6f7fb;
   --dbp-radius: 14px;
   --dbp-ease: cubic-bezier(0.2, 0.8, 0.2, 1);

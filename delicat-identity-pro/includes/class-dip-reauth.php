@@ -498,7 +498,7 @@ final class DIP_Reauth {
             . '<p>' . wp_kses_post(sprintf(__('Il expire dans <strong>%d minutes</strong> et ne fonctionne que dans le navigateur où vous l’avez demandé. Ne le communiquez à personne : Delicat Store ne vous le demandera jamais.', 'delicat-google-login'), $minutes)) . '</p>'
             . '<p>' . esc_html__('Vous n’êtes pas à l’origine de cette demande ? Quelqu’un utilise peut-être une de vos sessions : ouvrez le centre de sécurité et déconnectez les autres sessions.', 'delicat-google-login') . '</p>';
         $sent = class_exists('DIP_Email_Hub')
-            ? DIP_Email_Hub::send_access_email($user->user_email, $subject, __('Confirmez votre identité', 'delicat-google-login'), $body, '', '', ['badge'=>__('Code unique', 'delicat-google-login'), 'accent'=>'#7c3aed', 'label'=>__('Sécurité du compte', 'delicat-google-login')])
+            ? DIP_Email_Hub::send_access_email($user->user_email, $subject, __('Confirmez votre identité', 'delicat-google-login'), $body, '', '', ['badge'=>__('Code unique', 'delicat-google-login'), 'accent'=>'#2563eb', 'label'=>__('Sécurité du compte', 'delicat-google-login')])
             : wp_mail($user->user_email, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
         if (!$sent) {
             delete_transient($key);

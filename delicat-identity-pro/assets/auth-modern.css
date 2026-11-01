@@ -1,6 +1,6 @@
 /* Compact identity surface. Native controls and disclosure panels, without blur or layout animation. */
-:root{--dipa-bg:#fff;--dipa-card:#f5f6fa;--dipa-text:#1b1d29;--dipa-muted:#666c7d;--dipa-line:#e2e5ee;--dipa-accent:#405fe7;color-scheme:light}
-html[data-dip-auth-theme="dark"]{--dipa-bg:#19191c;--dipa-card:#25252a;--dipa-text:#f4f4f8;--dipa-muted:#b6b7c3;--dipa-line:#3b3b44;--dipa-accent:#a8b7ff;color-scheme:dark}
+:root{--dipa-bg:var(--ds-color-background,#fff);--dipa-card:var(--ds-color-surface,#f5f6fa);--dipa-text:var(--ds-color-text,#1b1d29);--dipa-muted:var(--ds-color-text-muted,#666c7d);--dipa-line:var(--ds-color-border,#e2e5ee);--dipa-accent:var(--ds-color-primary,#405fe7);color-scheme:light}
+html[data-dip-auth-theme="dark"]{--dipa-bg:var(--ds-color-background,#19191c);--dipa-card:var(--ds-color-surface,#25252a);--dipa-text:var(--ds-color-text,#f4f4f8);--dipa-muted:var(--ds-color-text-muted,#b6b7c3);--dipa-line:var(--ds-color-border,#3b3b44);--dipa-accent:var(--ds-color-primary,#a8b7ff);color-scheme:dark}
 html,body{background:var(--dipa-bg);color:var(--dipa-text)}body{padding:22px 18px 12px}
 .dipx-header{padding:0 30px 0}.dipx-brand{font-size:20px;letter-spacing:.01em;margin:0 0 6px}.dipx-brand span,.dipx-brand strong{display:inline}.dipx-brand strong{margin-left:5px;color:var(--dipa-accent)}.dipx-subtitle{color:var(--dipa-muted);font-size:12px;line-height:1.4}
 .dipx-tabs{gap:4px;padding:3px;border-radius:13px;background:var(--dipa-card);margin:16px 0 14px}.dipx-tab{min-height:44px;padding:8px 6px;border:0;background:transparent;color:var(--dipa-muted);border-radius:10px;font-size:13px}.dipx-tab.is-active{background:var(--dipa-bg);color:var(--dipa-text);box-shadow:0 1px 4px #0000000a}

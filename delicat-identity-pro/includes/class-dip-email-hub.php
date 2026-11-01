@@ -183,7 +183,7 @@ final class DIP_Email_Hub {
         $subject = dipes_replace_tokens($subject_tpl, $ctx);
         $body = '<p>Une demande de réinitialisation du mot de passe a été reçue pour votre compte <strong>' . esc_html($user_login) . '</strong>.</p><p>Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail. Aucun changement ne sera effectué sans utiliser le lien sécurisé.</p>';
         $notification['subject'] = wp_strip_all_tags($subject);
-        $notification['message'] = self::render('customer_reset_password', $ctx, $heading, $body, ['badge'=>'Sécurité','accent'=>'#7c3aed','label'=>'Réinitialisation sécurisée','cta_label'=>'Créer un nouveau mot de passe','cta_url'=>$reset_url,'required_action'=>true]);
+        $notification['message'] = self::render('customer_reset_password', $ctx, $heading, $body, ['badge'=>'Sécurité','accent'=>'#2563eb','label'=>'Réinitialisation sécurisée','cta_label'=>'Créer un nouveau mot de passe','cta_url'=>$reset_url,'required_action'=>true]);
         $notification['headers'] = dipes_add_html_content_type_header($notification['headers'] ?? '');
         // WordPress sends this one itself: its plain-text part is attached when
         // that wp_mail() call reaches PHPMailer with this exact body.

@@ -385,7 +385,7 @@ body {
 	height:40px;
 	border-radius:999px;
 	background:var(--delicat-surface,#fff);
-	color:#6d5dfc;
+	color:var(--ds-color-primary,#2563eb);
 	box-shadow:0 10px 26px rgba(16,24,40,.18);
 	opacity:0;
 	transform:translate3d(-50%,0,0);

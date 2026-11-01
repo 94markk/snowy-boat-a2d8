@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.5.5
+ * Version: 9.6.0
 
  * Requires at least: 6.4
  * Requires PHP: 8.3
@@ -227,7 +227,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.5.5' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.6.0' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -237,6 +237,9 @@ define( 'DELICAT_BUILDER_V9_FILE', __FILE__ );
 define( 'DELICAT_BUILDER_V9_DIR', plugin_dir_path( __FILE__ ) );
 require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-transport.php';
 Delicat_Builder_V9_Transport::boot();
+/* 9.6.0: Delicat Design System 2.0 — the one source of design tokens for every front-end page. */
+require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-design-system.php';
+Delicat_Builder_V9_Design_System::boot();
 define( 'DELICAT_BUILDER_V9_URL', set_url_scheme( plugin_dir_url( __FILE__ ), 'https' ) );
 
 /*

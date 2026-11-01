@@ -63,12 +63,12 @@ html .dsb8-header.has-back .dsb8-header__logo {
 /* pro.50 made the bar opaque on the homepage only; on account and wallet
    pages the dark wallet card still showed through it. */
 html body .delicat-bottom-nav {
-  --dbn-bg: #fff;
+  --dbn-bg: var(--ds-color-surface,#fff);
   background: #fff !important;
 }
 html[data-delicat-theme="dark"] body .delicat-bottom-nav,
 html.dlc-theme-dark body .delicat-bottom-nav {
-  --dbn-bg: #171a2b;
+  --dbn-bg: var(--ds-color-surface,#171a2b);
   background: #171a2b !important;
 }
 

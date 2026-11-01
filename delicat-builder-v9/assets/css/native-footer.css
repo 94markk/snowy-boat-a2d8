@@ -16,13 +16,13 @@
 
 .dbv9-footer {
   --ft-bg: #f6f6fb;
-  --ft-surface: #ffffff;
+  --ft-surface: var(--ds-color-surface,#ffffff);
   --ft-surface-2: #efedfb;
-  --ft-text: #16142b;
-  --ft-muted: #625f78;
-  --ft-line: rgba(22, 20, 43, 0.08);
-  --ft-primary: #6f4cff;
-  --ft-primary-2: #d92cc6;
+  --ft-text: var(--ds-color-text,#16142b);
+  --ft-muted: var(--ds-color-text-muted,#625f78);
+  --ft-line: var(--ds-color-border,rgba(22, 20, 43, 0.08));
+  --ft-primary: var(--ds-color-primary,var(--ds-color-primary,#2563eb));
+  --ft-primary-2: var(--ds-color-primary-hover,#1d4ed8);
   --ft-wa: #0b7f43;
   --ft-wa-bg: #e5f6ec;
   --ft-shadow: 0 1px 2px rgba(22, 20, 43, 0.04), 0 8px 24px rgba(22, 20, 43, 0.05);
@@ -43,13 +43,13 @@
 html[data-delicat-theme="dark"] .dbv9-footer,
 html.dlc-theme-dark .dbv9-footer {
   --ft-bg: #0b0d1f;
-  --ft-surface: #14172e;
+  --ft-surface: var(--ds-color-surface,#14172e);
   --ft-surface-2: #1d2040;
-  --ft-text: #eef0fb;
-  --ft-muted: #a6abc6;
-  --ft-line: rgba(255, 255, 255, 0.08);
-  --ft-primary: #8f78ff;
-  --ft-primary-2: #e45bd4;
+  --ft-text: var(--ds-color-text,#eef0fb);
+  --ft-muted: var(--ds-color-text-muted,#a6abc6);
+  --ft-line: var(--ds-color-border,rgba(255, 255, 255, 0.08));
+  --ft-primary: var(--ds-color-primary,var(--ds-color-primary,#2563eb));
+  --ft-primary-2: var(--ds-color-primary-hover,#1d4ed8);
   --ft-wa: #4ade80;
   --ft-wa-bg: rgba(34, 197, 94, 0.13);
   --ft-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;

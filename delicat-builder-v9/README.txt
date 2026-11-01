@@ -1,3 +1,20 @@
+9.6.0 — Delicat Design System 2.0 : une seule identité visuelle pour tout le site (phase 2 de la refonte)
+(1) Couleurs de la marque partout : bleu #2563EB pour les boutons et les liens, bleu nuit #00004F du logo pour
+la marque. Le violet, le rose et l’orange qui variaient d’une page à l’autre (boutique, panier, menu, compte,
+portefeuille) sont remplacés ; les anciens réglages de couleurs pointent tous vers les mêmes valeurs.
+(2) Une seule source : les couleurs, la police, les arrondis, les espacements, les ombres et les durées
+d’animation sont définis à un seul endroit (classe Design System) et chargés en tête de chaque page
+(1,3 Ko compressés, sans fichier supplémentaire). Delicat Identity et Delicat Recharge les utilisent aussi.
+(3) Mode sombre : les nouveaux visiteurs suivent le réglage de leur téléphone (clair par défaut, sombre si le
+téléphone est en sombre) ; le choix fait avec le bouton reste prioritaire. Fond sombre neutre (#090F1D) au
+lieu du violet. Correction : en mode sombre, le nom du site n’apparaît plus blanc sur blanc dans l’en-tête.
+(4) Police Inter hébergée sur le site (48 Ko, mise en cache), sans décalage de mise en page au chargement ;
+Impact, Playfair, Georgia et Poppins retirées des composants.
+(5) Icônes : un seul jeu (Lucide, 71 icônes) disponible pour tous les modules via delicat_ds_icon().
+(6) Contraste vérifié (WCAG 2.2 AA) : textes 4,5:1 minimum sur toutes les surfaces, contours des champs 3:1.
+Documentation : design-system/DESIGN.md, AUDIT.md (audit complet), design-tokens.json.
+Installer avec Delicat Identity 6.16.0 et Delicat Recharge 6.6.0, puis purger LiteSpeed / Cloudflare.
+
 9.5.5 — Serveur plus léger à chaque page (revue de performance WordPress)
 (1) Compte, panier et portefeuille : les appels que chaque page fait en arrière-plan (état de la
 session, solde du portefeuille, état Pro) n’écrivent plus deux lignes dans la base à chaque appel

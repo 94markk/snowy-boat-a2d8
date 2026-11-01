@@ -641,7 +641,7 @@ public static function apply_reference_info_sections( int $page_id ) {
 			'badge_bg'            => '#171733',
 			'badge_text'          => '#ffffff',
 			'heart_bg'            => '#1b1b3d',
-			'heart_color'         => '#ff4da4',
+			'heart_color'         => '#1d4ed8',
 			'heart_icon'          => 'heart',
 			'carousel_cta'        => 1,
 			'carousel_tag'        => 1,

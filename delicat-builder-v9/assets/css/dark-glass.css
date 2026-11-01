@@ -18,26 +18,26 @@
 
 /* 1 ---------------------------------------------------------- tokens */
 html.dlc-theme-dark {
-  --g-canvas: #060817;
+  --g-canvas: var(--ds-color-background,#060817);
   --g-card: linear-gradient(150deg, rgba(44, 50, 108, 0.5) 0%, rgba(20, 24, 58, 0.58) 46%, rgba(12, 15, 38, 0.66) 100%);
-  --g-card-solid: #121633;
+  --g-card-solid: var(--ds-color-surface,#121633);
   --g-card-2: linear-gradient(160deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025));
-  --g-edge: rgba(255, 255, 255, 0.085);
-  --g-edge-hi: rgba(170, 160, 255, 0.24);
-  --g-depth: inset 0 1px 0 rgba(255, 255, 255, 0.075), -6px -6px 18px rgba(130, 118, 255, 0.04), 10px 16px 32px rgba(0, 0, 0, 0.5);
-  --g-depth-sm: inset 0 1px 0 rgba(255, 255, 255, 0.07), -3px -3px 10px rgba(130, 118, 255, 0.035), 5px 8px 18px rgba(0, 0, 0, 0.42);
+  --g-edge: var(--ds-color-border,rgba(255, 255, 255, 0.085));
+  --g-edge-hi: rgba(147,197,253, 0.24);
+  --g-depth: inset 0 1px 0 rgba(255, 255, 255, 0.075), -6px -6px 18px rgba(37,99,235, 0.04), 10px 16px 32px rgba(0, 0, 0, 0.5);
+  --g-depth-sm: inset 0 1px 0 rgba(255, 255, 255, 0.07), -3px -3px 10px rgba(37,99,235, 0.035), 5px 8px 18px rgba(0, 0, 0, 0.42);
   --g-inset: inset 3px 3px 8px rgba(0, 0, 0, 0.55), inset -2px -2px 6px rgba(255, 255, 255, 0.035);
   --g-field: rgba(5, 7, 20, 0.62);
   --g-pill: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.03));
-  --g-glow: 0 10px 26px -8px rgba(124, 92, 255, 0.62);
-  --g-text: #f4f5fb;
-  --g-muted: #a7aec6;
-  --dlc-bg: #060817;
-  --dlc-surface: rgba(20, 24, 56, 0.62);
+  --g-glow: 0 10px 26px -8px rgba(37,99,235, 0.62);
+  --g-text: var(--ds-color-text,#f4f5fb);
+  --g-muted: var(--ds-color-text-muted,#a7aec6);
+  --dlc-bg: var(--ds-color-background,#060817);
+  --dlc-surface: var(--ds-color-surface,rgba(20, 24, 56, 0.62));
   --dlc-surface-strong: rgba(16, 19, 46, 0.94);
-  --dlc-border: rgba(255, 255, 255, 0.085);
+  --dlc-border: var(--ds-color-border,rgba(255, 255, 255, 0.085));
   --dlc-control: rgba(5, 7, 20, 0.62);
-  background: #060817 !important;
+  background: var(--ds-color-background,#090f1d) !important;
 }
 
 /* 2 ------------------------------------------------- canvas + glows */
@@ -51,8 +51,8 @@ html.dlc-theme-dark::before {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(130vw 70vh at 8% -12%, rgba(108, 84, 255, 0.24), rgba(108, 84, 255, 0) 62%),
-    radial-gradient(95vw 60vh at 112% 38%, rgba(226, 72, 192, 0.13), rgba(226, 72, 192, 0) 62%),
+    radial-gradient(130vw 70vh at 8% -12%, rgba(37,99,235, 0.24), rgba(37,99,235, 0) 62%),
+    radial-gradient(95vw 60vh at 112% 38%, rgba(29,78,216, 0.13), rgba(29,78,216, 0) 62%),
     radial-gradient(120vw 72vh at 24% 116%, rgba(38, 112, 255, 0.15), rgba(38, 112, 255, 0) 62%);
 }
 /* page-level containers let the canvas show (cards keep their surfaces) */
@@ -92,12 +92,12 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-man
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"],
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout--homepage-managed {
   --dbv9-home-bg: transparent !important;
-  --delicat-surface: rgba(20, 24, 56, 0.62) !important;
+  --delicat-surface: var(--ds-color-surface,rgba(20, 24, 56, 0.62)) !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product {
   --dnp-bg: transparent !important;
-  --dnp-card: rgba(20, 24, 56, 0.62) !important;
-  --dnp-surface: rgba(255, 255, 255, 0.045);
+  --dnp-card: var(--ds-color-surface,rgba(20, 24, 56, 0.62)) !important;
+  --dnp-surface: var(--ds-color-surface,rgba(255, 255, 255, 0.045));
 }
 
 /* 3 ---------------------------------------------------------- header */
@@ -105,7 +105,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header {
   --dsb8-header-bg: rgba(10, 12, 32, 0.9) !important;
   background: linear-gradient(180deg, rgba(16, 19, 46, 0.96), rgba(9, 11, 30, 0.92)) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
-  box-shadow: inset 0 -1px 0 rgba(140, 128, 255, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8) !important;
+  box-shadow: inset 0 -1px 0 rgba(37,99,235, 0.08), 0 12px 30px -16px rgba(0, 0, 0, 0.8) !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dsb8-header__action,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dbv9-notifications__bell {
@@ -119,14 +119,14 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dbv9-notificat
 
 /* 4 ------------------------------------------------- drawer + bottom nav */
 html.dlc-theme-dark .dlx-drawer {
-  --dlx-bg: #0b0e24;
-  --dlx-card: rgba(255, 255, 255, 0.05);
+  --dlx-bg: var(--ds-color-surface,#0b0e24);
+  --dlx-card: var(--ds-color-surface,rgba(255, 255, 255, 0.05));
   --dlx-soft: rgba(255, 255, 255, 0.07);
-  --dlx-line: rgba(255, 255, 255, 0.08);
+  --dlx-line: var(--ds-color-border,rgba(255, 255, 255, 0.08));
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-drawer__panel {
   background:
-    radial-gradient(120% 50% at 0% 0%, rgba(108, 84, 255, 0.2), rgba(108, 84, 255, 0) 70%),
+    radial-gradient(120% 50% at 0% 0%, rgba(37,99,235, 0.2), rgba(37,99,235, 0) 70%),
     radial-gradient(110% 40% at 100% 100%, rgba(38, 112, 255, 0.14), rgba(38, 112, 255, 0) 70%),
     #0b0e24;
   border-right: 1px solid rgba(255, 255, 255, 0.07);
@@ -139,11 +139,11 @@ html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-account__code {
   box-shadow: var(--g-depth-sm);
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bottom-nav {
-  --dbn-bg: #141838;
-  --dbn-line: rgba(255, 255, 255, 0.08);
+  --dbn-bg: var(--ds-color-surface,#141838);
+  --dbn-line: var(--ds-color-border,rgba(255, 255, 255, 0.08));
   background: linear-gradient(180deg, rgba(34, 39, 86, 0.97), rgba(15, 18, 44, 0.98)) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 -2px 0 rgba(124, 108, 255, 0.05), 0 16px 40px rgba(0, 0, 0, 0.55) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 -2px 0 rgba(37,99,235, 0.05), 0 16px 40px rgba(0, 0, 0, 0.55) !important;
 }
 
 /* 5 ---------------------------------------------------- product page */
@@ -163,11 +163,11 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card {
   background: var(--g-card-2) !important;
-  border-color: rgba(188, 180, 255, 0.18) !important;
+  border-color: rgba(147,197,253, 0.18) !important;
   box-shadow: var(--g-depth-sm) !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card.is-selected {
-  background: linear-gradient(135deg, #6a5cff, #2f2a86) !important;
+  background: linear-gradient(135deg, var(--ds-color-primary,#2563eb), #2f2a86) !important;
   border-color: rgba(206, 198, 255, 0.55) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), var(--g-glow) !important;
 }
@@ -225,7 +225,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result:hover,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result.is-active {
-  background: rgba(124, 108, 255, 0.16) !important;
+  background: rgba(37,99,235, 0.16) !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result img,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result-placeholder,
@@ -248,8 +248,8 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-currency__select {
 html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce form :where(input.input-text, select, textarea):focus,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product :where(input, select, textarea):focus,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-review-dialog :where(.dlc-review-input, .dlc-review-textarea):focus {
-  border-color: rgba(150, 136, 255, 0.7) !important;
-  box-shadow: var(--g-inset), 0 0 0 3px rgba(124, 108, 255, 0.22) !important;
+  border-color: rgba(37,99,235, 0.7) !important;
+  box-shadow: var(--g-inset), 0 0 0 3px rgba(37,99,235, 0.22) !important;
   outline: none !important;
 }
 
@@ -271,7 +271,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-vote--down[aria-pressed
   box-shadow: var(--g-inset) !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-rv-chip[aria-pressed="true"] {
-  background: linear-gradient(135deg, #8b7cff, #6a5cff) !important;
+  background: linear-gradient(135deg, var(--ds-color-primary,#2563eb), var(--ds-color-primary,#2563eb)) !important;
   color: #0b0e24 !important;
   box-shadow: var(--g-glow) !important;
 }
@@ -320,7 +320,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-thumb img, .dpn-
   background-color: rgba(255, 255, 255, 0.07) !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-badge, .dpn-account-status, .dcn-cart-category, .dpn-wallet-ui) {
-  background: rgba(124, 108, 255, 0.14) !important;
+  background: rgba(37,99,235, 0.14) !important;
   color: #d9d4ff !important;
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-clear, .dcn-clear-cart, .delicat-native-cart a.remove) {
@@ -340,7 +340,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-pwa-card,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-install-bar,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-push-help__card {
   background:
-    radial-gradient(120% 60% at 0% 0%, rgba(108, 84, 255, 0.16), rgba(108, 84, 255, 0) 70%),
+    radial-gradient(120% 60% at 0% 0%, rgba(37,99,235, 0.16), rgba(37,99,235, 0) 70%),
     linear-gradient(180deg, #151939, #0d1029) !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 26px 70px rgba(0, 0, 0, 0.6) !important;
@@ -357,7 +357,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dbv9-notifications__
 }
 html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-review-dialog {
   background:
-    radial-gradient(120% 50% at 0% 0%, rgba(108, 84, 255, 0.18), rgba(108, 84, 255, 0) 70%),
+    radial-gradient(120% 50% at 0% 0%, rgba(37,99,235, 0.18), rgba(37,99,235, 0) 70%),
     radial-gradient(100% 40% at 100% 100%, rgba(38, 112, 255, 0.12), rgba(38, 112, 255, 0) 70%),
     #0f1230;
   border-color: rgba(255, 255, 255, 0.09);
@@ -384,7 +384,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-currency-sticky {
 html.dlc-theme-dark.delicat-low-power {
   --g-depth: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 6px 14px rgba(0, 0, 0, 0.4);
   --g-depth-sm: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 8px rgba(0, 0, 0, 0.35);
-  --g-glow: 0 6px 14px -6px rgba(124, 92, 255, 0.55);
+  --g-glow: 0 6px 14px -6px rgba(37,99,235, 0.55);
 }
 
 /* 13 --------------------------------------- order confirmation (9.4.1) */
@@ -393,7 +393,7 @@ html.dlc-theme-dark.delicat-low-power {
 html.dlc-theme-dark .dlc-oc .dlc-oc-card {
   background-color: transparent;
   background-image: linear-gradient(150deg, rgba(44, 50, 108, 0.5) 0%, rgba(20, 24, 58, 0.58) 46%, rgba(12, 15, 38, 0.66) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075), -6px -6px 18px rgba(130, 118, 255, 0.04), 10px 16px 32px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075), -6px -6px 18px rgba(37,99,235, 0.04), 10px 16px 32px rgba(0, 0, 0, 0.5);
 }
 html.dlc-theme-dark .dlc-oc .dlc-oc-card:not(.dlc-oc-hero) {
   border-color: rgba(255, 255, 255, 0.085);

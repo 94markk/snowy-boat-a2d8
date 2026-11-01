@@ -148,7 +148,7 @@
    selectors at once, including the ones nobody thought to list. Only the two
    places that name a family literally still need naming. */
 html.delicat-slow-net {
-  --delicat-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --delicat-font: var(--ds-font-sans,-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
 }
 
 /* The literal stacks, which read no variable and so cannot be reached above. */
@@ -370,9 +370,9 @@ html.delicat-slow-net .dbv9-reveal {
    paragraph instead of to a page. No decoration that costs a repaint. */
 
 .delicat-legal {
-  --lg-ink: #15172a;
+  --lg-ink: var(--ds-color-text,#15172a);
   --lg-mute: #6b7285;
-  --lg-line: #e3e7f1;
+  --lg-line: var(--ds-color-border,#e3e7f1);
   --lg-accent: var(--dbv9-design-accent, #ff5a1f);
   --lg-brand: var(--dbv9-design-primary, #0d1b4d);
   max-width: 44rem;

@@ -68,8 +68,8 @@ final class Delicat_Builder_V9_Design {
 			'selected_page_id'    => 0,
 			'preset'              => 'modern_store',
 			'carousel_style'      => 'default',
-			'primary_color'       => '#7c3aed',
-			'secondary_color'     => '#ec4899',
+			'primary_color'       => '#2563eb',
+			'secondary_color'     => '#1d4ed8',
 			'accent_color'        => '#2563eb',
 			'surface_color'       => '#ffffff',
 			'page_tint'           => '#f3f5ff',
@@ -89,9 +89,9 @@ final class Delicat_Builder_V9_Design {
 			'product_name_t'      => 17,
 			'product_name_m'      => 16,
 			'badge_bg'            => '#e9ddff',
-			'badge_text'          => '#6540d9',
+			'badge_text'          => '#2563eb',
 			'heart_bg'            => '#ffffff',
-			'heart_color'         => '#ff4d91',
+			'heart_color'         => '#1d4ed8',
 			'heart_icon'          => 'heart',
 			'radius'              => 22,
 			'carousel_cta'        => 1,
@@ -190,8 +190,8 @@ final class Delicat_Builder_V9_Design {
 			);
 
 			$s = self::settings();
-			$primary = sanitize_hex_color( (string) ( $s['primary_color'] ?? '#7c3aed' ) ) ?: '#7c3aed';
-			$secondary = sanitize_hex_color( (string) ( $s['secondary_color'] ?? '#ec4899' ) ) ?: '#ec4899';
+			$primary = sanitize_hex_color( (string) ( $s['primary_color'] ?? '#2563eb' ) ) ?: '#2563eb';
+			$secondary = sanitize_hex_color( (string) ( $s['secondary_color'] ?? '#1d4ed8' ) ) ?: '#1d4ed8';
 			$accent = sanitize_hex_color( (string) ( $s['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb';
 			$surface = sanitize_hex_color( (string) ( $s['surface_color'] ?? '#ffffff' ) ) ?: '#ffffff';
 			$tint = sanitize_hex_color( (string) ( $s['page_tint'] ?? '#f3f5ff' ) ) ?: '#f3f5ff';
@@ -338,9 +338,9 @@ final class Delicat_Builder_V9_Design {
 			'name_t'     => min( 36, max( 10, absint( $s['product_name_t'] ?? 17 ) ) ),
 			'name_m'     => min( 32, max( 10, absint( $s['product_name_m'] ?? 16 ) ) ),
 			'badge_bg'   => sanitize_hex_color( (string) ( $s['badge_bg'] ?? '#e9ddff' ) ) ?: '#e9ddff',
-			'badge_text' => sanitize_hex_color( (string) ( $s['badge_text'] ?? '#6540d9' ) ) ?: '#6540d9',
+			'badge_text' => sanitize_hex_color( (string) ( $s['badge_text'] ?? '#2563eb' ) ) ?: '#2563eb',
 			'heart_bg'   => sanitize_hex_color( (string) ( $s['heart_bg'] ?? '#ffffff' ) ) ?: '#ffffff',
-			'heart_color'=> sanitize_hex_color( (string) ( $s['heart_color'] ?? '#ff4d91' ) ) ?: '#ff4d91',
+			'heart_color'=> sanitize_hex_color( (string) ( $s['heart_color'] ?? '#1d4ed8' ) ) ?: '#1d4ed8',
 			'heart_icon' => $heart_icon,
 		);
 	}

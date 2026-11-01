@@ -21,7 +21,7 @@ function delicat_builder_v9_menu_menu_builder_defaults() {
         'enabled' => 'yes', 'layout' => 'drawer', 'position' => 'left', 'width' => 390,
         'overlay_opacity' => 55, 'blur_strength' => 8, 'open_speed' => 280, 'close_on_overlay' => 'yes', 'body_scroll_lock' => 'yes', 'swipe_close' => 'yes',
         'menu_preset' => 'apple-glass', 'dark_model' => 'neo-glass', 'light_model' => 'soft-glass',
-        'primary' => '#8b5cf6', 'secondary' => '#ec4899', 'accent' => '#2f75ff', 'radius' => 24, 'item_radius' => 16, 'gap' => 10,
+        'primary' => '#2563eb', 'secondary' => '#1d4ed8', 'accent' => '#2f75ff', 'radius' => 24, 'item_radius' => 16, 'gap' => 10,
         'custom_header_enabled' => 'yes', 'custom_header_title' => 'Delicat Store Haiti', 'custom_header_subtitle' => 'Recharge rapide, simple et sécurisée', 'custom_header_image' => '', 'custom_header_url' => '/', 'custom_header_style' => 'glass', 'custom_header_align' => 'left', 'section_order' => 'custom_header,profile,wallet,quick,main,bonus,promo,social,footer',
         'show_profile' => 'yes', 'show_header_title' => 'yes', 'header_title' => '', 'header_subtitle' => '', 'profile_name' => 'Delicat Store Haiti', 'profile_email' => 'info@delicastoreha.com', 'profile_badge' => 'Premium', 'profile_initial' => 'D', 'profile_cover' => '', 'welcome_text' => '',
         'show_wallet' => 'yes', 'wallet_label' => 'Mon portefeuille', 'wallet_balance' => 'Auto', 'wallet_item_balance' => 'yes', 'wallet_url' => '/my-wallet/', 'recharge_url' => '/my-wallet/', 'loyalty_points' => '0',
@@ -43,16 +43,16 @@ function delicat_builder_v9_menu_menu_builder_defaults() {
 
 function delicat_builder_v9_menu_menu_builder_default_items() {
     return array(
-        array('title'=>'Accueil','subtitle'=>'Page principale','url'=>'/','icon'=>'dashicons-admin-home','image'=>'','color1'=>'#8b5cf6','color2'=>'#ec4899','badge'=>'','group'=>'main','visibility'=>'all'),
+        array('title'=>'Accueil','subtitle'=>'Page principale','url'=>'/','icon'=>'dashicons-admin-home','image'=>'','color1'=>'#2563eb','color2'=>'#1d4ed8','badge'=>'','group'=>'main','visibility'=>'all'),
         array('title'=>'Mon Portefeuille','subtitle'=>'Solde et recharge','url'=>'/my-wallet/','icon'=>'dashicons-portfolio','image'=>'','color1'=>'#4f46e5','color2'=>'#06b6d4','badge'=>'','group'=>'main','visibility'=>'logged_in'),
         array('title'=>'Recharger mon compte','subtitle'=>'Moncash / Natcash','url'=>'/my-wallet/','icon'=>'dashicons-money-alt','image'=>'','color1'=>'#06b6d4','color2'=>'#22c55e','badge'=>'','group'=>'main','visibility'=>'all'),
         array('title'=>'Réclamer votre PIN Free Fire','subtitle'=>'Copier et réclamer','url'=>'/free-fire-redeem/','icon'=>'dashicons-admin-network','image'=>'','color1'=>'#f59e0b','color2'=>'#fb7185','badge'=>'HOT','group'=>'main','visibility'=>'all'),
-        array('title'=>'FREE FIRE','subtitle'=>'Diamants instantanés','url'=>'/categorie-produit/free-fire/','icon'=>'dashicons-games','image'=>'','color1'=>'#6366f1','color2'=>'#8b5cf6','badge'=>'GAME','group'=>'main','visibility'=>'all'),
-        array('title'=>'Rewards Program','subtitle'=>'Points et cadeaux','url'=>'/rewards/','icon'=>'dashicons-awards','image'=>'','color1'=>'#a855f7','color2'=>'#f97316','badge'=>'NEW','group'=>'bonus','visibility'=>'all'),
+        array('title'=>'FREE FIRE','subtitle'=>'Diamants instantanés','url'=>'/categorie-produit/free-fire/','icon'=>'dashicons-games','image'=>'','color1'=>'#6366f1','color2'=>'#2563eb','badge'=>'GAME','group'=>'main','visibility'=>'all'),
+        array('title'=>'Rewards Program','subtitle'=>'Points et cadeaux','url'=>'/rewards/','icon'=>'dashicons-awards','image'=>'','color1'=>'#2563eb','color2'=>'#f97316','badge'=>'NEW','group'=>'bonus','visibility'=>'all'),
         array('title'=>'Meilleur client','subtitle'=>'Classement clients','url'=>'/program-bon-kliyan/','icon'=>'dashicons-star-filled','image'=>'','color1'=>'#f59e0b','color2'=>'#ef4444','badge'=>'HOT','group'=>'bonus','visibility'=>'all'),
         array('title'=>'Exchange USDT - USD','subtitle'=>'Services financiers','url'=>'/product-category/exchange/','icon'=>'dashicons-money-alt','image'=>'','color1'=>'#10b981','color2'=>'#06b6d4','badge'=>'','group'=>'bonus','visibility'=>'all'),
-        array('title'=>'Jeux Disponibles','subtitle'=>'Tous les jeux','url'=>'/categorie-produit/jeux/','icon'=>'dashicons-games','image'=>'','color1'=>'#2563eb','color2'=>'#8b5cf6','badge'=>'','group'=>'bonus','visibility'=>'all'),
-        array('title'=>'Gift Card','subtitle'=>'Apple, Google, PSN','url'=>'/categorie-produit/gift-card/','icon'=>'dashicons-awards','image'=>'','color1'=>'#ec4899','color2'=>'#f43f5e','badge'=>'','group'=>'bonus','visibility'=>'all'),
+        array('title'=>'Jeux Disponibles','subtitle'=>'Tous les jeux','url'=>'/categorie-produit/jeux/','icon'=>'dashicons-games','image'=>'','color1'=>'#2563eb','color2'=>'#2563eb','badge'=>'','group'=>'bonus','visibility'=>'all'),
+        array('title'=>'Gift Card','subtitle'=>'Apple, Google, PSN','url'=>'/categorie-produit/gift-card/','icon'=>'dashicons-awards','image'=>'','color1'=>'#1d4ed8','color2'=>'#f43f5e','badge'=>'','group'=>'bonus','visibility'=>'all'),
     );
 }
 
@@ -142,8 +142,8 @@ function delicat_builder_v9_menu_sanitize_menu_builder_items($items) {
             'icon' => sanitize_html_class($item['icon'] ?? 'dashicons-arrow-right-alt2'),
             'image' => esc_url_raw($item['image'] ?? ''),
             'attachment_id' => absint($item['attachment_id'] ?? 0),
-            'color1' => sanitize_hex_color($item['color1'] ?? '#8b5cf6') ?: '#8b5cf6',
-            'color2' => sanitize_hex_color($item['color2'] ?? '#ec4899') ?: '#ec4899',
+            'color1' => sanitize_hex_color($item['color1'] ?? '#2563eb') ?: '#2563eb',
+            'color2' => sanitize_hex_color($item['color2'] ?? '#1d4ed8') ?: '#1d4ed8',
             'badge' => sanitize_text_field($item['badge'] ?? ''),
             'group' => in_array(($item['group'] ?? 'main'), array('main','bonus','footer','quick'), true) ? $item['group'] : 'main',
             'visibility' => in_array(($item['visibility'] ?? 'all'), array('all','logged_in','logged_out'), true) ? $item['visibility'] : 'all',
@@ -222,8 +222,8 @@ function delicat_builder_v9_menu_menu_style_vars($s) {
     $gap = $bounded($s['gap'] ?? 10, 4, 24, 10);
     $desktop_pad = $bounded($s['desktop_padding'] ?? 24, 8, 40, 24);
     $mobile_pad = $bounded($s['mobile_padding'] ?? 16, 6, 28, 16);
-    $primary = sanitize_hex_color($s['primary'] ?? '#8b5cf6') ?: '#8b5cf6';
-    $secondary = sanitize_hex_color($s['secondary'] ?? '#ec4899') ?: '#ec4899';
+    $primary = sanitize_hex_color($s['primary'] ?? '#2563eb') ?: '#2563eb';
+    $secondary = sanitize_hex_color($s['secondary'] ?? '#1d4ed8') ?: '#1d4ed8';
     $accent = sanitize_hex_color($s['accent'] ?? '#2f75ff') ?: '#2f75ff';
     $mw = $mobile . $unit;
     return '--dsb-menu-width:'.$desktop.'px;--dsb-menu-tablet-width:'.$tablet.'px;--dsb-menu-mobile-width:'.esc_attr($mw).';--dsb-overlay-opacity:'.$overlay.';--dsb-menu-blur:'.$blur.'px;--dsb-menu-speed:'.$speed.'ms;--dsb-primary:'.esc_attr($primary).';--dsb-secondary:'.esc_attr($secondary).';--dsb-accent:'.esc_attr($accent).';--dsb-radius:'.$radius.'px;--dsb-item-radius:'.$item_radius.'px;--dsb-menu-gap:'.$gap.'px;--dsb-desktop-pad:'.$desktop_pad.'px;--dsb-mobile-pad:'.$mobile_pad.'px;';
@@ -490,7 +490,7 @@ function delicat_builder_v9_menu_menu_builder_admin_page() {
           </aside>
         </div>
 
-        <template id="dbv9MenuRowTemplate"><div class="dbv9-repeat-row" draggable="true" data-repeat="menu"><div class="dbv9-repeat-handle"><button type="button" class="dbv9-drag">⠿</button><span class="dbv9-item-icon-dot"></span></div><div class="dbv9-repeat-grid menu-grid"><label>Titre<input data-name="title" placeholder="Titre"></label><label>Sous-titre<input data-name="subtitle" placeholder="Sous-titre"></label><label>Lien<input data-name="url" placeholder="/lien/"></label><label>Icône native<input data-name="icon" value="dashicons-arrow-right-alt2"></label><label>Image/SVG<input class="dsb-menu-image-url" data-name="image"><input type="hidden" class="dsb-menu-attachment-id" data-name="attachment_id" value="0"><button type="button" class="button dsb-menu-upload">Média</button></label><label>Couleur 1<input type="color" data-name="color1" value="#8b5cf6"></label><label>Couleur 2<input type="color" data-name="color2" value="#ec4899"></label><label>Badge<input data-name="badge"></label><label>Groupe<select data-name="group"><option value="main">Principal</option><option value="bonus">Bonus</option><option value="footer">Footer</option><option value="quick">Quick</option></select></label><label>Visibilité<select data-name="visibility"><option value="all">Tous</option><option value="logged_in">Connectés</option><option value="logged_out">Invités</option></select></label></div><div class="dbv9-repeat-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button><button type="button" class="dbv9-remove">×</button></div></div></template>
+        <template id="dbv9MenuRowTemplate"><div class="dbv9-repeat-row" draggable="true" data-repeat="menu"><div class="dbv9-repeat-handle"><button type="button" class="dbv9-drag">⠿</button><span class="dbv9-item-icon-dot"></span></div><div class="dbv9-repeat-grid menu-grid"><label>Titre<input data-name="title" placeholder="Titre"></label><label>Sous-titre<input data-name="subtitle" placeholder="Sous-titre"></label><label>Lien<input data-name="url" placeholder="/lien/"></label><label>Icône native<input data-name="icon" value="dashicons-arrow-right-alt2"></label><label>Image/SVG<input class="dsb-menu-image-url" data-name="image"><input type="hidden" class="dsb-menu-attachment-id" data-name="attachment_id" value="0"><button type="button" class="button dsb-menu-upload">Média</button></label><label>Couleur 1<input type="color" data-name="color1" value="#2563eb"></label><label>Couleur 2<input type="color" data-name="color2" value="#1d4ed8"></label><label>Badge<input data-name="badge"></label><label>Groupe<select data-name="group"><option value="main">Principal</option><option value="bonus">Bonus</option><option value="footer">Footer</option><option value="quick">Quick</option></select></label><label>Visibilité<select data-name="visibility"><option value="all">Tous</option><option value="logged_in">Connectés</option><option value="logged_out">Invités</option></select></label></div><div class="dbv9-repeat-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button><button type="button" class="dbv9-remove">×</button></div></div></template>
         <template id="dbv9QuickRowTemplate"><div class="dbv9-repeat-row" draggable="true" data-repeat="quick"><div class="dbv9-repeat-handle"><button type="button" class="dbv9-drag">⠿</button></div><div class="dbv9-repeat-grid quick-grid"><label>Icône<input data-name="icon" placeholder="⭐"></label><label>Image/SVG<input class="dsb-menu-image-url" data-name="image"><input type="hidden" class="dsb-menu-attachment-id" data-name="attachment_id" value="0"><button type="button" class="button dsb-menu-upload">Média</button></label><label>Libellé<input data-name="label" placeholder="Raccourci"></label><label>Lien<input data-name="url" placeholder="/lien/"></label><label>Visibilité<select data-name="visibility"><option value="all">Tous</option><option value="logged_in">Connectés</option><option value="logged_out">Invités</option></select></label></div><div class="dbv9-repeat-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button><button type="button" class="dbv9-remove">×</button></div></div></template>
       </form>
     </div>

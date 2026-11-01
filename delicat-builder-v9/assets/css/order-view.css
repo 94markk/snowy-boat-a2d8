@@ -11,17 +11,17 @@
   --vo-bg: var(--dipapp-bg, #f7f8fa);
   --vo-card: var(--dipapp-surface, #fff);
   --vo-text: var(--dipapp-text, #1d2430);
-  --vo-muted: #646a78; /* 9.5.4: 4.8:1 or more on every light surface (Lighthouse) */
+  --vo-muted: var(--ds-color-text-muted,#646a78); /* 9.5.4: 4.8:1 or more on every light surface (Lighthouse) */
   --vo-border: var(--dipapp-border, #e8ebf1);
   --vo-hover: var(--dipapp-hover, #f4f6fa);
-  --vo-accent: #0b6bdc; /* 5:1 with white text */
-  --vo-accent-soft: #e8f2ff;
+  --vo-accent: var(--ds-color-primary,#0b6bdc); /* 5:1 with white text */
+  --vo-accent-soft: var(--ds-color-primary-subtle,#e8f2ff);
   --vo-accent-ink: #0b5cc2;
-  --vo-ok: #0b6e3c;
+  --vo-ok: var(--ds-color-success-text,#0b6e3c);
   --vo-ok-soft: #e7f6ee;
-  --vo-warn: #9a4507;
+  --vo-warn: var(--ds-color-warning-text,#9a4507);
   --vo-warn-soft: #fef3e2;
-  --vo-bad: #b02a37;
+  --vo-bad: var(--ds-color-danger-text,#b02a37);
   --vo-bad-soft: #fdecee;
   --vo-grey: #565c6a;
   --vo-grey-soft: #f0f1f4;
@@ -74,13 +74,13 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   --vo-border: var(--dipapp-border, #33363e);
   --vo-hover: var(--dipapp-hover, #2a2d35);
   --vo-accent: var(--dipapp-blue, #3b9bff);
-  --vo-accent-soft: #13304f;
+  --vo-accent-soft: var(--ds-color-primary-subtle,#13304f);
   --vo-accent-ink: #9ccbff;
-  --vo-ok: #4ade80;
+  --vo-ok: var(--ds-color-success-text,#4ade80);
   --vo-ok-soft: #173a26;
-  --vo-warn: #fbbf24;
+  --vo-warn: var(--ds-color-warning-text,#fbbf24);
   --vo-warn-soft: #3a2d12;
-  --vo-bad: #ff6b78;
+  --vo-bad: var(--ds-color-danger-text,#ff6b78);
   --vo-bad-soft: #3d1d22;
   --vo-grey: #b4b8c2;
   --vo-grey-soft: #33363e;
@@ -93,13 +93,13 @@ html.dlc-theme-dark:not([data-dip-account-theme="light"]) body:not(.dip-account-
   html:not([data-dip-account-theme]) body.dip-account-app:not(.dipma-scheme-light) .dlc-vo {
     --vo-muted: var(--dipapp-muted, #a7abb5);
     --vo-accent: var(--dipapp-blue, #3b9bff);
-    --vo-accent-soft: #13304f;
+    --vo-accent-soft: var(--ds-color-primary-subtle,#13304f);
     --vo-accent-ink: #9ccbff;
-    --vo-ok: #4ade80;
+    --vo-ok: var(--ds-color-success-text,#4ade80);
     --vo-ok-soft: #173a26;
-    --vo-warn: #fbbf24;
+    --vo-warn: var(--ds-color-warning-text,#fbbf24);
     --vo-warn-soft: #3a2d12;
-    --vo-bad: #ff6b78;
+    --vo-bad: var(--ds-color-danger-text,#ff6b78);
     --vo-bad-soft: #3d1d22;
     --vo-grey: #b4b8c2;
     --vo-grey-soft: #38383c;

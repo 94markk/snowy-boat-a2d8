@@ -587,7 +587,7 @@ final class DIP_App_Sync_V2 {
         <style>
         .dip-app-panel{--dap-ink:#0f172a;--dap-muted:#64748b;--dap-line:rgba(15,23,42,.10);--dap-soft:#f8fafc;--dap-accent:#1d4ed8;max-width:720px;padding:24px;border:1px solid var(--dap-line);border-radius:22px;background:#fff;color:var(--dap-ink);box-shadow:0 18px 50px rgba(15,23,42,.08)}
         .dip-app-panel__head{display:flex;gap:14px;align-items:flex-start;margin-bottom:16px}.dip-app-panel__head h3{margin:0 0 4px;font-size:20px;line-height:1.25}.dip-app-panel__head p{margin:0;color:var(--dap-muted)}
-        .dip-app-panel__icon{flex:0 0 46px;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#1d4ed8,#6d28d9);color:#fff}
+        .dip-app-panel__icon{flex:0 0 46px;width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff}
         .dip-app-panel__notice{margin:0 0 14px;padding:11px 14px;border-radius:12px;background:#ecfdf5;color:#065f46}.dip-app-panel__notice.is-error{background:#fef2f2;color:#991b1b}
         .dip-app-panel__stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin:0 0 16px}.dip-app-panel__stats div{padding:14px;border-radius:16px;background:var(--dap-soft)}.dip-app-panel__stats strong{display:block;font-size:24px;line-height:1.1}.dip-app-panel__stats span{color:var(--dap-muted);font-size:13px}
         .dip-app-panel__list{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:10px}.dip-app-panel__list li{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px;border:1px solid var(--dap-line);border-radius:16px}

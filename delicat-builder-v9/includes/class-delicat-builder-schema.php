@@ -15,7 +15,7 @@ final class Delicat_Builder_V9_Schema {
 	public const MAX_LAYOUT_BYTES = 131072;
 
 	/** RC61: default floating icons behind the hero copy — token|hex tone, one per line. */
-	public const HERO_FLOAT_ICONS = "gamepad|#6a5cff\ngift|#e0407f\ntv|#22a06b\ncoins|#d9860c\nsparkles|#8b5cf6\nbolt|#1f7fd6\nheart|#ff4d91\ncrown|#f0b429";
+	public const HERO_FLOAT_ICONS = "gamepad|#2563eb\ngift|#1d4ed8\ntv|#22a06b\ncoins|#d9860c\nsparkles|#2563eb\nbolt|#1f7fd6\nheart|#1d4ed8\ncrown|#f0b429";
 
 	/** A section hidden at every breakpoint must not run queries or load assets. */
 	public static function section_is_visible( array $section ): bool {
@@ -138,8 +138,8 @@ final class Delicat_Builder_V9_Schema {
 					'bg_start'        => '#eceeff',
 					'bg_mid'          => '#f6ecff',
 					'bg_end'          => '#ffe9f0',
-					'glow_1'          => '#7d6cff',
-					'glow_2'          => '#ff4d91',
+					'glow_1'          => '#2563eb',
+					'glow_2'          => '#1d4ed8',
 					'glow_3'          => '#28c8ff',
 					'glow_4'          => '#ffb547',
 					'glow_strength'   => 36,
@@ -235,7 +235,7 @@ final class Delicat_Builder_V9_Schema {
 				$base['content'] = array(
 					'style'          => 'ultra',
 					'eyebrow'        => 'Simple comme bonjour',
-					'eyebrow_color'  => '#6a5cff',
+					'eyebrow_color'  => '#2563eb',
 					'title'          => 'Comment ça marche',
 					'subtitle'       => 'Trois étapes. Moins d’une minute d’attente.',
 					'ultra_bg'       => '#f4f3ff',
@@ -243,7 +243,7 @@ final class Delicat_Builder_V9_Schema {
 					'ultra_title'    => '#111827',
 					'ultra_text'     => '#6b7280',
 					'ultra_icon_bg'  => '#ffffff',
-					'ultra_icon'     => '#6a5cff',
+					'ultra_icon'     => '#2563eb',
 					'ultra_number'   => '#dcdfe8',
 					'ultra_radius'   => 14,
 					'title_color'    => '',
@@ -256,7 +256,7 @@ final class Delicat_Builder_V9_Schema {
 					'card_title'     => '#f8f8ff',
 					'card_text'      => '#989bad',
 					'accent_1'       => '#5964ff',
-					'accent_2'       => '#ee5abd',
+					'accent_2'       => '#1d4ed8',
 					'accent_3'       => '#56d8f1',
 					'card_gap'       => 18,
 					'card_radius'    => 30,
@@ -338,7 +338,7 @@ final class Delicat_Builder_V9_Schema {
 					'cta_bg_start'     => '#ecebff',
 					'cta_bg_end'       => '#fde7f0',
 					'cta_button_start' => '#5b5bd6',
-					'cta_button_end'   => '#e0407f',
+					'cta_button_end'   => '#1d4ed8',
 					'title_size_d'     => 34,
 					'title_size_t'     => 30,
 					'title_size_m'     => 26,
@@ -363,7 +363,7 @@ final class Delicat_Builder_V9_Schema {
 					'title'          => 'Retrouve ce que tu aimes',
 					'subtitle'       => 'Jeux, abonnements, cartes cadeaux et services : tout est là, en un geste.',
 					'align'          => 'left',
-					'eyebrow_color'  => '#6a5cff',
+					'eyebrow_color'  => '#2563eb',
 					'title_color'    => '#111827',
 					'subtitle_color' => '#6b7280',
 					'title_size_d'   => 34,
@@ -378,11 +378,11 @@ final class Delicat_Builder_V9_Schema {
 					'columns_d'      => 4,
 					'columns_m'      => 2,
 					'icon_size'      => 44,
-					'items'          => "gamepad|Jeux|Free Fire, PUBG, Mobile Legends…|/product-category/jeux/|#6a5cff\ntv|Streaming|Netflix, Spotify, Canal+…|/product-category/abonnement/|#e0407f\ngift|Gift Cards|iTunes, Google Play, PlayStation…|/product-category/gift-card/|#22a06b\ncoins|Exchange|MonCash, Natcash, transferts…|/product-category/exchange/|#d9860c",
+					'items'          => "gamepad|Jeux|Free Fire, PUBG, Mobile Legends…|/product-category/jeux/|#2563eb\ntv|Streaming|Netflix, Spotify, Canal+…|/product-category/abonnement/|#1d4ed8\ngift|Gift Cards|iTunes, Google Play, PlayStation…|/product-category/gift-card/|#22a06b\ncoins|Exchange|MonCash, Natcash, transferts…|/product-category/exchange/|#d9860c",
 					'button_text'    => 'Voir toute la boutique',
 					'button_url'     => '/shop/',
 					'button_start'   => '#5b5bd6',
-					'button_end'     => '#e0407f',
+					'button_end'     => '#1d4ed8',
 				);
 				break;
 
@@ -406,7 +406,7 @@ final class Delicat_Builder_V9_Schema {
 					'panel_bg'          => '#12131f',
 					'panel_border'      => '#2a2b45',
 					'panel_radius'      => 30,
-					'glow_color'        => '#6a4dff',
+					'glow_color'        => '#2563eb',
 					'glow_strength'     => 60,
 					'pattern_enabled'   => 1,
 					'eyebrow_color'     => '#d6ff3f',
@@ -423,7 +423,7 @@ final class Delicat_Builder_V9_Schema {
 					'card_text_color'   => '#ffffff',
 					'card_accent'       => '#d6ff3f',
 					'card_back_text'    => 'Delicat',
-					'card_back_bg'      => '#6f5cff',
+					'card_back_bg'      => '#2563eb',
 					'badge_enabled'     => 1,
 					'badge_icon'        => 'star',
 					'rings_enabled'     => 1,
@@ -444,7 +444,7 @@ final class Delicat_Builder_V9_Schema {
 					'title_color'     => '#f8f8ff',
 					'text_color'      => '#989bad',
 					'accent_start'    => '#5964ff',
-					'accent_end'      => '#ee3ba8',
+					'accent_end'      => '#1d4ed8',
 					'card_radius'     => 28,
 				);
 				break;
@@ -457,7 +457,7 @@ final class Delicat_Builder_V9_Schema {
 					'subtitle_color' => '#989bad',
 					'accent_1'       => '#5964ff',
 					'accent_2'       => '#56d8f1',
-					'accent_3'       => '#ee5abd',
+					'accent_3'       => '#1d4ed8',
 					'items'          => "shield|Paiements sécurisés|100% fiables\nlightning|Livraison rapide|Délai selon le produit\nheadset|Support humain|Disponible pour vous aider",
 					'domain_label'   => 'delicastoreha.com',
 					'domain_url'     => 'https://delicastoreha.com',
@@ -616,8 +616,8 @@ final class Delicat_Builder_V9_Schema {
 					'bg_start'         => self::sanitize_color( (string) ( $content['bg_start'] ?? '#eceeff' ) ),
 					'bg_mid'           => self::sanitize_color( (string) ( $content['bg_mid'] ?? '#f6ecff' ) ),
 					'bg_end'           => self::sanitize_color( (string) ( $content['bg_end'] ?? '#ffe9f0' ) ),
-					'glow_1'           => self::sanitize_color( (string) ( $content['glow_1'] ?? '#7d6cff' ) ),
-					'glow_2'           => self::sanitize_color( (string) ( $content['glow_2'] ?? '#ff4d91' ) ),
+					'glow_1'           => self::sanitize_color( (string) ( $content['glow_1'] ?? '#2563eb' ) ),
+					'glow_2'           => self::sanitize_color( (string) ( $content['glow_2'] ?? '#1d4ed8' ) ),
 					'glow_3'           => self::sanitize_color( (string) ( $content['glow_3'] ?? '#28c8ff' ) ),
 					'glow_4'           => self::sanitize_color( (string) ( $content['glow_4'] ?? '#ffb547' ) ),
 					'glow_strength'    => self::clamp_int( $content['glow_strength'] ?? 36, 0, 100 ),
@@ -714,13 +714,13 @@ final class Delicat_Builder_V9_Schema {
 				return array(
 					'style'          => in_array( (string) ( $content['style'] ?? 'ultra' ), array( 'ultra', 'neon' ), true ) ? (string) ( $content['style'] ?? 'ultra' ) : 'ultra',
 					'eyebrow'        => self::plain( $content['eyebrow'] ?? 'Simple comme bonjour', 120 ),
-					'eyebrow_color'  => self::sanitize_color( (string) ( $content['eyebrow_color'] ?? '#6a5cff' ) ),
+					'eyebrow_color'  => self::sanitize_color( (string) ( $content['eyebrow_color'] ?? '#2563eb' ) ),
 					'ultra_bg'       => self::sanitize_color( (string) ( $content['ultra_bg'] ?? '#f4f3ff' ) ),
 					'ultra_border'   => self::sanitize_color( (string) ( $content['ultra_border'] ?? '#e6e4fb' ) ),
 					'ultra_title'    => self::sanitize_color( (string) ( $content['ultra_title'] ?? '#111827' ) ),
 					'ultra_text'     => self::sanitize_color( (string) ( $content['ultra_text'] ?? '#6b7280' ) ),
 					'ultra_icon_bg'  => self::sanitize_color( (string) ( $content['ultra_icon_bg'] ?? '#ffffff' ) ),
-					'ultra_icon'     => self::sanitize_color( (string) ( $content['ultra_icon'] ?? '#6a5cff' ) ),
+					'ultra_icon'     => self::sanitize_color( (string) ( $content['ultra_icon'] ?? '#2563eb' ) ),
 					'ultra_number'   => self::sanitize_color( (string) ( $content['ultra_number'] ?? '#dcdfe8' ) ),
 					'ultra_radius'   => self::clamp_int( $content['ultra_radius'] ?? 14, 8, 48 ),
 					'title'          => self::plain( $content['title'] ?? '', 180 ),
@@ -735,7 +735,7 @@ final class Delicat_Builder_V9_Schema {
 					'card_title'     => self::sanitize_color( (string) ( $content['card_title'] ?? '#f8f8ff' ) ),
 					'card_text'      => self::sanitize_color( (string) ( $content['card_text'] ?? '#989bad' ) ),
 					'accent_1'       => self::sanitize_color( (string) ( $content['accent_1'] ?? '#5964ff' ) ),
-					'accent_2'       => self::sanitize_color( (string) ( $content['accent_2'] ?? '#ee5abd' ) ),
+					'accent_2'       => self::sanitize_color( (string) ( $content['accent_2'] ?? '#1d4ed8' ) ),
 					'accent_3'       => self::sanitize_color( (string) ( $content['accent_3'] ?? '#56d8f1' ) ),
 					'card_gap'       => self::clamp_int( $content['card_gap'] ?? 18, 0, 48 ),
 					'card_radius'    => self::clamp_int( $content['card_radius'] ?? 30, 8, 48 ),
@@ -812,7 +812,7 @@ final class Delicat_Builder_V9_Schema {
 					'cta_bg_start'     => self::sanitize_color( (string) ( $content['cta_bg_start'] ?? '#ecebff' ) ),
 					'cta_bg_end'       => self::sanitize_color( (string) ( $content['cta_bg_end'] ?? '#fde7f0' ) ),
 					'cta_button_start' => self::sanitize_color( (string) ( $content['cta_button_start'] ?? '#5b5bd6' ) ),
-					'cta_button_end'   => self::sanitize_color( (string) ( $content['cta_button_end'] ?? '#e0407f' ) ),
+					'cta_button_end'   => self::sanitize_color( (string) ( $content['cta_button_end'] ?? '#1d4ed8' ) ),
 					'eyebrow'          => self::plain( $content['eyebrow'] ?? '', 120 ),
 					'title'            => self::plain( $content['title'] ?? '', 220 ),
 					'title_size_d'     => self::clamp_int( $content['title_size_d'] ?? 38, 18, 64 ),
@@ -838,7 +838,7 @@ final class Delicat_Builder_V9_Schema {
 					'title'          => self::plain( $content['title'] ?? '', 180 ),
 					'subtitle'       => self::plain( $content['subtitle'] ?? '', 240 ),
 					'align'          => in_array( (string) ( $content['align'] ?? 'left' ), array( 'left', 'center' ), true ) ? (string) $content['align'] : 'left',
-					'eyebrow_color'  => self::sanitize_color( (string) ( $content['eyebrow_color'] ?? '#6a5cff' ) ),
+					'eyebrow_color'  => self::sanitize_color( (string) ( $content['eyebrow_color'] ?? '#2563eb' ) ),
 					'title_color'    => self::sanitize_color( (string) ( $content['title_color'] ?? '#111827' ) ),
 					'subtitle_color' => self::sanitize_color( (string) ( $content['subtitle_color'] ?? '#6b7280' ) ),
 					'title_size_d'   => self::clamp_int( $content['title_size_d'] ?? 38, 18, 64 ),
@@ -857,7 +857,7 @@ final class Delicat_Builder_V9_Schema {
 					'button_text'    => self::plain( $content['button_text'] ?? '', 60 ),
 					'button_url'     => self::url( $content['button_url'] ?? '' ),
 					'button_start'   => self::sanitize_color( (string) ( $content['button_start'] ?? '#5b5bd6' ) ),
-					'button_end'     => self::sanitize_color( (string) ( $content['button_end'] ?? '#e0407f' ) ),
+					'button_end'     => self::sanitize_color( (string) ( $content['button_end'] ?? '#1d4ed8' ) ),
 				);
 
 			case 'bon_kliyan':
@@ -883,7 +883,7 @@ final class Delicat_Builder_V9_Schema {
 					'panel_bg'          => self::sanitize_color( (string) ( $content['panel_bg'] ?? '#12131f' ) ),
 					'panel_border'      => self::sanitize_color( (string) ( $content['panel_border'] ?? '#2a2b45' ) ),
 					'panel_radius'      => self::clamp_int( $content['panel_radius'] ?? 30, 8, 48 ),
-					'glow_color'        => self::sanitize_color( (string) ( $content['glow_color'] ?? '#6a4dff' ) ),
+					'glow_color'        => self::sanitize_color( (string) ( $content['glow_color'] ?? '#2563eb' ) ),
 					'glow_strength'     => self::clamp_int( $content['glow_strength'] ?? 60, 0, 100 ),
 					'pattern_enabled'   => ! isset( $content['pattern_enabled'] ) || self::truthy( $content['pattern_enabled'] ),
 					'eyebrow_color'     => self::sanitize_color( (string) ( $content['eyebrow_color'] ?? '#d6ff3f' ) ),
@@ -900,7 +900,7 @@ final class Delicat_Builder_V9_Schema {
 					'card_text_color'   => self::sanitize_color( (string) ( $content['card_text_color'] ?? '#ffffff' ) ),
 					'card_accent'       => self::sanitize_color( (string) ( $content['card_accent'] ?? '#d6ff3f' ) ),
 					'card_back_text'    => self::plain( $content['card_back_text'] ?? '', 40 ),
-					'card_back_bg'      => self::sanitize_color( (string) ( $content['card_back_bg'] ?? '#6f5cff' ) ),
+					'card_back_bg'      => self::sanitize_color( (string) ( $content['card_back_bg'] ?? '#2563eb' ) ),
 					'badge_enabled'     => ! isset( $content['badge_enabled'] ) || self::truthy( $content['badge_enabled'] ),
 					'badge_icon'        => self::plain( $content['badge_icon'] ?? 'star', 24 ),
 					'rings_enabled'     => ! isset( $content['rings_enabled'] ) || self::truthy( $content['rings_enabled'] ),
@@ -920,7 +920,7 @@ final class Delicat_Builder_V9_Schema {
 					'title_color'     => self::sanitize_color( (string) ( $content['title_color'] ?? '#f8f8ff' ) ),
 					'text_color'      => self::sanitize_color( (string) ( $content['text_color'] ?? '#989bad' ) ),
 					'accent_start'    => self::sanitize_color( (string) ( $content['accent_start'] ?? '#5964ff' ) ),
-					'accent_end'      => self::sanitize_color( (string) ( $content['accent_end'] ?? '#ee3ba8' ) ),
+					'accent_end'      => self::sanitize_color( (string) ( $content['accent_end'] ?? '#1d4ed8' ) ),
 					'card_radius'     => self::clamp_int( $content['card_radius'] ?? 28, 8, 48 ),
 				);
 
@@ -932,7 +932,7 @@ final class Delicat_Builder_V9_Schema {
 					'subtitle_color' => self::sanitize_color( (string) ( $content['subtitle_color'] ?? '#989bad' ) ),
 					'accent_1'       => self::sanitize_color( (string) ( $content['accent_1'] ?? '#5964ff' ) ),
 					'accent_2'       => self::sanitize_color( (string) ( $content['accent_2'] ?? '#56d8f1' ) ),
-					'accent_3'       => self::sanitize_color( (string) ( $content['accent_3'] ?? '#ee5abd' ) ),
+					'accent_3'       => self::sanitize_color( (string) ( $content['accent_3'] ?? '#1d4ed8' ) ),
 					'items'          => self::multiline( $content['items'] ?? '', 4000 ),
 					'domain_label'   => self::plain( $content['domain_label'] ?? '', 120 ),
 					'domain_url'     => self::url( $content['domain_url'] ?? '' ),

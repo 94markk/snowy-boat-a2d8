@@ -21,7 +21,7 @@ function delicat_builder_v9_menu_menu_builder_defaults() {
         'enabled' => 'yes', 'layout' => 'drawer', 'position' => 'left', 'width' => 390,
         'overlay_opacity' => 55, 'blur_strength' => 8, 'open_speed' => 280, 'close_on_overlay' => 'yes', 'body_scroll_lock' => 'yes', 'swipe_close' => 'yes',
         'menu_preset' => 'apple-glass', 'dark_model' => 'neo-glass', 'light_model' => 'soft-glass',
-        'primary' => '#8b5cf6', 'secondary' => '#ec4899', 'accent' => '#2f75ff', 'radius' => 24, 'item_radius' => 16, 'gap' => 10,
+        'primary' => '#2563eb', 'secondary' => '#1d4ed8', 'accent' => '#2f75ff', 'radius' => 24, 'item_radius' => 16, 'gap' => 10,
         'custom_header_enabled' => 'yes', 'custom_header_title' => 'Delicat Store Haiti', 'custom_header_subtitle' => 'Recharge rapide, simple et sécurisée', 'custom_header_image' => '', 'custom_header_url' => '/', 'custom_header_style' => 'glass', 'custom_header_align' => 'left', 'section_order' => 'custom_header,profile,wallet,quick,main,bonus,promo,social,footer',
         'show_profile' => 'yes', 'show_header_title' => 'yes', 'header_title' => '', 'header_subtitle' => '', 'profile_name' => 'Delicat Store Haiti', 'profile_email' => 'info@delicastoreha.com', 'profile_badge' => 'Premium', 'profile_initial' => 'D', 'profile_cover' => '', 'welcome_text' => '',
         'show_wallet' => 'yes', 'wallet_label' => 'Mon portefeuille', 'wallet_balance' => 'Auto', 'wallet_item_balance' => 'yes', 'wallet_url' => '/my-wallet/', 'recharge_url' => '/my-wallet/', 'loyalty_points' => '0',
@@ -43,16 +43,16 @@ function delicat_builder_v9_menu_menu_builder_defaults() {
 
 function delicat_builder_v9_menu_menu_builder_default_items() {
     return array(
-        array('title'=>'Accueil','subtitle'=>'Page principale','url'=>'/','icon'=>'dashicons-admin-home','image'=>'','color1'=>'#8b5cf6','color2'=>'#ec4899','badge'=>'','group'=>'main','visibility'=>'all'),
+        array('title'=>'Accueil','subtitle'=>'Page principale','url'=>'/','icon'=>'dashicons-admin-home','image'=>'','color1'=>'#2563eb','color2'=>'#1d4ed8','badge'=>'','group'=>'main','visibility'=>'all'),
         array('title'=>'Mon Portefeuille','subtitle'=>'Solde et recharge','url'=>'/my-wallet/','icon'=>'dashicons-portfolio','image'=>'','color1'=>'#4f46e5','color2'=>'#06b6d4','badge'=>'','group'=>'main','visibility'=>'logged_in'),
         array('title'=>'Recharger mon compte','subtitle'=>'Moncash / Natcash','url'=>'/my-wallet/','icon'=>'dashicons-money-alt','image'=>'','color1'=>'#06b6d4','color2'=>'#22c55e','badge'=>'','group'=>'main','visibility'=>'all'),
         array('title'=>'Réclamer votre PIN Free Fire','subtitle'=>'Copier et réclamer','url'=>'/free-fire-redeem/','icon'=>'dashicons-admin-network','image'=>'','color1'=>'#f59e0b','color2'=>'#fb7185','badge'=>'HOT','group'=>'main','visibility'=>'all'),
-        array('title'=>'FREE FIRE','subtitle'=>'Diamants instantanés','url'=>'/product-category/free-fire/','icon'=>'dashicons-games','image'=>'','color1'=>'#6366f1','color2'=>'#8b5cf6','badge'=>'GAME','group'=>'main','visibility'=>'all'),
-        array('title'=>'Rewards Program','subtitle'=>'Points et cadeaux','url'=>'/rewards/','icon'=>'dashicons-awards','image'=>'','color1'=>'#a855f7','color2'=>'#f97316','badge'=>'NEW','group'=>'bonus','visibility'=>'all'),
+        array('title'=>'FREE FIRE','subtitle'=>'Diamants instantanés','url'=>'/product-category/free-fire/','icon'=>'dashicons-games','image'=>'','color1'=>'#6366f1','color2'=>'#2563eb','badge'=>'GAME','group'=>'main','visibility'=>'all'),
+        array('title'=>'Rewards Program','subtitle'=>'Points et cadeaux','url'=>'/rewards/','icon'=>'dashicons-awards','image'=>'','color1'=>'#2563eb','color2'=>'#f97316','badge'=>'NEW','group'=>'bonus','visibility'=>'all'),
         array('title'=>'Meilleur client','subtitle'=>'Classement clients','url'=>'/program-bon-kliyan/','icon'=>'dashicons-star-filled','image'=>'','color1'=>'#f59e0b','color2'=>'#ef4444','badge'=>'HOT','group'=>'bonus','visibility'=>'all'),
         array('title'=>'Exchange USDT - USD','subtitle'=>'Services financiers','url'=>'/product-category/exchange/','icon'=>'dashicons-money-alt','image'=>'','color1'=>'#10b981','color2'=>'#06b6d4','badge'=>'','group'=>'bonus','visibility'=>'all'),
-        array('title'=>'Jeux Disponibles','subtitle'=>'Tous les jeux','url'=>'/product-category/jeux/','icon'=>'dashicons-games','image'=>'','color1'=>'#2563eb','color2'=>'#8b5cf6','badge'=>'','group'=>'bonus','visibility'=>'all'),
-        array('title'=>'Gift Card','subtitle'=>'Apple, Google, PSN','url'=>'/product-category/gift-card/','icon'=>'dashicons-awards','image'=>'','color1'=>'#ec4899','color2'=>'#f43f5e','badge'=>'','group'=>'bonus','visibility'=>'all'),
+        array('title'=>'Jeux Disponibles','subtitle'=>'Tous les jeux','url'=>'/product-category/jeux/','icon'=>'dashicons-games','image'=>'','color1'=>'#2563eb','color2'=>'#2563eb','badge'=>'','group'=>'bonus','visibility'=>'all'),
+        array('title'=>'Gift Card','subtitle'=>'Apple, Google, PSN','url'=>'/product-category/gift-card/','icon'=>'dashicons-awards','image'=>'','color1'=>'#1d4ed8','color2'=>'#f43f5e','badge'=>'','group'=>'bonus','visibility'=>'all'),
     );
 }
 
@@ -147,8 +147,8 @@ function delicat_builder_v9_menu_normalize_runtime_items($items) {
             'icon' => sanitize_html_class(delicat_builder_v9_menu_runtime_scalar($item['icon'] ?? 'dashicons-arrow-right-alt2', 'dashicons-arrow-right-alt2')),
             'image' => esc_url_raw(delicat_builder_v9_menu_runtime_scalar($item['image'] ?? '', '')),
             'attachment_id' => absint(is_numeric($item['attachment_id'] ?? null) ? $item['attachment_id'] : 0),
-            'color1' => sanitize_hex_color(delicat_builder_v9_menu_runtime_scalar($item['color1'] ?? '#8b5cf6', '#8b5cf6')) ?: '#8b5cf6',
-            'color2' => sanitize_hex_color(delicat_builder_v9_menu_runtime_scalar($item['color2'] ?? '#ec4899', '#ec4899')) ?: '#ec4899',
+            'color1' => sanitize_hex_color(delicat_builder_v9_menu_runtime_scalar($item['color1'] ?? '#2563eb', '#2563eb')) ?: '#2563eb',
+            'color2' => sanitize_hex_color(delicat_builder_v9_menu_runtime_scalar($item['color2'] ?? '#1d4ed8', '#1d4ed8')) ?: '#1d4ed8',
             'badge' => sanitize_text_field(delicat_builder_v9_menu_runtime_scalar($item['badge'] ?? '', '')),
             'group' => in_array($group, array('main','bonus','footer','quick'), true) ? $group : 'main',
             'visibility' => in_array($visibility, array('all','logged_in','logged_out'), true) ? $visibility : 'all',
@@ -237,8 +237,8 @@ function delicat_builder_v9_menu_menu_style_vars($s) {
     $gap = $bounded($s['gap'] ?? 10, 4, 24, 10);
     $desktop_pad = $bounded($s['desktop_padding'] ?? 24, 8, 40, 24);
     $mobile_pad = $bounded($s['mobile_padding'] ?? 16, 6, 28, 16);
-    $primary = sanitize_hex_color($s['primary'] ?? '#8b5cf6') ?: '#8b5cf6';
-    $secondary = sanitize_hex_color($s['secondary'] ?? '#ec4899') ?: '#ec4899';
+    $primary = sanitize_hex_color($s['primary'] ?? '#2563eb') ?: '#2563eb';
+    $secondary = sanitize_hex_color($s['secondary'] ?? '#1d4ed8') ?: '#1d4ed8';
     $accent = sanitize_hex_color($s['accent'] ?? '#2f75ff') ?: '#2f75ff';
     $mw = $mobile . $unit;
     return '--dsb-menu-width:'.$desktop.'px;--dsb-menu-tablet-width:'.$tablet.'px;--dsb-menu-mobile-width:'.esc_attr($mw).';--dsb-overlay-opacity:'.$overlay.';--dsb-menu-blur:'.$blur.'px;--dsb-menu-speed:'.$speed.'ms;--dsb-primary:'.esc_attr($primary).';--dsb-secondary:'.esc_attr($secondary).';--dsb-accent:'.esc_attr($accent).';--dsb-radius:'.$radius.'px;--dsb-item-radius:'.$item_radius.'px;--dsb-menu-gap:'.$gap.'px;--dsb-desktop-pad:'.$desktop_pad.'px;--dsb-mobile-pad:'.$mobile_pad.'px;';

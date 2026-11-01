@@ -333,7 +333,7 @@ final class Delicat_Builder_V9_Purchase_Native {
 				'native_cart'      => 1,
 				'native_checkout'  => 1,
 				'compact_checkout' => 0,
-				'accent_color'     => '#6d5dfc',
+				'accent_color'     => '#2563eb',
 				'max_width'        => 1200,
 			)
 		);
@@ -447,7 +447,7 @@ final class Delicat_Builder_V9_Purchase_Native {
 	 * a 2 KB inline sheet cannot be separated from the HTML it styles.
 	 */
 	private static function guest_gate_css(): string {
-		return 'body.dpn-checkout{--dpn-bg:#eef0f4;--dpn-card:#fff;--dpn-text:#171922;--dpn-muted:#737887;--dpn-line:#e5e7ed;--dpn-soft:#f7f8fa;--dpn-accent:#6d5dfc;--dpn-accent-rgb:109,93,252;--dpn-action-start:#5f51ef;--dpn-action-end:#ed23b2;--dpn-max:1200px;background:var(--dpn-bg)!important;color:var(--dpn-text)}'
+		return 'body.dpn-checkout{--dpn-bg:#eef0f4;--dpn-card:#fff;--dpn-text:#171922;--dpn-muted:#737887;--dpn-line:#e5e7ed;--dpn-soft:#f7f8fa;--dpn-accent:#2563eb;--dpn-accent-rgb:109,93,252;--dpn-action-start:#2563eb;--dpn-action-end:#1d4ed8;--dpn-max:1200px;background:var(--dpn-bg)!important;color:var(--dpn-text)}'
 			. 'body.dpn-checkout .delicat-native-page-main{box-sizing:border-box;width:min(var(--dpn-max,1200px),calc(100% - 28px));margin-inline:auto;padding-top:22px;padding-bottom:max(56px,calc(32px + env(safe-area-inset-bottom)))}'
 			. 'body.dpn-checkout .delicat-native-page-main>h1{display:none!important}'
 			. '.dpn-guest-gate,.dpn-guest-gate *{box-sizing:border-box;font-family:var(--delicat-font,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif)}'
@@ -456,17 +456,17 @@ final class Delicat_Builder_V9_Purchase_Native {
 			. '.dpn-guest-gate .dpn-checkout-title h1{margin:0;font-size:clamp(25px,3.2vw,30px);font-weight:800;line-height:1.08;letter-spacing:-.035em;color:var(--dpn-text,#171922)}'
 			. '.dpn-guest-gate .dpn-checkout-title p{margin:6px 0 0;font-size:14px;line-height:1.4;color:var(--dpn-muted,#737887)}'
 			. '.dpn-gate-card{width:100%;margin:0 auto;padding:24px 18px 20px;border:1px solid var(--dpn-line,#e5e7ed);border-radius:22px;background:var(--dpn-card,#fff);text-align:center;box-shadow:0 10px 28px rgba(16,24,40,.07)}'
-			. '.dpn-gate-mark{display:grid;place-items:center;width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:rgba(var(--dpn-accent-rgb,109,93,252),.12);color:var(--dpn-accent,#6d5dfc)}'
+			. '.dpn-gate-mark{display:grid;place-items:center;width:48px;height:48px;margin:0 auto 12px;border-radius:16px;background:rgba(var(--dpn-accent-rgb,109,93,252),.12);color:var(--dpn-accent,#2563eb)}'
 			. '.dpn-gate-mark svg{display:block!important;width:22px!important;height:22px!important;max-width:22px!important;max-height:22px!important;min-width:22px!important;min-height:22px!important;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}'
 			. '.dpn-gate-card h2{margin:0 0 7px;font-size:20px;font-weight:850;letter-spacing:-.02em;color:var(--dpn-text,#171922)}'
 			. '.dpn-gate-card>p{margin:0 auto 16px;max-width:34em;font-size:14px;line-height:1.5;color:var(--dpn-muted,#737887)}'
 			. '.dpn-gate-cart{margin:0 0 16px;padding:4px 13px;list-style:none;text-align:left;border:1px solid var(--dpn-line,#e5e7ed);border-radius:15px;background:var(--dpn-soft,#f7f8fa)}'
 			. '.dpn-gate-cart li{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin:0;padding:9px 0;border-bottom:1px dashed var(--dpn-line,#e5e7ed);font-size:13px;color:var(--dpn-text,#171922)}'
 			. '.dpn-gate-cart li:last-child{border-bottom:0}.dpn-gate-cart li em{font-style:normal;color:var(--dpn-muted,#737887)}.dpn-gate-cart li strong{white-space:nowrap}'
-			. '.dpn-gate-cart li.is-total{font-weight:800}.dpn-gate-cart li.is-total strong{font-size:16px;color:var(--dpn-accent,#6d5dfc)}'
-			. '.dpn-gate-cta{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;margin:0;padding:11px 17px;border:0;border-radius:16px;background:linear-gradient(135deg,var(--dpn-action-start,#5f51ef),var(--dpn-action-end,#ed23b2));color:#fff!important;font:inherit;font-size:15px;font-weight:800;line-height:1.2;text-decoration:none!important;cursor:pointer;box-shadow:0 10px 22px rgba(var(--dpn-accent-rgb,109,93,252),.24)}'
+			. '.dpn-gate-cart li.is-total{font-weight:800}.dpn-gate-cart li.is-total strong{font-size:16px;color:var(--dpn-accent,#2563eb)}'
+			. '.dpn-gate-cta{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;min-height:52px;margin:0;padding:11px 17px;border:0;border-radius:16px;background:linear-gradient(135deg,var(--dpn-action-start,#2563eb),var(--dpn-action-end,#1d4ed8));color:#fff!important;font:inherit;font-size:15px;font-weight:800;line-height:1.2;text-decoration:none!important;cursor:pointer;box-shadow:0 10px 22px rgba(var(--dpn-accent-rgb,109,93,252),.24)}'
 			. '.dpn-gate-cta svg{display:block!important;width:18px!important;height:18px!important;max-width:18px!important;max-height:18px!important;flex:0 0 18px!important;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}'
-			. '.dpn-gate-secondary{display:inline-block;margin:12px 0 0;font-size:13px;font-weight:700;color:var(--dpn-accent,#6d5dfc);text-decoration:none}'
+			. '.dpn-gate-secondary{display:inline-block;margin:12px 0 0;font-size:13px;font-weight:700;color:var(--dpn-accent,#2563eb);text-decoration:none}'
 			. '.dpn-gate-trust{display:flex;justify-content:center;gap:5px 12px;flex-wrap:wrap;margin:12px 0 0;font-size:11px;line-height:1.35;color:var(--dpn-muted,#737887)}'
 			. '.dpn-gate-trust span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}'
 			. '.dpn-gate-trust span>svg{display:block!important;width:12px!important;height:12px!important;max-width:12px!important;max-height:12px!important;min-width:12px!important;min-height:12px!important;flex:0 0 12px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important;stroke-linecap:round;stroke-linejoin:round}'
@@ -682,10 +682,10 @@ final class Delicat_Builder_V9_Purchase_Native {
 		$action_text = $luminance > 0.68 ? '#171922' : '#ffffff';
 		$action_start = $soft;
 		$action_end   = $accent;
-		if ( '#6d5dfc' === strtolower( $accent ) ) {
+		if ( '#2563eb' === strtolower( $accent ) ) {
 			/* Preserve the established Delicat purple-to-pink brand treatment. */
-			$action_start = '#5f51ef';
-			$action_end   = '#ed23b2';
+			$action_start = '#2563eb';
+			$action_end   = '#1d4ed8';
 		}
 
 		return sprintf(

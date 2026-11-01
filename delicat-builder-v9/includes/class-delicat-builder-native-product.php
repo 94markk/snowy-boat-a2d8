@@ -176,7 +176,7 @@ final class Delicat_Builder_V9_Native_Product {
 		return array(
 			'enabled' => 1, 'force_native_template' => 1, 'max_width' => 1120,
 			'page_bg' => '#f6f7fb', 'card_bg' => '#ffffff', 'text' => '#111827', 'muted' => '#667085',
-			'primary' => '#6846ff', 'accent' => '#ff365d', 'line' => '#e7e9f2', 'radius' => 24,
+			'primary' => '#2563eb', 'accent' => '#ff365d', 'line' => '#e7e9f2', 'radius' => 24,
 			'show_breadcrumbs' => 0, 'show_short_desc' => 1, 'show_price' => 1, 'show_stock' => 1,
 			'show_details' => 1, 'show_related' => 1, 'show_trust' => 1, 'show_steps' => 1, 'show_mobile_dock' => 1, 'mobile_floating_only' => 1, 'hide_quantity' => 1, 'express_checkout' => 1, 'show_reviews' => 1,
 			'section_title' => 'Choisissez votre option', 'details_title' => 'Détails du produit',
@@ -268,7 +268,7 @@ final class Delicat_Builder_V9_Native_Product {
 		$vars = array(
 			'--dnp-bg' => sanitize_hex_color($s['page_bg']) ?: '#f6f7fb', '--dnp-card' => sanitize_hex_color($s['card_bg']) ?: '#fff',
 			'--dnp-text' => sanitize_hex_color($s['text']) ?: '#111827', '--dnp-muted' => sanitize_hex_color($s['muted']) ?: '#667085',
-			'--dnp-primary' => sanitize_hex_color($s['primary']) ?: '#6846ff', '--dnp-accent' => sanitize_hex_color($s['accent']) ?: '#ff365d',
+			'--dnp-primary' => sanitize_hex_color($s['primary']) ?: '#2563eb', '--dnp-accent' => sanitize_hex_color($s['accent']) ?: '#ff365d',
 			'--dnp-line' => sanitize_hex_color($s['line']) ?: '#e7e9f2', '--dnp-radius' => min(40,max(10,absint($s['radius']))).'px',
 			'--dnp-max' => min(1440,max(720,absint($s['max_width']))).'px',
 		);

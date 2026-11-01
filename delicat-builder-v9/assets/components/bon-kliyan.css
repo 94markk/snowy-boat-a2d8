@@ -1,7 +1,7 @@
 /* RC61 "Programme Bon Kliyan" — dark loyalty panel. Every colour, size and text comes from the section fields via custom properties; the card float is CSS keyframes on static markup. */
 .delicat-bk,.delicat-bk *,.delicat-bk *::before,.delicat-bk *::after{box-sizing:border-box}
 .delicat-bk{position:relative;display:grid;grid-template-columns:minmax(0,1fr);gap:26px;overflow:hidden;isolation:isolate;width:100%;padding:44px 26px 30px;border:1px solid var(--dbv9-bk-border,#2a2b45);border-radius:var(--dbv9-bk-radius,30px);background:var(--dbv9-bk-bg,#12131f);color:var(--dbv9-bk-title,#fff);box-shadow:0 22px 50px rgba(6,8,28,.28);contain:layout paint style}
-.delicat-bk::before{content:"";position:absolute;z-index:-2;inset:-20%;pointer-events:none;background:radial-gradient(circle at 78% 26%,var(--dbv9-bk-glow,#6a4dff),transparent 34%);opacity:var(--dbv9-bk-glow-a,.6)}
+.delicat-bk::before{content:"";position:absolute;z-index:-2;inset:-20%;pointer-events:none;background:radial-gradient(circle at 78% 26%,var(--dbv9-bk-glow,var(--ds-color-primary,#2563eb)),transparent 34%);opacity:var(--dbv9-bk-glow-a,.6)}
 .delicat-bk.has-pattern::after{content:"";position:absolute;z-index:-1;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.11) 1px,transparent 1.5px) 0 0/22px 22px;opacity:.9;-webkit-mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 92%);mask-image:radial-gradient(circle at 50% 40%,#000 30%,transparent 92%)}
 .delicat-bk__copy{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;min-width:0;text-align:center}
 .delicat-bk--left .delicat-bk__copy{align-items:flex-start;text-align:left}
@@ -30,7 +30,7 @@
 .delicat-bk__ring--1{width:300px;height:300px}
 .delicat-bk__ring--2{width:210px;height:210px;opacity:.10}
 .delicat-bk__card{--dbv9-bk-rot:0deg;position:absolute;top:50%;left:50%;display:flex;flex-direction:column;width:var(--dbv9-bk-card-w);height:var(--dbv9-bk-card-h);margin:calc(var(--dbv9-bk-card-h) / -2) 0 0 calc(min(300px,100%) / -2);padding:22px 24px;border-radius:22px;transform:translate3d(0,0,0) rotate(var(--dbv9-bk-rot));backface-visibility:hidden}
-.delicat-bk__card--back{--dbv9-bk-rot:-13deg;justify-content:flex-start;margin-top:calc(var(--dbv9-bk-card-h) / -2 - 26px);margin-left:calc(min(300px,100%) / -2 - 34px);background:var(--dbv9-bk-card-back,#6f5cff);box-shadow:0 22px 44px rgba(0,0,0,.35)}
+.delicat-bk__card--back{--dbv9-bk-rot:-13deg;justify-content:flex-start;margin-top:calc(var(--dbv9-bk-card-h) / -2 - 26px);margin-left:calc(min(300px,100%) / -2 - 34px);background:var(--dbv9-bk-card-back,var(--ds-color-primary,#2563eb));box-shadow:0 22px 44px rgba(0,0,0,.35)}
 .delicat-bk__card-brand{color:rgba(255,255,255,.34);font-size:15px;font-weight:800;letter-spacing:.34em;text-transform:uppercase}
 .delicat-bk__card--front{--dbv9-bk-rot:6deg;margin-top:calc(var(--dbv9-bk-card-h) / -2 + 20px);margin-left:calc(min(300px,100%) / -2 + 22px);border:1px solid rgba(255,255,255,.09);background:var(--dbv9-bk-card-bg,#1b1c2e);color:var(--dbv9-bk-card-text,#fff);box-shadow:0 30px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08)}
 .delicat-bk__card-sheen{position:absolute;inset:0;border-radius:inherit;background:linear-gradient(118deg,rgba(255,255,255,.09),transparent 42%,transparent 70%,rgba(255,255,255,.04));pointer-events:none}

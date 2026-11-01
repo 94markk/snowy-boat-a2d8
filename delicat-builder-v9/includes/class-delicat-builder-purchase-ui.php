@@ -43,7 +43,7 @@ final class Delicat_Builder_V9_Purchase_UI {
 			'native_cart'          => 1,
 			'native_checkout'      => 1,
 			'compact_checkout'     => 0,
-			'accent_color'         => '#6d5dfc',
+			'accent_color'         => '#2563eb',
 			'max_width'            => 1200,
 			'mobile_dock_label'    => __( 'Acheter maintenant', 'delicat-builder-v9' ),
 		);
@@ -184,7 +184,7 @@ final class Delicat_Builder_V9_Purchase_UI {
 					DELICAT_BUILDER_V9_VERSION
 				);
 
-				$accent = sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#6d5dfc' ) ) ?: '#6d5dfc';
+				$accent = sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb';
 				$max = self::max_width( $settings['max_width'] ?? 1200 );
 				wp_add_inline_style(
 					'delicat-builder-v9-purchase-ui',

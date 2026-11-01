@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.5.2
+ * Version:     6.6.0
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
@@ -25,7 +25,7 @@ if ( ! defined( 'DELICAT_VERSION' ) ) {
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.5.2' );
+    define( 'DELICAT_ASSET_VERSION', '6.6.0' );
 }
 if ( ! function_exists( 'delicat_recharge_finish_request' ) ) {
     /**
@@ -246,8 +246,8 @@ add_action( 'wp_head', function () {
         --delicat-ink:#070b3f!important;
         --delicat-blue:#2778ff!important;
         --delicat-cyan:#65d4ff!important;
-        --delicat-violet:#7b4dff!important;
-        --delicat-pink:#ff5bbd!important;
+        --delicat-violet:#2563eb!important;
+        --delicat-pink:#1d4ed8!important;
         --delicat-orange:#ff9f5a!important;
         --delicat-glass:rgba(255,255,255,.76)!important;
         --delicat-line:rgba(100,112,220,.18)!important;
@@ -256,11 +256,11 @@ add_action( 'wp_head', function () {
     .dmc{max-width:1000px!important;margin:0 auto!important;position:relative!important;isolation:isolate!important;}
     .dmc:before,.dsm:before,.dr-wrap:before{
         content:""!important;position:absolute!important;inset:-34px!important;border-radius:36px!important;z-index:-2!important;pointer-events:none!important;
-        background:radial-gradient(circle at 6% 12%,rgba(99,211,255,.34) 0 9%,transparent 20%),radial-gradient(circle at 92% 14%,rgba(255,118,190,.24) 0 11%,transparent 24%),radial-gradient(circle at 72% 94%,rgba(126,82,255,.2) 0 12%,transparent 25%),linear-gradient(135deg,#f8fbff 0%,#fff 42%,#f7f1ff 100%)!important;
+        background:radial-gradient(circle at 6% 12%,rgba(99,211,255,.34) 0 9%,transparent 20%),radial-gradient(circle at 92% 14%,rgba(29,78,216,.24) 0 11%,transparent 24%),radial-gradient(circle at 72% 94%,rgba(37,99,235,.2) 0 12%,transparent 25%),linear-gradient(135deg,#f8fbff 0%,#fff 42%,#f7f1ff 100%)!important;
     }
     .dmc-hero{
         border-radius:32px!important;padding:30px!important;color:var(--delicat-ink)!important;overflow:hidden!important;position:relative!important;
-        background:radial-gradient(circle at 8% 16%,rgba(105,213,255,.42),transparent 28%),radial-gradient(circle at 86% 18%,rgba(255,130,199,.32),transparent 30%),radial-gradient(circle at 66% 100%,rgba(125,88,255,.24),transparent 35%),linear-gradient(135deg,rgba(255,255,255,.9),rgba(242,248,255,.7))!important;
+        background:radial-gradient(circle at 8% 16%,rgba(105,213,255,.42),transparent 28%),radial-gradient(circle at 86% 18%,rgba(29,78,216,.32),transparent 30%),radial-gradient(circle at 66% 100%,rgba(37,99,235,.24),transparent 35%),linear-gradient(135deg,rgba(255,255,255,.9),rgba(242,248,255,.7))!important;
         border:1px solid rgba(255,255,255,.86)!important;box-shadow:var(--delicat-shadow),inset 0 1px 0 rgba(255,255,255,.92)!important;
         backdrop-filter:blur(24px) saturate(165%)!important;-webkit-backdrop-filter:blur(24px) saturate(165%)!important;
     }
@@ -274,7 +274,7 @@ add_action( 'wp_head', function () {
     .dmc-btn-light,.dmc-btn-solid,.dsm-btn-solid{background:linear-gradient(135deg,var(--delicat-blue),var(--delicat-violet),var(--delicat-pink))!important;color:#fff!important;}
     .dmc-btn-ghost,.dsm-btn-ghost{background:rgba(255,255,255,.66)!important;color:#17205a!important;backdrop-filter:blur(14px)!important;-webkit-backdrop-filter:blur(14px)!important;}
     .dmc-stat,.dmc-recent,.dmc-card,.dsm-card,.dpc{border-radius:24px!important;background:linear-gradient(145deg,rgba(255,255,255,.82),rgba(248,251,255,.62))!important;border:1px solid rgba(255,255,255,.86)!important;box-shadow:0 18px 45px rgba(49,61,136,.1),inset 0 1px 0 rgba(255,255,255,.95)!important;backdrop-filter:blur(18px) saturate(155%)!important;-webkit-backdrop-filter:blur(18px) saturate(155%)!important;}
-    .dsm-codecard{border-radius:26px!important;background:linear-gradient(135deg,#287dff 0%,#7550ff 48%,#ff5abd 78%,#ff9a5b 100%)!important;color:#fff!important;box-shadow:0 20px 48px rgba(109,81,255,.28),inset 0 1px 0 rgba(255,255,255,.34)!important;position:relative!important;overflow:hidden!important;}
+    .dsm-codecard{border-radius:26px!important;background:linear-gradient(135deg,#287dff 0%,#2563eb 48%,#1d4ed8 78%,#ff9a5b 100%)!important;color:#fff!important;box-shadow:0 20px 48px rgba(37,99,235,.28),inset 0 1px 0 rgba(255,255,255,.34)!important;position:relative!important;overflow:hidden!important;}
     .dsm-codecard:after{content:""!important;position:absolute!important;right:-34px!important;top:-42px!important;width:145px!important;height:145px!important;border-radius:50%!important;background:rgba(255,255,255,.18)!important;box-shadow:-180px 135px 0 rgba(255,255,255,.1)!important;}
     .dsm-codecard>*{position:relative!important;z-index:1!important;}
     .dsm-input{border-radius:17px!important;background:rgba(255,255,255,.82)!important;border:1px solid rgba(107,122,180,.18)!important;}

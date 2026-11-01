@@ -2,10 +2,15 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.15.4
+Stable tag: 6.16.0
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.16.0 ==
+
+* Delicat Design System 2.0 : les couleurs du compte, de la connexion, des Passkeys et du tableau de bord suivent les jetons de design du Builder 9.6.0 (bleu #2563EB, bleu nuit du logo, mêmes textes et contours en clair et en sombre). Sans le Builder, les anciennes couleurs restent en secours.
+* Plus de violet ni de rose dans les écrans du compte ; police unique Inter.
 
 == Version 6.15.4 ==
 

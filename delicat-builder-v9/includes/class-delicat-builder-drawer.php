@@ -159,7 +159,7 @@ final class Delicat_Builder_V9_Drawer {
 			$badge = trim( (string) ( $it['badge'] ?? '' ) );
 			$html .= '<li><a class="dlx-item' . ( $current ? ' is-current' : '' ) . '" href="' . esc_url( $url ) . '"' . ( $current ? ' aria-current="page"' : '' )
 				. ' data-dlx-filter="' . esc_attr( strtolower( wp_strip_all_tags( (string) ( $it['title'] ?? '' ) . ' ' . $sub ) ) ) . '"'
-				. ' style="--i1:' . esc_attr( self::hex( $it['color1'] ?? '', '#6d5dfc' ) ) . ';--i2:' . esc_attr( self::hex( $it['color2'] ?? '', '#ec4899' ) ) . '">'
+				. ' style="--i1:' . esc_attr( self::hex( $it['color1'] ?? '', '#2563eb' ) ) . ';--i2:' . esc_attr( self::hex( $it['color2'] ?? '', '#1d4ed8' ) ) . '">'
 				. '<span class="dlx-item__icon" aria-hidden="true">' . self::item_icon( $it ) . '</span>'
 				. '<span class="dlx-item__copy"><strong>' . self::tokens( esc_html( (string) ( $it['title'] ?? '' ) ) ) . '</strong>'
 				. ( '' !== $sub ? '<small>' . self::tokens( esc_html( $sub ) ) . '</small>' : '' ) . '</span>'
@@ -341,8 +341,8 @@ final class Delicat_Builder_V9_Drawer {
 		}
 		self::$rendered = true;
 		$s        = self::settings();
-		$primary  = self::hex( $s['primary'] ?? '', '#8b5cf6' );
-		$second   = self::hex( $s['secondary'] ?? '', '#ec4899' );
+		$primary  = self::hex( $s['primary'] ?? '', '#2563eb' );
+		$second   = self::hex( $s['secondary'] ?? '', '#1d4ed8' );
 		$accent   = self::hex( $s['accent'] ?? '', '#2f75ff' );
 		$radius   = max( 12, min( 32, (int) ( $s['radius'] ?? 24 ) ) );
 		$item_r   = max( 10, min( 24, (int) ( $s['item_radius'] ?? 16 ) ) );

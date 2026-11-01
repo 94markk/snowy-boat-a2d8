@@ -184,7 +184,7 @@ html.delicat-placeholder {
   line-height: 1.2;
 }
 .dph__price {
-  color: var(--dn-primary, #6755f5);
+  color: var(--dn-primary, var(--ds-color-primary,#2563eb));
   margin: 0;
   font-size: 18px;
   font-weight: 800;
@@ -645,7 +645,7 @@ html .dlx-drawer .dlx-social__link.is-telegram {
   color: #2aabee !important;
 }
 html .dlx-drawer .dlx-social__link.is-instagram {
-  color: #e1306c !important;
+  color: var(--ds-color-primary-hover,#1d4ed8) !important;
 }
 html .dlx-drawer .dlx-social__link.is-facebook {
   color: #1877f2 !important;

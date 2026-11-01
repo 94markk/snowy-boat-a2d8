@@ -368,9 +368,9 @@ final class Delicat_Builder_V9_Carousel {
 			'name_t'     => 17,
 			'name_m'     => 16,
 			'badge_bg'   => '#e9ddff',
-			'badge_text' => '#6540d9',
+			'badge_text' => '#2563eb',
 			'heart_bg'   => '#ffffff',
-			'heart_color'=> '#ff4d91',
+			'heart_color'=> '#1d4ed8',
 			'heart_icon' => 'heart',
 		);
 
@@ -383,9 +383,9 @@ final class Delicat_Builder_V9_Carousel {
 		$product_name_t = $product_name_t > 0 ? $product_name_t : absint( $design['name_t'] ?? 17 );
 		$product_name_m = $product_name_m > 0 ? $product_name_m : absint( $design['name_m'] ?? 16 );
 		$badge_bg = $badge_bg ?: ( sanitize_hex_color( (string) ( $design['badge_bg'] ?? '#e9ddff' ) ) ?: '#e9ddff' );
-		$badge_text = $badge_text ?: ( sanitize_hex_color( (string) ( $design['badge_text'] ?? '#6540d9' ) ) ?: '#6540d9' );
+		$badge_text = $badge_text ?: ( sanitize_hex_color( (string) ( $design['badge_text'] ?? '#2563eb' ) ) ?: '#2563eb' );
 		$heart_bg = $heart_bg ?: ( sanitize_hex_color( (string) ( $design['heart_bg'] ?? '#ffffff' ) ) ?: '#ffffff' );
-		$heart_color = $heart_color ?: ( sanitize_hex_color( (string) ( $design['heart_color'] ?? '#ff4d91' ) ) ?: '#ff4d91' );
+		$heart_color = $heart_color ?: ( sanitize_hex_color( (string) ( $design['heart_color'] ?? '#1d4ed8' ) ) ?: '#1d4ed8' );
 		if ( 'inherit' === $heart_icon && ! empty( $design['heart_icon'] ) ) {
 			$heart_icon = sanitize_key( (string) $design['heart_icon'] );
 		}

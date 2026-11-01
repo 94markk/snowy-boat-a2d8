@@ -540,7 +540,7 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 			$theme = in_array( $theme, array( 'light', 'dark', 'system' ), true ) ? $theme : 'light';
 			$max = absint( $v['max_width'] ?? 1320 );
 			$max = in_array( $max, array( 1200, 1320, 1440 ), true ) ? $max : 1320;
-			$accent = sanitize_hex_color( (string) ( $v['accent_color'] ?? '#6d5dfc' ) ) ?: '#6d5dfc';
+			$accent = sanitize_hex_color( (string) ( $v['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb';
 			$logo_id = absint( $v['logo_id'] ?? 0 );
 			$menu_id = absint( $v['menu_id'] ?? 0 );
 			$legacy_footer_menu_id = absint( $v['footer_menu_id'] ?? 0 );
@@ -618,7 +618,7 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 				'sticky_summary'       => empty( $v['sticky_summary'] ) ? 0 : 1,
 				'single_image_preload' => empty( $v['single_image_preload'] ) ? 0 : 1,
 				'max_width'            => Delicat_Builder_V9_Woo_UI::max_width( $v['max_width'] ?? 1320 ),
-				'accent_color'         => sanitize_hex_color( (string) ( $v['accent_color'] ?? '#6d5dfc' ) ) ?: '#6d5dfc',
+				'accent_color'         => sanitize_hex_color( (string) ( $v['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb',
 				'compact_mobile'       => empty( $v['compact_mobile'] ) ? 0 : 1,
 			);
 		}
@@ -636,7 +636,7 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 				'cart_style'           => empty( $v['cart_style'] ) ? 0 : 1,
 				'checkout_style'       => empty( $v['checkout_style'] ) ? 0 : 1,
 				'compact_checkout'     => empty( $v['compact_checkout'] ) ? 0 : 1,
-				'accent_color'         => sanitize_hex_color( (string) ( $v['accent_color'] ?? '#6d5dfc' ) ) ?: '#6d5dfc',
+				'accent_color'         => sanitize_hex_color( (string) ( $v['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb',
 				'max_width'            => Delicat_Builder_V9_Purchase_UI::max_width( $v['max_width'] ?? 1200 ),
 				'mobile_dock_label'    => $label ?: __( 'Acheter maintenant', 'delicat-builder-v9' ),
 			);
@@ -665,8 +665,8 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 				'selected_page_id'    => absint( $v['selected_page_id'] ?? 0 ),
 				'preset'              => in_array( $v['preset'] ?? '', array( 'modern_store', 'clean_luxe', 'gaming_glow', 'neon_luxe', 'neo_glass', 'lovable_reference' ), true ) ? $v['preset'] : 'modern_store',
 				'carousel_style'      => in_array( $v['carousel_style'] ?? '', array( 'default', 'neon_luxe', 'neo_glass' ), true ) ? $v['carousel_style'] : 'default',
-				'primary_color'       => sanitize_hex_color( (string) ( $v['primary_color'] ?? '#7c3aed' ) ) ?: '#7c3aed',
-				'secondary_color'     => sanitize_hex_color( (string) ( $v['secondary_color'] ?? '#ec4899' ) ) ?: '#ec4899',
+				'primary_color'       => sanitize_hex_color( (string) ( $v['primary_color'] ?? '#2563eb' ) ) ?: '#2563eb',
+				'secondary_color'     => sanitize_hex_color( (string) ( $v['secondary_color'] ?? '#1d4ed8' ) ) ?: '#1d4ed8',
 				'accent_color'        => sanitize_hex_color( (string) ( $v['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb',
 				'surface_color'       => sanitize_hex_color( (string) ( $v['surface_color'] ?? '#ffffff' ) ) ?: '#ffffff',
 				'page_tint'           => sanitize_hex_color( (string) ( $v['page_tint'] ?? '#f3f5ff' ) ) ?: '#f3f5ff',
@@ -686,9 +686,9 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 				'product_name_t'      => min( 36, max( 10, absint( $v['product_name_t'] ?? 17 ) ) ),
 				'product_name_m'      => min( 32, max( 10, absint( $v['product_name_m'] ?? 16 ) ) ),
 				'badge_bg'            => sanitize_hex_color( (string) ( $v['badge_bg'] ?? '#e9ddff' ) ) ?: '#e9ddff',
-				'badge_text'          => sanitize_hex_color( (string) ( $v['badge_text'] ?? '#6540d9' ) ) ?: '#6540d9',
+				'badge_text'          => sanitize_hex_color( (string) ( $v['badge_text'] ?? '#2563eb' ) ) ?: '#2563eb',
 				'heart_bg'            => sanitize_hex_color( (string) ( $v['heart_bg'] ?? '#ffffff' ) ) ?: '#ffffff',
-				'heart_color'         => sanitize_hex_color( (string) ( $v['heart_color'] ?? '#ff4d91' ) ) ?: '#ff4d91',
+				'heart_color'         => sanitize_hex_color( (string) ( $v['heart_color'] ?? '#1d4ed8' ) ) ?: '#1d4ed8',
 				'heart_icon'          => in_array( $v['heart_icon'] ?? '', array( 'heart', 'heart_outline', 'star', 'bolt' ), true ) ? $v['heart_icon'] : 'heart',
 				'radius'              => min( 32, max( 12, absint( $v['radius'] ?? 22 ) ) ),
 				'carousel_cta'        => empty( $v['carousel_cta'] ) ? 0 : 1,

@@ -60,8 +60,8 @@ final class Delicat_Builder_V9_Shell {
 			'show_theme_toggle' => 1,
 			'mobile_bottom_nav' => 0,
 			'mobile_nav_scope'  => 'all_frontend',
-			'theme_default'     => 'light',
-			'accent_color'      => '#6d5dfc',
+			'theme_default'     => 'system',
+			'accent_color'      => '#2563eb',
 			'max_width'         => 1320,
 			'announcement_text' => '',
 			'announcement_url'  => '',
@@ -938,7 +938,7 @@ final class Delicat_Builder_V9_Shell {
 		self::$mobile_nav_rendered = true;
 
 		$settings = self::settings();
-		$accent = sanitize_hex_color( (string) ( $settings['accent_color'] ?? '' ) ) ?: '#c72e69';
+		$accent = sanitize_hex_color( (string) ( $settings['accent_color'] ?? '' ) ) ?: '#1d4ed8';
 		$cart_count = self::cart_count();
 
 		ob_start();
@@ -996,7 +996,7 @@ final class Delicat_Builder_V9_Shell {
 		) {
 			$settings['announcement_text'] = '';
 		}
-		$accent   = sanitize_hex_color( (string) $settings['accent_color'] ) ?: '#6d5dfc';
+		$accent   = sanitize_hex_color( (string) $settings['accent_color'] ) ?: '#2563eb';
 		$max      = in_array( (int) $settings['max_width'], array( 1200, 1320, 1440 ), true ) ? (int) $settings['max_width'] : 1320;
 		$sticky   = ! empty( $settings['sticky'] );
 		$menu_id  = absint( $settings['menu_id'] );

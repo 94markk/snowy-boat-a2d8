@@ -50,7 +50,7 @@ final class Delicat_Builder_V9_Header_Studio_8 {
             'content_width' => 1440, 'side_padding' => 24, 'mobile_padding' => 12,
             'item_gap' => 12, 'mobile_gap' => 6, 'action_size' => 44, 'icon_size' => 27,
             'avatar_size' => 38, 'border_radius' => 0, 'floating_margin' => 12,
-            'accent' => '#c72e69', 'background' => '#ffffff', 'text_color' => '#111827',
+            'accent' => '#1d4ed8', 'background' => '#ffffff', 'text_color' => '#111827',
             'shadow_strength' => 9, 'border_color' => '#e8ebf0', 'dark_logo_id' => 0,
             'dark_wordmark' => 1, 'dark_wordmark_top' => '', 'dark_wordmark_sub' => '',
             'search_placeholder' => 'Rechercher un produit, un jeu…',
@@ -180,8 +180,8 @@ final class Delicat_Builder_V9_Header_Studio_8 {
     public function theme_boot() {
         if (is_admin() || !self::should_auto_render()) return;
         $shell = get_option('delicat_builder_v9_shell', array());
-        $default = is_array($shell) ? (string) ($shell['theme_default'] ?? 'light') : 'light';
-        if (!in_array($default, array('light','dark','system'), true)) $default = 'light';
+        $default = is_array($shell) ? (string) ($shell['theme_default'] ?? 'system') : 'system';
+        if (!in_array($default, array('light','dark','system'), true)) $default = 'system';
         ?>
         <?php /* 9.4.3: the page handles dark mode itself, so an Android WebView with automatic darkening leaves it alone. */ ?>
         <meta name="color-scheme" content="light dark">

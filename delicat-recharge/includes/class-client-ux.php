@@ -200,7 +200,7 @@ class Delicat_Client_Ux {
             html.dlc-theme-dark .dx-ok { background:rgba(66,213,156,.14); color:#7beab9; }
             html.dlc-theme-dark .dx-no { background:rgba(255,123,134,.14); color:#ffb3ba; }
             html.dlc-theme-dark .dx-wait { background:rgba(255,159,90,.14); color:#ffc08a; }
-            html.dlc-theme-dark .dx-wrap a.dx-recu-btn { background:linear-gradient(115deg,#3a5fe0,#8350e6); color:#fff; }
+            html.dlc-theme-dark .dx-wrap a.dx-recu-btn { background:linear-gradient(115deg,#3a5fe0,#2563eb); color:#fff; }
         </style>';
     }
 }

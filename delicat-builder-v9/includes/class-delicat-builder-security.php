@@ -1125,7 +1125,7 @@ add_action( 'woocommerce_after_order_itemmeta', static function ( $item_id, $ite
 	if ( ! is_string( $raw ) || '' === $raw ) { return; }
 	$fields = json_decode( $raw, true );
 	if ( ! is_array( $fields ) || ! $fields ) { return; }
-	echo '<div class="delicat-secure-order-fields" style="margin:8px 0;padding:9px 11px;border-left:3px solid #6846ff;background:#f7f5ff"><strong>' . esc_html__( 'Informations sécurisées de livraison', 'delicat-builder-v9' ) . '</strong>';
+	echo '<div class="delicat-secure-order-fields" style="margin:8px 0;padding:9px 11px;border-left:3px solid #2563eb;background:#f7f5ff"><strong>' . esc_html__( 'Informations sécurisées de livraison', 'delicat-builder-v9' ) . '</strong>';
 	$unreadable = false;
 	foreach ( $fields as $field ) {
 		if ( ! is_array( $field ) ) { continue; }

@@ -1378,7 +1378,7 @@ final class Delicat_Builder_V9_Swatches {
         form.variations_form .ddsw-check{display:none;position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:#fff;color:#284696;font-weight:900;line-height:22px;text-align:center}
         form.variations_form .ddsw-card.has-badge2 .ddsw-check{top:8px}
         form.variations_form .ddsw-card.is-selected .ddsw-check{display:block}
-        form.variations_form .ddsw-reset{align-self:flex-start;border:0!important;background:transparent!important;color:#b42357!important;padding:0!important;margin:0!important;font-size:13px!important;cursor:pointer!important}
+        form.variations_form .ddsw-reset{align-self:flex-start;border:0!important;background:transparent!important;color:#1d4ed8!important;padding:0!important;margin:0!important;font-size:13px!important;cursor:pointer!important}
         form.variations_form.ddsw-ready table.variations,
         form.variations_form>.ddsw-root[data-hide-native="yes"]~table.variations,
         form.variations_form .ddsw-root[data-hide-native="yes"]+table.variations,

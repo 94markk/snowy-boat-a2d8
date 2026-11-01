@@ -1026,7 +1026,7 @@ final class Delicat_Builder_V9_Engine {
 			return $classes;
 		}
 		$shell   = get_option( 'delicat_builder_v9_shell', array() );
-		$default = is_array( $shell ) ? (string) ( $shell['theme_default'] ?? 'light' ) : 'light';
+		$default = is_array( $shell ) ? (string) ( $shell['theme_default'] ?? 'system' ) : 'system';
 		if ( ! in_array( $default, array( 'light', 'dark' ), true ) ) {
 			return $classes; /* "system": the device decides */
 		}

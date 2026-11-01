@@ -92,7 +92,7 @@ final class Delicat_Builder_V9_Woo_UI {
 			'single_variation_style' => 'cards',
 			'single_button_full_width' => 1,
 			'max_width'            => 1320,
-			'accent_color'         => '#6d5dfc',
+			'accent_color'         => '#2563eb',
 			'compact_mobile'       => 1,
 		);
 	}
@@ -685,7 +685,7 @@ public static function apply_ultra_fast_archive_profile(): void {
 		);
 
 		$settings = self::$archive_active ? self::effective_archive_settings() : self::effective_single_settings();
-		$accent = sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#6d5dfc' ) ) ?: '#6d5dfc';
+		$accent = sanitize_hex_color( (string) ( $settings['accent_color'] ?? '#2563eb' ) ) ?: '#2563eb';
 		$max = self::max_width( $settings['max_width'] ?? 1320 );
 		$radius = max( 10, min( 38, absint( $settings['single_surface_radius'] ?? 24 ) ) );
 

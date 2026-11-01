@@ -20,20 +20,20 @@
 .delicat-banner-card__link{position:absolute;inset:0;z-index:1;border-radius:inherit}
 .delicat-banner-rail__dots{display:flex;justify-content:center;gap:6px;margin-top:8px}
 .delicat-banner-rail__dots i{display:block;width:6px;height:6px;border-radius:999px;background:rgba(20,22,28,.16);transition:width .22s ease,background .22s ease}
-.delicat-banner-rail__dots i.is-active{width:18px;background:var(--dbc-accent,#6d5dfc)}
+.delicat-banner-rail__dots i.is-active{width:18px;background:var(--dbc-accent,var(--ds-color-primary,#2563eb))}
 /* card styles */
 .delicat-banner-rail--dark .delicat-banner-card{border-color:transparent;background:#111318;color:#fff;box-shadow:0 10px 30px rgba(10,12,20,.18)}
 .delicat-banner-rail--dark .delicat-banner-card__text{color:rgba(255,255,255,.72)}
 .delicat-banner-rail--dark a.delicat-banner-card__button{background:#fff;color:#111318}
 .delicat-banner-rail--tint .delicat-banner-card{border-color:transparent;background:#eef0ff;box-shadow:none}
-@supports(background:color-mix(in srgb,red 10%,#fff)){.delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,#6d5dfc) 12%,#fff)}}
-.delicat-banner-rail--tint a.delicat-banner-card__button{background:var(--dbc-accent,#6d5dfc)}
+@supports(background:color-mix(in srgb,red 10%,#fff)){.delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,var(--ds-color-primary,#2563eb)) 12%,#fff)}}
+.delicat-banner-rail--tint a.delicat-banner-card__button{background:var(--dbc-accent,var(--ds-color-primary,#2563eb))}
 /* dark theme */
 html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card{border-color:rgba(255,255,255,.08);background:#121a2c;color:#f3f4fa;box-shadow:none}
 html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card__text{color:rgba(243,244,250,.7)}
-html.dlc-theme-dark .delicat-banner-rail--light a.delicat-banner-card__button{background:var(--dbc-accent,#6d5dfc)}
+html.dlc-theme-dark .delicat-banner-rail--light a.delicat-banner-card__button{background:var(--dbc-accent,var(--ds-color-primary,#2563eb))}
 html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:#121a2c;color:#f3f4fa}
-@supports(background:color-mix(in srgb,red 10%,#fff)){html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,#6d5dfc) 22%,#121a2c)}}
+@supports(background:color-mix(in srgb,red 10%,#fff)){html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,var(--ds-color-primary,#2563eb)) 22%,#121a2c)}}
 html.dlc-theme-dark .delicat-banner-rail__dots i{background:rgba(255,255,255,.18)}
 /* phones: the rail runs edge to edge, the section's own side padding becomes the rail's */
 @media(max-width:640px){.delicat-banner-rail{--dbc-edge:var(--dbv9-space-m,16px)}.delicat-banner-rail__heading{margin-bottom:12px}}

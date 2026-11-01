@@ -435,7 +435,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 				);
 			}
 			if ( ! empty( $float_items ) ) {
-				$float_tones = array( '#6a5cff', '#e0407f', '#22a06b', '#d9860c', '#8b5cf6', '#1f7fd6', '#ff4d91', '#f0b429' );
+				$float_tones = array( '#2563eb', '#1d4ed8', '#22a06b', '#d9860c', '#2563eb', '#1f7fd6', '#1d4ed8', '#f0b429' );
 				$float_markup = '<div class="delicat-builder-hero__float" aria-hidden="true">';
 				foreach ( $float_items as $float_index => $float_item ) {
 					$tone = $float_item['tone'] ?: $float_tones[ $float_index % count( $float_tones ) ];
@@ -455,8 +455,8 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 		$mesh_vars = ';--dbv9-hero-bg-start:' . self::color_or( $content['bg_start'] ?? '', '#eceeff' )
 			. ';--dbv9-hero-bg-mid:' . self::color_or( $content['bg_mid'] ?? '', '#f6ecff' )
 			. ';--dbv9-hero-bg-end:' . self::color_or( $content['bg_end'] ?? '', '#ffe9f0' )
-			. ';--dbv9-hero-glow-1:' . self::color_or( $content['glow_1'] ?? '', '#7d6cff' )
-			. ';--dbv9-hero-glow-2:' . self::color_or( $content['glow_2'] ?? '', '#ff4d91' )
+			. ';--dbv9-hero-glow-1:' . self::color_or( $content['glow_1'] ?? '', '#2563eb' )
+			. ';--dbv9-hero-glow-2:' . self::color_or( $content['glow_2'] ?? '', '#1d4ed8' )
 			. ';--dbv9-hero-glow-3:' . self::color_or( $content['glow_3'] ?? '', '#28c8ff' )
 			. ';--dbv9-hero-glow-4:' . self::color_or( $content['glow_4'] ?? '', '#ffb547' )
 			. ';--dbv9-hero-glow-a:' . ( max( 0, min( 100, absint( $content['glow_strength'] ?? 36 ) ) ) / 100 );
@@ -836,11 +836,11 @@ private static function how_it_works( array $content ): string {
 			'--dbv9-process-title:' . sanitize_hex_color( $content['ultra_title'] ?? '#111827' ),
 			'--dbv9-process-text:' . sanitize_hex_color( $content['ultra_text'] ?? '#6b7280' ),
 			'--dbv9-process-icon-bg:' . sanitize_hex_color( $content['ultra_icon_bg'] ?? '#ffffff' ),
-			'--dbv9-process-icon:' . sanitize_hex_color( $content['ultra_icon'] ?? '#6a5cff' ),
+			'--dbv9-process-icon:' . sanitize_hex_color( $content['ultra_icon'] ?? '#2563eb' ),
 			'--dbv9-process-number:' . sanitize_hex_color( $content['ultra_number'] ?? '#dcdfe8' ),
 			'--dbv9-process-gap:' . absint( $content['card_gap'] ?? 18 ) . 'px',
 			'--dbv9-process-radius:' . max( 8, min( 48, absint( $content['ultra_radius'] ?? 14 ) ) ) . 'px',
-			'--dbv9-eyebrow:' . sanitize_hex_color( $content['eyebrow_color'] ?? '#6a5cff' ),
+			'--dbv9-eyebrow:' . sanitize_hex_color( $content['eyebrow_color'] ?? '#2563eb' ),
 		);
 		$out = '<div class="delicat-process delicat-process--ultra" style="' . esc_attr( implode( ';', array_filter( $vars ) ) ) . '">';
 		$out .= '<header class="delicat-process__head" style="' . esc_attr( '--dbv9-info-title-d:' . absint( $content['title_size_d'] ?? 38 ) . 'px;--dbv9-info-title-t:' . absint( $content['title_size_t'] ?? 36 ) . 'px;--dbv9-info-title-m:' . absint( $content['title_size_m'] ?? 28 ) . 'px' . ( ! empty( $content['title_color'] ) ? ';--dbv9-info-title:' . sanitize_hex_color( $content['title_color'] ) : '' ) . ( ! empty( $content['subtitle_color'] ) ? ';--dbv9-info-subtitle:' . sanitize_hex_color( $content['subtitle_color'] ) : '' ) ) . '">';
@@ -870,7 +870,7 @@ private static function how_it_works( array $content ): string {
 		'--dbv9-process-title:' . sanitize_hex_color( $content['card_title'] ?? '#f8f8ff' ),
 		'--dbv9-process-text:' . sanitize_hex_color( $content['card_text'] ?? '#989bad' ),
 		'--dbv9-process-a1:' . sanitize_hex_color( $content['accent_1'] ?? '#5964ff' ),
-		'--dbv9-process-a2:' . sanitize_hex_color( $content['accent_2'] ?? '#ee5abd' ),
+		'--dbv9-process-a2:' . sanitize_hex_color( $content['accent_2'] ?? '#1d4ed8' ),
 		'--dbv9-process-a3:' . sanitize_hex_color( $content['accent_3'] ?? '#56d8f1' ),
 		'--dbv9-process-gap:' . absint( $content['card_gap'] ?? 18 ) . 'px',
 		'--dbv9-process-radius:' . absint( $content['card_radius'] ?? 30 ) . 'px',
@@ -1230,15 +1230,15 @@ private static function why_delicat( array $content ): string {
 
 private static function why_delicat_ultra( array $content, array $features ): string {
 	$tones = array(
-		array( 'bg' => '#ececff', 'fg' => '#6a5cff' ),
+		array( 'bg' => '#ececff', 'fg' => '#2563eb' ),
 		array( 'bg' => '#e6f7ee', 'fg' => '#22a06b' ),
-		array( 'bg' => '#fbe6f0', 'fg' => '#e0407f' ),
-		array( 'bg' => '#ececff', 'fg' => '#6a5cff' ),
+		array( 'bg' => '#fbe6f0', 'fg' => '#1d4ed8' ),
+		array( 'bg' => '#ececff', 'fg' => '#2563eb' ),
 		array( 'bg' => '#fff3d6', 'fg' => '#d9860c' ),
 		array( 'bg' => '#e3f3ff', 'fg' => '#1f7fd6' ),
 	);
 	$vars = array(
-		'--dbv9-why-eyebrow:' . sanitize_hex_color( $content['eyebrow_color'] ?? '#6a5cff' ),
+		'--dbv9-why-eyebrow:' . sanitize_hex_color( $content['eyebrow_color'] ?? '#2563eb' ),
 		'--dbv9-why-title:' . sanitize_hex_color( $content['ultra_title'] ?? '#111827' ),
 		'--dbv9-why-subtitle:' . sanitize_hex_color( $content['ultra_text'] ?? '#6b7280' ),
 		'--dbv9-why-bg:' . sanitize_hex_color( $content['ultra_bg'] ?? '#ffffff' ),
@@ -1253,7 +1253,7 @@ private static function why_delicat_ultra( array $content, array $features ): st
 		'--dbv9-why-cta-a:' . sanitize_hex_color( $content['cta_bg_start'] ?? '#ecebff' ),
 		'--dbv9-why-cta-b:' . sanitize_hex_color( $content['cta_bg_end'] ?? '#fde7f0' ),
 		'--dbv9-why-cta-btn-a:' . sanitize_hex_color( $content['cta_button_start'] ?? '#5b5bd6' ),
-		'--dbv9-why-cta-btn-b:' . sanitize_hex_color( $content['cta_button_end'] ?? '#e0407f' ),
+		'--dbv9-why-cta-btn-b:' . sanitize_hex_color( $content['cta_button_end'] ?? '#1d4ed8' ),
 	);
 
 	$out = '<div class="delicat-why delicat-why--ultra" style="' . esc_attr( implode( ';', array_filter( $vars ) ) ) . '">';
@@ -1324,9 +1324,9 @@ private static function favorites( array $content ): string {
 		return '';
 	}
 
-	$tones = array( '#6a5cff', '#e0407f', '#22a06b', '#d9860c', '#1f7fd6', '#8b5cf6' );
+	$tones = array( '#2563eb', '#1d4ed8', '#22a06b', '#d9860c', '#1f7fd6', '#2563eb' );
 	$vars = array(
-		'--dbv9-fav-eyebrow:' . sanitize_hex_color( $content['eyebrow_color'] ?? '#6a5cff' ),
+		'--dbv9-fav-eyebrow:' . sanitize_hex_color( $content['eyebrow_color'] ?? '#2563eb' ),
 		'--dbv9-fav-title:' . sanitize_hex_color( $content['title_color'] ?? '#111827' ),
 		'--dbv9-fav-subtitle:' . sanitize_hex_color( $content['subtitle_color'] ?? '#6b7280' ),
 		'--dbv9-fav-bg:' . sanitize_hex_color( $content['card_bg'] ?? '#ffffff' ),
@@ -1342,7 +1342,7 @@ private static function favorites( array $content ): string {
 		'--dbv9-fav-title-t:' . absint( $content['title_size_t'] ?? 30 ) . 'px',
 		'--dbv9-fav-title-m:' . absint( $content['title_size_m'] ?? 26 ) . 'px',
 		'--dbv9-fav-btn-a:' . sanitize_hex_color( $content['button_start'] ?? '#5b5bd6' ),
-		'--dbv9-fav-btn-b:' . sanitize_hex_color( $content['button_end'] ?? '#e0407f' ),
+		'--dbv9-fav-btn-b:' . sanitize_hex_color( $content['button_end'] ?? '#1d4ed8' ),
 	);
 	$align = in_array( (string) ( $content['align'] ?? 'left' ), array( 'left', 'center' ), true ) ? (string) $content['align'] : 'left';
 
@@ -1420,7 +1420,7 @@ private static function bon_kliyan( array $content ): string {
 		'--dbv9-bk-bg:' . self::color_or( $content['panel_bg'] ?? '', '#12131f' ),
 		'--dbv9-bk-border:' . self::color_or( $content['panel_border'] ?? '', '#2a2b45' ),
 		'--dbv9-bk-radius:' . max( 8, min( 48, absint( $content['panel_radius'] ?? 30 ) ) ) . 'px',
-		'--dbv9-bk-glow:' . self::color_or( $content['glow_color'] ?? '', '#6a4dff' ),
+		'--dbv9-bk-glow:' . self::color_or( $content['glow_color'] ?? '', '#2563eb' ),
 		'--dbv9-bk-glow-a:' . ( $glow_strength / 100 ),
 		'--dbv9-bk-eyebrow:' . self::color_or( $content['eyebrow_color'] ?? '', '#d6ff3f' ),
 		'--dbv9-bk-title:' . self::color_or( $content['title_color'] ?? '', '#ffffff' ),
@@ -1434,7 +1434,7 @@ private static function bon_kliyan( array $content ): string {
 		'--dbv9-bk-card-bg:' . self::color_or( $content['card_bg'] ?? '', '#1b1c2e' ),
 		'--dbv9-bk-card-text:' . self::color_or( $content['card_text_color'] ?? '', '#ffffff' ),
 		'--dbv9-bk-card-accent:' . self::color_or( $content['card_accent'] ?? '', '#d6ff3f' ),
-		'--dbv9-bk-card-back:' . self::color_or( $content['card_back_bg'] ?? '', '#6f5cff' ),
+		'--dbv9-bk-card-back:' . self::color_or( $content['card_back_bg'] ?? '', '#2563eb' ),
 	);
 
 	/* The visual is built first: an image visual with no usable attachment
@@ -1561,7 +1561,7 @@ private static function newsletter( array $content ): string {
 		'--dbv9-news-title:' . sanitize_hex_color( $content['title_color'] ?? '#f8f8ff' ),
 		'--dbv9-news-text:' . sanitize_hex_color( $content['text_color'] ?? '#989bad' ),
 		'--dbv9-news-a1:' . sanitize_hex_color( $content['accent_start'] ?? '#5964ff' ),
-		'--dbv9-news-a2:' . sanitize_hex_color( $content['accent_end'] ?? '#ee3ba8' ),
+		'--dbv9-news-a2:' . sanitize_hex_color( $content['accent_end'] ?? '#1d4ed8' ),
 		'--dbv9-news-radius:' . absint( $content['card_radius'] ?? 28 ) . 'px',
 	);
 
@@ -1630,7 +1630,7 @@ private static function trust_strip( array $content ): string {
 		'--dbv9-trust-subtitle:' . sanitize_hex_color( $content['subtitle_color'] ?? '#989bad' ),
 		'--dbv9-trust-a1:' . sanitize_hex_color( $content['accent_1'] ?? '#5964ff' ),
 		'--dbv9-trust-a2:' . sanitize_hex_color( $content['accent_2'] ?? '#56d8f1' ),
-		'--dbv9-trust-a3:' . sanitize_hex_color( $content['accent_3'] ?? '#ee5abd' ),
+		'--dbv9-trust-a3:' . sanitize_hex_color( $content['accent_3'] ?? '#1d4ed8' ),
 		'--dbv9-trust-status:' . sanitize_hex_color( $content['domain_status'] ?? '#2fa968' ),
 		'--dbv9-trust-radius:' . absint( $content['card_radius'] ?? 28 ) . 'px',
 	);
