@@ -36,6 +36,21 @@ NOUVEAUTÉS 3.4.0 — PARRAINAGE (« INVITER UN AMI »)
   · premier achat payé avec le crédit boutique, gratuit (coupon 100 %), trop petit ou remboursé : ne
     compte pas ; un remboursement après la validation retire le point (une récompense déjà donnée reste) ;
   · une récompense par palier, garantie par la base de données même si deux demandes arrivent ensemble.
+  · plus de 5 nouveaux amis en 24 h pour un même parrain : les suivants sont mis « À vérifier »
+    (réglable : « Invitations par jour ») ;
+  · une recharge de portefeuille (TeraWallet) ne compte pas comme premier achat, ni une commande passée
+    avant l'invitation ; un remboursement partiel qui laisse au moins le minimum garde le point ;
+  · le premier lien d'invitation ouvert sur un téléphone reste : un autre lien (ou un autre site) ne peut
+    pas le remplacer ;
+  · si une erreur interrompt une réclamation, le palier reste réservé (jamais payé deux fois) : il apparaît
+    dans « Réclamations à vérifier », où vous le libérez ou le marquez donné ;
+  · un compte bloqué que vous supprimez garde ses empreintes : la même personne ne repart pas de zéro.
+- Dans l'onglet, chaque invitation récente a un bouton : « Accepter » (une invitation refusée par erreur)
+  ou « Retirer » (refuser une invitation, ou reprendre un point déjà donné).
+- La page des liens se choisit dans l'onglet (« Page des invitations ») ; sinon c'est la page publiée qui
+  contient [delicat_bonus_free_fire].
+- Les limites de demandes (réclamations, chargement de la page) comptent désormais chaque visiteur
+  séparément derrière Cloudflare, au lieu de mettre tous les visiteurs dans le même compteur.
   Le client voit seulement un message général (« Ne respecte pas les règles du programme ») : les
   détails de la détection restent dans le tableau de bord. Les données (téléphone, réseau, navigateur, e-mail) sont gardées
   uniquement sous forme d'empreintes chiffrées, jamais en clair, et supprimées avec le compte.

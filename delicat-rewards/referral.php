@@ -20,6 +20,7 @@ defined( 'ABSPATH' ) || exit;
 
 const DELICAT_REF_DB         = 1;
 const DELICAT_REF_MAX_POINTS = 100;
+const DELICAT_REF_VPN_ANON_PER_HOUR = 300; // provider lookups from link visits (no account), per hour
 const DELICAT_REF_IP_WINDOW  = 259200; // 3 days: network addresses are compared only while this recent
 
 /* ============================================================== storage */
@@ -102,6 +103,8 @@ function delicat_ref_defaults() {
 		'same_device'      => 'block',  // block: refused + accounts leave the rewards programme | review
 		'same_ip'          => 'review', // review | block | off (mobile networks share addresses: review by default)
 		'vpn'              => 'block',  // block | review | off
+		'daily_cap'        => 5,        // more new friends than this in 24 h: the next ones go to review
+		'page_id'          => 0,        // the Bonus Free Fire page; 0 = found automatically
 		'share_text'       => 'Rejoins-moi sur Delicat Store pour tes diamants Free Fire ! Crée ton compte avec mon lien et fais ton premier achat : {lien} (code {code})',
 	);
 }
@@ -156,9 +159,37 @@ function delicat_ref_code( $user_id, $create = true ) {
 	}
 	return '';
 }
+/** A public page: published, of type page, without a password. */
+function delicat_ref_public_page( $id ) {
+	$id = (int) $id;
+	return $id > 0 && 'page' === get_post_type( $id ) && 'publish' === get_post_status( $id ) && '' === (string) get_post_field( 'post_password', $id );
+}
+/**
+ * The Bonus Free Fire page the invitation links open: the page chosen in the dashboard, else the first
+ * public page holding the shortcode (looked up once a day, again when a page is saved). Never taken from
+ * a page view: whoever can preview a draft must not be able to redirect every customer's link.
+ */
+function delicat_ref_page_id() {
+	$chosen = (int) delicat_ref_cfg( 'page_id' );
+	if ( delicat_ref_public_page( $chosen ) ) return $chosen;
+	$found = get_transient( 'delicat_ref_page' );
+	if ( false === $found ) {
+		global $wpdb;
+		$found = 0;
+		foreach ( array( '[delicat_bonus_free_fire', '[delicat_rewards', '[delicat_meilleur_client' ) as $tag ) {
+			foreach ( (array) $wpdb->get_col( $wpdb->prepare( "SELECT ID FROM {$wpdb->posts} WHERE post_type='page' AND post_status='publish' AND post_password='' AND post_content LIKE %s ORDER BY ID ASC LIMIT 5", '%' . $wpdb->esc_like( $tag ) . '%' ) ) as $id ) {
+				if ( delicat_ref_public_page( $id ) ) { $found = (int) $id; break 2; }
+			}
+		}
+		set_transient( 'delicat_ref_page', $found, DAY_IN_SECONDS );
+	}
+	return delicat_ref_public_page( $found ) ? (int) $found : 0;
+}
+add_action( 'save_post_page', function () { delete_transient( 'delicat_ref_page' ); } );
 function delicat_ref_link( $code ) {
-	$base = (string) get_option( 'delicat_bonus_page_url', '' );
-	if ( '' === $base || 0 !== strpos( $base, home_url() ) ) $base = home_url( '/' );
+	$page = delicat_ref_page_id();
+	$base = $page ? (string) get_permalink( $page ) : '';
+	if ( '' === $base ) return ''; // no public Bonus Free Fire page: a link would land nowhere
 	return add_query_arg( 'ref', rawurlencode( $code ), $base ) . '#parrainage';
 }
 
@@ -176,9 +207,7 @@ function delicat_ref_hash( $kind, $value ) {
 }
 /** The visitor's address: Cloudflare's CF-Connecting-IP when the request really comes from Cloudflare (Identity). */
 function delicat_ref_ip() {
-	if ( class_exists( 'DIP_Native_Auth' ) && method_exists( 'DIP_Native_Auth', 'throttle_ip' ) ) return (string) DIP_Native_Auth::throttle_ip();
-	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP ) : '';
-	return $ip;
+	return delicat_client_ip();
 }
 /**
  * This browser's device hash: Identity's (the same one its sign-in history keeps per account),
@@ -217,7 +246,12 @@ function delicat_ref_norm_email( $email ) {
 function delicat_ref_signal( $user_id, $kind, $hash ) {
 	global $wpdb;
 	if ( (int) $user_id < 1 || ! preg_match( '/^[a-f0-9]{64}$/', (string) $hash ) ) return;
-	$wpdb->query( $wpdb->prepare( 'INSERT INTO ' . delicat_ref_table( 'signals' ) . ' (user_id,kind,hash,seen_at) VALUES (%d,%s,%s,%s) ON DUPLICATE KEY UPDATE seen_at=VALUES(seen_at)', (int) $user_id, $kind, $hash, current_time( 'mysql', 1 ) ) );
+	$t = delicat_ref_table( 'signals' ); $now = current_time( 'mysql', 1 );
+	// Known: refreshed. New: kept while the account has fewer than 100 of this kind, so a flood of fresh
+	// cookies cannot push the first ones (the evidence) out, nor grow the table without end.
+	if ( $wpdb->query( $wpdb->prepare( "UPDATE $t SET seen_at=%s WHERE user_id=%d AND kind=%s AND hash=%s", $now, (int) $user_id, $kind, $hash ) ) ) return; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id=%d AND kind=%s", (int) $user_id, $kind ) ) >= 100 ) return; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $t (user_id,kind,hash,seen_at) VALUES (%d,%s,%s,%s)", (int) $user_id, $kind, $hash, $now ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 }
 /** Records what this request tells about the signed-in customer (device, network, browser, e-mail). */
 function delicat_ref_capture( $user_id, $fp = '', $create_device = false ) {
@@ -240,7 +274,7 @@ function delicat_ref_hashes( $user_id ) {
 	// Network addresses only while recent: mobile carriers hand the same public addresses to thousands of
 	// customers, so two accounts that each used an address weeks apart prove nothing.
 	$since = gmdate( 'Y-m-d H:i:s', time() - DELICAT_REF_IP_WINDOW );
-	foreach ( (array) $wpdb->get_results( $wpdb->prepare( 'SELECT kind,hash FROM ' . delicat_ref_table( 'signals' ) . " WHERE user_id=%d AND (kind<>'ip' OR seen_at>=%s) ORDER BY seen_at DESC LIMIT 200", (int) $user_id, $since ) ) as $r ) {
+	foreach ( (array) $wpdb->get_results( $wpdb->prepare( 'SELECT kind,hash FROM ' . delicat_ref_table( 'signals' ) . " WHERE user_id=%d AND (kind<>'ip' OR seen_at>=%s) LIMIT 1000", (int) $user_id, $since ) ) as $r ) { // at most 100 per kind are kept
 		if ( isset( $out[ $r->kind ] ) ) $out[ $r->kind ][] = $r->hash;
 	}
 	// Identity's own device list is not read: rows saved before its device cookie existed are a hash of
@@ -272,7 +306,7 @@ function delicat_ref_phone_users( $phone8, $exclude_user ) {
  * wp-config.php as DELICAT_PROXYCHECK_KEY; without either, nothing is checked (false). The key is
  * never printed, stored in the database or sent to the browser. A failed lookup does not block.
  */
-function delicat_ref_is_vpn( $ip = null ) {
+function delicat_ref_is_vpn( $ip = null, $anonymous = false ) {
 	$ip = null === $ip ? delicat_ref_ip() : (string) $ip;
 	$verdict = apply_filters( 'delicat_ref_vpn_verdict', null, $ip );
 	if ( null !== $verdict ) return (bool) $verdict;
@@ -281,13 +315,23 @@ function delicat_ref_is_vpn( $ip = null ) {
 	$cache = 'delicat_vpn_' . md5( $ip );
 	$known = get_transient( $cache );
 	if ( false !== $known ) return '1' === $known;
+	// Link visits need no account: their lookups share an hourly budget, so nobody can spend the provider's
+	// quota for the whole store. Sign-ups, codes and claims are always checked.
+	if ( $anonymous ) {
+		$bk = 'delicat_vpn_budget_' . gmdate( 'YmdH' );
+		if ( ! delicat_ref_rate( $bk, DELICAT_REF_VPN_ANON_PER_HOUR, HOUR_IN_SECONDS ) ) return false;
+	}
 	$r = wp_remote_get( 'https://proxycheck.io/v2/' . rawurlencode( $ip ) . '?vpn=1&key=' . rawurlencode( $key ), array( 'timeout' => 3, 'redirection' => 0 ) );
 	if ( is_wp_error( $r ) || 200 !== (int) wp_remote_retrieve_response_code( $r ) ) {
 		delicat_log( 'warning', 'Referral VPN check unavailable.', array() );
 		return false;
 	}
-	$j  = json_decode( (string) wp_remote_retrieve_body( $r ), true );
-	$is = is_array( $j ) && isset( $j[ $ip ]['proxy'] ) && 'yes' === $j[ $ip ]['proxy'];
+	$j = json_decode( (string) wp_remote_retrieve_body( $r ), true );
+	if ( ! is_array( $j ) || ! isset( $j[ $ip ]['proxy'] ) ) { // quota reached, key refused…: no verdict, nothing remembered
+		delicat_log( 'warning', 'Referral VPN check gave no answer.', array( 'status' => is_array( $j ) ? (string) ( $j['status'] ?? '' ) : '' ) );
+		return false;
+	}
+	$is = 'yes' === $j[ $ip ]['proxy'];
 	set_transient( $cache, $is ? '1' : '0', DAY_IN_SECONDS );
 	return $is;
 }
@@ -357,22 +401,36 @@ function delicat_ref_risk( $referrer_id, $referred_id ) {
 	if ( $same_ip && 'off' !== $cfg['same_ip'] ) {
 		$raise( 'block' === $cfg['same_ip'] ? 'reject' : 'review', array_intersect( $mine['fp'], $theirs['fp'] ) ? 'same_browser_network' : 'same_network' );
 	}
+	// Many new friends in one day: a person making accounts, or a link posted publicly. The team looks first.
+	$cap = (int) ( $cfg['daily_cap'] ?? 0 );
+	if ( $cap > 0 ) {
+		global $wpdb;
+		$recent = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . delicat_ref_table( 'referrals' ) . ' WHERE referrer_id=%d AND created_at>=%s', (int) $referrer_id, gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS ) ) );
+		if ( $recent > $cap ) $raise( 'review', 'velocity' );
+	}
 	if ( get_user_meta( $referred_id, '_delicat_ref_vpn', true ) && 'off' !== $cfg['vpn'] ) $raise( 'block' === $cfg['vpn'] ? 'reject' : 'review', 'vpn' );
 	return array( 'decision' => $decision, 'reasons' => array_values( array_unique( $reasons ) ), 'block' => array_values( array_unique( $block ) ) );
 }
 /** Applies a verdict to an invitation row; returns the new status. */
-function delicat_ref_apply( $row_id, $referrer_id, $referred_id, $ok_status ) {
+function delicat_ref_apply( $row_id, $referrer_id, $referred_id, $ok_status, $from_status ) {
 	global $wpdb;
 	$v = delicat_ref_risk( $referrer_id, $referred_id );
 	$status = 'ok' === $v['decision'] ? $ok_status : ( 'review' === $v['decision'] ? 'review' : 'rejected' );
 	$update = array( 'status' => $status, 'reason' => substr( implode( ',', $v['reasons'] ), 0, 40 ) );
 	if ( 'rejected' === $status ) $update['decided_at'] = current_time( 'mysql', 1 );
-	$wpdb->update( delicat_ref_table( 'referrals' ), $update, array( 'id' => (int) $row_id ) );
+	// Written only if the row is still in the status it was judged in: a refund or a team decision that
+	// landed meanwhile is never overwritten.
+	$changed = $wpdb->update( delicat_ref_table( 'referrals' ), $update, array( 'id' => (int) $row_id, 'status' => $from_status ) );
+	if ( ! $changed && $status !== $from_status ) return (string) $wpdb->get_var( $wpdb->prepare( 'SELECT status FROM ' . delicat_ref_table( 'referrals' ) . ' WHERE id=%d', (int) $row_id ) );
 	if ( $v['block'] ) {
 		foreach ( $v['block'] as $uid ) delicat_ref_block( $uid, $v['reasons'][0] ?? 'fraud', true );
 		delicat_ref_alert_admin( $referrer_id, $referred_id, $v['reasons'] );
 	}
 	return $status;
+}
+function delicat_ref_alert_admin_claim( $user_id, $points ) {
+	wp_mail( get_option( 'admin_email' ), 'Delicat — Parrainage : réclamation à vérifier',
+		sprintf( "La réclamation du palier %d points du client #%d a été interrompue par une erreur.\nVérifiez son portefeuille et ses commandes, puis « Libérer » ce palier dans WooCommerce › Delicat Rewards › Parrainage s'il n'a rien reçu.", (int) $points, (int) $user_id ) );
 }
 function delicat_ref_alert_admin( $referrer_id, $referred_id, array $reasons ) {
 	$key = 'delicat_ref_alert_' . (int) $referrer_id;
@@ -412,14 +470,20 @@ function delicat_ref_visit() {
 	nocache_headers();
 	if ( ! delicat_ref_on() ) wp_send_json( array( 'ok' => false, 'code' => 'off' ) );
 	if ( ! delicat_ref_rate( 'delicat_rv_' . md5( delicat_ref_ip() ), 30, MINUTE_IN_SECONDS ) ) wp_send_json( array( 'ok' => false, 'code' => 'rate_limited' ), 429 );
+	// Asked by this site's own page only: another site cannot post a link visit in the visitor's browser.
+	$origin = isset( $_SERVER['HTTP_ORIGIN'] ) ? (string) wp_unslash( $_SERVER['HTTP_ORIGIN'] ) : '';
+	if ( '' !== $origin && strtolower( (string) wp_parse_url( $origin, PHP_URL_HOST ) ) !== strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) ) wp_send_json( array( 'ok' => false, 'code' => 'origin' ), 403 );
 	$code = delicat_ref_normalize_code( isset( $_POST['code'] ) ? wp_unslash( $_POST['code'] ) : '' ); // phpcs:ignore WordPress.Security.NonceVerification.Missing -- public, read-mostly, no account change
+	// The first valid invitation on this phone stays: a later link (or a page made to replace it) does not take it over.
+	$kept = is_user_logged_in() ? '' : delicat_ref_cookie_code();
+	if ( '' !== $kept && $kept !== $code && ( $first = delicat_ref_user_by_code( $kept ) ) && ! delicat_ref_blocked( $first ) ) $code = $kept;
 	$inviter = delicat_ref_user_by_code( $code );
 	if ( ! $inviter || delicat_ref_blocked( $inviter ) ) wp_send_json( array( 'ok' => false, 'code' => 'invalid' ) );
-	if ( 'off' !== delicat_ref_cfg( 'vpn' ) && delicat_ref_is_vpn() ) wp_send_json( array( 'ok' => false, 'code' => 'vpn', 'message' => 'VPN ou proxy détecté : désactivez-le pour accepter l’invitation.' ) );
+	if ( 'off' !== delicat_ref_cfg( 'vpn' ) && delicat_ref_is_vpn( null, true ) ) wp_send_json( array( 'ok' => false, 'code' => 'vpn', 'message' => 'VPN ou proxy détecté : désactivez-le pour accepter l’invitation.' ) );
 	$name = delicat_display_name( $inviter, true );
 	if ( is_user_logged_in() ) wp_send_json( array( 'ok' => true, 'inviter' => $name, 'signedIn' => true ) );
 	delicat_ref_device( true ); // the phone gets its identity now, before the sign-up
-	delicat_ref_set_cookie( delicat_ref_cookie_value( $code ), max( 1, (int) delicat_ref_cfg( 'attribution_days' ) ) * DAY_IN_SECONDS );
+	if ( $kept !== $code ) delicat_ref_set_cookie( delicat_ref_cookie_value( $code ), max( 1, (int) delicat_ref_cfg( 'attribution_days' ) ) * DAY_IN_SECONDS );
 	$fp = isset( $_POST['fp'] ) ? (string) wp_unslash( $_POST['fp'] ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 	if ( preg_match( '/^[a-f0-9]{64}$/', $fp ) && ! headers_sent() ) setcookie( 'dlc_fp', $fp, array( 'expires' => time() + DAY_IN_SECONDS, 'path' => COOKIEPATH ?: '/', 'secure' => is_ssl(), 'httponly' => true, 'samesite' => 'Lax' ) );
 	wp_send_json( array( 'ok' => true, 'inviter' => $name ) );
@@ -439,7 +503,7 @@ function delicat_ref_attach( $referred_id, $referrer_id, $source, $fp = '' ) {
 		'status' => 'signed_up', 'created_at' => current_time( 'mysql', 1 ),
 	), array( '%d', '%d', '%s', '%s', '%s' ) );
 	if ( ! $ok ) return new WP_Error( 'exists', 'Ce compte a déjà un parrain.' );
-	return delicat_ref_apply( (int) $wpdb->insert_id, $referrer_id, $referred_id, 'signed_up' );
+	return delicat_ref_apply( (int) $wpdb->insert_id, $referrer_id, $referred_id, 'signed_up', 'signed_up' );
 }
 
 /* A new account opened from a personal link (any sign-up form: e-mail, code, Google…). */
@@ -470,8 +534,10 @@ function delicat_ref_order_counts( $order ) {
 	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) return false;
 	if ( $order->get_meta( '_delicat_reward' ) ) return false;                         // a free reward order
 	if ( ! $order->is_paid() || ! $order->has_status( 'completed' ) ) return false;
-	if ( (float) $order->get_total() < max( 1, (float) delicat_ref_cfg( 'min_order' ) ) ) return false; // 100 % coupons and tiny orders
-	if ( (float) $order->get_total_refunded() > 0 ) return false;
+	// 100 % coupons, tiny orders, and what is left after a partial refund
+	if ( (float) $order->get_total() - (float) $order->get_total_refunded() < max( 1, (float) delicat_ref_cfg( 'min_order' ) ) ) return false;
+	// A wallet top-up is money kept by the friend (and transferable): not a purchase.
+	if ( function_exists( 'is_wallet_rechargeable_order' ) && is_wallet_rechargeable_order( $order ) ) return false;
 	if ( (int) delicat_ref_cfg( 'exclude_wallet' ) && in_array( $order->get_payment_method(), array( 'wallet', 'woo_wallet', 'delicat_wallet' ), true ) ) return false;
 	return true;
 }
@@ -484,7 +550,11 @@ add_action( 'woocommerce_order_status_completed', function ( $order_id ) {
 	if ( $uid < 1 ) return;
 	$row = delicat_ref_row_for( $uid );
 	if ( ! $row || ! in_array( $row->status, array( 'signed_up', 'review' ), true ) || (int) $row->order_id ) return;
-	if ( strtotime( $row->created_at . ' UTC' ) + max( 1, (int) delicat_ref_cfg( 'order_days' ) ) * DAY_IN_SECONDS < time() ) {
+	$joined = strtotime( $row->created_at . ' UTC' );
+	$placed = $order->get_date_created();
+	if ( $placed && $placed->getTimestamp() < $joined ) return; // ordered before the invitation (a code typed afterwards, a guest order)
+	$paid = $order->get_date_paid() ?: $placed;
+	if ( ( $paid ? $paid->getTimestamp() : time() ) > $joined + max( 1, (int) delicat_ref_cfg( 'order_days' ) ) * DAY_IN_SECONDS ) {
 		$wpdb->update( delicat_ref_table( 'referrals' ), array( 'status' => 'rejected', 'reason' => 'too_late', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id ) );
 		return;
 	}
@@ -502,15 +572,17 @@ add_action( 'woocommerce_order_status_completed', function ( $order_id ) {
 		return;
 	}
 	// The payment phone is known now: judge again.
-	delicat_ref_apply( (int) $row->id, (int) $row->referrer_id, $uid, 'qualified' );
+	delicat_ref_apply( (int) $row->id, (int) $row->referrer_id, $uid, 'qualified', 'signed_up' );
 }, 20 );
 
 /* A refund or cancellation of the qualifying order cancels the invitation (or takes the point back). */
 function delicat_ref_order_reversed( $order_id ) {
 	global $wpdb;
+	// A partial refund that leaves a real first purchase (at least the minimum) keeps the invitation.
+	if ( 'woocommerce_order_partially_refunded' === current_action() && delicat_ref_order_counts( wc_get_order( $order_id ) ) ) return;
 	$rows = $wpdb->get_results( $wpdb->prepare( 'SELECT id,status FROM ' . delicat_ref_table( 'referrals' ) . " WHERE order_id=%d AND status IN ('qualified','confirmed','review')", (int) $order_id ) );
 	foreach ( (array) $rows as $r ) {
-		$wpdb->update( delicat_ref_table( 'referrals' ), array( 'status' => 'rejected', 'reason' => 'confirmed' === $r->status ? 'refunded_after' : 'refunded', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $r->id ) );
+		$wpdb->update( delicat_ref_table( 'referrals' ), array( 'status' => 'rejected', 'reason' => 'confirmed' === $r->status ? 'refunded_after' : 'refunded', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $r->id, 'status' => $r->status ) );
 	}
 }
 foreach ( array( 'woocommerce_order_status_refunded', 'woocommerce_order_status_cancelled', 'woocommerce_order_status_failed', 'woocommerce_order_partially_refunded' ) as $delicat_ref_hook ) {
@@ -526,15 +598,15 @@ function delicat_ref_confirm_due( $referrer_id = 0, $limit = 50 ) {
 	foreach ( (array) $wpdb->get_results( $wpdb->prepare( $sql, $args ) ) as $row ) { // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		$order = wc_get_order( (int) $row->order_id );
 		if ( ! delicat_ref_order_counts( $order ) ) {
-			$wpdb->update( $t, array( 'status' => 'rejected', 'reason' => 'order_changed', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id ) );
+			$wpdb->update( $t, array( 'status' => 'rejected', 'reason' => 'order_changed', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id, 'status' => 'qualified' ) );
 			continue;
 		}
 		if ( 'admin_ok' === $row->reason ) {
-			$wpdb->update( $t, array( 'status' => 'confirmed', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id ) );
+			$wpdb->update( $t, array( 'status' => 'confirmed', 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id, 'status' => 'qualified' ) );
 			continue;
 		}
-		$status = delicat_ref_apply( (int) $row->id, (int) $row->referrer_id, (int) $row->referred_id, 'confirmed' );
-		if ( 'confirmed' === $status ) $wpdb->update( $t, array( 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id ) );
+		$status = delicat_ref_apply( (int) $row->id, (int) $row->referrer_id, (int) $row->referred_id, 'confirmed', 'qualified' );
+		if ( 'confirmed' === $status ) $wpdb->update( $t, array( 'decided_at' => current_time( 'mysql', 1 ) ), array( 'id' => (int) $row->id, 'status' => 'confirmed' ) );
 	}
 }
 add_action( 'wp_scheduled_delete', function () { if ( delicat_ref_on() ) delicat_ref_confirm_due( 0, 500 ); } );
@@ -552,7 +624,7 @@ function delicat_ref_can_enter_code( $user_id ) {
 	if ( ! $u || delicat_ref_row_for( $user_id ) || delicat_ref_blocked( $user_id ) ) return false;
 	if ( strtotime( $u->user_registered . ' UTC' ) + max( 1, (int) delicat_ref_cfg( 'code_days' ) ) * DAY_IN_SECONDS < time() ) return false;
 	// Not after a first real purchase: the invitation must come first.
-	foreach ( wc_get_orders( array( 'customer_id' => (int) $user_id, 'status' => array( 'completed', 'processing' ), 'limit' => 10 ) ) as $o ) {
+	foreach ( wc_get_orders( array( 'customer_id' => (int) $user_id, 'status' => array( 'completed', 'processing', 'on-hold', 'refunded' ), 'limit' => 20 ) ) as $o ) { // on-hold: paid by MonCash/NatCash, awaiting the team
 		if ( ! $o->get_meta( '_delicat_reward' ) ) return false;
 	}
 	return true;
@@ -586,7 +658,7 @@ function delicat_ref_state( $user_id ) {
 		if ( count( $friends ) >= 50 ) continue;
 		// Detection details stay with the team: the customer sees a refund or « programme rules ».
 		$why = 'rejected' === $r->status ? ( in_array( $r->reason, array( 'refunded', 'refunded_after', 'order_changed' ), true ) ? 'Achat remboursé ou annulé' : ( 'too_late' === $r->reason ? 'Pas d’achat dans les délais' : 'Ne respecte pas les règles du programme' ) ) : '';
-		$friends[] = array( 'name' => delicat_display_name( (int) $r->referred_id, true ), 'date' => mysql_to_rfc3339( $r->created_at ), 'status' => $r->status, 'label' => $labels[ $r->status ] ?? $r->status, 'why' => $why );
+		$friends[] = array( 'name' => delicat_display_name( (int) $r->referred_id, true ), 'date' => gmdate( 'c', (int) strtotime( $r->created_at . ' UTC' ) ), 'status' => $r->status, 'label' => $labels[ $r->status ] ?? $r->status, 'why' => $why );
 	}
 	$mine = delicat_ref_row_for( $user_id );
 	$code = $blocked ? '' : delicat_ref_code( $user_id );
@@ -594,7 +666,7 @@ function delicat_ref_state( $user_id ) {
 		'enabled'      => delicat_ref_on(),
 		'blocked'      => $blocked,
 		'code'         => $code,
-		'link'         => $code ? delicat_ref_link( $code ) : '',
+		'link'         => $code ? delicat_ref_link( $code ) : '', // '' without a public Bonus Free Fire page
 		'points'       => $points,
 		'max'          => min( DELICAT_REF_MAX_POINTS, max( 1, (int) delicat_ref_cfg( 'max_points' ) ) ),
 		'milestones'   => $miles,
@@ -604,7 +676,7 @@ function delicat_ref_state( $user_id ) {
 		'canEnterCode' => delicat_ref_can_enter_code( $user_id ),
 		'rules'        => array( 'minOrder' => (int) delicat_ref_cfg( 'min_order' ), 'holdDays' => (int) delicat_ref_cfg( 'hold_days' ), 'orderDays' => (int) delicat_ref_cfg( 'order_days' ), 'walletExcluded' => (bool) delicat_ref_cfg( 'exclude_wallet' ) ),
 		'wallet'       => function_exists( 'woo_wallet' ),
-		'shareText'    => $code ? delicat_ref_share_text( $code ) : '',
+		'shareText'    => $code && delicat_ref_link( $code ) ? delicat_ref_share_text( $code ) : '',
 	);
 }
 
@@ -647,13 +719,14 @@ function delicat_ref_claim( $user_id, $points, $choice ) {
 	if ( ! delicat_lock( $lock, 5 ) ) return new WP_Error( 'busy', 'Réclamation en cours, réessayez.', array( 'status' => 429 ) );
 	try {
 		delicat_ref_confirm_due( $user_id, 20 );
+		if ( delicat_ref_blocked( $user_id ) ) return new WP_Error( 'blocked', 'Votre accès au parrainage est suspendu. Contactez le support.', array( 'status' => 403 ) ); // the judgement just above may have blocked it
 		if ( delicat_ref_points( $user_id ) < $points ) return new WP_Error( 'not_ready', 'Pas encore assez de points pour ce palier.', array( 'status' => 400 ) );
 		// One claim per milestone, enforced by the database (unique user + milestone).
 		$t = delicat_ref_table( 'claims' );
 		$ok = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $t (user_id,milestone,choice,amount,status,created_at) VALUES (%d,%d,%s,%d,'pending',%s)", $user_id, $points, $choice, $amount, current_time( 'mysql', 1 ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( 1 !== (int) $ok ) return new WP_Error( 'claimed', 'Ce palier a déjà été réclamé.', array( 'status' => 409 ) );
 		$claim_id = (int) $wpdb->insert_id;
-		$ref = 0; $delivery = null; $note = sprintf( 'Parrainage Delicat — palier %d points', $points );
+		$ref = 0; $delivery = null; $broken = false; $note = sprintf( 'Parrainage Delicat — palier %d points', $points );
 		try {
 			if ( 'diamonds' === $choice ) {
 				$plan = delicat_reward_plan( $amount, true );
@@ -663,10 +736,18 @@ function delicat_ref_claim( $user_id, $points, $choice ) {
 			} else {
 				$ref = (int) woo_wallet()->wallet->credit( $user_id, $amount, $note );
 			}
-		} finally {
-			if ( ! $ref ) $wpdb->delete( $t, array( 'id' => $claim_id ) ); // nothing delivered: the milestone stays claimable
+		} catch ( \Throwable $e ) {
+			$broken = true; // the reward may have been given before the error: the milestone stays reserved
+			delicat_log( 'error', 'Referral reward interrupted; check the customer before releasing the milestone.', array( 'user_id' => $user_id, 'milestone' => $points, 'choice' => $choice ) );
 		}
-		if ( ! $ref ) return new WP_Error( 'issue_failed', 'diamonds' === $choice ? 'Stock de PIN indisponible pour le moment. Réessayez plus tard ou choisissez le crédit boutique.' : 'Le crédit boutique n’a pas pu être ajouté. Réessayez plus tard.', array( 'status' => 503 ) );
+		if ( ! $ref && $broken ) {
+			delicat_ref_alert_admin_claim( $user_id, $points );
+			return new WP_Error( 'issue_check', 'Votre récompense est en vérification par l’équipe. Elle vous sera confirmée rapidement.', array( 'status' => 503 ) );
+		}
+		if ( ! $ref ) {
+			$wpdb->delete( $t, array( 'id' => $claim_id, 'status' => 'pending' ) ); // nothing delivered: the milestone stays claimable
+			return new WP_Error( 'issue_failed', 'diamonds' === $choice ? 'Stock de PIN indisponible pour le moment. Réessayez plus tard ou choisissez le crédit boutique.' : 'Le crédit boutique n’a pas pu être ajouté. Réessayez plus tard.', array( 'status' => 503 ) );
+		}
 		$wpdb->update( $t, array( 'status' => 'done', 'ref_id' => $ref ), array( 'id' => $claim_id ) );
 		if ( 'diamonds' === $choice && function_exists( 'delicat_reward_delivery' ) ) {
 			$d = delicat_reward_delivery( $ref, $user_id );
@@ -733,7 +814,8 @@ add_action( 'wp_ajax_delicat_ref_seen', function () {
 add_action( 'delete_user', function ( $user_id ) {
 	global $wpdb;
 	$user_id = (int) $user_id;
-	$wpdb->delete( delicat_ref_table( 'signals' ), array( 'user_id' => $user_id ) );
+	// A blocked account's hashed signals stay: the same phone or e-mail cannot come back clean under a new account.
+	if ( ! delicat_ref_blocked( $user_id ) ) $wpdb->delete( delicat_ref_table( 'signals' ), array( 'user_id' => $user_id ) );
 	$wpdb->delete( delicat_ref_table( 'claims' ), array( 'user_id' => $user_id ) );
 	$wpdb->delete( delicat_ref_table( 'referrals' ), array( 'referred_id' => $user_id ) );
 	$wpdb->delete( delicat_ref_table( 'referrals' ), array( 'referrer_id' => $user_id ) );

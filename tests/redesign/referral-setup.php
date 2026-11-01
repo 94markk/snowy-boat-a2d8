@@ -88,7 +88,7 @@ PHP
 	$o->calculate_totals(); $o->set_date_paid( time() - 20 * DAY_IN_SECONDS ); $o->save(); $o->update_status( 'completed', 'Staging order.' );
 
 	$cfg = delicat_ref_defaults();
-	$cfg['enabled'] = 1; $cfg['hold_days'] = 0;
+	$cfg['enabled'] = 1; $cfg['hold_days'] = 0; $cfg['daily_cap'] = 50; // the suite signs up 7 friends in minutes (referral-security tests the daily limit)
 	$cfg['milestones'] = array(
 		array( 'points' => 1, 'diamonds' => 110, 'htg' => 140 ),
 		array( 'points' => 2, 'diamonds' => 341, 'htg' => 420 ),
@@ -98,7 +98,8 @@ PHP
 	update_option( 'delicat_ref_config', $cfg, false );
 	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient%delicat\\_rv\\_%' OR option_name LIKE '\\_transient%delicat\\_rc\\_%' OR option_name LIKE '\\_transient%delicat\\_rs\\_%' OR option_name LIKE '\\_transient%delicat\\_ref\\_alert\\_%' OR option_name LIKE '\\_transient%delicat\\_vpn\\_%' OR option_name LIKE '\\_transient%delicat\\_bb\\_%' OR option_name LIKE '\\_transient%delicat\\_rl%'" ); // claim counters too: the suite claims several times a run
 	$page = get_page_by_path( 'bonus-free-fire' );
-	if ( $page ) update_option( 'delicat_bonus_page_url', get_permalink( $page ), false );
+	delete_option( 'delicat_bonus_page_url' ); // written by a pre-release build only
+	delete_transient( 'delicat_ref_page' ); // found automatically (the page holding [delicat_bonus_free_fire])
 	echo wp_json_encode( array( 'ref1' => (int) $ref1->ID, 'page' => $page ? get_permalink( $page ) : '' ) ) . "\n";
 	exit;
 }

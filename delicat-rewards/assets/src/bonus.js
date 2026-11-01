@@ -725,7 +725,7 @@
         return;
       }
       R.invite = { code: code, inviter: j.inviter };
-      if (!S.loggedIn) refGuest();
+      if (!j.signedIn) refGuest();
       else if (R.state && R.state.canEnterCode && !R.state.invitedBy && R.state.code !== code) {
         R.prefill = code; renderRef(R.state); toast('Code de ' + (clean(j.inviter) || 'votre ami') + ' prêt : touchez Valider.');
       }
@@ -774,12 +774,15 @@
         if (!S.loggedIn) { R.state = null; refGuest(); }
         else if (b.referral && b.referral.error) refError(b.referral.error);
         else if (b.referral) renderRef(b.referral);
-        if (!R.visited) { R.visited = true; visit(); }
         seen();
       }
       tick();
     }).catch(function (e) { notice(e.message || 'Chargement impossible. Touchez Actualiser.'); })
-      .finally(function () { S.booting = null; spin.classList.remove('is-busy'); spin.disabled = false; });
+      .finally(function () {
+        S.booting = null; spin.classList.remove('is-busy'); spin.disabled = false;
+        // A friend's link is honoured even if the page's data could not load (busy server, slow network).
+        if ($('dbf-panel-parrainage') && !R.visited) { R.visited = true; visit(); }
+      });
     return S.booting;
   }
   var last = {};

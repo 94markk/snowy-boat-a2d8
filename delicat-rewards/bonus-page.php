@@ -69,11 +69,6 @@ function delicat_bonus_page( $atts = array() ) {
 	if ( ! $rewards && ! $meilleur && ! $referral ) return delicat_paused_html();
 	$open = array_keys( array_filter( array( 'classement' => $meilleur, 'bonus' => $rewards, 'parrainage' => $referral ) ) );
 	$tab  = in_array( $atts['tab'], $open, true ) ? $atts['tab'] : $open[0];
-	// The page's address, for the personal invitation links.
-	if ( is_singular() ) {
-		$here = (string) get_permalink();
-		if ( '' !== $here && get_option( 'delicat_bonus_page_url' ) !== $here ) update_option( 'delicat_bonus_page_url', $here, false );
-	}
 	if ( ! wp_style_is( 'delicat-bonus', 'enqueued' ) ) delicat_bonus_enqueue(); // shortcode outside the post content (widget, template)
 	$c     = delicat_bonus_static_config();
 	$texts = (array) ( $c['texts'] ?? array() );
@@ -220,7 +215,7 @@ function delicat_bonus_boot() {
 	nocache_headers();
 	if ( ! headers_sent() ) header( 'Cache-Control: no-store, private, max-age=0' );
 	$uid  = get_current_user_id();
-	$ip   = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP ) : '';
+	$ip   = delicat_client_ip(); // the visitor's own counter, also behind Cloudflare
 	$key  = 'delicat_bb_' . ( $uid ? 'u' . $uid : md5( $ip ) );
 	$hits = (int) get_transient( $key );
 	if ( $hits >= ( $uid ? 30 : 60 ) ) wp_send_json( array( 'code' => 'rate_limited', 'message' => 'Trop de demandes. Réessayez dans une minute.' ), 429 );

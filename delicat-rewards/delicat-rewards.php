@@ -16,6 +16,11 @@
  *     shared payment phone or e-mail alias refused; same recent network sent to review; VPN refused
  *     (proxycheck.io, DELICAT_PROXYCHECK_KEY in wp-config.php); store-credit first orders excluded;
  *     refunds reverse points. Signals stored as keyed hashes only.
+ *   • Review hardening: daily sign-up cap per inviter (review), wallet top-ups and orders placed before the
+ *     invitation never qualify, first valid invitation kept and same-site visits only, guarded status
+ *     writes, claims kept reserved after a delivery error (team releases them), blocked accounts' hashed
+ *     evidence kept on deletion, invitation page chosen in the dashboard (never from a page view).
+ *   • delicat_client_ip(): one Cloudflare-aware address for every limiter and log (3.3 claim limits too).
  *   • Page: links drawn as buttons keep their colours under Builder (« main a »); the page opts out of
  *     Builder's dark-mode repaint (data-dlc-dark-skip) and draws its own dark theme.
  *
@@ -2189,7 +2194,7 @@ function delicat_rate_ok( $user_id ) {
 		$dn = (int) get_transient( $dk );
 		if ( $dn >= DELICAT_CLAIMS_PER_DAY ) return false;
 
-		$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP ) : '';
+		$ip = delicat_client_ip(); // 3.4.0: the visitor, not the Cloudflare server everyone shares
 		if ( $ip ) {
 			$ik = 'delicat_rli_' . md5( $ip );
 			$in = (int) get_transient( $ik );
@@ -2527,12 +2532,30 @@ function delicat_notice_show() {
 	}
 }
 
+/**
+ * The visitor's address for limits and logs: Identity's helper (Cloudflare's CF-Connecting-IP, trusted only
+ * from Cloudflare's own servers; IPv6 grouped by /64), else REMOTE_ADDR with IPv6 grouped by /64. Behind
+ * Cloudflare, REMOTE_ADDR alone is the Cloudflare server: every visitor would share one counter.
+ */
+function delicat_client_ip() {
+	if ( class_exists( 'DIP_Native_Auth' ) && method_exists( 'DIP_Native_Auth', 'throttle_ip' ) ) {
+		$ip = (string) DIP_Native_Auth::throttle_ip();
+		if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) return $ip;
+	}
+	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP ) : '';
+	if ( '' !== $ip && filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+		$packed = inet_pton( $ip );
+		if ( false !== $packed ) $ip = (string) inet_ntop( substr( $packed, 0, 8 ) . str_repeat( "\0", 8 ) );
+	}
+	return $ip;
+}
+
 /** Who changed what, when, from where. Last 40 entries. */
 function delicat_audit_add( $what ) {
 	$log = get_option( 'delicat_audit', array() );
 	if ( ! is_array( $log ) ) $log = array();
 	$u  = wp_get_current_user();
-	$ip = isset( $_SERVER['REMOTE_ADDR'] ) ? filter_var( wp_unslash( $_SERVER['REMOTE_ADDR'] ), FILTER_VALIDATE_IP ) : '';
+	$ip = delicat_client_ip();
 	array_unshift( $log, array(
 		't'  => current_time( 'mysql' ),
 		'u'  => ( $u && $u->ID ) ? $u->user_login : 'système',
@@ -4327,7 +4350,7 @@ add_action( 'rest_api_init', function () {
 			$client_nonce = preg_replace( '/[^A-Za-z0-9_-]/', '', substr( (string) $req->get_param( 'nonce' ), 0, 64 ) );
 			$domain = delicat_license_normalize_domain( $req->get_param( 'domain' ) );
 			if ( strlen( $key ) < 20 || ! $domain ) return new WP_REST_Response( array( 'valid'=>false, 'code'=>'invalid_request' ), 400 );
-			$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
+			$ip = delicat_client_ip();
 			$rl = 'dlc_lic_' . md5( $ip ); $n=(int)get_transient($rl); if($n>30) return new WP_REST_Response(array('valid'=>false,'code'=>'rate_limited'),429); set_transient($rl,$n+1,MINUTE_IN_SECONDS);
 			$hash = hash( 'sha256', $key );
 			if ( ! delicat_license_lock( 3 ) ) return new WP_REST_Response( array( 'valid'=>false, 'code'=>'busy' ), 503 );
