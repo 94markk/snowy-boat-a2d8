@@ -1,5 +1,5 @@
-/* Delicat Rewards 3.3.0 — Bonus Free Fire page: « Classement » (Meilleur Client) and « Mes bonus »
- * on one page. One request (delicat_bonus_boot) brings the session and both tabs' data; claims keep
+/* Delicat Rewards 3.4.0 — Bonus Free Fire page: « Classement » (Meilleur Client), « Mes bonus » and
+ * « Parrainage » (invite a friend) on one page. One request (delicat_bonus_boot) brings the session and both tabs' data; claims keep
  * the 3.2.4 protocol (signed token, session renewal, AJAX fallback when a host blocks REST, never an
  * automatic second POST). PINs never go into a URL, storage or analytics. */
 (function (w, d) {
@@ -147,14 +147,14 @@
   }
 
   /* ------------------------------------------------------------------ tabs */
-  var tabs = [].slice.call(root.querySelectorAll('[role="tab"]'));
+  var tabs = [].slice.call(root.querySelectorAll('[role="tab"]')), HASH = { bonus: 'mes-bonus', classement: 'classement', parrainage: 'parrainage' };
   function current() { return root.getAttribute('data-tab') || 'classement'; }
   function select(name, focus) {
     if (!$('dbf-panel-' + name)) return;
     tabs.forEach(function (t) { var on = t.id === 'dbf-tab-' + name; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; if (on && focus) t.focus(); });
-    ['classement', 'bonus'].forEach(function (n) { var p = $('dbf-panel-' + n); if (p) p.hidden = n !== name; });
+    ['classement', 'bonus', 'parrainage'].forEach(function (n) { var p = $('dbf-panel-' + n); if (p) p.hidden = n !== name; });
     root.setAttribute('data-tab', name);
-    if (tabs.length) try { history.replaceState(history.state, '', '#' + (name === 'bonus' ? 'mes-bonus' : 'classement')); } catch (e) { /* sandboxed */ }
+    if (tabs.length) try { history.replaceState(history.state, '', '#' + (HASH[name] || name)); } catch (e) { /* sandboxed */ }
     if (name === 'bonus' && S.loggedIn && !S.historyAsked) loadHistory().catch(function (e) { notice(e.message); });
     yourBar();
   }
@@ -166,7 +166,7 @@
       e.preventDefault(); select(tabs[(j + tabs.length) % tabs.length].id.replace('dbf-tab-', ''), true);
     });
   });
-  if (/^#mes-bonus\b/.test(location.hash)) select('bonus'); else if (/^#classement\b/.test(location.hash)) select('classement');
+  if (/^#mes-bonus\b/.test(location.hash)) select('bonus'); else if (/^#classement\b/.test(location.hash)) select('classement'); else if (/^#parrainage\b/.test(location.hash)) select('parrainage');
 
   /* ------------------------------------------------------------------ classement */
   function login() { var c = $('dbf-login').cloneNode(true); c.removeAttribute('id'); c.hidden = false; fillIcons(c); return c; }
@@ -407,6 +407,343 @@
   $('dbf-dialog-close').addEventListener('click', function () { dialog.close(); });
   $('dbf-pin-refresh').addEventListener('click', function () { S.pinChecks = 0; fetchDelivery(); });
 
+  /* ------------------------------------------------------------------ parrainage */
+  // One point per invited friend whose first real purchase stays paid; milestones are claimed once, as a
+  // PIN (diamonds) or store credit (HTG). The server decides everything; this only draws and asks.
+  var BRANDS = __BRANDS__; // share logos, 24 x 24
+  var R = { state: null, claiming: false, seq: 0, fp: null, invite: null, prefill: '', armed: '', armTimer: 0, visited: false, seen: false };
+  var CODE_RE = /^DLC[A-HJ-NP-Z2-9]{6}$/;
+  var FRIEND_ICON = { signed_up: 'schedule', qualified: 'hourglass_top', review: 'info', confirmed: 'verified', rejected: 'block' };
+  function brand(name) {
+    var svg = icon(''); svg.setAttribute('viewBox', '0 0 24 24'); svg.firstChild.setAttribute('d', BRANDS[name] || ''); return svg;
+  }
+  function refCode(v) { return String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); }
+  function plural(n, one, many) { return num(n) + ' ' + (Math.abs(n) > 1 ? many : one); }
+  function prizeText(m) { return [m.diamonds ? diamonds(m.diamonds) : '', m.htg ? num(m.htg) + ' HTG' : ''].filter(Boolean).join(' ou '); }
+  /* A summary of this browser (no canvas, nothing stored): the server keeps only a keyed hash of it,
+     to see one phone opening several accounts. */
+  function fingerprint() {
+    if (R.fp) return R.fp;
+    var n = navigator, sc = w.screen || {}, tz = '', sw = sc.width || 0, sh = sc.height || 0;
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) { /* old browsers */ }
+    var raw = [n.userAgent, n.platform || '', [].concat(n.languages || n.language || []).join(','), tz,
+      Math.min(sw, sh) + 'x' + Math.max(sw, sh) + 'x' + (sc.colorDepth || 0), w.devicePixelRatio || 1,
+      n.hardwareConcurrency || 0, n.deviceMemory || 0, n.maxTouchPoints || 0].join('|');
+    var subtle = w.crypto && w.crypto.subtle;
+    R.fp = subtle && w.TextEncoder ? subtle.digest('SHA-256', new TextEncoder().encode(raw)).then(function (buf) {
+      return [].map.call(new Uint8Array(buf), function (x) { return (x < 16 ? '0' : '') + x.toString(16); }).join('');
+    }).catch(function () { return ''; }) : Promise.resolve('');
+    return R.fp;
+  }
+  function copyText(value) {
+    function legacy() {
+      var ta = node('textarea'); ta.value = value; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:1px;opacity:0';
+      d.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, value.length);
+      var ok = false; try { ok = d.execCommand('copy'); } catch (e) { /* not allowed */ }
+      ta.remove(); return ok;
+    }
+    if (navigator.clipboard && w.isSecureContext) return navigator.clipboard.writeText(value).then(function () { return true; }, legacy);
+    return Promise.resolve(legacy());
+  }
+  function copyButton(id, label, value) {
+    var b = node('button', 'dbf-btn dbf-btn--ghost dbf-copy'); b.type = 'button'; b.id = id;
+    b.appendChild(icon('content_copy')); b.appendChild(node('span', '', label));
+    var timer = 0;
+    b.addEventListener('click', function () {
+      copyText(value).then(function (ok) {
+        if (!ok) { toast('Appuyez longuement sur le texte pour le copier.'); return; }
+        clearTimeout(timer); b.replaceChildren(icon('check_circle'), node('span', '', 'Copié'));
+        timer = setTimeout(function () { b.replaceChildren(icon('content_copy'), node('span', '', label)); }, 2200);
+      });
+    });
+    return b;
+  }
+
+  /* hero: points, bar, milestone marks */
+  function refHero(s) {
+    var pts = s ? Number(s.points || 0) : 0, max = Math.max(1, Number(s && s.max || 100)), miles = s && s.milestones || [];
+    text('dbf-ref-points', s ? num(pts) : '—');
+    var bar = $('dbf-ref-bar'), meter = $('dbf-ref-meter'), track = $('dbf-ref-track');
+    if (bar) bar.style.width = Math.min(100, pts / max * 100) + '%';
+    if (meter) meter.setAttribute('aria-valuenow', String(pts));
+    if (track) {
+      track.replaceChildren();
+      // A number too close to the next one (or to the end) shows as a dot only, so labels never overlap.
+      var at = miles.map(function (m) { return Math.min(100, m.points / max * 100); }), shown = -100;
+      miles.forEach(function (m, i) {
+        var end = m.points >= max, tight = !end && (at[i] - shown < 9 || (at[at.length - 1] >= 100 && 100 - at[i] < 9));
+        if (!tight) shown = at[i];
+        var mark = node('span', 'dbf-ref-mark' + (pts >= m.points ? ' is-on' : '') + (end ? ' is-end' : '') + (tight ? ' is-tight' : ''), m.points);
+        mark.style.left = at[i] + '%'; track.appendChild(mark);
+      });
+    }
+    var ready = miles.filter(function (m) { return m.status === 'claimable'; }).length;
+    var next = miles.filter(function (m) { return m.points > pts; })[0];
+    text('dbf-ref-next', !s ? 'Connectez-vous pour obtenir votre code et votre lien personnels.'
+      : s.blocked ? 'Votre accès au parrainage est suspendu.'
+      : ready ? (ready === 1 ? 'Une récompense vous attend ci-dessous.' : ready + ' récompenses vous attendent ci-dessous.')
+      : next ? 'Encore ' + plural(next.points - pts, 'point', 'points') + ' pour le palier ' + next.points + ' : ' + prizeText(next) + '.'
+      : 'Tous les paliers sont atteints. Merci pour vos invitations !');
+  }
+  function refBody() { var b = $('dbf-ref-body'); if (b) { b.replaceChildren(); b.setAttribute('aria-busy', 'false'); } return b; }
+  function refError(msg) { var b = refBody(); if (b) b.appendChild(node('p', 'dbf-muted', msg)); }
+
+  /* signed out: sign-in card, or the friend's invitation */
+  function inviteCard(inv) {
+    var c = $('dbf-invite').cloneNode(true); c.removeAttribute('id'); c.hidden = false;
+    c.querySelector('[data-ref="name"]').textContent = clean(inv.inviter) || 'Un ami';
+    c.querySelector('[data-ref="initials"]').textContent = initials(inv.inviter || 'A');
+    fillIcons(c); return c;
+  }
+  function refGuest() {
+    var b = refBody(); if (!b) return;
+    refHero(null);
+    b.appendChild(R.invite && $('dbf-invite') ? inviteCard(R.invite) : login());
+  }
+
+  /* signed in */
+  function renderRef(s) {
+    var b = $('dbf-ref-body'); if (!b) return;
+    if (!s || typeof s !== 'object') { refError('Parrainage indisponible. Touchez Actualiser.'); return; }
+    if (s.enabled === false) { refHero(null); refBody().appendChild(node('p', 'dbf-empty', 'Le parrainage est fermé pour le moment.')); return; }
+    if (!Array.isArray(s.milestones)) { refError('Parrainage indisponible. Touchez Actualiser.'); return; }
+    R.state = s; disarm();
+    refHero(s); refBody();
+    if (s.invitedBy) b.appendChild(invitedNote(s.invitedBy));
+    else if (s.canEnterCode) b.appendChild(codeForm());
+    if (s.blocked) b.appendChild(blockedCard());
+    else if (s.code && /^https?:\/\//.test(s.link || '')) b.appendChild(shareCard(s));
+    b.appendChild(milestoneList(s));
+    b.appendChild(friendList(s));
+    celebrateRef(s);
+  }
+  function invitedNote(by) {
+    var p = node('p', 'dbf-card dbf-ref-note'); p.appendChild(icon('group_add'));
+    var waiting = by.status === 'signed_up' || by.status === 'qualified';
+    p.appendChild(node('span', '', 'Vous avez été invité par ' + (clean(by.name) || 'un ami') + '.' + (waiting ? ' Votre premier achat lui offre un point.' : '')));
+    return p;
+  }
+  function blockedCard() {
+    var c = node('div', 'dbf-card dbf-ref-blocked'); c.setAttribute('role', 'status');
+    var i = node('span', 'dbf-tier-i'); i.appendChild(icon('block')); c.appendChild(i);
+    var t = node('div'); t.appendChild(node('b', '', 'Accès au parrainage suspendu'));
+    t.appendChild(node('p', 'dbf-muted', 'Un même téléphone, numéro ou adresse est utilisé par plusieurs comptes, ou les règles du programme n’ont pas été respectées. Contactez le support si vous pensez à une erreur.'));
+    c.appendChild(t); return c;
+  }
+  function codeForm() {
+    var f = node('form', 'dbf-card dbf-codeform'); f.noValidate = true;
+    f.appendChild(node('h3', '', 'Un ami vous a invité ?'));
+    f.appendChild(node('p', 'dbf-muted', 'Entrez son code avant votre premier achat : il gagne un point quand votre achat est validé.'));
+    var row = node('div', 'dbf-code-row'), input = node('input'), btn = node('button', 'dbf-btn', 'Valider'), err = node('p', 'dbf-field-err');
+    input.id = 'dbf-ref-code-in'; input.name = 'code'; input.autocomplete = 'off'; input.spellcheck = false; input.maxLength = 12;
+    input.setAttribute('autocapitalize', 'characters'); input.setAttribute('aria-label', 'Code de parrainage'); input.placeholder = 'DLC…';
+    input.value = R.prefill || ''; err.id = 'dbf-ref-code-err'; err.hidden = true; err.setAttribute('role', 'alert'); input.setAttribute('aria-describedby', err.id);
+    btn.type = 'submit'; btn.id = 'dbf-ref-code-btn';
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var code = refCode(input.value); err.hidden = true;
+      if (!CODE_RE.test(code)) { err.textContent = 'Le code commence par DLC et compte 9 caractères.'; err.hidden = false; input.focus(); return; }
+      btn.disabled = true; btn.replaceChildren(node('span', 'dbf-spin'), d.createTextNode('Vérification…'));
+      fingerprint().then(function (fp) { return api('/referral/code', { method: 'POST', body: JSON.stringify({ code: code, fp: fp }) }); })
+        .then(function (st) {
+          R.prefill = ''; renderRef(st);
+          toast('Code accepté. Votre premier achat offre un point à ' + (st.invitedBy && clean(st.invitedBy.name) || 'votre ami') + '.');
+        }).catch(function (e2) {
+          err.textContent = e2.message || 'Code refusé.'; err.hidden = false;
+          btn.disabled = false; btn.textContent = 'Valider';
+        });
+    });
+    row.appendChild(input); row.appendChild(btn); f.appendChild(row); f.appendChild(err);
+    return f;
+  }
+  function shareCard(s) {
+    var card = node('section', 'dbf-card dbf-share'); card.setAttribute('aria-label', 'Votre invitation');
+    var top = node('div', 'dbf-share-top'), code = node('div', 'dbf-code');
+    code.appendChild(node('small', '', 'Votre code')); code.appendChild(node('b', '', s.code));
+    top.appendChild(code); top.appendChild(copyButton('dbf-ref-copy-code', 'Copier', s.code)); card.appendChild(top);
+    var link = node('div', 'dbf-link'), input = node('input');
+    input.id = 'dbf-ref-link'; input.value = s.link; input.readOnly = true; input.spellcheck = false; input.setAttribute('aria-label', 'Votre lien personnel');
+    input.addEventListener('click', function () { input.select(); });
+    link.appendChild(icon('link')); link.appendChild(input); link.appendChild(copyButton('dbf-ref-copy-link', 'Copier le lien', s.link));
+    card.appendChild(link);
+    card.appendChild(node('p', 'dbf-share-l', 'Partager mon invitation'));
+    var grid = node('div', 'dbf-share-grid'), msg = clean(s.shareText) || s.link;
+    var bare = msg.split(s.link).join('').replace(/\s{2,}/g, ' ').replace(/\s*:\s*\(/, ' (').trim(), e = encodeURIComponent;
+    [
+      { k: 'whatsapp', label: 'Partager sur WhatsApp', href: 'https://wa.me/?text=' + e(msg) },
+      { k: 'facebook', label: 'Facebook', href: 'https://www.facebook.com/sharer/sharer.php?u=' + e(s.link) },
+      { k: 'telegram', label: 'Telegram', href: 'https://t.me/share/url?url=' + e(s.link) + '&text=' + e(bare) },
+      { k: 'sms', label: 'SMS', href: 'sms:?&body=' + e(msg) }
+    ].forEach(function (x) {
+      var a = node('a', 'dbf-sh dbf-sh--' + x.k); a.href = x.href; a.setAttribute('data-no-shell', '');
+      if (x.k !== 'sms') { a.target = '_blank'; a.rel = 'noopener noreferrer'; }
+      if (x.k !== 'whatsapp') a.setAttribute('aria-label', 'Partager sur ' + x.label);
+      a.appendChild(x.k === 'sms' ? icon('sms') : brand(x.k)); a.appendChild(node('span', '', x.label));
+      grid.appendChild(a);
+    });
+    if (navigator.share) {
+      var native = node('button', 'dbf-sh dbf-sh--more'); native.type = 'button'; native.setAttribute('aria-label', 'Autres applications'); native.id = 'dbf-ref-share';
+      native.appendChild(icon('share')); native.appendChild(node('span', '', 'Plus…'));
+      native.addEventListener('click', function () {
+        navigator.share({ title: 'Delicat Store', text: bare, url: s.link }).catch(function (err) { if (err && err.name !== 'AbortError') toast('Partage impossible ici : copiez votre lien.'); });
+      });
+      grid.appendChild(native);
+    }
+    card.appendChild(grid);
+    return card;
+  }
+  function milestoneList(s) {
+    var wrap = node('section', 'dbf-ref-miles'), pts = Number(s.points || 0), list = node('ol', 'dbf-miles');
+    wrap.appendChild(node('h2', 'dbf-h', 'Vos récompenses'));
+    if (!s.milestones.length) list.appendChild(node('li', 'dbf-muted', 'Aucun palier pour le moment.'));
+    s.milestones.forEach(function (m) {
+      var li = node('li', 'dbf-card dbf-mile is-' + m.status), badge = node('span', 'dbf-mile-pts'), info = node('div', 'dbf-mile-info');
+      badge.appendChild(node('b', '', m.points)); badge.appendChild(node('small', '', m.points > 1 ? 'points' : 'point'));
+      info.appendChild(node('h3', '', prizeText(m)));
+      var c = m.claimed || {}, line;
+      if (m.status === 'claimed') line = c.choice === 'htg' ? num(c.amount) + ' HTG ajoutés à votre portefeuille' : diamonds(c.amount) + ' reçus';
+      else if (m.status === 'pending') line = 'Réclamation en cours…';
+      else if (m.status === 'claimable') line = 'Palier atteint : choisissez votre récompense.';
+      else line = s.blocked ? 'Indisponible' : 'Encore ' + plural(Math.max(0, m.points - pts), 'point', 'points');
+      var p = node('p', 'dbf-mile-line'); if (m.status === 'claimed') p.appendChild(icon('check_circle')); p.appendChild(d.createTextNode(line)); info.appendChild(p);
+      if (m.status === 'locked' && !s.blocked) {
+        var bar = node('span', 'dbf-bar'), fill = node('i'); fill.style.width = Math.min(100, pts / m.points * 100) + '%'; bar.appendChild(fill); info.appendChild(bar);
+      }
+      li.appendChild(badge); li.appendChild(info);
+      if (m.status === 'claimable') {
+        var acts = node('div', 'dbf-mile-acts');
+        if (m.diamonds) acts.appendChild(choiceButton(m, 'diamonds'));
+        if (m.htg && s.wallet) acts.appendChild(choiceButton(m, 'htg'));
+        acts.appendChild(node('small', 'dbf-muted', 'Touchez votre choix puis confirmez. Le choix est définitif.'));
+        li.appendChild(acts);
+      } else if (m.status === 'claimed' && c.choice === 'diamonds' && c.order > 0) {
+        var see = node('button', 'dbf-btn dbf-btn--ghost dbf-mile-see', 'Voir mon PIN'); see.type = 'button'; see.id = 'dbf-ref-pin-' + m.points;
+        see.addEventListener('click', function () { returnFocus = see.id; openOrder(c.order); });
+        li.appendChild(see);
+      }
+      list.appendChild(li);
+    });
+    wrap.appendChild(list);
+    return wrap;
+  }
+  function choiceButton(m, choice) {
+    var label = choice === 'htg' ? num(m.htg) + ' HTG' : diamonds(m.diamonds);
+    var b = node('button', 'dbf-btn dbf-choice dbf-choice--' + choice); b.type = 'button'; b.id = 'dbf-ref-claim-' + m.points + '-' + choice;
+    b.setAttribute('data-label', label); b.disabled = R.claiming;
+    b.appendChild(icon(choice === 'htg' ? 'account_balance_wallet' : 'diamond')); b.appendChild(node('span', '', label));
+    b.addEventListener('click', function () { if (R.armed === b.id) refClaim(m.points, choice, b); else arm(b); });
+    return b;
+  }
+  function arm(b) {
+    disarm(); R.armed = b.id; b.classList.add('is-armed'); b.lastChild.textContent = 'Confirmer : ' + b.getAttribute('data-label');
+    R.armTimer = setTimeout(disarm, 6000);
+  }
+  function disarm() {
+    clearTimeout(R.armTimer);
+    var b = R.armed ? $(R.armed) : null; R.armed = '';
+    if (b && !R.claiming) { b.classList.remove('is-armed'); b.lastChild.textContent = b.getAttribute('data-label'); }
+  }
+  function friendList(s) {
+    var wrap = node('section', 'dbf-ref-friends'), cn = s.counts || {}, friends = s.friends || [];
+    var head = node('div', 'dbf-row-h'); head.appendChild(node('h2', 'dbf-h', 'Vos invitations'));
+    var going = (cn.signed_up || 0) + (cn.qualified || 0) + (cn.review || 0);
+    if (going) head.appendChild(node('span', 'dbf-chip dbf-chip--info', plural(going, 'en cours', 'en cours')));
+    wrap.appendChild(head);
+    if (!friends.length) { wrap.appendChild(node('p', 'dbf-card dbf-empty', 'Personne pour l’instant. Partagez votre lien : chaque ami qui fait son premier achat vous rapporte un point.')); return wrap; }
+    var ul = node('ul', 'dbf-friends'), FIRST = 8;
+    friends.forEach(function (f, i) {
+      var li = node('li', 'dbf-friend'); li.hidden = i >= FIRST;
+      var mid = node('div', 'dbf-friend-mid'), when = f.date ? new Date(f.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '';
+      li.appendChild(node('span', 'dbf-av dbf-av--sm', initials(f.name)));
+      mid.appendChild(node('b', '', clean(f.name) || 'Ami'));
+      mid.appendChild(node('small', 'dbf-muted', [when, f.why].filter(Boolean).join(' · ')));
+      var chip = node('span', 'dbf-st dbf-st--' + (FRIEND_ICON[f.status] ? f.status : 'signed_up')); chip.appendChild(icon(FRIEND_ICON[f.status] || 'schedule')); chip.appendChild(node('span', '', clean(f.label)));
+      li.appendChild(mid); li.appendChild(chip); ul.appendChild(li);
+    });
+    wrap.appendChild(ul);
+    if (friends.length > FIRST) { // the latest first; the rest on request
+      var more = node('button', 'dbf-btn dbf-btn--ghost dbf-more', 'Voir les ' + (friends.length - FIRST) + ' autres'); more.type = 'button'; more.id = 'dbf-ref-more';
+      more.addEventListener('click', function () { [].forEach.call(ul.children, function (li) { li.hidden = false; }); more.remove(); var next = ul.children[FIRST]; next.tabIndex = -1; next.focus(); });
+      wrap.appendChild(more);
+    }
+    return wrap;
+  }
+  /* New points and newly reached milestones are celebrated once on this phone. */
+  function celebrateRef(s) {
+    var pts = Number(s.points || 0), ready = s.milestones.filter(function (m) { return m.status === 'claimable'; }).map(function (m) { return m.points; });
+    var prev = store('dbf_ref'); store('dbf_ref', { u: S.userId, p: pts, r: ready });
+    if (prev && prev.u !== S.userId) prev = null;
+    var fresh = ready.filter(function (p) { return !prev || (prev.r || []).indexOf(p) < 0; });
+    if (fresh.length) { confetti(false); toast('Palier ' + fresh[0] + ' atteint : réclamez votre récompense !'); }
+    else if (prev && pts > prev.p) { confetti(false); toast('+' + plural(pts - prev.p, 'point', 'points') + ' de parrainage. Merci pour vos invitations !'); }
+  }
+  function refreshRef() {
+    var seq = ++R.seq;
+    return api('/referral').then(function (st) { if (seq === R.seq && !R.claiming) renderRef(st); });
+  }
+  function openNote(title, msg) {
+    clearSecrets(); showDialog(true);
+    text('dbf-dialog-title', title); text('dbf-dialog-msg', msg);
+    $('dbf-redeem').hidden = true; $('dbf-pin-refresh').hidden = true;
+  }
+  function refClaim(points, choice, button) {
+    if (R.claiming) return;
+    clearTimeout(R.armTimer); R.armed = ''; R.claiming = true; R.seq++; returnFocus = button.id;
+    [].forEach.call(root.querySelectorAll('[id^="dbf-ref-claim-"]'), function (x) { x.disabled = true; });
+    button.replaceChildren(node('span', 'dbf-spin'), d.createTextNode('Envoi de votre récompense…')); button.setAttribute('aria-busy', 'true');
+    api('/referral/claim', { method: 'POST', body: JSON.stringify({ milestone: points, choice: choice }) })
+      .then(function (reply) {
+        R.claiming = false; renderRef(reply); notice('');
+        var c = reply.claimed || {};
+        confetti(true);
+        if (c.choice === 'htg') openNote('Bravo ! ' + num(c.amount) + ' HTG gagnés', 'Le montant est ajouté à votre portefeuille Delicat : utilisez-le pour vos prochains achats.');
+        else if (c.delivery) openDelivery(c.delivery, true);
+        else openNote('Bravo ! ' + diamonds(c.amount) + ' gagnés', 'Votre PIN est en préparation : touchez « Voir mon PIN » dans quelques instants.');
+        if (S.historyAsked) { S.page = 1; loadHistory().catch(function () { /* the list refreshes with the next visit */ }); }
+      }).catch(function (e) {
+        R.claiming = false;
+        var msg = e.name === 'AbortError' || e instanceof TypeError ? 'La réponse a été interrompue. Vérifiez vos récompenses avant de réclamer à nouveau.' : e.message;
+        notice(msg);
+        // Never repeat the POST: the state shows whether the reward was given.
+        refreshRef().catch(function () { notice('Connexion interrompue. Rechargez la page pour vérifier votre récompense.'); });
+      });
+  }
+  /* Arrival through a personal link: the browser remembers the inviter (signed cookie, server side). */
+  function visit() {
+    var code = '';
+    try { code = refCode(new URLSearchParams(location.search).get('ref')); } catch (e) { /* old browsers */ }
+    if (!code) return;
+    select('parrainage');
+    function drop() {
+      try { var u = new URL(location.href); u.searchParams.delete('ref'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) { /* sandboxed */ }
+    }
+    if (!CODE_RE.test(code)) { drop(); notice('Ce lien d’invitation n’est pas valable.'); return; }
+    fingerprint().then(function (fp) { return post({ action: 'delicat_ref_visit', code: code, fp: fp }); }).then(function (j) {
+      drop();
+      if (!j.ok) {
+        notice(j.message || (j.code === 'invalid' ? 'Ce lien d’invitation n’est plus valable.' : j.code === 'off' ? 'Le parrainage est fermé pour le moment.' : 'Invitation indisponible. Réessayez plus tard.'));
+        return;
+      }
+      R.invite = { code: code, inviter: j.inviter };
+      if (!S.loggedIn) refGuest();
+      else if (R.state && R.state.canEnterCode && !R.state.invitedBy && R.state.code !== code) {
+        R.prefill = code; renderRef(R.state); toast('Code de ' + (clean(j.inviter) || 'votre ami') + ' prêt : touchez Valider.');
+      }
+    }).catch(function (e) { notice(e.message); });
+  }
+  /* The signed-in page reports this browser a few times an hour at most (duplicate-account checks). */
+  function seen() {
+    if (R.seen || !S.loggedIn || !S.nonce) return;
+    R.seen = true;
+    var last = store('dbf_ref_seen');
+    if (last && last.u === S.userId && Date.now() - last.t < 1800000) return;
+    fingerprint().then(function (fp) {
+      if (!fp) return;
+      store('dbf_ref_seen', { u: S.userId, t: Date.now() });
+      return post({ action: 'delicat_ref_seen', nonce: S.nonce, fp: fp });
+    }).catch(function () { /* best effort */ });
+  }
+
   /* ------------------------------------------------------------------ boot, clocks, refresh */
   function boot() {
     if (S.booting) return S.booting;
@@ -432,6 +769,13 @@
           if (b.rewards && !b.rewards.error) render(b.rewards); else if (b.rewards) notice(b.rewards.error);
           if (current() === 'bonus' || S.historyAsked) loadHistory().catch(function (e) { notice(e.message); });
         }
+      }
+      if ($('dbf-panel-parrainage')) {
+        if (!S.loggedIn) { R.state = null; refGuest(); }
+        else if (b.referral && b.referral.error) refError(b.referral.error);
+        else if (b.referral) renderRef(b.referral);
+        if (!R.visited) { R.visited = true; visit(); }
+        seen();
       }
       tick();
     }).catch(function (e) { notice(e.message || 'Chargement impossible. Touchez Actualiser.'); })

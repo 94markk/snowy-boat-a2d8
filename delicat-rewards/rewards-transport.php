@@ -14,7 +14,7 @@ function delicat_rewards_transport() {
     }
     $path = isset( $_POST['path'] ) && is_string( $_POST['path'] ) ? wp_unslash( $_POST['path'] ) : '';
     $method = isset( $_POST['method'] ) && is_string( $_POST['method'] ) ? strtoupper( wp_unslash( $_POST['method'] ) ) : 'GET';
-    $routes = array( '/rewards' => 'GET', '/reward-pins' => 'GET', '/leaderboard' => 'GET', '/claim' => 'POST' );
+    $routes = array( '/rewards' => 'GET', '/reward-pins' => 'GET', '/leaderboard' => 'GET', '/claim' => 'POST', '/referral' => 'GET', '/referral/claim' => 'POST', '/referral/code' => 'POST' );
     if ( ! isset( $routes[ $path ] ) || $method !== $routes[ $path ] ) {
         wp_send_json( array( 'code' => 'invalid_route', 'message' => 'Action non autorisée.' ), 400 );
     }
@@ -22,7 +22,8 @@ function delicat_rewards_transport() {
     if ( strlen( $raw ) > 2048 ) wp_send_json( array( 'code' => 'invalid_params' ), 400 );
     $params = json_decode( $raw, true );
     if ( ! is_array( $params ) ) wp_send_json( array( 'code' => 'invalid_params' ), 400 );
-    $allowed = '/claim' === $path ? array( 'tier', 'token' ) : ( '/reward-pins' === $path ? array( 'order_id', 'page' ) : array() );
+    $allowed = array( '/claim' => array( 'tier', 'token' ), '/reward-pins' => array( 'order_id', 'page' ), '/referral/claim' => array( 'milestone', 'choice' ), '/referral/code' => array( 'code', 'fp' ) );
+    $allowed = $allowed[ $path ] ?? array();
     if ( array_diff( array_keys( $params ), $allowed ) ) wp_send_json( array( 'code' => 'invalid_params' ), 400 );
     $request = new WP_REST_Request( $method, '/delicat/v1' . $path );
     if ( 'POST' === $method ) $request->set_body_params( $params );

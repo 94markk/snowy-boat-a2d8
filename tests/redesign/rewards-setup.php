@@ -1,5 +1,5 @@
 <?php
-// php rewards-setup.php <site-dir> — STAGING ONLY. Test data for the Bonus Free Fire page (Delicat Rewards 3.3):
+// php rewards-setup.php <site-dir> — STAGING ONLY. Test data for the Bonus Free Fire page (Delicat Rewards 3.3+):
 // PIN products with stock, short tier goals, a week of paid + completed orders for the ranking, a claimable
 // « Mini » bonus for client1, pages for the new and the old shortcodes, and a must-use fixture that writes
 // test PIN codes onto reward orders (no key manager on staging). Safe to run again: it resets its own data.
@@ -15,7 +15,8 @@ if ( ! is_dir( $mu ) ) mkdir( $mu, 0755, true );
 file_put_contents( $mu . '/delicat-rewards-staging-pins.php', <<<'PHP'
 <?php
 /* STAGING ONLY (tests/redesign/rewards-setup.php): reward orders get test PIN codes and are completed. */
-add_action( 'delicat_reward_issued', function ( $user_id, $tier, $order_id ) {
+// Every reward order (bonus tiers, weekly prize, referral milestones) announces itself on this hook.
+add_action( 'delicat_reward_order_ready_for_delivery', function ( $order_id ) {
 	$order = wc_get_order( $order_id );
 	if ( ! $order ) return;
 	foreach ( $order->get_items() as $item ) {
@@ -25,7 +26,7 @@ add_action( 'delicat_reward_issued', function ( $user_id, $tier, $order_id ) {
 		$item->save();
 	}
 	$order->update_status( 'completed', 'Staging: test PINs.' );
-}, 20, 3 );
+}, 20, 1 );
 PHP
 );
 

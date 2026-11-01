@@ -2,9 +2,22 @@
 /**
  * Plugin Name: Delicat Rewards — Admin Edition
  * Description: Complete Delicat Rewards system with branding controls and secure license server for Client editions.
- * Version:     3.3.0
+ * Version:     3.4.0
  * Author:      Delicat Store Haiti
  * Requires PHP: 7.4
+ *
+ * NEW IN 3.4.0 — Referral programme « Parrainage » (referral.php, referral-admin.php).
+ *   • Third tab on the Bonus Free Fire page: personal code DLC…… and link, share buttons (WhatsApp,
+ *     Facebook, Telegram, SMS, the phone's share sheet), milestones, invited friends, code entry.
+ *   • 1 point per friend who signs up through the link (or types the code early) and pays a first real
+ *     order; points count after a holding period; up to 100; milestones claimed once, as a PIN reward
+ *     order or TeraWallet credit. Off until enabled in the dashboard tab « Parrainage ».
+ *   • Fraud rules: same phone (device cookie) refused and both accounts leave the rewards programme;
+ *     shared payment phone or e-mail alias refused; same recent network sent to review; VPN refused
+ *     (proxycheck.io, DELICAT_PROXYCHECK_KEY in wp-config.php); store-credit first orders excluded;
+ *     refunds reverse points. Signals stored as keyed hashes only.
+ *   • Page: links drawn as buttons keep their colours under Builder (« main a »); the page opts out of
+ *     Builder's dark-mode repaint (data-dlc-dark-skip) and draws its own dark theme.
  *
  * NEW IN 3.3.0 — Bonus Free Fire page and security fixes (bonus-page.php).
  *   • One page, two tabs: « Classement » (Meilleur Client) and « Mes bonus », [delicat_bonus_free_fire];
@@ -188,7 +201,7 @@ define( 'DELICAT_BOARD_SPEND_WEIGHT', 0.70 ); // Meilleur Client: money is prima
 define( 'DELICAT_BOARD_ORDER_WEIGHT', 0.30 ); // distinct WooCommerce orders
 define( 'DELICAT_LEDGER_DEBT_KEY',    '#debt' ); // reserved signed-ledger key: purchases still owed (sanitize_key can never produce it)
 define( 'DELICAT_DEBT_MONTHS',        13 );    // how many past months a refund after a claim is carried forward from
-if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.3.0' ); // keep in step with the header
+if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.4.0' ); // keep in step with the header
 
 /** Capability required for every Delicat admin screen and action. */
 require_once __DIR__ . '/reward-delivery.php';
@@ -3136,6 +3149,7 @@ function delicat_admin_page() {
 		'installation'=> 'Installation',
 		'tiers'       => 'Rewards Program — Tiers',
 		'meilleur' => 'Meilleur client',
+		'parrainage'  => 'Parrainage',
 		'produits'    => 'Produits',
 		'reglages'    => 'Rewards — Réglages',
 		'branding'     => 'Nom & Logo',
@@ -3174,6 +3188,7 @@ function delicat_admin_page() {
 	if ( 'installation' === $tab )     delicat_tab_setup();
 	elseif ( 'meilleur' === $tab ) { delicat_tab_competition(); delicat_tab_settings( true ); }
 	elseif ( 'tiers' === $tab )        delicat_tab_tiers();
+	elseif ( 'parrainage' === $tab )   delicat_tab_referral();
 	elseif ( 'produits' === $tab )     delicat_tab_products();
 	elseif ( 'reglages' === $tab )     delicat_tab_settings();
 	elseif ( 'branding' === $tab )      delicat_tab_branding();
@@ -4366,4 +4381,6 @@ function delicat_license_admin_page(){
 
 require_once __DIR__ . '/competition-admin.php';
 require_once __DIR__ . '/app-contract.php';
+require_once __DIR__ . '/referral.php';
+require_once __DIR__ . '/referral-admin.php';
 require_once __DIR__ . '/bonus-page.php';

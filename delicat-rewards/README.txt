@@ -1,4 +1,68 @@
-DELICAT REWARDS — ADMIN EDITION 3.3.0
+DELICAT REWARDS — ADMIN EDITION 3.4.0
+
+NOUVEAUTÉS 3.4.0 — PARRAINAGE (« INVITER UN AMI »)
+- Un troisième onglet « Parrainage » sur la page Bonus Free Fire (lien direct : …/votre-page/#parrainage).
+  Le programme est DÉSACTIVÉ à l'installation : activez-le dans Delicat Rewards › onglet « Parrainage »
+  après avoir vérifié les paliers et les montants.
+- Chaque client reçoit un code personnel (DLC + 6 caractères, ex. DLCK7M2QX) et un lien personnel vers la
+  page. Boutons : « Partager sur WhatsApp », Facebook, Telegram, SMS, « Plus… » (le menu de partage du
+  téléphone : Instagram, Messenger, etc.), « Copier » le code et « Copier le lien ». Le message envoyé se
+  règle dans le tableau de bord ({lien} = le lien du client, {code} = son code).
+- 1 point par ami qui :
+  1) crée son compte avec le lien (ou tape le code dans les 7 jours après son inscription, avant son
+     premier achat) ;
+  2) paie un premier achat d'au moins 100 HTG dans les 30 jours, par MonCash, NatCash… (pas avec le
+     crédit boutique) ;
+  3) le point est validé 7 jours après l'achat terminé, s'il n'est ni remboursé ni annulé.
+  Maximum 100 points par client. Si une règle n'est pas respectée : aucun point.
+- Paliers 5, 15, 35, 60, 85 et 100 points : chaque palier se réclame une seule fois, au choix du client,
+  en diamants Free Fire (PIN, comme les bonus) ou en HTG (crédit ajouté au portefeuille TeraWallet).
+  Montants proposés au départ, À VÉRIFIER avant d'activer :
+     5 pts : 110 diamants ou 140 HTG      60 pts : 1 160 diamants ou 1 400 HTG
+    15 pts : 341 diamants ou 420 HTG      85 pts : 2 180 diamants ou 2 600 HTG
+    35 pts : 572 diamants ou 700 HTG     100 pts : 3 340 diamants ou 4 000 HTG
+  À l'enregistrement, un montant en diamants qui ne peut pas être fait avec vos PIN est refusé (choix
+  diamants retiré pour ce palier) ; le stock est vérifié au moment de la réclamation.
+- Protection contre la fraude :
+  · même téléphone que le parrain (ou téléphone déjà utilisé par un autre compte) : invitation refusée et
+    les comptes concernés sont retirés du programme de récompenses (bonus et parrainage) jusqu'à votre
+    vérification (bouton « Débloquer ») ; un e-mail vous prévient ;
+  · même numéro de téléphone de paiement ou même adresse e-mail (variantes comme nom+promo@… ou
+    n.o.m@gmail.com) qu'un autre compte : refusée ;
+  · même réseau internet que le parrain dans les 3 derniers jours : mise « À vérifier » (pas refusée :
+    Digicel et Natcom donnent la même adresse à beaucoup de clients, et des amis s'invitent souvent sur
+    le même Wi-Fi) ; vous acceptez ou refusez dans l'onglet ;
+  · VPN ou proxy : interdit (visite du lien, inscription, code, réclamation), avec une clé proxycheck.io ;
+  · premier achat payé avec le crédit boutique, gratuit (coupon 100 %), trop petit ou remboursé : ne
+    compte pas ; un remboursement après la validation retire le point (une récompense déjà donnée reste) ;
+  · une récompense par palier, garantie par la base de données même si deux demandes arrivent ensemble.
+  Le client voit seulement un message général (« Ne respecte pas les règles du programme ») : les
+  détails de la détection restent dans le tableau de bord. Les données (téléphone, réseau, navigateur, e-mail) sont gardées
+  uniquement sous forme d'empreintes chiffrées, jamais en clair, et supprimées avec le compte.
+- Ce qu'un site web ne peut pas faire (à savoir) : lire l'IMEI ou le numéro du téléphone, ou voir la
+  vraie adresse derrière un VPN. Le « même téléphone » est reconnu par l'identifiant que le site enregistre
+  dans le navigateur : quelqu'un qui efface les données du navigateur ou change de navigateur n'est plus
+  reconnu par ce moyen. Les autres contrôles (numéro de paiement, e-mail, réseau, VPN, vérification par
+  l'équipe) restent actifs.
+- Page : les boutons-liens (« Se connecter », « Utiliser mon PIN ») gardent leurs couleurs avec Delicat
+  Builder ; le mode sombre de la page est dessiné par la page elle-même.
+
+INSTALLATION 3.4.0
+1. WordPress > Extensions > Ajouter > Téléverser : delicat-rewards-admin-v3.4.0.zip, remplacer l'extension
+   existante. Les réglages, commandes, bonus et registres sont conservés ; trois tables sont ajoutées
+   ({préfixe}delicat_referrals, delicat_ref_claims, delicat_ref_signals).
+2. Détection VPN (recommandé) : créez un compte sur proxycheck.io, copiez votre clé, puis ajoutez dans
+   wp-config.php (avant « That's all, stop editing ») :  define( 'DELICAT_PROXYCHECK_KEY', 'votre-clé' );
+   La clé n'est jamais affichée ni envoyée au navigateur. Sans clé, les VPN ne sont pas détectés.
+3. Delicat Rewards › onglet « Parrainage » : vérifiez les paliers et les montants, le message de partage,
+   puis cochez « Activer le parrainage » et enregistrez.
+4. Mettez à jour votre politique de confidentialité (à faire par vous) : le programme de parrainage
+   enregistre, sous forme d'empreintes chiffrées, l'identifiant du navigateur, l'adresse réseau, un résumé
+   du navigateur et l'e-mail, et vérifie les VPN auprès de proxycheck.io, pour empêcher les faux comptes.
+5. Purgez LiteSpeed Cache et Cloudflare.
+6. Testez avec deux téléphones différents : le lien d'un client, l'inscription de l'ami, son premier achat.
+
+DELICAT REWARDS — 3.3.0
 
 NOUVEAUTÉS 3.3.0 — PAGE « BONUS FREE FIRE » ET SÉCURITÉ
 - Une seule page, deux onglets : « Classement » (Meilleur client de la semaine) et « Mes bonus »
