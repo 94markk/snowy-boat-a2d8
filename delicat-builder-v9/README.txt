@@ -1,3 +1,20 @@
+9.7.0 — Navigation globale unifiée (phase 3 de la refonte)
+(1) Un seul en-tête et un seul pied de page : avec un thème « blocs » (Twenty Twenty-Five et les autres thèmes
+récents), l’en-tête et le pied de page du thème s’affichaient sous ceux du Builder sur l’accueil, le blog et la
+boutique ; ils ne sont plus générés (page plus légère, plus de script de navigation du thème). Les shortcodes
+[delicat_app_header] et [delicat_bottom_nav] laissés dans une page n’ajoutent plus un deuxième en-tête ni une
+deuxième barre du bas (ils restent reconnus, rien ne s’affiche en clair).
+(2) Icônes Material partout dans la navigation : en-tête, cloche des notifications, menu latéral (raccourcis et
+entrées du menu), barre du bas et pied de page. Les logos WhatsApp, Telegram, Instagram, Facebook, TikTok et
+YouTube restent ceux des marques. Les 100 icônes ont des tracés optimisés (−30 % d’octets, identiques à l’œil).
+(3) Accessibilité : le mini-panier et le panneau de notifications prennent le focus à l’ouverture ; Échap les
+ferme et rend le focus au bouton, comme le menu latéral.
+(4) Nettoyage : l’ancienne barre mobile du « Shell » (mobile-dock.css et mobile-dock.js), inutilisée depuis
+l’arrivée de la barre du bas native, est supprimée.
+Poids des pages (HTML compressé, site de test) : accueil −6,9 Ko, boutique −4,1 Ko ; fiche produit et panier
++4,0 Ko (icônes Material du menu latéral).
+Installer avec Delicat Identity 6.17.1 et Delicat Recharge 6.6.2 (inchangés), puis purger LiteSpeed / Cloudflare.
+
 9.6.2 — Correctif : états et icônes perdus lors du retrait des emojis
 (1) Notifications : chaque notification retrouve l’icône de sa catégorie (commande, portefeuille, message,
 promotion, sécurité) au lieu de la même cloche pour toutes ; les notifications déjà enregistrées aussi.

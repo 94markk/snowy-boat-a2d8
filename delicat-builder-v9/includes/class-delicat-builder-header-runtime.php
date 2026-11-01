@@ -251,19 +251,11 @@ final class Delicat_Builder_V9_Header_Studio_8 {
         return array_values(array_unique((array)$classes));
     }
 
+    /** 9.7.0: header icons come from the shared Material Symbols set (sized by the header CSS). */
     private function icon($name) {
-        $icons = array(
-            'menu'=>'<path d="M4 7h16M4 12h16M4 17h16"/>','search'=>'<circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/>',
-            'cart'=>'<path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L20 8H7"/><circle cx="10" cy="20" r="1"/><circle cx="17" cy="20" r="1"/>',
-            'user'=>'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
-            'theme'=>'<path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7Z"/>',
-            'game'=>'<path d="M8 8h8a5 5 0 0 1 4.6 7l-1 2.4a2 2 0 0 1-3.2.7L14 16h-4l-2.4 2.1a2 2 0 0 1-3.2-.7L3.4 15A5 5 0 0 1 8 8Z"/><path d="M7 12h4M9 10v4M16 12h.01M18 14h.01"/>',
-            'gift'=>'<path d="M4 10h16v10H4zM3 6h18v4H3zM12 6v14"/><path d="M12 6H8.5A2.5 2.5 0 1 1 12 2.5V6Zm0 0h3.5A2.5 2.5 0 1 0 12 2.5V6Z"/>',
-            'screen'=>'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>','card'=>'<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>',
-            'shop'=>'<path d="M4 10h16l-1 11H5L4 10Zm2 0 1-5h10l1 5M9 14v2M15 14v2"/>','chat'=>'<path d="M21 12a8 8 0 0 1-8 8H5l-3 2 1-4a8 8 0 1 1 18-6Z"/>',
-            'grid'=>'<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>'
-        );
-        return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'.($icons[$name] ?? $icons['grid']).'</svg>';
+        $material = array('menu'=>'menu','search'=>'search','cart'=>'shopping-cart','user'=>'person','theme'=>'dark-mode','game'=>'sports-esports',
+            'gift'=>'redeem','screen'=>'live-tv','card'=>'credit-card','shop'=>'storefront','chat'=>'chat','grid'=>'grid-view');
+        return isset($material[$name]) ? Delicat_Builder_V9_Design_System::icon($material[$name], 24) : '';
     }
 
     /**

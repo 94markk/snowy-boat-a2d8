@@ -86,20 +86,17 @@ final class Delicat_Builder_V9_Drawer {
 		return $value;
 	}
 
+	/** 9.7.0: interface icons from the shared Material Symbols set; brand marks keep their own paths. */
 	private static function icon( string $name ): string {
+		$material = array(
+			'close' => 'close', 'chevron' => 'chevron-right', 'search' => 'search', 'wallet' => 'account-balance-wallet',
+			'orders' => 'package-2', 'support' => 'support-agent', 'app' => 'mobile', 'copy' => 'content-copy',
+			'logout' => 'logout', 'login' => 'login', 'moon' => 'dark-mode', 'points' => 'stars',
+		);
+		if ( isset( $material[ $name ] ) ) {
+			return Delicat_Builder_V9_Design_System::icon( $material[ $name ], 20 );
+		}
 		$paths = array(
-			'close'    => '<path d="M6 6l12 12M18 6L6 18"/>',
-			'chevron'  => '<path d="m9 5 7 7-7 7"/>',
-			'search'   => '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
-			'wallet'   => '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M15.5 14.5h2.5"/>',
-			'orders'   => '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>',
-			'support'  => '<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-5 4z"/><path d="M8 9.5h8M8 13h5"/>',
-			'app'      => '<rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10 18h4"/>',
-			'copy'     => '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/>',
-			'logout'   => '<path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l5 4-5 4M20 12H9"/>',
-			'login'    => '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9 8l5 4-5 4M14 12H3"/>',
-			'moon'     => '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
-			'points'   => '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-2.9-5.6 2.9 1.1-6.2L3 9.6l6.2-.9z"/>',
 			'whatsapp' => '<path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.7-1.2A9 9 0 1 0 12 3z"/><path d="M9.2 8.8c.2-.4.5-.5.8-.5h.5c.2 0 .4.1.5.4l.6 1.5c.1.2 0 .4-.1.6l-.5.6c.6 1 1.5 1.8 2.5 2.4l.6-.5c.2-.2.4-.2.6-.1l1.5.7c.2.1.4.3.3.6-.1.9-.7 1.5-1.6 1.6-2.9.1-6.2-3.2-6.1-6.1 0-.4.2-.8.4-1.2z"/>',
 			'telegram' => '<path d="m3.5 11.2 16-6.7c.6-.2 1.1.2 1 .9L18 19.8c-.1.6-.6.8-1.1.5l-4.3-3.2-2.1 2c-.2.2-.6.1-.6-.2l.3-3.4 7-6.3-8.6 5.3-3.7-1.2c-.7-.2-.7-.9 0-1.1z"/>',
 			'instagram'=> '<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r=".8"/>',
@@ -107,7 +104,7 @@ final class Delicat_Builder_V9_Drawer {
 			'tiktok'   => '<path d="M14 3c.3 2.3 1.8 3.8 4 4v3c-1.5 0-2.9-.5-4-1.3V15a5 5 0 1 1-5-5v3a2 2 0 1 0 2 2V3z"/>',
 			'youtube'  => '<path d="M3.5 8.2c.2-1.6 1.3-2.5 2.9-2.6C8.3 5.4 10 5.3 12 5.3s3.7.1 5.6.3c1.6.1 2.7 1 2.9 2.6.2 1.3.3 2.5.3 3.8s-.1 2.5-.3 3.8c-.2 1.6-1.3 2.5-2.9 2.6-1.9.2-3.6.3-5.6.3s-3.7-.1-5.6-.3c-1.6-.1-2.7-1-2.9-2.6A24 24 0 0 1 3.2 12c0-1.3.1-2.5.3-3.8z"/><path d="m10.3 9.4 4.3 2.6-4.3 2.6z"/>',
 		);
-		return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . ( $paths[ $name ] ?? '' ) . '</svg>';
+		return isset( $paths[ $name ] ) ? '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . $paths[ $name ] . '</svg>' : '';
 	}
 
 	private static function item_icon( array $it ): string {

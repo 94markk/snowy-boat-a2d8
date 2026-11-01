@@ -348,6 +348,14 @@ function delicat_builder_v9_menu_native_icon_svg($icon) {
         'lock' => '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
         'shield' => '<path d="M12 2l8 3v6c0 5-3 9-8 11-5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>'
     );
+    /* 9.7.0: one icon set — Material Symbols for every key it covers (keys without a match keep the paths above). */
+    $material = array('admin-home'=>'home','money-alt'=>'payments','games'=>'sports-esports','awards'=>'trophy','star-filled'=>'star-fill',
+        'admin-users'=>'person','arrow-right-alt2'=>'chevron-right','card'=>'credit-card','package'=>'package-2','chat'=>'chat','phone'=>'mobile',
+        'moon'=>'dark-mode','bell'=>'notifications','cart'=>'shopping-cart','gift'=>'redeem','bolt'=>'bolt','lock'=>'lock','shield'=>'verified-user');
+    if (!isset($paths[$key]) || isset($material[$key])) {
+        $svg = Delicat_Builder_V9_Design_System::icon($material[$key] ?? 'grid-view', 24, array('class' => 'dbv9-menu-svg'));
+        if ($svg !== '') return $svg;
+    }
     $path = $paths[$key] ?? '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>';
     return '<svg class="dbv9-menu-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'.$path.'</svg>';
 }
@@ -920,7 +928,8 @@ add_shortcode('delicat_social_row', function(){
     }
     return $out.'</div>';
 });
-add_shortcode('delicat_bottom_nav', function(){ $s=delicat_builder_v9_menu_get_menu_builder_settings(); if($s['bottom_nav']!=='yes') return ''; if(class_exists('Delicat_Builder_V9_Shell', false) && is_callable(array('Delicat_Builder_V9_Shell','mobile_nav_expected')) && Delicat_Builder_V9_Shell::mobile_nav_expected()) return ''; delicat_builder_v9_menu_menu_builder_style(); $items = delicat_builder_v9_menu_get_menu_builder_items(); if (class_exists('Delicat_Builder_V9_App_View', false)) $items = Delicat_Builder_V9_App_View::filter_items($items, 'url', array('title','subtitle','badge')); $items = array_slice($items, 0, 5); $out = '<nav class="dsb-bottom-nav '.($s['center_button']==='yes'?'dsb-bottom-center':'').'" aria-label="Navigation mobile" style="'.esc_attr(delicat_builder_v9_menu_menu_style_vars($s)).'">'; foreach ($items as $idx=>$it) { if(!delicat_builder_v9_menu_menu_item_visible($it)) continue; $nav_icon = !empty($it['image']) ? '<img src="'.esc_url($it['image']).'" alt="" loading="lazy" decoding="async">' : delicat_builder_v9_menu_native_icon_svg($it['icon']); $out .= '<a class="'.($idx===2?'is-center':'').'" href="'.esc_url($it['url']).'" style="--i1:'.esc_attr($it['color1']).';--i2:'.esc_attr($it['color2']).'">'.$nav_icon.'<small>'.delicat_builder_v9_menu_menu_apply_tokens(esc_html($it['title'])).'</small></a>'; } return $out.'</nav>'; });
+/* 9.7.0: one bottom bar — the shortcode stays registered (no raw [tag] in saved pages) but prints nothing while the native bar renders. */
+add_shortcode('delicat_bottom_nav', function(){ $s=delicat_builder_v9_menu_get_menu_builder_settings(); if($s['bottom_nav']!=='yes') return ''; if (class_exists('Delicat_Builder_V9_Bottom_Nav', false) && Delicat_Builder_V9_Bottom_Nav::expected()) return ''; if(class_exists('Delicat_Builder_V9_Shell', false) && is_callable(array('Delicat_Builder_V9_Shell','mobile_nav_expected')) && Delicat_Builder_V9_Shell::mobile_nav_expected()) return ''; delicat_builder_v9_menu_menu_builder_style(); $items = delicat_builder_v9_menu_get_menu_builder_items(); if (class_exists('Delicat_Builder_V9_App_View', false)) $items = Delicat_Builder_V9_App_View::filter_items($items, 'url', array('title','subtitle','badge')); $items = array_slice($items, 0, 5); $out = '<nav class="dsb-bottom-nav '.($s['center_button']==='yes'?'dsb-bottom-center':'').'" aria-label="Navigation mobile" style="'.esc_attr(delicat_builder_v9_menu_menu_style_vars($s)).'">'; foreach ($items as $idx=>$it) { if(!delicat_builder_v9_menu_menu_item_visible($it)) continue; $nav_icon = !empty($it['image']) ? '<img src="'.esc_url($it['image']).'" alt="" loading="lazy" decoding="async">' : delicat_builder_v9_menu_native_icon_svg($it['icon']); $out .= '<a class="'.($idx===2?'is-center':'').'" href="'.esc_url($it['url']).'" style="--i1:'.esc_attr($it['color1']).';--i2:'.esc_attr($it['color2']).'">'.$nav_icon.'<small>'.delicat_builder_v9_menu_menu_apply_tokens(esc_html($it['title'])).'</small></a>'; } return $out.'</nav>'; });
 
 }
 add_action('init', 'delicat_builder_v9_menu_register_shortcodes', 99);

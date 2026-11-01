@@ -54,7 +54,7 @@ Account: ~110 KB Identity CSS + order-view 27 KB; wallet endpoints + Recharge `f
 10. **Service worker** — push merged into `/delicat-v9-sw.js`; `pwa-runtime.js` removed; real update prompt
     ("Une nouvelle version de Delicat Store est disponible." / "Mettre à jour") and offline page.
 
-Also: one icon set (Lucide, inline SVG, 1.75 stroke) replacing ~25 icon helpers and interface emoji; one
+Also: one icon set (Material Symbols Rounded since 9.6.1; Lucide was the Phase 1 proposal) replacing ~25 icon helpers and interface emoji; one
 font (Inter variable, self-hosted Latin + Latin-Extended WOFF2, `font-display: optional`); spacing scale
 4/8/12/16/20/24/32/40/48/64; radii 8/12/16/20/24/full.
 
@@ -67,3 +67,12 @@ font (Inter variable, self-hosted Latin + Latin-Extended WOFF2, `font-display: o
 | 5 Customer services | account, wallet, orders, Mes achats, rewards, auth UI | Identity theme detection, Recharge 286 KB CSS, second balance endpoint |
 | 6 Performance + PWA | merged service worker, update prompt, offline page, prefetch strategy | push worker, `pwa-runtime.js` |
 | 7–8 Integration, release | E2E + security review, staged zips with rollback notes | — |
+
+## Progress
+- Phase 2 — Builder 9.6.0: tokens, themes, Inter, icon helper (Material since 9.6.1).
+- Phase 3 — Builder 9.7.0: one header/footer (block-theme template parts suppressed, legacy `[delicat_app_header]` and
+  `[delicat_bottom_nav]` defer to the native ones), Material icons in header, drawer, bottom bar, footer and bell, focus
+  handling for the mini-cart and notifications panels, dead Shell mobile dock removed. Still open from the Phase 3 list:
+  one search overlay (four search UIs remain: header form, drawer filter, Shell sheet, hero index), colour literals in
+  the nav stylesheets (the aliases already resolve them to tokens), legacy nav JS kept as the engine-off fallback,
+  Safe Mode has no native header/footer.

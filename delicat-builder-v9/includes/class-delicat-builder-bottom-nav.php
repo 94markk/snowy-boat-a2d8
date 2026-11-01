@@ -60,16 +60,10 @@ final class Delicat_Builder_V9_Bottom_Nav {
 		}
 	}
 
+	/** 9.7.0: bottom bar icons from the shared Material Symbols set (sized by bottom-nav.css). */
 	private static function icon( string $name ): string {
-		$paths = array(
-			'home'    => '<path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1h-5v-6H9.5v6h-5a1 1 0 0 1-1-1z"/>',
-			'wallet'  => '<rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10h18M15.5 14.5h2.5"/>',
-			'shop'    => '<path d="M4 9.5 5.2 5h13.6L20 9.5M4 9.5v9A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5v-9M4 9.5c0 1.4 1.1 2.5 2.5 2.5S9 10.9 9 9.5c0 1.4 1.1 2.5 2.5 2.5S14 10.9 14 9.5c0 1.4 1.1 2.5 2.5 2.5S19 10.9 19 9.5M9.5 20v-5h5v5"/>',
-			'cart'    => '<path d="M3.5 4.5h2l1.7 9.1a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6.2"/><circle cx="9.8" cy="19" r="1.2"/><circle cx="17.8" cy="19" r="1.2"/>',
-			'account' => '<circle cx="12" cy="8" r="4"/><path d="M4.5 21c.7-5 3.3-7.5 7.5-7.5s6.8 2.5 7.5 7.5"/>',
-			'orders'  => '<path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"/><path d="M4 7.5 12 12l8-4.5M12 12v9"/>',
-		);
-		return '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . ( $paths[ $name ] ?? '' ) . '</svg>';
+		$material = array( 'home' => 'home', 'wallet' => 'account-balance-wallet', 'shop' => 'storefront', 'cart' => 'shopping-cart', 'account' => 'person', 'orders' => 'package-2' );
+		return isset( $material[ $name ] ) ? Delicat_Builder_V9_Design_System::icon( $material[ $name ], 24 ) : '';
 	}
 
 	private static function urls(): array {

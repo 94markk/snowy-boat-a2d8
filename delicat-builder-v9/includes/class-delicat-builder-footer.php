@@ -327,15 +327,18 @@ final class Delicat_Builder_V9_Footer {
 		return '<span class="dbv9-footer-wordmark" aria-hidden="true">' . ( '' !== $top ? '<b>' . esc_html( $top ) . '</b>' : '' ) . ( '' !== $sub ? '<small>' . esc_html( $sub ) . '</small>' : '' ) . '</span>';
 	}
 
+	/** 9.7.0: footer icons from the shared Material Symbols set; WhatsApp keeps its brand mark. */
 	private static function icon( string $name ): string {
+		$material = array(
+			'bolt' => array( 'bolt', 22, '' ), 'shield' => array( 'verified-user', 22, '' ), 'chat' => array( 'chat', 22, '' ),
+			'headset' => array( 'support-agent', 20, '' ), 'chevron' => array( 'keyboard-arrow-down', 18, 'dbv9-ft__chevron' ), 'lock' => array( 'lock', 14, '' ),
+		);
+		if ( isset( $material[ $name ] ) ) {
+			[ $icon, $size, $class ] = $material[ $name ];
+			return Delicat_Builder_V9_Design_System::icon( $icon, $size, '' === $class ? array() : array( 'class' => $class ) );
+		}
 		$icons = array(
-			'bolt'     => '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13 2 4.5 13.2h6.2L10 22l9-12h-6.3L13 2Z"/></svg>',
-			'shield'   => '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3 5 6v5.2c0 4.5 2.8 8.2 7 9.8 4.2-1.6 7-5.3 7-9.8V6l-7-3Z"/><path d="m8.8 12 2.1 2.1 4.5-4.7"/></svg>',
-			'chat'     => '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.6a7.5 7.5 0 0 1-8 7.4 8.7 8.7 0 0 1-3.1-.7L4 20l1.7-4.3A7.4 7.4 0 1 1 20 11.6Z"/><path d="M8.5 11.8h.01M12 11.8h.01M15.5 11.8h.01"/></svg>',
 			'whatsapp' => '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.1-1.3A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3a8.2 8.2 0 1 1 7 3.8Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.7.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/></svg>',
-			'headset'  => '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><path d="M4 14a2 2 0 0 1 2-2h1v6H6a2 2 0 0 1-2-2v-2ZM20 14a2 2 0 0 0-2-2h-1v6h1a2 2 0 0 0 2-2v-2Z"/><path d="M17 18c0 1.7-2 3-5 3"/></svg>',
-			'chevron'  => '<svg class="dbv9-ft__chevron" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m6 9 6 6 6-6"/></svg>',
-			'lock'     => '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
 		);
 		return $icons[ $name ] ?? '';
 	}

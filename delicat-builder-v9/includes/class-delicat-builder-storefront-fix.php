@@ -60,6 +60,8 @@ final class Delicat_Builder_V9_Storefront_Fix {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'elementor_slim' ), 998 );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'block_css_slim' ), 997 );
 		add_filter( 'hello_elementor_header_footer', array( __CLASS__, 'suppress_theme_header_footer' ) );
+		add_filter( 'pre_render_block', array( __CLASS__, 'skip_theme_template_part' ), 10, 2 );
+		add_filter( 'render_block_core/template-part', array( __CLASS__, 'drop_theme_template_part' ), 10, 2 );
 		add_filter( 'hello_elementor_page_title', array( __CLASS__, 'suppress_theme_page_title' ) );
 		add_filter( 'wp_page_menu', array( __CLASS__, 'suppress_fallback_page_menu' ), 10, 1 );
 		add_filter( 'wp_nav_menu_args', array( __CLASS__, 'nav_menu_no_fallback' ) );
@@ -519,6 +521,59 @@ final class Delicat_Builder_V9_Storefront_Fix {
 
 	public static function suppress_theme_header_footer( $value ) {
 		return self::native_header_engine_active() ? false : $value;
+	}
+
+	/**
+	 * 9.7.0: block themes print their header and footer as template parts, which the rules of
+	 * native_header_css() (classic themes, Elementor) never matched: blog and shop pages showed two
+	 * headers and two footers. Skip them before they render (no markup, no theme navigation script)
+	 * when the Builder prints its own; the footer only while the Builder footer is on.
+	 *
+	 * @param string|null $pre   Short-circuit value.
+	 * @param array       $block Parsed block.
+	 */
+	public static function skip_theme_template_part( $pre, $block ) {
+		if ( null !== $pre || ! is_array( $block ) || 'core/template-part' !== ( $block['blockName'] ?? '' ) ) {
+			return $pre;
+		}
+		return self::theme_part_replaced( (array) ( $block['attrs'] ?? array() ) ) ? '' : $pre;
+	}
+
+	/** Same, for a header/footer part nested inside another block (pre_render_block sees top-level blocks only). */
+	public static function drop_theme_template_part( $content, $block ) {
+		return is_array( $block ) && self::theme_part_replaced( (array) ( $block['attrs'] ?? array() ) ) ? '' : $content;
+	}
+
+	private static function theme_part_replaced( array $attrs ): bool {
+		if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return false;
+		}
+		$area = self::template_part_area( $attrs );
+		if ( 'header' === $area ) {
+			return self::native_header_engine_active();
+		}
+		if ( 'footer' === $area ) {
+			return self::native_header_engine_active()
+				&& class_exists( 'Delicat_Builder_V9_Footer', false )
+				&& Delicat_Builder_V9_Footer::is_enabled();
+		}
+		return false;
+	}
+
+	private static function template_part_area( array $attrs ): string {
+		foreach ( array( 'area', 'tagName' ) as $key ) {
+			$value = sanitize_key( (string) ( $attrs[ $key ] ?? '' ) );
+			if ( 'header' === $value || 'footer' === $value ) {
+				return $value;
+			}
+		}
+		$slug = sanitize_title( (string) ( $attrs['slug'] ?? '' ) );
+		if ( '' === $slug || ! function_exists( 'get_block_template' ) ) {
+			return '';
+		}
+		$theme = sanitize_text_field( (string) ( $attrs['theme'] ?? get_stylesheet() ) );
+		$part  = get_block_template( $theme . '//' . $slug, 'wp_template_part' );
+		return ( $part && isset( $part->area ) ) ? sanitize_key( (string) $part->area ) : '';
 	}
 
 	public static function suppress_theme_page_title( $value ) {

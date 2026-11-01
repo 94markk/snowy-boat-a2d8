@@ -740,7 +740,7 @@ final class Delicat_Builder_V9_Notifications {
 		// The panel itself is still created after a real click to prevent theme
 		// flashes. Only a compact JSON snapshot rides with the bell markup.
 		return '<div class="dbv9-notifications" data-dbv9-notifications data-config="' . esc_attr( wp_json_encode( $config ) ) . '">' .
-			'<button type="button" class="dbv9-notifications__bell' . ( $unread ? ' has-unread' : '' ) . '" data-dbv9-notification-open aria-expanded="false" aria-controls="' . esc_attr( $panel_id ) . '" aria-label="' . esc_attr__( 'Notifications', 'delicat-builder-v9' ) . '"><span class="dbv9-notifications__bell-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg></span><span class="dbv9-notifications__live-dot" aria-hidden="true"></span><span class="dbv9-notifications__count"' . ( $unread ? '' : ' hidden' ) . '>' . esc_html( (string) min( 99, $unread ) ) . '</span></button>' .
+			'<button type="button" class="dbv9-notifications__bell' . ( $unread ? ' has-unread' : '' ) . '" data-dbv9-notification-open aria-expanded="false" aria-controls="' . esc_attr( $panel_id ) . '" aria-label="' . esc_attr__( 'Notifications', 'delicat-builder-v9' ) . '"><span class="dbv9-notifications__bell-icon" aria-hidden="true">' . Delicat_Builder_V9_Design_System::icon( 'notifications', 24 ) . '</span><span class="dbv9-notifications__live-dot" aria-hidden="true"></span><span class="dbv9-notifications__count"' . ( $unread ? '' : ' hidden' ) . '>' . esc_html( (string) min( 99, $unread ) ) . '</span></button>' .
 			'</div>';
 	}
 

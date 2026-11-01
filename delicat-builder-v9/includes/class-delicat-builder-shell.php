@@ -30,7 +30,6 @@ final class Delicat_Builder_V9_Shell {
 		add_action( 'wp', array( __CLASS__, 'detect_shortcodes' ), 5 );
 		add_action( 'wp_body_open', array( __CLASS__, 'auto_header' ), 20 );
 		add_action( 'wp_footer', array( __CLASS__, 'auto_mobile_fallback' ), 2 );
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue_mobile_nav_assets' ), 80 );
 		add_action( 'wp_head', array( __CLASS__, 'theme_boot' ), 1 );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'frontend_config' ), 35 );
 		add_action( 'wp_ajax_delicat_builder_v9_product_search', array( __CLASS__, 'ajax_product_search' ) );
@@ -107,7 +106,18 @@ final class Delicat_Builder_V9_Shell {
 		}
 
 		$content = (string) $post->post_content;
-		self::$header_shortcode_present = has_shortcode( $content, 'delicat_app_header' );
+		self::$header_shortcode_present = has_shortcode( $content, 'delicat_app_header' ) && ! self::native_header_renders();
+	}
+
+	/**
+	 * 9.7.0: one header. The native header (header-runtime) prints on every storefront page, so a
+	 * [delicat_app_header] left in page content must not add a second header with its own search
+	 * sheet, cart drawer and assets.
+	 */
+	private static function native_header_renders(): bool {
+		return class_exists( 'Delicat_Builder_V9_Header_Studio_8', false )
+			&& is_callable( array( 'Delicat_Builder_V9_Header_Studio_8', 'should_auto_render' ) )
+			&& Delicat_Builder_V9_Header_Studio_8::should_auto_render();
 	}
 
 	public static function header_expected(): bool {
@@ -267,37 +277,11 @@ final class Delicat_Builder_V9_Shell {
 			|| self::needs_shell_js();
 	}
 
-	public static function enqueue_mobile_nav_assets(): void {
-		if ( ! self::mobile_nav_expected() ) {
-			return;
-		}
-
-		$path = DELICAT_BUILDER_V9_DIR . 'assets/css/mobile-dock.css';
-		if ( ! is_file( $path ) ) {
-			return;
-		}
-
-		wp_enqueue_style(
-			'delicat-builder-v9-mobile-dock',
-			DELICAT_BUILDER_V9_URL . 'assets/css/mobile-dock.css',
-			array(),
-			DELICAT_BUILDER_V9_VERSION
-		);
-
-		$script_path = DELICAT_BUILDER_V9_DIR . 'assets/js/mobile-dock.js';
-		if ( is_file( $script_path ) ) {
-			wp_enqueue_script(
-				'delicat-builder-v9-mobile-dock',
-				DELICAT_BUILDER_V9_URL . 'assets/js/mobile-dock.js',
-				array(),
-				DELICAT_BUILDER_V9_VERSION,
-				true
-			);
-			if ( function_exists( 'wp_script_add_data' ) ) {
-				wp_script_add_data( 'delicat-builder-v9-mobile-dock', 'strategy', 'defer' );
-			}
-		}
-	}
+	/**
+	 * 9.7.0: the retired Shell mobile dock is gone (mobile_nav_expected() has returned false since the
+	 * native bottom bar took over); its mobile-dock.css/js files were removed. Kept as a no-op for callers.
+	 */
+	public static function enqueue_mobile_nav_assets(): void {}
 
 	public static function frontend_config(): void {
 		if ( is_admin() || ! self::header_expected() || ! self::needs_shell_js() ) {
@@ -691,6 +675,9 @@ final class Delicat_Builder_V9_Shell {
 	}
 
 	public static function header_shortcode(): string {
+		if ( self::native_header_renders() ) {
+			return '';
+		}
 		return self::safe_header_markup( 'header_shortcode' );
 	}
 

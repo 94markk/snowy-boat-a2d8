@@ -216,6 +216,9 @@ final class Delicat_Builder_V9_Design_System {
 		$css .= 'html[data-delicat-theme="dark"],html.dlc-theme-dark{' . $dark . '}';
 		/* No pre-paint script (JS off, standalone documents): follow the device. */
 		$css .= '@media (prefers-color-scheme:dark){html:not([data-delicat-theme]):not(.dlc-theme-light){' . $dark . '}}';
+		/* 9.7.0: Material Symbols are filled glyphs. Older component sheets style every svg as a 2 px
+		 * outline (fill:none; stroke:…); the icon primitive must win over those rules. */
+		$css .= 'svg.ds-icon,svg.ds-icon *{fill:currentColor!important;stroke:none!important}svg.ds-icon{flex:none}';
 
 		foreach ( self::FONT_FILES as $subset => $file ) {
 			if ( ! file_exists( DELICAT_BUILDER_V9_DIR . $file ) ) {
