@@ -157,7 +157,7 @@ class Delicat_Guard {
 			delicat_recharge_finish_request();
 			wp_mail(
 				get_option( 'admin_email' ),
-				'🚫 Delicat — blocage automatique d\'un compte',
+				'Delicat — blocage automatique d\'un compte',
 				$body
 			);
 		}, 20 );
@@ -179,7 +179,7 @@ class Delicat_Guard {
 		] );
 		?>
 		<div style="margin:18px 0;border:1px solid #e0e0e0;border-radius:12px;background:#fff;padding:16px 18px;">
-			<h2 style="margin:0 0 4px;font-size:16px;">🛡️ Sécurité — blocages automatiques</h2>
+			<h2 style="margin:0 0 4px;font-size:16px;">Sécurité — blocages automatiques</h2>
 			<p style="margin:0 0 14px;color:#666;font-size:12px;">
 				Les comptes qui accumulent des comportements suspects (codes déjà
 				utilisés, demandes rejetées) sont bloqués automatiquement.
@@ -210,7 +210,7 @@ class Delicat_Guard {
 					</tbody>
 				</table>
 			<?php else : ?>
-				<p style="color:#2e7d32;font-weight:600;margin:0 0 14px;">✅ Aucun compte bloqué automatiquement.</p>
+				<p style="color:#2e7d32;font-weight:600;margin:0 0 14px;">Aucun compte bloqué automatiquement.</p>
 			<?php endif; ?>
 
 			<details>
@@ -247,7 +247,7 @@ class Delicat_Guard {
 			delete_user_meta( $uid, 'dr_banned_auto' );
 			delete_user_meta( $uid, 'dr_banned_reason' );
 			self::clear( $uid );
-			self::log( $uid, '✅ Débloqué manuellement par un administrateur', 0 );
+			self::log( $uid, 'Débloqué manuellement par un administrateur', 0 );
 		}
 
 		wp_safe_redirect( wp_get_referer() ?: admin_url( 'admin.php?page=delicat-recharges' ) );

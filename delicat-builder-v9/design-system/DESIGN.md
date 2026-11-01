@@ -21,7 +21,7 @@ Audit and phase plan: [AUDIT.md](AUDIT.md). Machine-readable tokens: [design-tok
 | Text pairs ≥ 4.5:1, controls/focus ≥ 3:1 | WCAG 2.2 AA. Measured: muted `#5F6B7E` ≥ 4.93:1 on every light surface; success/warning text use darker `-text` tokens (`#15803D`, `#B45309`, 5.02:1). |
 | Theme default = follow the device | New visitors get light unless their phone asks for dark; a saved choice (cookie `dbv9_theme`) wins. |
 | Inter variable, self-hosted, `font-display: optional` | One family, no layout shift when it loads, no third-party request; only the 48 KB Latin file is preloaded. |
-| Lucide icons, 1.75 stroke, `currentColor` | One outline family that follows light/dark text colour; 71 curated icons rendered server-side. |
+| Material Symbols Rounded, `currentColor`, no emoji | Owner choice 2026-11-01: modern Material glyphs only; 96 curated icons (outline + `-fill` for active states) rendered server-side, or as a CSS mask via `icon_mask()` for markup the plugin does not own; every emoji removed from the interface. |
 | Legacy variables alias tokens | `--dlc-*`, `--dipma-*`, `--dr-*`… keep working but resolve to `--ds-*`, so no component needs rewriting before its own phase. |
 
 ## Tokens
@@ -40,6 +40,6 @@ step up on desktop), `--ds-space-{1,2,3,4,5,6,8,10,12,16}` = 4–64 px, `--ds-sp
 ## Rules for new work
 1. Never write a colour, font, radius, shadow or duration literal in a component — use a `--ds-*` token.
 2. Text on a surface uses `text` or `text-muted`; coloured status text uses the `-text` variants.
-3. Icons come from `delicat_ds_icon()`; no emoji as interface icons.
+3. Icons come from `delicat_ds_icon()` (Material Symbols names with hyphens); no emoji anywhere in the interface or messages.
 4. Motion uses the duration tokens and is disabled under `prefers-reduced-motion`.
 5. Before adding a component, check AUDIT.md's consolidation list — extend the surviving implementation.

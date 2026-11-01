@@ -155,6 +155,50 @@ final class Delicat_Builder_V9_Site {
 				'.delicat-site{--delicat-site-accent:' . $accent . '}'
 			);
 		}
+
+		$icons = self::account_menu_icon_css();
+		if ( '' !== $icons ) {
+			wp_add_inline_style( 'delicat-builder-v9-site', $icons );
+		}
+	}
+
+	/**
+	 * 9.6.1: Material icons for the WooCommerce account menu, printed only on the logged-in account
+	 * pages that show this menu, so the shared page/woo bundles stay free of icon data. Skipped when
+	 * Delicat Identity's account screen is active: it draws its own menu icons.
+	 */
+	private static function account_menu_icon_css(): string {
+		if ( ! self::$account_active || ! is_user_logged_in() || ! class_exists( 'Delicat_Builder_V9_Design_System', false ) ) {
+			return '';
+		}
+		if ( class_exists( 'DIP_My_Account_Modern', false ) && has_filter( 'body_class', array( 'DIP_My_Account_Modern', 'body_classes' ) ) ) {
+			return '';
+		}
+		$map = array(
+			'dashboard'       => 'home',
+			'orders'          => 'package-2',
+			'downloads'       => 'download',
+			'edit-address'    => 'location-on',
+			'payment-methods' => 'credit-card',
+			'woo-wallet'      => 'account-balance-wallet',
+			'edit-account'    => 'settings',
+			'customer-logout' => 'logout',
+		);
+		$scope     = 'body.delicat-site-account:not(.dip-account-modern) .woocommerce-MyAccount-navigation-link--';
+		$selectors = array();
+		$rules     = '';
+		foreach ( $map as $endpoint => $icon ) {
+			$mask = Delicat_Builder_V9_Design_System::icon_mask( $icon );
+			if ( '' === $mask ) {
+				continue;
+			}
+			$selectors[] = $scope . $endpoint . ' a::before';
+			$rules      .= $scope . $endpoint . ' a::before{-webkit-mask-image:' . $mask . ';mask-image:' . $mask . '}';
+		}
+		if ( ! $selectors ) {
+			return '';
+		}
+		return implode( ',', $selectors ) . '{content:"";flex:0 0 18px;width:18px;height:18px;background:currentColor;-webkit-mask:center/contain no-repeat;mask:center/contain no-repeat}' . $rules;
 	}
 
 

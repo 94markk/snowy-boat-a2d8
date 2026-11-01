@@ -25,7 +25,7 @@ function delicat_builder_v9_menu_menu_builder_defaults() {
         'custom_header_enabled' => 'yes', 'custom_header_title' => 'Delicat Store Haiti', 'custom_header_subtitle' => 'Recharge rapide, simple et sécurisée', 'custom_header_image' => '', 'custom_header_url' => '/', 'custom_header_style' => 'glass', 'custom_header_align' => 'left', 'section_order' => 'custom_header,profile,wallet,quick,main,bonus,promo,social,footer',
         'show_profile' => 'yes', 'show_header_title' => 'yes', 'header_title' => '', 'header_subtitle' => '', 'profile_name' => 'Delicat Store Haiti', 'profile_email' => 'info@delicastoreha.com', 'profile_badge' => 'Premium', 'profile_initial' => 'D', 'profile_cover' => '', 'welcome_text' => '',
         'show_wallet' => 'yes', 'wallet_label' => 'Mon portefeuille', 'wallet_balance' => 'Auto', 'wallet_item_balance' => 'yes', 'wallet_url' => '/my-wallet/', 'recharge_url' => '/my-wallet/', 'loyalty_points' => '0',
-        'promo_enabled' => 'yes', 'promo_title' => 'Promos exclusives ! 🔥', 'promo_text' => 'Profitez de réductions incroyables sur vos top-ups préférés.', 'promo_button' => 'Voir les promos', 'promo_url' => '/promos/', 'promo_countdown' => '',
+        'promo_enabled' => 'yes', 'promo_title' => 'Promos exclusives !', 'promo_text' => 'Profitez de réductions incroyables sur vos top-ups préférés.', 'promo_button' => 'Voir les promos', 'promo_url' => '/promos/', 'promo_countdown' => '',
         'quick_actions' => 'yes', 'quick_wallet' => 'yes', 'quick_orders' => 'yes', 'quick_support' => 'yes', 'quick_app' => 'yes',
         'bonus_enabled' => 'yes', 'bonus_title' => 'Bonus Free Fire', 'social_enabled' => 'yes',
         'whatsapp_url' => 'https://wa.me/message/BXQXUCKDDI3GO1', 'telegram_url' => '#', 'instagram_url' => '#', 'facebook_url' => '#', 'tiktok_url' => '#', 'youtube_url' => '#',
@@ -478,9 +478,9 @@ function delicat_builder_v9_menu_menu_builder_admin_page() {
               <div class="dbv9-preview-head"><div><span>Aperçu</span><strong>Mobile</strong></div><span class="dbv9-preview-dot"></span></div>
               <div class="dbv9-phone" id="dbv9MenuPreview" style="--p1:<?php echo esc_attr($s['primary']); ?>;--p2:<?php echo esc_attr($s['secondary']); ?>;--pa:<?php echo esc_attr($s['accent']); ?>;--pr:<?php echo (int)$s['radius']; ?>px;--pir:<?php echo (int)$s['item_radius']; ?>px;">
                 <div class="dbv9-phone-top"><span class="dbv9-preview-logo">D</span><div><strong id="dbv9PreviewTitle"><?php echo esc_html($s['custom_header_title'] ?: 'Delicat Store Haiti'); ?></strong><small id="dbv9PreviewSubtitle"><?php echo esc_html($s['custom_header_subtitle']); ?></small></div><button type="button" tabindex="-1">×</button></div>
-                <div class="dbv9-preview-profile"><span>👤</span><div><small>Bienvenue</small><strong><?php echo esc_html($s['profile_name'] ?: 'Client Delicat'); ?></strong></div></div>
+                <div class="dbv9-preview-profile"><span></span><div><small>Bienvenue</small><strong><?php echo esc_html($s['profile_name'] ?: 'Client Delicat'); ?></strong></div></div>
                 <div class="dbv9-preview-wallet"><div><small><?php echo esc_html($s['wallet_label']); ?></small><strong>G 1,250</strong></div><button type="button" tabindex="-1">Recharger</button></div>
-                <div class="dbv9-preview-quick"><span>💳<small>Wallet</small></span><span>📦<small>Commandes</small></span><span>💬<small>Support</small></span></div>
+                <div class="dbv9-preview-quick"><span><small>Wallet</small></span><span><small>Commandes</small></span><span><small>Support</small></span></div>
                 <div class="dbv9-preview-links" id="dbv9PreviewLinks">
                   <?php foreach(array_slice($items,0,4) as $it): ?><span><i style="--c1:<?php echo esc_attr($it['color1']); ?>;--c2:<?php echo esc_attr($it['color2']); ?>"></i><b><?php echo esc_html($it['title']); ?></b><em>›</em></span><?php endforeach; ?>
                 </div>
@@ -491,7 +491,7 @@ function delicat_builder_v9_menu_menu_builder_admin_page() {
         </div>
 
         <template id="dbv9MenuRowTemplate"><div class="dbv9-repeat-row" draggable="true" data-repeat="menu"><div class="dbv9-repeat-handle"><button type="button" class="dbv9-drag">⠿</button><span class="dbv9-item-icon-dot"></span></div><div class="dbv9-repeat-grid menu-grid"><label>Titre<input data-name="title" placeholder="Titre"></label><label>Sous-titre<input data-name="subtitle" placeholder="Sous-titre"></label><label>Lien<input data-name="url" placeholder="/lien/"></label><label>Icône native<input data-name="icon" value="dashicons-arrow-right-alt2"></label><label>Image/SVG<input class="dsb-menu-image-url" data-name="image"><input type="hidden" class="dsb-menu-attachment-id" data-name="attachment_id" value="0"><button type="button" class="button dsb-menu-upload">Média</button></label><label>Couleur 1<input type="color" data-name="color1" value="#2563eb"></label><label>Couleur 2<input type="color" data-name="color2" value="#1d4ed8"></label><label>Badge<input data-name="badge"></label><label>Groupe<select data-name="group"><option value="main">Principal</option><option value="bonus">Bonus</option><option value="footer">Footer</option><option value="quick">Quick</option></select></label><label>Visibilité<select data-name="visibility"><option value="all">Tous</option><option value="logged_in">Connectés</option><option value="logged_out">Invités</option></select></label></div><div class="dbv9-repeat-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button><button type="button" class="dbv9-remove">×</button></div></div></template>
-        <template id="dbv9QuickRowTemplate"><div class="dbv9-repeat-row" draggable="true" data-repeat="quick"><div class="dbv9-repeat-handle"><button type="button" class="dbv9-drag">⠿</button></div><div class="dbv9-repeat-grid quick-grid"><label>Icône<input data-name="icon" placeholder="⭐"></label><label>Image/SVG<input class="dsb-menu-image-url" data-name="image"><input type="hidden" class="dsb-menu-attachment-id" data-name="attachment_id" value="0"><button type="button" class="button dsb-menu-upload">Média</button></label><label>Libellé<input data-name="label" placeholder="Raccourci"></label><label>Lien<input data-name="url" placeholder="/lien/"></label><label>Visibilité<select data-name="visibility"><option value="all">Tous</option><option value="logged_in">Connectés</option><option value="logged_out">Invités</option></select></label></div><div class="dbv9-repeat-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button><button type="button" class="dbv9-remove">×</button></div></div></template>
+        <template id="dbv9QuickRowTemplate"><div class="dbv9-repeat-row" draggable="true" data-repeat="quick"><div class="dbv9-repeat-handle"><button type="button" class="dbv9-drag">⠿</button></div><div class="dbv9-repeat-grid quick-grid"><label>Icône<input data-name="icon" placeholder=""></label><label>Image/SVG<input class="dsb-menu-image-url" data-name="image"><input type="hidden" class="dsb-menu-attachment-id" data-name="attachment_id" value="0"><button type="button" class="button dsb-menu-upload">Média</button></label><label>Libellé<input data-name="label" placeholder="Raccourci"></label><label>Lien<input data-name="url" placeholder="/lien/"></label><label>Visibilité<select data-name="visibility"><option value="all">Tous</option><option value="logged_in">Connectés</option><option value="logged_out">Invités</option></select></label></div><div class="dbv9-repeat-actions"><button type="button" data-move="up">↑</button><button type="button" data-move="down">↓</button><button type="button" class="dbv9-remove">×</button></div></div></template>
       </form>
     </div>
     <?php
@@ -760,7 +760,7 @@ function delicat_builder_v9_menu_render_wallet_card() {
         . delicat_builder_v9_menu_native_icon_svg('dashicons-money-alt')
         . '<div><small>' . esc_html($s['wallet_label']) . '</small>'
         . '<strong class="dsb-wallet-amount">' . $bal . '</strong>'
-        . '<em>⭐ ' . esc_html($s['loyalty_points']) . ' points</em></div>'
+        . '<em>' . esc_html($s['loyalty_points']) . ' points</em></div>'
         . '<a href="' . esc_url($s['recharge_url']) . '">Recharger</a>'
         . '</div>';
 }
@@ -853,10 +853,10 @@ function delicat_builder_v9_menu_wallet_live_assets() {
 function delicat_builder_v9_menu_menu_quick_defaults() {
     $s = delicat_builder_v9_menu_get_menu_builder_settings();
     $out = array();
-    if (($s['quick_wallet']  ?? 'yes') === 'yes') $out[] = array('icon'=>'💳','image'=>'','attachment_id'=>0,'label'=>'Wallet','url'=>$s['wallet_url'],'visibility'=>'all');
-    if (($s['quick_orders']  ?? 'yes') === 'yes') $out[] = array('icon'=>'📦','image'=>'','attachment_id'=>0,'label'=>'Commandes','url'=>delicat_builder_v9_menu_menu_account_url('orders'),'visibility'=>'all');
-    if (($s['quick_support'] ?? 'yes') === 'yes') $out[] = array('icon'=>'💬','image'=>'','attachment_id'=>0,'label'=>'Support','url'=>$s['whatsapp_url'],'visibility'=>'all');
-    if (($s['quick_app']     ?? 'yes') === 'yes') $out[] = array('icon'=>'📲','image'=>'','attachment_id'=>0,'label'=>'App','url'=>'#install-app','visibility'=>'all');
+    if (($s['quick_wallet']  ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Wallet','url'=>$s['wallet_url'],'visibility'=>'all');
+    if (($s['quick_orders']  ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Commandes','url'=>delicat_builder_v9_menu_menu_account_url('orders'),'visibility'=>'all');
+    if (($s['quick_support'] ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Support','url'=>$s['whatsapp_url'],'visibility'=>'all');
+    if (($s['quick_app']     ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'App','url'=>'#install-app','visibility'=>'all');
     return $out;
 }
 
@@ -967,7 +967,7 @@ function delicat_builder_v9_menu_render_modern_menu($mode = 'drawer') {
                 case 'bonus': if ($s['bonus_enabled']==='yes') echo '<div class="dsb-menu-divider"><span>'.esc_html($s['bonus_title']).'</span></div><div class="dsb-menu-list dsb-menu-list-bonus">'.delicat_builder_v9_menu_render_menu_items('bonus').'</div>'; break;
                 case 'promo': if ($s['promo_enabled'] === 'yes') echo do_shortcode('[delicat_menu_promo]'); break;
                 case 'social': if ($s['social_enabled'] === 'yes') echo do_shortcode('[delicat_social_row]'); break;
-                case 'footer': if ($s['footer_toggle'] === 'yes') echo '<div class="dsb-menu-footer-toggle"><span>🌙 Mode Sombre</span>'.do_shortcode('[delicat_theme_toggle label="no"]').'</div>'; break;
+                case 'footer': if ($s['footer_toggle'] === 'yes') echo '<div class="dsb-menu-footer-toggle"><span>Mode Sombre</span>'.do_shortcode('[delicat_theme_toggle label="no"]').'</div>'; break;
             }
         } ?>
         <?php if ($s['wave_footer'] === 'yes'): ?><div class="dsb-menu-wave" aria-hidden="true"><span>◇</span></div><?php endif; ?>
@@ -986,14 +986,14 @@ function delicat_builder_v9_menu_register_shortcodes() {
     }
 add_shortcode('delicat_modern_menu', function($atts){ $atts = shortcode_atts(array('layout'=>''), $atts, 'delicat_modern_menu'); return delicat_builder_v9_menu_render_modern_menu($atts['layout']); });
 add_shortcode('delicat_menu_toggle', function($atts){ delicat_builder_v9_menu_menu_builder_assets(); $atts = shortcode_atts(array('label'=>'no'), $atts, 'delicat_menu_toggle'); return '<button type="button" class="dsb-menu-toggle" aria-label="Ouvrir le menu"><span></span><span></span><span></span>'.(($atts['label']==='yes')?'<em>Menu</em>':'').'</button>'; });
-add_shortcode('delicat_menu_promo', function(){ $s = delicat_builder_v9_menu_get_menu_builder_settings(); delicat_builder_v9_menu_menu_builder_assets(); return '<div class="dsb-menu-promo"><div class="dsb-menu-gift">🎁</div><div><strong>'.esc_html($s['promo_title']).'</strong><p>'.esc_html($s['promo_text']).'</p>'.($s['promo_countdown']?'<small>'.esc_html($s['promo_countdown']).'</small>':'').'<a href="'.esc_url($s['promo_url']).'">'.esc_html($s['promo_button']).'</a></div></div>'; });
+add_shortcode('delicat_menu_promo', function(){ $s = delicat_builder_v9_menu_get_menu_builder_settings(); delicat_builder_v9_menu_menu_builder_assets(); return '<div class="dsb-menu-promo"><div class="dsb-menu-gift">'.delicat_ds_icon('redeem', 22).'</div><div><strong>'.esc_html($s['promo_title']).'</strong><p>'.esc_html($s['promo_text']).'</p>'.($s['promo_countdown']?'<small>'.esc_html($s['promo_countdown']).'</small>':'').'<a href="'.esc_url($s['promo_url']).'">'.esc_html($s['promo_button']).'</a></div></div>'; });
 add_shortcode('delicat_profile_card', function(){ return delicat_builder_v9_menu_render_profile_card(); });
 add_shortcode('delicat_wallet_card', function(){ return delicat_builder_v9_menu_render_wallet_card(); });
 add_shortcode('delicat_quick_actions', function(){ return delicat_builder_v9_menu_render_quick_actions(); });
 add_shortcode('delicat_bonus_menu', function(){ delicat_builder_v9_menu_menu_builder_assets(); return '<div class="dsb-menu-list dsb-menu-list-bonus">'.delicat_builder_v9_menu_render_menu_items('bonus').'</div>'; });
 add_shortcode('delicat_social_row', function(){
     $s=delicat_builder_v9_menu_get_menu_builder_settings(); delicat_builder_v9_menu_menu_builder_assets();
-    $links=array('whatsapp'=>'☘','telegram'=>'✈','instagram'=>'◎','facebook'=>'f','tiktok'=>'♪','youtube'=>'▶');
+    $links=array('whatsapp'=>'','telegram'=>'','instagram'=>'◎','facebook'=>'f','tiktok'=>'','youtube'=>'▶');
     $style='--dsb-social-size:'.absint($s['social_button_size']).'px;--dsb-social-icon:'.absint($s['social_icon_size']).'px;--dsb-social-gap:'.absint($s['social_gap']).'px;--dsb-social-align:'.esc_attr($s['social_align']);
     $out='<div class="dsb-menu-social" style="'.$style.'">';
     foreach($links as $slug=>$fallback){

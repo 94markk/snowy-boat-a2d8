@@ -414,7 +414,7 @@ final class Delicat_Builder_V9_Maintenance_Admin {
 					</div>
 					<div class="delicat-field">
 						<label><strong><?php esc_html_e( 'Annonces', 'delicat-builder-v9' ); ?></strong></label>
-						<textarea class="large-text" rows="3" name="<?php echo esc_attr( $option ); ?>[notices]" placeholder="🎁 Les cartes-cadeaux arrivent bientôt&#10;⚡ Recharges Free Fire plus rapides"><?php echo esc_textarea( (string) $s['notices'] ); ?></textarea>
+						<textarea class="large-text" rows="3" name="<?php echo esc_attr( $option ); ?>[notices]" placeholder="Les cartes-cadeaux arrivent bientôt&#10;Recharges Free Fire plus rapides"><?php echo esc_textarea( (string) $s['notices'] ); ?></textarea>
 						<small><?php esc_html_e( 'Une annonce par ligne, dans un encadré sous le message. À partir de deux lignes elles défilent toutes les 5 secondes, avec des points cliquables. Maximum 6.', 'delicat-builder-v9' ); ?></small>
 					</div>
 					<div class="delicat-field">

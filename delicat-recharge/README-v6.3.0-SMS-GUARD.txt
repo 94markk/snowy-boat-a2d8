@@ -21,8 +21,8 @@ verrouillage 30 min après un SMS suspect (tout passe en approbation manuelle) a
 alerte push + email.
 
 Un SMS qui échoue est RETENU : jamais crédité, jamais supprimé, visible sur
-Délicat Console → 🔍 Natcash SMS avec les motifs exacts et un bouton
-« ✅ Authentique → créditer & re-sync solde » si c'est un vrai.
+Délicat Console → Natcash SMS avec les motifs exacts et un bouton
+« Authentique → créditer & re-sync solde » si c'est un vrai.
 Les SMS suspects (et ceux reçus avant cette version) ne servent plus de preuve
 pour la vérification instantanée à la soumission ni pour l'app.
 
@@ -34,7 +34,7 @@ AUTRES CORRECTIONS
 - Journal SMS : 40 entrées au lieu de 15 (une rafale de faux ne chasse plus les vrais).
 
 APRÈS INSTALLATION (obligatoire)
-1. Délicat Console → 🔍 Natcash SMS → « Définir le solde de référence » : entrez
+1. Délicat Console → Natcash SMS → « Définir le solde de référence » : entrez
    votre solde Natcash actuel (app Natcash ou *144#). Tant qu'il n'est pas défini,
    les crédits automatiques Natcash sont retenus (approbation manuelle).
 2. Réglages → WordPress → fuseau horaire = America/Port-au-Prince (la garde teste
@@ -61,5 +61,5 @@ API POUR L'APP ADMIN
 POST /wp-json/delicat/v1/sms/balance  (en-têtes x-delicat-device / x-delicat-token)
      provider=natcash|moncash, balance=80707.63  → re-synchronise le solde de référence.
 
-RÉGLAGES : Délicat Console → ⚙️ Paramètres → 🛡️ Garde SMS.
+RÉGLAGES : Délicat Console → Paramètres → Garde SMS.
 DELICAT_VERSION reste 6.0.5 (aucune migration de base), assets 6.1.3.

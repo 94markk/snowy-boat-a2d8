@@ -573,7 +573,7 @@ final class DIP_Security_Center {
         echo '</div>';
         if (!empty($architecture['checks'])) {
             echo '<div class="card dip-security-admin-card"><h2>Contrôles d’accès centralisés</h2><table class="widefat striped"><tbody>';
-            foreach ((array)$architecture['checks'] as $check) echo '<tr><td>'.(!empty($check['ok'])?'✅':'⚠️').'</td><td>'.esc_html($check['label'] ?? '').'</td><td>'.(!empty($check['ok'])?'Actif':'À vérifier').'</td></tr>';
+            foreach ((array)$architecture['checks'] as $check) echo '<tr><td>'.(!empty($check['ok'])?'':'').'</td><td>'.esc_html($check['label'] ?? '').'</td><td>'.(!empty($check['ok'])?'Actif':'À vérifier').'</td></tr>';
             echo '</tbody></table></div>';
         }
         if (class_exists('DIP_Security_Recommendations')) echo DIP_Security_Recommendations::render_admin();

@@ -25,7 +25,7 @@ function delicat_builder_v9_menu_menu_builder_defaults() {
         'custom_header_enabled' => 'yes', 'custom_header_title' => 'Delicat Store Haiti', 'custom_header_subtitle' => 'Recharge rapide, simple et sécurisée', 'custom_header_image' => '', 'custom_header_url' => '/', 'custom_header_style' => 'glass', 'custom_header_align' => 'left', 'section_order' => 'custom_header,profile,wallet,quick,main,bonus,promo,social,footer',
         'show_profile' => 'yes', 'show_header_title' => 'yes', 'header_title' => '', 'header_subtitle' => '', 'profile_name' => 'Delicat Store Haiti', 'profile_email' => 'info@delicastoreha.com', 'profile_badge' => 'Premium', 'profile_initial' => 'D', 'profile_cover' => '', 'welcome_text' => '',
         'show_wallet' => 'yes', 'wallet_label' => 'Mon portefeuille', 'wallet_balance' => 'Auto', 'wallet_item_balance' => 'yes', 'wallet_url' => '/my-wallet/', 'recharge_url' => '/my-wallet/', 'loyalty_points' => '0',
-        'promo_enabled' => 'yes', 'promo_title' => 'Promos exclusives ! 🔥', 'promo_text' => 'Profitez de réductions incroyables sur vos top-ups préférés.', 'promo_button' => 'Voir les promos', 'promo_url' => '/promos/', 'promo_countdown' => '',
+        'promo_enabled' => 'yes', 'promo_title' => 'Promos exclusives !', 'promo_text' => 'Profitez de réductions incroyables sur vos top-ups préférés.', 'promo_button' => 'Voir les promos', 'promo_url' => '/promos/', 'promo_countdown' => '',
         'quick_actions' => 'yes', 'quick_wallet' => 'yes', 'quick_orders' => 'yes', 'quick_support' => 'yes', 'quick_app' => 'yes',
         'bonus_enabled' => 'yes', 'bonus_title' => 'Bonus Free Fire', 'social_enabled' => 'yes',
         'whatsapp_url' => 'https://wa.me/message/BXQXUCKDDI3GO1', 'telegram_url' => '#', 'instagram_url' => '#', 'facebook_url' => '#', 'tiktok_url' => '#', 'youtube_url' => '#',
@@ -654,7 +654,7 @@ function delicat_builder_v9_menu_render_wallet_card() {
         . delicat_builder_v9_menu_native_icon_svg('dashicons-money-alt')
         . '<div><small>' . esc_html($s['wallet_label']) . '</small>'
         . '<strong class="dsb-wallet-amount">' . $bal . '</strong>'
-        . ($rewards !== '' ? '<em>⭐ ' . esc_html($rewards) . '</em>' : '') . '</div>'
+        . ($rewards !== '' ? '<em>' . esc_html($rewards) . '</em>' : '') . '</div>'
         . '<a href="' . esc_url($s['recharge_url']) . '">Recharger</a>'
         . '</div>';
 }
@@ -751,10 +751,10 @@ function delicat_builder_v9_menu_wallet_live_assets($from_render = false) {
 function delicat_builder_v9_menu_menu_quick_defaults() {
     $s = delicat_builder_v9_menu_get_menu_builder_settings();
     $out = array();
-    if (($s['quick_wallet']  ?? 'yes') === 'yes') $out[] = array('icon'=>'💳','image'=>'','attachment_id'=>0,'label'=>'Wallet','url'=>$s['wallet_url'],'visibility'=>'all');
-    if (($s['quick_orders']  ?? 'yes') === 'yes') $out[] = array('icon'=>'📦','image'=>'','attachment_id'=>0,'label'=>'Commandes','url'=>delicat_builder_v9_menu_menu_account_url('orders'),'visibility'=>'all');
-    if (($s['quick_support'] ?? 'yes') === 'yes') $out[] = array('icon'=>'💬','image'=>'','attachment_id'=>0,'label'=>'Support','url'=>$s['whatsapp_url'],'visibility'=>'all');
-    if (($s['quick_app']     ?? 'yes') === 'yes') $out[] = array('icon'=>'📲','image'=>'','attachment_id'=>0,'label'=>'App','url'=>'#install-app','visibility'=>'all');
+    if (($s['quick_wallet']  ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Wallet','url'=>$s['wallet_url'],'visibility'=>'all');
+    if (($s['quick_orders']  ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Commandes','url'=>delicat_builder_v9_menu_menu_account_url('orders'),'visibility'=>'all');
+    if (($s['quick_support'] ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'Support','url'=>$s['whatsapp_url'],'visibility'=>'all');
+    if (($s['quick_app']     ?? 'yes') === 'yes') $out[] = array('icon'=>'','image'=>'','attachment_id'=>0,'label'=>'App','url'=>'#install-app','visibility'=>'all');
     return $out;
 }
 

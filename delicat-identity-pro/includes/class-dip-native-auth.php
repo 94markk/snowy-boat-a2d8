@@ -365,7 +365,7 @@ final class DIP_Native_Auth {
         if ($username !== '' && self::is_locked($username)) {
             return new WP_Error(
                 'delicat_locked',
-                sprintf(__('🔒 Trop de tentatives. Réessayez dans environ %d minutes.', 'delicat-google-login'), self::lockout_minutes($username))
+                sprintf(__('Trop de tentatives. Réessayez dans environ %d minutes.', 'delicat-google-login'), self::lockout_minutes($username))
             );
         }
         // Re-apply the Delicat customer policy at the end of WordPress' normal
@@ -565,7 +565,7 @@ final class DIP_Native_Auth {
         nocache_headers();
         if (is_user_logged_in()) {
             $return = self::posted_return();
-            wp_send_json_success(['message'=>__('✅ Vous êtes déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect($return !== '' ? $return : self::login_redirect())]);
+            wp_send_json_success(['message'=>__('Vous êtes déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect($return !== '' ? $return : self::login_redirect())]);
         }
         if (!self::verify_browser_nonce('delicat_login_action')) {
             self::json_error(__('Session expirée. Nouvelle tentative…', 'delicat-google-login'), 'bad_nonce');
@@ -585,7 +585,7 @@ final class DIP_Native_Auth {
         $max = min(256, max(32, absint($s['native_password_max'] ?? 100)));
 
         if (self::is_locked($email)) {
-            self::json_error(sprintf(__('🔒 Trop de tentatives. Réessayez dans environ %d minutes.', 'delicat-google-login'), self::lockout_minutes($email)), 'locked');
+            self::json_error(sprintf(__('Trop de tentatives. Réessayez dans environ %d minutes.', 'delicat-google-login'), self::lockout_minutes($email)), 'locked');
         }
         if (!is_email($email) || $pass === '' || strlen($pass) > $max * 4) {
             self::record_failure($email, 'invalid_input');
@@ -604,7 +604,7 @@ final class DIP_Native_Auth {
             $safe_policy = ['dip_account_banned','delicat_locked','dip_email_not_verified','account_pending_approval','dip_2fa_required','dip_2fa_invalid','dip_2fa_rate_limited','dip_2fa_https_required'];
             $message = in_array($code, $safe_policy, true)
                 ? wp_strip_all_tags($user->get_error_message())
-                : __('❌ Identifiants incorrects. Vérifiez votre email et votre mot de passe.', 'delicat-google-login');
+                : __('Identifiants incorrects. Vérifiez votre email et votre mot de passe.', 'delicat-google-login');
             self::json_error($message, $code === 'delicat_locked' ? 'locked' : (in_array($code, $safe_policy, true) ? $code : 'invalid_credentials'));
         }
 
@@ -612,7 +612,7 @@ final class DIP_Native_Auth {
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user->ID);
         $return = self::posted_return();
         wp_send_json_success([
-            'message' => __('✅ Connexion réussie. Redirection…', 'delicat-google-login'),
+            'message' => __('Connexion réussie. Redirection…', 'delicat-google-login'),
             'redirect' => self::auth_transition_redirect($return !== '' ? $return : self::login_redirect()),
         ]);
     }
@@ -664,7 +664,7 @@ final class DIP_Native_Auth {
         nocache_headers();
         if (is_user_logged_in()) {
             $return = self::posted_return();
-            wp_send_json_success(['message'=>__('✅ Votre compte est déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect($return !== '' ? $return : self::register_redirect())]);
+            wp_send_json_success(['message'=>__('Votre compte est déjà connecté.', 'delicat-google-login'), 'redirect'=>self::auth_transition_redirect($return !== '' ? $return : self::register_redirect())]);
         }
         if (!self::verify_browser_nonce('delicat_register_action')) {
             self::json_error(__('Session expirée. Nouvelle tentative…', 'delicat-google-login'), 'bad_nonce');
@@ -674,7 +674,7 @@ final class DIP_Native_Auth {
             self::json_error(__('Erreur de validation.', 'delicat-google-login'));
         }
         if (!self::registration_attempt_allowed()) self::json_error(__('Trop de demandes d’inscription. Réessayez dans quelques minutes.', 'delicat-google-login'), 'registration_attempt_rate_limited');
-        if (self::is_locked()) self::json_error(__('🔒 Trop de tentatives. Réessayez plus tard.', 'delicat-google-login'), 'locked');
+        if (self::is_locked()) self::json_error(__('Trop de tentatives. Réessayez plus tard.', 'delicat-google-login'), 'locked');
         if (!self::registration_allowed()) self::json_error(__('Les inscriptions sont actuellement fermées.', 'delicat-google-login'));
         if (self::registration_rate_limited()) self::json_error(__('Limite d’inscriptions atteinte. Réessayez dans une heure.', 'delicat-google-login'), 'registration_rate_limited');
 
@@ -731,7 +731,7 @@ final class DIP_Native_Auth {
             }
             if (class_exists('DIP_Audit')) DIP_Audit::record('native_registration_pending_verification', 'notice', $user_id);
             wp_send_json_success([
-                'message' => __('✅ Compte créé. Vérifiez maintenant votre e-mail pour activer la connexion.', 'delicat-google-login'),
+                'message' => __('Compte créé. Vérifiez maintenant votre e-mail pour activer la connexion.', 'delicat-google-login'),
                 'verificationRequired' => true,
             ]);
         }
@@ -750,7 +750,7 @@ final class DIP_Native_Auth {
         $return = self::posted_return();
 
         wp_send_json_success([
-            'message' => __('✅ Compte créé avec succès. Redirection…', 'delicat-google-login'),
+            'message' => __('Compte créé avec succès. Redirection…', 'delicat-google-login'),
             'redirect' => self::auth_transition_redirect($return !== '' ? $return : self::register_redirect()),
         ]);
     }

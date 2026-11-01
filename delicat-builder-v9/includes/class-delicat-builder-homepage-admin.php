@@ -272,7 +272,7 @@ public static function info(): void {
 				<section class="delicat-admin__card">
 					<h2><?php esc_html_e( '2. Starter layout', 'delicat-builder-v9' ); ?></h2>
 					<p><?php esc_html_e( 'The starter adds exactly these homepage blocks:', 'delicat-builder-v9' ); ?></p>
-					<p><strong>Category chips → JEUX 🎮 → ABONNEMENT PREMIUM 👑 → ÉCHANGES 💵 → GIFT CARDS 🎁</strong></p>
+					<p><strong>Category chips → JEUX → ABONNEMENT PREMIUM → ÉCHANGES → GIFT CARDS</strong></p>
 					<p><?php esc_html_e( 'Only the two approved carousel styles are used: Delicat Jeux and Delicat Abonnement Premium.', 'delicat-builder-v9' ); ?></p>
 					<?php if ( $page_id ) : ?>
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">

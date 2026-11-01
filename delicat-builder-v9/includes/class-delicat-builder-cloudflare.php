@@ -509,7 +509,7 @@ final class Delicat_Builder_V9_Cloudflare {
 			<?php if ( ! empty( $status ) ) : ?>
 				<h2><?php esc_html_e( 'Dernière purge', 'delicat-builder-v9' ); ?></h2>
 				<p>
-					<?php echo ! empty( $status['ok'] ) ? '✅' : '❌'; ?>
+					<?php echo ! empty( $status['ok'] ) ? '' : ''; ?>
 					<code><?php echo esc_html( (string) ( $status['scope'] ?? '' ) ); ?></code>
 					— <?php echo esc_html( (string) ( $status['time'] ?? '' ) ); ?>
 					<?php if ( '' !== (string) ( $status['note'] ?? '' ) ) : ?>

@@ -79,7 +79,7 @@ class Delicat_Alerts {
         $oldest = $rows[0];
         $url = admin_url( 'admin.php?page=delicat-recharges&statut=en_attente&highlight=' . (int) $oldest->id );
 
-        $title = '⏰ Recharges en attente';
+        $title = 'Recharges en attente';
         $body  = sprintf(
             "%d demande(s) attendent votre validation.\nLa plus ancienne: #%d — %s HTG (%s)",
             $pending_total,
@@ -110,7 +110,7 @@ class Delicat_Alerts {
         $count = $approved ? (int) $approved->c : 0;
         $sum   = $approved ? (float) $approved->s : 0;
 
-        $title = '📊 Résumé du jour — Delicat';
+        $title = 'Résumé du jour — Delicat';
         $body  = sprintf(
             "Aujourd'hui: %d recharge(s) approuvée(s)\nTotal crédité: %s HTG\nEn attente: %d",
             $count, number_format( $sum, 2 ), $pending
@@ -153,7 +153,7 @@ class Delicat_Alerts {
         if ( get_transient( 'delicat_stock_alert_' . $hash ) ) return;
         set_transient( 'delicat_stock_alert_' . $hash, 1, 6 * HOUR_IN_SECONDS );
 
-        $title = '⚠️ Stock faible';
+        $title = 'Stock faible';
         $body  = "Réapprovisionnez bientôt:\n• " . implode( "\n• ", array_slice( $messages, 0, 8 ) );
         $url   = class_exists( 'Delicat_Sales_Analytics' )
             ? admin_url( 'admin.php?page=delicat-sales-analytics' )

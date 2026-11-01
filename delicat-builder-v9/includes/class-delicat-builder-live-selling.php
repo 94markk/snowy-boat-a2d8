@@ -25,7 +25,7 @@ final class Delicat_Builder_V9_Live_Selling {
 			'show_mobile'      => 1,
 			'show_desktop'     => 1,
 			'show_close'       => 1,
-			'label'            => '🔥 Vente en direct',
+			'label'            => 'Vente en direct',
 			'message_template' => 'Un client vient d’acheter {product}',
 			'max_age'          => 21600,
 			'initial_delay'    => 9000,
@@ -325,7 +325,7 @@ final class Delicat_Builder_V9_Live_Selling {
 			'showMobile'      => ! empty( $s['show_mobile'] ),
 			'showDesktop'     => ! empty( $s['show_desktop'] ),
 			'showClose'       => ! empty( $s['show_close'] ),
-			'label'           => (string) ( $s['label'] ?? '🔥 Vente en direct' ),
+			'label'           => (string) ( $s['label'] ?? 'Vente en direct' ),
 			'messageTemplate' => (string) ( $s['message_template'] ?? 'Un client vient d’acheter {product}' ),
 		);
 		wp_add_inline_script( 'delicat-builder-v9-live-selling', 'window.DelicatLiveSelling=' . wp_json_encode( $config ) . ';', 'before' );
@@ -674,7 +674,7 @@ final class Delicat_Builder_V9_Live_Selling {
 		$last = ! empty( $events[0] ) && is_array( $events[0] ) ? $events[0] : array();
 		?>
 		<div class="wrap">
-			<h1>🔥 <?php esc_html_e( 'Live Selling', 'delicat-builder-v9' ); ?></h1>
+			<h1><?php esc_html_e( 'Live Selling', 'delicat-builder-v9' ); ?></h1>
 			<p>Affiche une preuve sociale légère basée uniquement sur de vraies commandes WooCommerce payées. Aucune identité client, adresse, e-mail, numéro de commande ou total n’est exposé.</p>
 			<?php if ( isset( $_GET['settings'] ) ) : ?><div class="notice notice-success is-dismissible"><p>Paramètres Live Selling enregistrés — état actuel : <strong><?php echo self::enabled() ? 'actif' : 'désactivé'; ?></strong><?php if ( self::enabled() && $events ) : ?>, <?php echo esc_html( sprintf( '%d vente(s) réelle(s) prête(s) à afficher.', count( $events ) ) ); ?><?php endif; ?></p></div><?php endif; ?>
 			<div style="display:grid;grid-template-columns:minmax(340px,2fr) minmax(280px,1fr);gap:20px;max-width:1180px;align-items:start">
@@ -690,7 +690,7 @@ final class Delicat_Builder_V9_Live_Selling {
 						<tr><th scope="row"><label for="dbv9-live-position">Position</label></th><td><select id="dbv9-live-position" name="live_selling[position]"><option value="bottom_left" <?php selected( $s['position'], 'bottom_left' ); ?>>Bas gauche</option><option value="bottom_right" <?php selected( $s['position'], 'bottom_right' ); ?>>Bas droite</option></select></td></tr>
 						<tr><th scope="row"><label for="dbv9-live-scope">Pages</label></th><td><select id="dbv9-live-scope" name="live_selling[display_scope]"><option value="site" <?php selected( $s['display_scope'], 'site' ); ?>>Tout le site sauf panier / checkout / compte</option><option value="shop" <?php selected( $s['display_scope'], 'shop' ); ?>>Accueil + boutique + produits</option><option value="home" <?php selected( $s['display_scope'], 'home' ); ?>>Accueil uniquement</option></select></td></tr>
 						<tr><th scope="row">Appareils</th><td><label><input type="checkbox" name="live_selling[show_mobile]" value="1" <?php checked( ! empty( $s['show_mobile'] ) ); ?>> Mobile</label>&nbsp;&nbsp;<label><input type="checkbox" name="live_selling[show_desktop]" value="1" <?php checked( ! empty( $s['show_desktop'] ) ); ?>> Desktop / tablette</label></td></tr>
-						<tr><th scope="row"><label for="dbv9-live-label">Petit titre</label></th><td><input id="dbv9-live-label" class="regular-text" maxlength="60" name="live_selling[label]" value="<?php echo esc_attr( (string) $s['label'] ); ?>"><p class="description">Exemple : 🔥 Vente en direct</p></td></tr>
+						<tr><th scope="row"><label for="dbv9-live-label">Petit titre</label></th><td><input id="dbv9-live-label" class="regular-text" maxlength="60" name="live_selling[label]" value="<?php echo esc_attr( (string) $s['label'] ); ?>"><p class="description">Exemple : Vente en direct</p></td></tr>
 						<tr><th scope="row"><label for="dbv9-live-message">Message</label></th><td><input id="dbv9-live-message" class="large-text" maxlength="140" name="live_selling[message_template]" value="<?php echo esc_attr( (string) $s['message_template'] ); ?>"><p class="description">Utilisez obligatoirement <code>{product}</code> pour insérer le nom du produit.</p></td></tr>
 						<tr><th scope="row"><label for="dbv9-live-initial">Premier affichage</label></th><td><input id="dbv9-live-initial" type="number" min="4" max="60" name="live_selling[initial_delay_seconds]" value="<?php echo esc_attr( (string) round( (int) $s['initial_delay'] / 1000 ) ); ?>"> secondes</td></tr>
 						<tr><th scope="row"><label for="dbv9-live-duration">Durée d’affichage</label></th><td><input id="dbv9-live-duration" type="number" min="3" max="15" name="live_selling[display_duration_seconds]" value="<?php echo esc_attr( (string) round( (int) $s['display_duration'] / 1000 ) ); ?>"> secondes</td></tr>
@@ -703,7 +703,7 @@ final class Delicat_Builder_V9_Live_Selling {
 				</div>
 
 				<div>
-					<div class="card" style="max-width:none"><h2>État</h2><p><strong><?php echo self::enabled() ? '✅ Actif' : '⏸️ Désactivé'; ?></strong></p><p><?php echo esc_html( sprintf( '%d vente(s) réelle(s) mémorisée(s).', count( $events ) ) ); ?></p><?php if ( $last ) : ?><p><strong>Dernière :</strong><br><?php echo esc_html( (string) ( $last['title'] ?? '' ) ); ?><br><small><?php echo esc_html( wp_date( 'd/m/Y H:i', absint( $last['created'] ?? 0 ) ) ); ?></small></p><?php else : ?><p><small>Aucune vente capturée depuis l’activation.</small></p><?php endif; ?></div>
+					<div class="card" style="max-width:none"><h2>État</h2><p><strong><?php echo self::enabled() ? 'Actif' : 'Désactivé'; ?></strong></p><p><?php echo esc_html( sprintf( '%d vente(s) réelle(s) mémorisée(s).', count( $events ) ) ); ?></p><?php if ( $last ) : ?><p><strong>Dernière :</strong><br><?php echo esc_html( (string) ( $last['title'] ?? '' ) ); ?><br><small><?php echo esc_html( wp_date( 'd/m/Y H:i', absint( $last['created'] ?? 0 ) ) ); ?></small></p><?php else : ?><p><small>Aucune vente capturée depuis l’activation.</small></p><?php endif; ?></div>
 					<div class="card" style="max-width:none"><h2>Aperçu</h2><div style="border:1px solid #dcdcde;border-radius:16px;padding:14px;background:#fff"><small style="display:block;color:#6c64e8;font-weight:700;margin-bottom:4px"><?php echo esc_html( (string) $s['label'] ); ?></small><strong style="display:block"><?php echo esc_html( str_replace( '{product}', 'Free Fire (LATAM)', (string) $s['message_template'] ) ); ?></strong><small style="display:block;color:#777;margin-top:5px">À l’instant</small></div><p class="description">Aperçu administratif seulement : aucune fausse vente n’est publiée.</p></div>
 				</div>
 			</div>

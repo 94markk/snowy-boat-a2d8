@@ -462,11 +462,11 @@ class Delicat_SMS_Guard {
 			if ( $lock ) update_option( self::OPT_LOCK_UNTIL, time() + $mins * MINUTE_IN_SECONDS, false );
 		}
 		$title = $spoof
-			? sprintf( '🚨 SMS %s SUSPECT — %s HTG non crédités', ucfirst( $provider ), number_format( (float) ( $parsed['amount'] ?? 0 ), 0 ) )
-			: sprintf( '⏸ SMS %s retenu — %s HTG à approuver', ucfirst( $provider ), number_format( (float) ( $parsed['amount'] ?? 0 ), 0 ) );
+			? sprintf( 'SMS %s SUSPECT — %s HTG non crédités', ucfirst( $provider ), number_format( (float) ( $parsed['amount'] ?? 0 ), 0 ) )
+			: sprintf( 'SMS %s retenu — %s HTG à approuver', ucfirst( $provider ), number_format( (float) ( $parsed['amount'] ?? 0 ), 0 ) );
 		$body  = 'TransCode ' . ( $parsed['trans_code'] ?? '?' ) . "\n" . implode( "\n", array_map( function ( $k, $v ) { return '• ' . $v; }, array_keys( $flags ), $flags ) );
 		if ( $lock ) {
-			$body .= "\n\n🔒 Validation automatique suspendue " . $mins . ' min. Approuvez manuellement depuis l\'app ou la page Natcash SMS.';
+			$body .= "\n\nValidation automatique suspendue " . $mins . ' min. Approuvez manuellement depuis l\'app ou la page Natcash SMS.';
 		}
 		self::notify( $title, $body, $spoof );
 	}
@@ -548,7 +548,7 @@ class Delicat_SMS_Guard {
 	public static function settings_ui(): void {
 		$o = function ( $k ) { return esc_attr( (string) self::opt( $k ) ); };
 		?>
-		<h2>🛡️ Garde SMS (anti-spoofing)</h2>
+		<h2>Garde SMS (anti-spoofing)</h2>
 		<p class="description">Protège la validation automatique contre les faux SMS « Natcash » / « MonCash » envoyés par des escrocs (Twilio, etc.). Tout SMS qui échoue est <strong>retenu</strong> (jamais crédité) et visible sur la page <a href="<?php echo esc_url( admin_url( 'admin.php?page=delicat-natcash-log' ) ); ?>">Natcash SMS</a> avec un bouton pour le valider si c'est un vrai.</p>
 		<table class="form-table">
 			<tr><th>Mode</th>
@@ -596,16 +596,16 @@ class Delicat_SMS_Guard {
 		?>
 		<div class="dlc-panel" style="border-left:5px solid <?php echo $lock ? '#c62828' : ( $na ? '#2e7d32' : '#ef6c00' ); ?>;">
 			<div class="dlc-panel-head">
-				<strong>🛡️ Garde SMS — <?php echo self::mode() === 'hold' ? 'actif (retient les SMS suspects)' : 'journal seulement'; ?></strong>
+				<strong>Garde SMS — <?php echo self::mode() === 'hold' ? 'actif (retient les SMS suspects)' : 'journal seulement'; ?></strong>
 				<span class="dlc-hint"><a href="<?php echo esc_url( admin_url( 'admin.php?page=delicat-settings' ) ); ?>">Réglages</a></span>
 			</div>
 			<?php if ( $msg ) : ?><div class="notice notice-info inline" style="margin:0 0 10px;"><p><?php echo esc_html( $msg ); ?></p></div><?php endif; ?>
 			<?php if ( $lock ) : ?>
-				<p style="color:#c62828;font-weight:700;">🔒 Verrouillage actif jusqu'à <?php echo esc_html( wp_date( 'H:i', (int) get_option( self::OPT_LOCK_UNTIL, 0 ) ) ); ?> — tout crédit automatique est retenu.
+				<p style="color:#c62828;font-weight:700;">Verrouillage actif jusqu'à <?php echo esc_html( wp_date( 'H:i', (int) get_option( self::OPT_LOCK_UNTIL, 0 ) ) ); ?> — tout crédit automatique est retenu.
 					<a class="button button-small" href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=delicat_smsg_unlock' ), 'delicat_smsg_unlock' ) ); ?>">Lever le verrouillage</a></p>
 			<?php endif; ?>
 			<?php if ( ! $na ) : ?>
-				<p style="color:#ef6c00;font-weight:700;">⚠️ Solde de référence Natcash non défini : les crédits automatiques Natcash sont retenus jusqu'à ce que vous l'entriez ci-dessous (voir votre solde dans l'app Natcash ou *144#).</p>
+				<p style="color:#ef6c00;font-weight:700;">Solde de référence Natcash non défini : les crédits automatiques Natcash sont retenus jusqu'à ce que vous l'entriez ci-dessous (voir votre solde dans l'app Natcash ou *144#).</p>
 			<?php endif; ?>
 			<table class="dlc-table">
 				<tr><th>Dernier solde Natcash vérifié</th><td><?php echo $fmt( $na ); ?></td></tr>
@@ -636,14 +636,14 @@ class Delicat_SMS_Guard {
 		$flags = is_array( $e['flags'] ?? null ) ? $e['flags'] : [];
 		$lbl   = self::flag_labels();
 		if ( $trust === 'ok' ) {
-			echo '<div class="dlc-details" style="color:#2e7d32;font-weight:700;">🛡️ Authentique';
+			echo '<div class="dlc-details" style="color:#2e7d32;font-weight:700;">Authentique';
 			if ( ! empty( $e['confirmed_by'] ) ) echo ' (confirmé par ' . esc_html( (string) $e['confirmed_by'] ) . ')';
 			echo '</div>';
 			return;
 		}
 		if ( $flags ) {
 			echo '<div class="dlc-details" style="color:#b71c1c;">';
-			echo '<b>' . ( $trust === 'suspect' ? '🚨 SUSPECT' : '⏸ RETENU' ) . '</b>';
+			echo '<b>' . ( $trust === 'suspect' ? 'SUSPECT' : 'RETENU' ) . '</b>';
 			foreach ( $flags as $k => $txt ) {
 				echo '<br>• <b>' . esc_html( $lbl[ $k ] ?? $k ) . '</b> — ' . esc_html( (string) $txt );
 			}
@@ -653,7 +653,7 @@ class Delicat_SMS_Guard {
 		}
 		if ( empty( $e['uid'] ) || ! empty( $e['resolved'] ) ) return;
 		$url = wp_nonce_url( admin_url( 'admin-post.php?action=delicat_smsg_trust&uid=' . rawurlencode( (string) $e['uid'] ) ), 'delicat_smsg_trust_' . $e['uid'] );
-		echo '<p style="margin:6px 0 0;"><a class="button button-small button-primary" href="' . esc_url( $url ) . '" onclick="return confirm(\'Confirmez UNIQUEMENT si ce SMS existe vraiment dans votre app Natcash/MonCash (montant + TransCode + solde). Le solde du SMS deviendra la nouvelle référence.\');">✅ Authentique → créditer &amp; re-sync solde</a></p>';
+		echo '<p style="margin:6px 0 0;"><a class="button button-small button-primary" href="' . esc_url( $url ) . '" onclick="return confirm(\'Confirmez UNIQUEMENT si ce SMS existe vraiment dans votre app Natcash/MonCash (montant + TransCode + solde). Le solde du SMS deviendra la nouvelle référence.\');">Authentique → créditer &amp; re-sync solde</a></p>';
 	}
 
 	/* ---- admin-post handlers ----------------------------------------------- */

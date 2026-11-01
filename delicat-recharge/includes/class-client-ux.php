@@ -23,11 +23,11 @@ class Delicat_Client_Ux {
     private static function badge( string $statut ): string {
         switch ( $statut ) {
             case 'approuve':
-                return '<span class="dx-badge dx-ok">✅ Approuvé</span>';
+                return '<span class="dx-badge dx-ok">Approuvé</span>';
             case 'rejete':
-                return '<span class="dx-badge dx-no">❌ Rejeté</span>';
+                return '<span class="dx-badge dx-no">Rejeté</span>';
             default:
-                return '<span class="dx-badge dx-wait">⏳ En attente</span>';
+                return '<span class="dx-badge dx-wait">En attente</span>';
         }
     }
 
@@ -73,7 +73,7 @@ class Delicat_Client_Ux {
                                 <div class="dx-trans">TransCode : <?php echo esc_html( $r->trans_code ); ?></div>
                             <?php endif; ?>
                             <?php if ( $r->statut === 'approuve' ) : ?>
-                                <a class="dx-recu-btn" href="<?php echo esc_url( $recu ); ?>" target="_blank">🧾 Voir le reçu</a>
+                                <a class="dx-recu-btn" href="<?php echo esc_url( $recu ); ?>" target="_blank">Voir le reçu</a>
                             <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
@@ -143,7 +143,7 @@ class Delicat_Client_Ux {
         <div class="recu-head">
             <h1><?php echo esc_html( $b['name'] ); ?></h1>
             <div class="sub">REÇU DE RECHARGE</div>
-            <div class="recu-badge">✅ Paiement confirmé</div>
+            <div class="recu-badge">Paiement confirmé</div>
         </div>
         <div class="recu-body">
             <div class="recu-amt"><?php echo number_format( (float) $r->montant, 2 ); ?> HTG</div>
@@ -155,7 +155,7 @@ class Delicat_Client_Ux {
             <?php endif; ?>
             <div class="recu-line"><span>Date</span><span><?php echo esc_html( mysql2date( 'd/m/Y H:i', $r->created_at ) ); ?></span></div>
             <div class="recu-line"><span>Statut</span><span style="color:#1b5e20;">Crédité au wallet</span></div>
-            <button class="recu-print" onclick="window.print()">🖨️ Imprimer / Enregistrer</button>
+            <button class="recu-print" onclick="window.print()">Imprimer / Enregistrer</button>
         </div>
         <div class="recu-foot">
             Merci pour votre confiance.<br>

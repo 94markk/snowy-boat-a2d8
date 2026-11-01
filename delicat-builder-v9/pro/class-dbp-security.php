@@ -32,6 +32,10 @@ final class DBP_Security {
 	public static function boot() {
 		add_filter( 'wp_headers', array( __CLASS__, 'headers' ), 20 );
 		add_action( 'send_headers', array( __CLASS__, 'send_headers' ), PHP_INT_MAX );
+		/* 9.6.1: WordPress re-sends a frame-only CSP (replace mode) on account, checkout and
+		 * login pages, which dropped base-uri/object-src there; restore it after core. */
+		add_action( 'template_redirect', array( __CLASS__, 'restore_policy' ), PHP_INT_MAX );
+		add_action( 'login_init', array( __CLASS__, 'login_headers' ), PHP_INT_MAX );
 
 		/* Author enumeration: ?author=1 redirects to a slug and hands an
 		 * attacker a valid username to spray against the login form. */
@@ -88,11 +92,50 @@ final class DBP_Security {
 		if ( self::secure() ) { $policy .= '; upgrade-insecure-requests'; }
 		header( 'Content-Security-Policy: ' . $policy, false );
 
-		header( 'Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(self), interest-cohort=()' );
+		/* 9.6.1: interest-cohort is retired (browsers log an error for it); browsing-topics replaces it. */
+		header( 'Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(self), browsing-topics=()' );
 		header( 'Cross-Origin-Resource-Policy: same-site' );
+		/* 9.6.1: isolate the browsing context from cross-origin windows; popups we open
+		 * (Google sign-in, payment) keep working. */
+		header( 'Cross-Origin-Opener-Policy: same-origin-allow-popups' );
+		header( 'X-Permitted-Cross-Domain-Policies: none' );
 
 		if ( self::secure() ) {
 			header( 'Strict-Transport-Security: max-age=31536000' ); // 9.4.3: no includeSubDomains (see Security::safe_headers)
+		}
+	}
+
+	/** The enforcing baseline policy appended next to any host policy. */
+	private static function baseline_policy(): string {
+		$policy = "frame-ancestors 'self'; base-uri 'self'; object-src 'none'";
+		return self::secure() ? $policy . '; upgrade-insecure-requests' : $policy;
+	}
+
+	/** Re-append the baseline CSP when a later header() call replaced it (account/checkout pages). */
+	public static function restore_policy(): void {
+		if ( is_admin() || headers_sent() ) {
+			return;
+		}
+		foreach ( headers_list() as $line ) {
+			if ( 0 === stripos( $line, 'Content-Security-Policy:' ) && false !== stripos( $line, 'object-src' ) ) {
+				return;
+			}
+		}
+		header( 'Content-Security-Policy: ' . self::baseline_policy(), false );
+	}
+
+	/** wp-login.php does not run send_headers: give it the same baseline. */
+	public static function login_headers(): void {
+		if ( headers_sent() ) {
+			return;
+		}
+		header( 'X-Content-Type-Options: nosniff' );
+		header( 'Referrer-Policy: strict-origin-when-cross-origin' );
+		header( 'Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=(self), browsing-topics=()' );
+		header( 'Cross-Origin-Opener-Policy: same-origin-allow-popups' );
+		header( 'Content-Security-Policy: ' . self::baseline_policy(), false );
+		if ( self::secure() ) {
+			header( 'Strict-Transport-Security: max-age=31536000' );
 		}
 	}
 

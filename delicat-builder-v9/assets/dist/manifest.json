@@ -1,6 +1,6 @@
 {
  "version": 2,
- "builtAt": "2026-11-01T03:29:55.721Z",
+ "builtAt": "2026-11-01T04:18:34.106Z",
  "js": {
   "engine": {
    "file": "engine.726bef735cd8.js",
@@ -246,9 +246,9 @@
    ]
   },
   "page": {
-   "file": "page.0bca6865bd8b.css",
-   "bytes": 43497,
-   "sha256": "0bca6865bd8b10cc0f838ec8ab317a477716b2631806ad7d09b0ebbcc4ab38d3",
+   "file": "page.240e75ebfc3f.css",
+   "bytes": 42868,
+   "sha256": "240e75ebfc3fd8c57f2e73ff19bea490c088ce808952f3a959460def9c9435a6",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -269,9 +269,9 @@
    ]
   },
   "woo": {
-   "file": "woo.ec36a2e8b5e7.css",
-   "bytes": 69427,
-   "sha256": "ec36a2e8b5e7670efc04f000e0f7672884dc4ce6e2abba8a4a524a8e4b212087",
+   "file": "woo.7f8f2fd57440.css",
+   "bytes": 68798,
+   "sha256": "7f8f2fd57440f9020c21a6ac7f875691e2bf2f5add2cc64f69abe4d57c118afd",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/woo-ui.css",
@@ -280,9 +280,9 @@
    ]
   },
   "woo-design": {
-   "file": "woo-design.d6a0cb4c325a.css",
-   "bytes": 86676,
-   "sha256": "d6a0cb4c325aa1acb7f1ef5a5b7bbbbb467d40fbd2fa442c5bb209fa2fb70d0f",
+   "file": "woo-design.5ba3efa642ab.css",
+   "bytes": 86047,
+   "sha256": "5ba3efa642abf831436f3bb746c9c6441e798aa0b63e24f113f181ee6164e0c7",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/woo-ui.css",

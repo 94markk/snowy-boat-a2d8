@@ -268,7 +268,7 @@ final class Delicat_Builder_V9_Security {
 		}
 		/* RC32 */
 		if ( ! isset( $headers['Permissions-Policy'] ) ) {
-			$headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(), interest-cohort=()';
+			$headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=(), browsing-topics=()';
 		}
 		/* self::request_is_secure(), not is_ssl(): behind Cloudflare/LiteSpeed the
 		 * latter is false on an https site, and HSTS - the one header that keeps a

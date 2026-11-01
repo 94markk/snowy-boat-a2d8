@@ -257,7 +257,7 @@ final class DIP_Security_Architecture {
             'dip_native_do_register_v2',
             'dip_native_resend_verification_v2',
         ];
-        $self = ['dip_connected_accounts_status'];
+        $self = ['dip_connected_accounts_status', 'dip_age_declaration']; // 6.17.0: the signed-in customer's own age declaration
         $public = array_values(array_unique(array_map('sanitize_key', (array) apply_filters('dip_public_ajax_actions', $public))));
         $self = array_values(array_unique(array_map('sanitize_key', (array) apply_filters('dip_self_service_ajax_actions', $self))));
         if (in_array($action, $public, true)) return;

@@ -299,7 +299,7 @@ final class Delicat_Builder_V9_Schema {
 
 			case 'faq':
 				$base['content'] = array(
-					'title'          => 'QUESTIONS FRÉQUENTES ❓',
+					'title'          => 'QUESTIONS FRÉQUENTES',
 					'subtitle'       => 'Tout ce qu’il faut savoir avant de commander.',
 					'title_color'    => '',
 					'subtitle_color' => '',

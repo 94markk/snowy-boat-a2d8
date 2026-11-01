@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.6.0
+ * Version: 9.6.1
 
  * Requires at least: 6.4
  * Requires PHP: 8.3
@@ -115,9 +115,10 @@ register_shutdown_function(
 		 * caller's, and Safe Mode would not cure it (the class would still be
 		 * missing) — it would only switch the storefront off. Only a fatal in a
 		 * Builder file, or one raised while running Builder code (an undefined
-		 * method or a type error on a Builder class), is Builder-related. */
+		 * method or a type error on a Builder class), is Builder-related.
+		 * 9.6.1: ReflectionException words the same failure "does not exist". */
 		$foreign_missing_class = ! $in_builder_file
-			&& (bool) preg_match( '/class\s+"?delicat_builder_v9_[a-z0-9_]+"?\s+not\s+found/i', $message );
+			&& (bool) preg_match( '/class\s+"?delicat_builder_v9_[a-z0-9_]+"?\s+(?:not\s+found|does\s+not\s+exist)/i', $message );
 		$builder_related = $in_builder_file
 			|| ( ! $foreign_missing_class && false !== stripos( $message, 'Delicat_Builder_V9_' ) );
 
@@ -227,7 +228,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.6.0' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.6.1' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -872,8 +873,11 @@ $delicat_builder_v9_admin_page = isset( $_REQUEST['page'] ) // phpcs:ignore Word
 $delicat_builder_v9_option_group = isset( $_POST['option_page'] ) // phpcs:ignore WordPress.Security.NonceVerification.Missing -- settings routing only; Options API verifies its nonce.
 	? sanitize_key( delicat_builder_v9_request_scalar( $_POST['option_page'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Missing
 	: '';
+/* 9.6.1: not sanitize_file_name(): for a name with several dots (a missing
+ * `page.<hash>.css` routed to WordPress) it calls current_user_can() before
+ * pluggable.php is loaded, a fatal error on every such request. */
 $delicat_builder_v9_admin_script = isset( $_SERVER['SCRIPT_NAME'] )
-	? sanitize_file_name( basename( delicat_builder_v9_request_scalar( $_SERVER['SCRIPT_NAME'] ) ) )
+	? (string) preg_replace( '/[^A-Za-z0-9._-]/', '', basename( delicat_builder_v9_request_scalar( $_SERVER['SCRIPT_NAME'] ) ) )
 	: '';
 $delicat_builder_v9_builder_admin_request = (
 	0 === strpos( $delicat_builder_v9_admin_page, 'delicat-builder-v9' )

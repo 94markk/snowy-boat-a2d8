@@ -3,7 +3,7 @@ DELICAT RECHARGE — v5.4.0  ·  Live balance update (no page refresh)
 
 WHAT CHANGED (what the client sees)
 -----------------------------------
-When the client taps "✈️ Envoyer la demande", the wallet balance now
+When the client taps "Envoyer la demande", the wallet balance now
 updates BY ITSELF — no page reload needed.
 
   • Instant credit (MonCash / Natcash Auto TC, when the matching SMS has

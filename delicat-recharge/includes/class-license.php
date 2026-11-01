@@ -216,7 +216,7 @@ class Delicat_License {
     /* ---------------- Admin UI ---------------- */
 
     public function menu(): void {
-        add_submenu_page( 'delicat-recharges', 'Licences clients', '🔑 Licences',
+        add_submenu_page( 'delicat-recharges', 'Licences clients', 'Licences',
             'manage_options', 'delicat-licenses', [ $this, 'page' ] );
     }
 
@@ -255,12 +255,12 @@ class Delicat_License {
         $nonce = wp_create_nonce( 'delicat_license' );
         ?>
         <div class="wrap">
-            <h1>🔑 Licences clients</h1>
+            <h1>Licences clients</h1>
             <p>Gérez les abonnements des clients qui utilisent le système Délicat sur leur propre site.</p>
 
             <?php if ( $new ) : ?>
             <div class="notice notice-success" style="padding:14px;">
-                <h3>✅ Licence créée — donnez ces valeurs au client (une seule fois)</h3>
+                <h3>Licence créée — donnez ces valeurs au client (une seule fois)</h3>
                 <p><strong>Clé de licence :</strong> <code style="font-size:14px;"><?php echo esc_html( $new['key'] ); ?></code></p>
                 <p><strong>Clé de signature :</strong> <code><?php echo esc_html( $new['lic']['sign_key'] ); ?></code></p>
                 <p><strong>Domaine :</strong> <?php echo esc_html( $new['lic']['domain'] ); ?>
@@ -308,8 +308,8 @@ class Delicat_License {
                         <td><?php echo (int) $lic['plan']; ?> mois</td>
                         <td><?php echo esc_html( $lic['expires'] ); ?></td>
                         <td><?php echo $valid
-                            ? '<span style="color:#1b5e20;font-weight:700;">🟢 Actif</span>'
-                            : '<span style="color:#b71c1c;font-weight:700;">🔴 ' . ( $lic['status']==='suspended' ? 'Suspendu' : 'Expiré' ) . '</span>'; ?></td>
+                            ? '<span style="color:#1b5e20;font-weight:700;">Actif</span>'
+                            : '<span style="color:#b71c1c;font-weight:700;">' . ( $lic['status']==='suspended' ? 'Suspendu' : 'Expiré' ) . '</span>'; ?></td>
                         <td><small><?php echo esc_html( $lic['last_check'] ?: 'jamais' ); ?></small></td>
                         <td>
                             <form method="post" style="display:inline;">

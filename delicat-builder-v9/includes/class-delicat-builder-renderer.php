@@ -783,8 +783,8 @@ private static function how_it_works( array $content ): string {
 	 * copy, so a never-customised block matches the reference out of the box. */
 	$style = in_array( (string) ( $content['style'] ?? 'ultra' ), array( 'ultra', 'neon' ), true ) ? (string) ( $content['style'] ?? 'ultra' ) : 'ultra';
 	if ( 'ultra' === $style ) {
-		$content['title'] = self::upgraded_default( $content['title'] ?? '', array( 'Comment ça marche ⚡', 'Comment ça marche ⚡️' ), 'Comment ça marche' );
-		if ( preg_match( '/^Comment ça marche\s*⚡(?:️)?\s*$/iu', (string) $content['title'] ) ) {
+		$content['title'] = self::upgraded_default( $content['title'] ?? '', array( 'Comment ça marche', 'Comment ça marche' ), 'Comment ça marche' );
+		if ( preg_match( '/^Comment ça marche\s*(?:️)?\s*$/iu', (string) $content['title'] ) ) {
 			$content['title'] = 'Comment ça marche';
 		}
 		$content['subtitle'] = self::upgraded_default( $content['subtitle'] ?? '', array( 'Trois étapes, moins d’une minute d’attente.', 'Trois étapes. Moins d’une minute d’attente.' ), 'Trois étapes. Un délai clair selon le produit.' );
@@ -1062,7 +1062,7 @@ private static function testimonials( array $content ): string {
 }
 
 private static function faq( array $content ): string {
-	$content['title'] = self::upgraded_default( $content['title'] ?? '', array( 'QUESTIONS FRÉQUENTES ❓' ), 'Questions fréquentes' );
+	$content['title'] = self::upgraded_default( $content['title'] ?? '', array( 'QUESTIONS FRÉQUENTES' ), 'Questions fréquentes' );
 	$content['items'] = self::upgraded_default(
 		$content['items'] ?? '',
 		array( "Combien de temps prend une recharge ?|La plupart des recharges sont créditées en moins d’une minute. Pour les commandes manuelles, comptez 5 à 15 minutes maximum.\nQuels moyens de paiement acceptez-vous ?|MonCash, transfert bancaire, PayPal, Wise et cartes prépayées. Les prix affichés sont en gourdes (G).\nEst-ce risqué pour mon compte de jeu ?|Nous utilisons uniquement les informations nécessaires à la livraison. Ne transmettez jamais un mot de passe au support ; si une fiche produit exige exceptionnellement une information sensible, utilisez uniquement son champ sécurisé dédié.\nComment recevoir mon code de carte cadeau ?|Après confirmation du paiement, le code est livré dans votre historique de commande selon le produit acheté." ),
@@ -1114,7 +1114,7 @@ private static function why_delicat( array $content ): string {
 	$style = in_array( (string) ( $content['style'] ?? 'ultra' ), array( 'ultra', 'neon' ), true ) ? (string) ( $content['style'] ?? 'ultra' ) : 'ultra';
 	if ( 'ultra' === $style ) {
 		$content['eyebrow'] = self::upgraded_default( $content['eyebrow'] ?? '', array( 'POURQUOI DELICAT STORE' ), 'Pourquoi Delicat' );
-		$content['title']   = self::sentence_case( self::upgraded_default( $content['title'] ?? '', array( "LA CONFIANCE D'UNE VRAIE PLATEFORME", 'LA CONFIANCE D’UNE VRAIE PLATEFORME', 'Tout est pensé pour ta tranquillité 💜' ), 'Tout est pensé pour ta tranquillité' ) );
+		$content['title']   = self::sentence_case( self::upgraded_default( $content['title'] ?? '', array( "LA CONFIANCE D'UNE VRAIE PLATEFORME", 'LA CONFIANCE D’UNE VRAIE PLATEFORME', 'Tout est pensé pour ta tranquillité' ), 'Tout est pensé pour ta tranquillité' ) );
 		$content['items']   = self::upgraded_default(
 			$content['items'] ?? '',
 			array( "lightning|LIVRAISON INSTANTANÉE|Codes et recharges activés en moins de 5 minutes.\nshield|PAIEMENT SÉCURISÉ|MonCash, Natcash, Visa et Mastercard chiffrés.\nglobe|DIASPORA FRIENDLY|Offrez une recharge à vos proches en Haïti, où que vous soyez.\nheadset|SUPPORT 24/7|Une équipe humaine, en français et en créole.\nverified|PRODUITS OFFICIELS|Comptes et codes provenant de fournisseurs vérifiés.\ntag|TARIFS EN GOURDES|Des prix justes, clairs, sans frais cachés.", "lightning|Livraison instantanée|vos recharges automatiques sont livres en moins de 5s\nshield|Paiement sécurisé|MonCash, Natcash,.\nverified|Produits officiels|Comptes et codes provenant de fournisseurs vérifiés.\ntag|Tarifs en gourdes|Des prix justes, clairs, sans frais cachés." ),
@@ -1300,7 +1300,7 @@ private static function why_delicat_ultra( array $content, array $features ): st
 }
 
 /**
- * RC58 "Retrouve ce que tu aimes ✨" — a fully customisable grid of link
+ * RC58 "Retrouve ce que tu aimes" — a fully customisable grid of link
  * cards (icon token or emoji | title | text | URL | optional hex tone), with
  * an optional closing button. Server-rendered, no JavaScript.
  */
@@ -1665,7 +1665,7 @@ private static function trust_strip( array $content ): string {
 
 	/**
 	 * RC64: category icons are modern stroke SVGs. Tokens map directly; the
-	 * emoji saved by earlier reference layouts (🎮 🎁 👑 ✦ ▶ 💰 🛍 …) are
+	 * emoji saved by earlier reference layouts (✦ ▶ …) are
 	 * translated to their token so nothing has to be re-saved; anything
 	 * else prints as text. Icons are inline SVG — no font, no request.
 	 */

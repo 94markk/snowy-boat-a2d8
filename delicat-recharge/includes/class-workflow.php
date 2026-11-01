@@ -125,7 +125,7 @@ class Delicat_Workflow {
         }
 
         wp_send_json_success( [
-            'message' => sprintf( '❌ %d rejetée(s), %d ignorée(s).', $rejected, $skipped ),
+            'message' => sprintf( '%d rejetée(s), %d ignorée(s).', $rejected, $skipped ),
         ] );
     }
 
@@ -210,7 +210,7 @@ class Delicat_Workflow {
 
         wp_send_json_success( [
             'message' => sprintf(
-                '✅ %d approuvée(s), %d ignorée(s)%s.',
+                '%d approuvée(s), %d ignorée(s)%s.',
                 $approved, $skipped,
                 $errors ? ', ' . count( $errors ) . ' erreur(s)' : ''
             ),
@@ -283,7 +283,7 @@ class Delicat_Workflow {
         ] );
 
         wp_send_json_success( [
-            'message' => sprintf( '✅ %s HTG remboursés (débités du wallet). Trace enregistrée.', number_format( (float) $r->montant, 2 ) ),
+            'message' => sprintf( '%s HTG remboursés (débités du wallet). Trace enregistrée.', number_format( (float) $r->montant, 2 ) ),
         ] );
     }
 }

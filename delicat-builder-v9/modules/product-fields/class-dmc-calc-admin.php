@@ -66,9 +66,9 @@ class Delicat_Builder_V9_Product_Fields_Admin {
 				<label><?php esc_html_e( 'Custom product rate', 'deli-multi-currency' ); ?> <input type="number" step="any" name="dmc_custom_rate" value="<?php echo esc_attr( $custom_rate ); ?>" class="small-text" placeholder="142"></label>
 				<span class="description"><?php esc_html_e( 'Optional. Use it in the formula as {rate}, e.g. {quantity} * {rate}. Leave blank to ignore (defaults to 1).', 'deli-multi-currency' ); ?></span>
 			</p>
-			<p class="description"><?php esc_html_e( 'Add fields, drag the ☰ handle to reorder, set per-field/option pricing (fixed amount or % of base), conditional visibility and display style. Reference any field in the formula as {field_id}; the product price is {base}.', 'deli-multi-currency' ); ?></p>
+			<p class="description"><?php esc_html_e( 'Add fields, drag the handle to reorder, set per-field/option pricing (fixed amount or % of base), conditional visibility and display style. Reference any field in the formula as {field_id}; the product price is {base}.', 'deli-multi-currency' ); ?></p>
 			<div class="dmc-design-panel">
-				<h3>✨ Design premium des champs</h3>
+				<h3>Design premium des champs</h3>
 				<p class="description">Personnalisez la carte, les coins, couleurs, ombres, taille, icônes d’aide et popup. Ces réglages sont propres à ce produit.</p>
 				<div class="dmc-design-grid">
 					<label>Style <select class="dmc-design" data-key="preset"><option value="modern">Modern</option><option value="glass">Glass</option><option value="apple">Apple</option><option value="gaming">Gaming Neon</option><option value="minimal">Minimal</option></select></label>
@@ -101,7 +101,7 @@ class Delicat_Builder_V9_Product_Fields_Admin {
 				</div>
 			</div>
 			<div class="dmc-template-panel">
-				<h3>⚡ Modèles rapides</h3>
+				<h3>Modèles rapides</h3>
 				<p class="description">Ajoutez une structure prête à l'emploi puis personnalisez-la.</p>
 				<div class="dmc-template-actions">
 					<button type="button" class="button dmc-template" data-template="freefire">Free Fire</button>

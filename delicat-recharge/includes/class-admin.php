@@ -31,9 +31,9 @@ class Delicat_Admin {
                 et personne n'a le droit de l'utiliser sans notre autorisation.
             </p>
             <p style="font-size:13px;color:#0d1b4d;line-height:1.8;margin:8px 0;">
-                📞 <strong>+509 33111283</strong><br>
-                ✉️ <a href="mailto:info@delicastoreha.com" style="color:#284696;text-decoration:none;">info@delicastoreha.com</a><br>
-                🌐 <a href="https://www.delicastoreha.com" target="_blank" style="color:#284696;text-decoration:none;">www.delicastoreha.com</a>
+                <strong>+509 33111283</strong><br>
+                <a href="mailto:info@delicastoreha.com" style="color:#284696;text-decoration:none;">info@delicastoreha.com</a><br>
+                <a href="https://www.delicastoreha.com" target="_blank" style="color:#284696;text-decoration:none;">www.delicastoreha.com</a>
             </p>
             <p style="font-size:11px;color:#999;margin-top:10px;">© <?php echo esc_html( date_i18n('Y') ); ?> Délicat Store Haiti — Tous droits réservés.</p>
         </div>
@@ -46,13 +46,13 @@ class Delicat_Admin {
         add_menu_page( 'Delicat Console', 'Delicat Console', 'manage_options',
             'delicat-recharges', [ $this, 'page_list' ], 'dashicons-money-alt', 56 );
 
-        add_submenu_page( 'delicat-recharges', 'Recharges', '💳 Recharges',
+        add_submenu_page( 'delicat-recharges', 'Recharges', 'Recharges',
             'manage_options', 'delicat-recharges', [ $this, 'page_list' ] );
 
-        add_submenu_page( 'delicat-recharges', 'Clients', '👥 Clients',
+        add_submenu_page( 'delicat-recharges', 'Clients', 'Clients',
             'manage_options', 'delicat-clients', [ 'Delicat_Clients', 'page_clients' ] );
 
-        add_submenu_page( 'delicat-recharges', 'Paramètres', '⚙️ Paramètres',
+        add_submenu_page( 'delicat-recharges', 'Paramètres', 'Paramètres',
             'manage_options', 'delicat-settings', [ $this, 'page_settings' ] );
     }
 
@@ -147,19 +147,19 @@ class Delicat_Admin {
         $opt = fn( $k, $d = '' ) => esc_attr( get_option( $k, $d ) );
         ?>
         <div class="wrap">
-            <h1>⚙️ Delicat Recharge — Paramètres</h1>
+            <h1>Delicat Recharge — Paramètres</h1>
 
             <form method="post" action="options.php">
                 <?php settings_fields( 'delicat_settings_group' ); ?>
 
-                <h2>📧 Notifications</h2>
+                <h2>Notifications</h2>
                 <table class="form-table">
                     <tr><th>Email admin</th>
                         <td><input type="email" name="delicat_admin_email" class="regular-text"
                                    value="<?php echo $opt('delicat_admin_email', get_option('admin_email')); ?>"></td></tr>
                 </table>
 
-                <h2>💚 MonCash API (pour vérification automatique)</h2>
+                <h2>MonCash API (pour vérification automatique)</h2>
                 <p class="description">Obtenez vos credentials sur
                     <a href="https://moncashbutton.digicelgroup.com/Moncash-business/merchant/login" target="_blank">
                     MonCash Business Portal</a>.</p>
@@ -187,7 +187,7 @@ class Delicat_Admin {
                                    value="<?php echo $opt('delicat_moncash_nom','LOUIS MARKEN'); ?>"></td></tr>
                 </table>
 
-                <h2>🔵 Natcash</h2>
+                <h2>Natcash</h2>
                 <table class="form-table">
                     <tr><th>Numéro Natcash (affiché au client)</th>
                         <td><input type="text" name="delicat_natcash_numero" class="regular-text"
@@ -197,7 +197,7 @@ class Delicat_Admin {
                                    value="<?php echo $opt('delicat_natcash_nom','Damas Louis'); ?>"></td></tr>
                 </table>
 
-                <h2>🔗 Webhook (Make / Zapier / n8n)</h2>
+                <h2>Webhook (Make / Zapier / n8n)</h2>
                 <table class="form-table">
                     <tr><th>Webhook URL</th>
                         <td><input type="url" name="delicat_webhook_url" class="large-text"
@@ -210,7 +210,7 @@ class Delicat_Admin {
                 </table>
 
                 <?php if ( defined( 'DELICAT_IS_CLIENT' ) && DELICAT_IS_CLIENT ) : ?>
-                <h2>🔑 Licence (activation)</h2>
+                <h2>Licence (activation)</h2>
                 <p class="description">Entrez la licence fournie par Délicat Store pour activer le système.</p>
                 <?php $cl = class_exists('Delicat_Client_License') ? Delicat_Client_License::config() : []; ?>
                 <table class="form-table">
@@ -225,8 +225,8 @@ class Delicat_Admin {
                     <?php if ( class_exists('Delicat_Client_License') && Delicat_Client_License::is_configured() ) : ?>
                     <tr><th>Statut</th>
                         <td><?php echo Delicat_Client_License::valid()
-                            ? '<span style="color:#1b5e20;font-weight:700;">🟢 Licence active</span>'
-                            : '<span style="color:#b71c1c;font-weight:700;">🔴 Licence invalide ou expirée</span>'; ?></td></tr>
+                            ? '<span style="color:#1b5e20;font-weight:700;">Licence active</span>'
+                            : '<span style="color:#b71c1c;font-weight:700;">Licence invalide ou expirée</span>'; ?></td></tr>
                     <tr><th>Tester la notification</th>
                         <td>
                             <?php
@@ -235,14 +235,14 @@ class Delicat_Admin {
                             }
                             $test_url = wp_nonce_url( admin_url( 'admin.php?page=delicat-settings&delicat_test_relay=1' ), 'delicat_test_relay' );
                             ?>
-                            <a href="<?php echo esc_url( $test_url ); ?>" class="button button-secondary">🔔 Envoyer une notification de test</a>
+                            <a href="<?php echo esc_url( $test_url ); ?>" class="button button-secondary">Envoyer une notification de test</a>
                             <p class="description">Envoie un push de test via HQ vers votre téléphone, et affiche le résultat exact.</p>
                         </td></tr>
                     <?php endif; ?>
                 </table>
                 <?php endif; // DELICAT_IS_CLIENT ?>
 
-                <h2>📊 Tableau de bord — Appareils (approuver depuis l'app)</h2>
+                <h2>Tableau de bord — Appareils (approuver depuis l'app)</h2>
                 <p class="description">Pour <strong>approuver / rejeter</strong> les recharges depuis l'app, créez un appareil par téléphone. Le jeton ne s'affiche qu'une seule fois — copiez-le dans l'app immédiatement.</p>
                 <table class="form-table">
                     <?php
@@ -252,7 +252,7 @@ class Delicat_Admin {
                     if ( $just ) { delete_transient( 'delicat_new_device' ); }
                     ?>
                     <?php if ( $just ) : ?>
-                    <tr><th style="color:#1b5e20;">✅ Nouvel appareil</th>
+                    <tr><th style="color:#1b5e20;">Nouvel appareil</th>
                         <td>
                             <p><strong>Copiez ces deux valeurs dans l'app maintenant (le jeton ne sera plus affiché) :</strong></p>
                             <p>Device ID :<br><input type="text" readonly value="<?php echo esc_attr( $just['device_id'] ); ?>" class="large-text" style="font-family:monospace;" onclick="this.select();"></p>
@@ -268,7 +268,7 @@ class Delicat_Admin {
                                 <p style="margin:4px 0;">
                                     <code><?php echo esc_html( $did ); ?></code> —
                                     <strong><?php echo esc_html( $d['label'] ?? '' ); ?></strong>
-                                    <?php echo ! empty( $d['enabled'] ) ? '🟢' : '🔴'; ?>
+                                    <?php echo ! empty( $d['enabled'] ) ? '' : ''; ?>
                                     <small style="color:#888;">vu: <?php echo esc_html( $d['last_seen'] ?: 'jamais' ); ?></small>
                                     <label style="margin-left:10px;"><input type="checkbox" name="delicat_revoke_device[]" value="<?php echo esc_attr( $did ); ?>"> révoquer</label>
                                 </p>
@@ -281,7 +281,7 @@ class Delicat_Admin {
                         </td></tr>
                 </table>
 
-                <h2>📊 Tableau de bord — Lecture seule (statistiques)</h2>
+                <h2>Tableau de bord — Lecture seule (statistiques)</h2>
                 <table class="form-table">
                     <tr><th>Clé du tableau de bord</th>
                         <td>
@@ -293,7 +293,7 @@ class Delicat_Admin {
                         <td>
                             <?php $durl = esc_url( home_url( '/wp-json/delicat/v1/stats?key=' . $dk ) ); ?>
                             <input type="text" readonly value="<?php echo $durl; ?>" class="large-text" style="font-family:monospace;font-size:11px;" onclick="this.select();">
-                            <p class="description">Ouvrez ce lien dans un navigateur : si vous voyez des données (JSON), tout fonctionne. ⚠️ Ne la partagez avec personne — elle donne accès à vos statistiques.</p>
+                            <p class="description">Ouvrez ce lien dans un navigateur : si vous voyez des données (JSON), tout fonctionne. Ne la partagez avec personne — elle donne accès à vos statistiques.</p>
                         </td></tr>
                     <tr><th>Réinitialiser la clé</th>
                         <td>
@@ -302,7 +302,7 @@ class Delicat_Admin {
                         </td></tr>
                 </table>
 
-                <h2>📱 Notification Android (Delicat Notification)</h2>
+                <h2>Notification Android (Delicat Notification)</h2>
                 <p class="description">Recevez une alerte sur votre téléphone à chaque nouvelle recharge et à chaque approbation.</p>
                 <table class="form-table">
                     <tr><th>Token(s) de l'appareil</th>
@@ -353,18 +353,18 @@ class Delicat_Admin {
         $sl = [ 'en_attente' => 'En attente', 'approuve' => 'Approuvé', 'rejete' => 'Rejeté' ];
         ?>
         <div class="wrap">
-            <h1>💳 Demandes de recharge
+            <h1>Demandes de recharge
                 <a href="<?php echo esc_url( admin_url('admin.php?page=delicat-recharges&dr_export=transactions&_wpnonce='.wp_create_nonce('dr_export_nonce')) ); ?>"
-                   class="page-title-action">⬇️ Exporter CSV</a>
+                   class="page-title-action">Exporter CSV</a>
             </h1>
 
             <!-- Filters -->
             <div style="margin:12px 0;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
                 <?php foreach ( [
                     '' => 'Tous',
-                    'en_attente' => '⏳ En attente (' . ( $counts['en_attente'] ?? 0 ) . ')',
-                    'approuve'   => '✅ Approuvés',
-                    'rejete'     => '❌ Rejetés',
+                    'en_attente' => 'En attente (' . ( $counts['en_attente'] ?? 0 ) . ')',
+                    'approuve'   => 'Approuvés',
+                    'rejete'     => 'Rejetés',
                 ] as $val => $label ) : ?>
                     <a href="<?php echo esc_url( add_query_arg( [ 'page' => 'delicat-recharges', 'statut' => $val, 'tab' => ( $f_tab === '' ? 'all' : $f_tab ) ] ) ); ?>"
                        class="button <?php echo $f_statut === $val ? 'button-primary' : ''; ?>">
@@ -385,7 +385,7 @@ class Delicat_Admin {
 
             <?php $dr_services = Delicat_Database::services(); ?>
             <div style="margin:8px 0 14px;border:1px solid #d7e3d7;border-radius:10px;background:#f4faf4;padding:14px 16px;">
-                <p style="margin:0 0 10px;font-weight:800;color:#2e7d32;">🔌 Services de recharge — activer / désactiver</p>
+                <p style="margin:0 0 10px;font-weight:800;color:#2e7d32;">Services de recharge — activer / désactiver</p>
                 <div style="display:flex;gap:12px;flex-wrap:wrap;">
                     <?php foreach ( [ 'natcash_tc' => 'Natcash Auto (TC)', 'moncash' => 'MonCash', 'natcash' => 'Natcash Auto' ] as $skey => $slabel ) :
                         $son = ! empty( $dr_services[ $skey ] ); ?>
@@ -404,7 +404,7 @@ class Delicat_Admin {
             <div style="margin:8px 0 18px;border:1px solid #d9cfe8;border-radius:10px;background:#faf7ff;">
                 <button type="button" id="dr-me-toggle" class="button"
                         style="width:100%;text-align:left;background:#6a1b9a;color:#fff;border-color:#4a148c;font-weight:700;padding:10px 14px;">
-                    ➕ Enregistrer un code déjà payé (bloquer sur le site)
+                    Enregistrer un code déjà payé (bloquer sur le site)
                 </button>
                 <div id="dr-me-panel" style="display:none;padding:16px;">
                     <p style="margin:0 0 12px;color:#555;font-size:13px;">
@@ -442,12 +442,12 @@ class Delicat_Admin {
                         <button type="button" id="dr-me-block" class="button button-primary"
                                 data-nonce="<?php echo esc_attr( $nonce ); ?>" data-ajax="<?php echo esc_url( $ajax ); ?>"
                                 style="background:#6a1b9a;border-color:#4a148c;">
-                            🔒 Bloquer ce code (déjà validé)
+                            Bloquer ce code (déjà validé)
                         </button>
                         <button type="button" id="dr-me-credit" class="button"
                                 data-nonce="<?php echo esc_attr( $nonce ); ?>" data-ajax="<?php echo esc_url( $ajax ); ?>"
                                 style="background:#43a047;color:#fff;border-color:#388e3c;">
-                            💳 Créditer le wallet maintenant
+                            Créditer le wallet maintenant
                         </button>
                         <button type="button" id="dr-me-verify" class="button"
                                 data-nonce="<?php echo esc_attr( $nonce ); ?>" data-ajax="<?php echo esc_url( $ajax ); ?>"
@@ -476,13 +476,13 @@ class Delicat_Admin {
                 <button id="dr-bulk-approve" class="button button-primary"
                         data-nonce="<?php echo esc_attr( $wf_nonce ); ?>"
                         data-ajax="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>">
-                    ✅ Approuver la sélection
+                    Approuver la sélection
                 </button>
                 <button id="dr-bulk-reject" class="button"
                         style="background:#c62828;border-color:#b71c1c;color:#fff;"
                         data-nonce="<?php echo esc_attr( $wf_nonce ); ?>"
                         data-ajax="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>">
-                    ❌ Rejeter la sélection
+                    Rejeter la sélection
                 </button>
                 <span id="dr-bulk-count" style="font-weight:700;color:#1565c0;font-size:12px;"></span>
                 <span style="color:#888;font-size:12px;">Cochez des demandes en attente puis choisissez une action.</span>
@@ -523,7 +523,7 @@ class Delicat_Admin {
                             <?php if ( $risk ) : ?>
                                 <br><span class="dr-risk" title="<?php echo esc_attr( implode( ' • ', $risk ) ); ?>"
                                           style="color:#c62828;font-size:11px;font-weight:700;cursor:help;">
-                                    ⚠️ <?php echo count( $risk ); ?> alerte(s)
+                                    <?php echo count( $risk ); ?> alerte(s)
                                 </span>
                             <?php endif; ?>
                         </td>
@@ -537,10 +537,10 @@ class Delicat_Admin {
                         <td><?php echo esc_html( $r->trans_code ?: '—' ); ?></td>
                         <td>
                             <?php if ( $r->preuve_url ) : ?>
-                                <a href="<?php echo esc_url( Delicat_Files::view_url( $r->preuve_url ) ); ?>" target="_blank">📎 Voir</a>
+                                <a href="<?php echo esc_url( Delicat_Files::view_url( $r->preuve_url ) ); ?>" target="_blank">Voir</a>
                             <?php else : echo '—'; endif; ?>
                         </td>
-                        <td><?php echo $r->wallet_credited ? '✅' : '—'; ?></td>
+                        <td><?php echo $r->wallet_credited ? '' : '—'; ?></td>
                         <td>
                             <span style="background:<?php echo $sc[$r->statut]??'#999'; ?>;
                                          color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:600;">
@@ -555,7 +555,7 @@ class Delicat_Admin {
                                     data-nonce="<?php echo $nonce; ?>"
                                     data-ajax="<?php echo $ajax; ?>"
                                     style="background:#43a047;color:#fff;border-color:#388e3c;">
-                                ✅ Approuver
+                                Approuver
                             </button>
                             <?php endif; ?>
                             <?php if ( $r->statut !== 'rejete' ) : ?>
@@ -564,7 +564,7 @@ class Delicat_Admin {
                                     data-nonce="<?php echo $nonce; ?>"
                                     data-ajax="<?php echo $ajax; ?>"
                                     style="background:#e53935;color:#fff;border-color:#c62828;margin-top:4px;">
-                                ❌ Rejeter
+                                Rejeter
                             </button>
                             <?php endif; ?>
                             <?php if ( $r->statut === 'approuve' && (int) $r->wallet_credited === 1 && strpos( (string) $r->note_admin, '[REMBOURSÉ' ) === false && strpos( (string) $r->note_admin, '[BLOCAGE-MANUEL]' ) === false ) : ?>
@@ -577,7 +577,7 @@ class Delicat_Admin {
                             </button>
                             <?php endif; ?>
                             <?php if ( $r->note_admin ) : ?>
-                                <br><small style="color:#888;" title="<?php echo esc_attr($r->note_admin); ?>">ℹ️ Note</small>
+                                <br><small style="color:#888;" title="<?php echo esc_attr($r->note_admin); ?>">Note</small>
                             <?php endif; ?>
                         </td>
                     </tr>
@@ -627,7 +627,7 @@ class Delicat_Admin {
                         $msg.css({background:'#ffebee',border:'1px solid #ef9a9a',color:'#c62828',
                                   padding:'10px 16px',borderRadius:'6px'})
                             .html(res.data.message).show();
-                        btn.prop('disabled', false).text(actionType === 'approuver' ? '✅ Approuver' : '❌ Rejeter');
+                        btn.prop('disabled', false).text(actionType === 'approuver' ? 'Approuver' : 'Rejeter');
                     }
                 });
             }
@@ -666,7 +666,7 @@ class Delicat_Admin {
                 // Two-step confirmation: rejecting notifies clients and cannot be
                 // silently undone, so require an explicit typed confirmation for
                 // larger batches.
-                if (!confirm('❌ REJETER ' + ids.length + ' demande(s) ?\n\nLes clients seront notifiés.')) return;
+                if (!confirm('REJETER ' + ids.length + ' demande(s) ?\n\nLes clients seront notifiés.')) return;
                 if (ids.length >= 5) {
                     var typed = prompt('Confirmation requise pour ' + ids.length + ' rejets.\nTapez REJETER pour confirmer :');
                     if (typed !== 'REJETER') { alert('Annulé.'); return; }
@@ -685,7 +685,7 @@ class Delicat_Admin {
                         .text((res.data && res.data.message) || 'Terminé').show();
                     setTimeout(function(){ location.reload(); }, 1600);
                 }).fail(function(){
-                    btn.prop('disabled', false).text('❌ Rejeter la sélection');
+                    btn.prop('disabled', false).text('Rejeter la sélection');
                     alert('Erreur réseau.');
                 });
             });
@@ -715,7 +715,7 @@ class Delicat_Admin {
                         .text((res.data && res.data.message) || 'Terminé').show();
                     setTimeout(function(){ location.reload(); }, 1600);
                 }).fail(function(){
-                    btn.prop('disabled', false).text('✅ Approuver la sélection');
+                    btn.prop('disabled', false).text('Approuver la sélection');
                     alert('Erreur réseau.');
                 });
             });
@@ -789,14 +789,14 @@ class Delicat_Admin {
                         setTimeout(function(){ location.reload(); }, 1600);
                     } else {
                         $all.prop('disabled', false);
-                        $('#dr-me-block').text('🔒 Bloquer ce code (déjà validé)');
-                        $('#dr-me-credit').text('💳 Créditer le wallet maintenant');
+                        $('#dr-me-block').text('Bloquer ce code (déjà validé)');
+                        $('#dr-me-credit').text('Créditer le wallet maintenant');
                         $('#dr-me-verify').text('✔️ Vérifier via SMS & créditer');
                     }
                 }).fail(function(){
                     $all.prop('disabled', false);
-                    $('#dr-me-block').text('🔒 Bloquer ce code (déjà validé)');
-                    $('#dr-me-credit').text('💳 Créditer le wallet maintenant');
+                    $('#dr-me-block').text('Bloquer ce code (déjà validé)');
+                    $('#dr-me-credit').text('Créditer le wallet maintenant');
                     $('#dr-me-verify').text('✔️ Vérifier via SMS & créditer');
                     alert('Erreur réseau.');
                 });

@@ -195,7 +195,7 @@ final class DIP_Security_Recommendations {
 
     public static function render_admin() {
         $items = self::admin();
-        if (!$items) return '<div class="card"><h2>✅ Recommandations</h2><p>Aucune recommandation critique détectée.</p></div>';
+        if (!$items) return '<div class="card"><h2>Recommandations</h2><p>Aucune recommandation critique détectée.</p></div>';
         ob_start(); ?><div class="card"><h2>Recommandations prioritaires</h2><table class="widefat striped"><tbody><?php foreach ($items as $item): ?><tr><td><strong><?php echo esc_html(strtoupper($item['priority'])); ?></strong></td><td><strong><?php echo esc_html($item['title']); ?></strong><br><span><?php echo esc_html($item['detail']); ?></span></td></tr><?php endforeach; ?></tbody></table></div><?php return ob_get_clean();
     }
 }

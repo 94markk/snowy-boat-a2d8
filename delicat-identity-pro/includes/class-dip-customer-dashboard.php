@@ -214,7 +214,7 @@ final class DIP_Customer_Dashboard {
                     </div>
                     <?php if (!empty($architecture['checks'])): ?>
                     <div class="dip-id-panel dip-id-panel-spaced"><h4><?php esc_html_e('Contrôles d’accès actifs', 'delicat-google-login'); ?></h4>
-                      <?php foreach ((array)$architecture['checks'] as $check): ?><p><strong><?php echo !empty($check['ok']) ? '✓' : '⚠'; ?> <?php echo esc_html($check['label'] ?? ''); ?></strong></p><?php endforeach; ?>
+                      <?php foreach ((array)$architecture['checks'] as $check): ?><p><strong><?php echo !empty($check['ok']) ? '✓' : ''; ?> <?php echo esc_html($check['label'] ?? ''); ?></strong></p><?php endforeach; ?>
                     </div>
                     <?php endif; ?>
                     <div class="dip-id-grid dip-id-actions">

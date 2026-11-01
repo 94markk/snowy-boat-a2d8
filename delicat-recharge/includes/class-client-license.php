@@ -137,10 +137,10 @@ class Delicat_Client_License {
      * Test the relay synchronously and return a human-readable result.
      */
     public static function test_relay(): string {
-        if ( ! self::is_configured() ) return '❌ Licence non configurée.';
+        if ( ! self::is_configured() ) return 'Licence non configurée.';
         $c = self::config();
         $tokens_raw = trim( (string) get_option( 'delicat_fcm_device_token', '' ) );
-        if ( $tokens_raw === '' ) return '❌ Aucun token d\'appareil (Notification Android).';
+        if ( $tokens_raw === '' ) return 'Aucun token d\'appareil (Notification Android).';
         $tokens = preg_split( '/[\s,]+/', $tokens_raw, -1, PREG_SPLIT_NO_EMPTY );
 
         $hq    = rtrim( (string) $c['hq'], '/' );
@@ -154,27 +154,27 @@ class Delicat_Client_License {
             'timeout'  => 12,
             'body'     => [
                 'key' => $key, 'device_token' => $token,
-                'title' => '🔔 Test Délicat', 'body' => 'Notification de test.',
+                'title' => 'Test Délicat', 'body' => 'Notification de test.',
                 'ts' => $ts, 'sig' => $sig,
             ],
         ] );
 
         if ( is_wp_error( $resp ) ) {
-            return '❌ Impossible de joindre HQ : ' . $resp->get_error_message();
+            return 'Impossible de joindre HQ : ' . $resp->get_error_message();
         }
         $code = (int) wp_remote_retrieve_response_code( $resp );
         $body = wp_remote_retrieve_body( $resp );
         $data = json_decode( $body, true );
 
         if ( $code === 200 && is_array( $data ) && ! empty( $data['sent'] ) ) {
-            return '✅ Envoyé ! Vérifiez le téléphone.';
+            return 'Envoyé ! Vérifiez le téléphone.';
         }
         if ( $code === 403 ) {
-            return '❌ HQ a refusé (403) : ' . ( is_array($data) && isset($data['message']) ? $data['message'] : 'licence/signature' );
+            return 'HQ a refusé (403) : ' . ( is_array($data) && isset($data['message']) ? $data['message'] : 'licence/signature' );
         }
         if ( $code === 200 && is_array( $data ) && empty( $data['sent'] ) ) {
-            return '⚠️ HQ accepté mais Firebase n\'a pas envoyé. Vérifiez le token ou le Service Account côté HQ.';
+            return 'HQ accepté mais Firebase n\'a pas envoyé. Vérifiez le token ou le Service Account côté HQ.';
         }
-        return '❌ Réponse inattendue (' . $code . ') : ' . substr( (string) $body, 0, 200 );
+        return 'Réponse inattendue (' . $code . ') : ' . substr( (string) $body, 0, 200 );
     }
 }

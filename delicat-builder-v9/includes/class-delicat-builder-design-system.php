@@ -247,24 +247,21 @@ final class Delicat_Builder_V9_Design_System {
 		echo '<style id="delicat-ds-tokens">' . self::css() . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
-	/** @var array<string,string>|null Lucide inner markup, loaded on first use. */
+	/** @var array<string,string>|null Material Symbols inner markup, loaded on first use. */
 	private static ?array $icons = null;
 
 	/**
-	 * The one icon set: Lucide outlines, 1.75 stroke, currentColor, so icons follow
-	 * the text colour in light and dark mode. Decorative by default (aria-hidden);
-	 * pass 'label' for an icon that is the only content of a control.
+	 * The one icon set: Material Symbols Rounded (weight 400), drawn in currentColor so
+	 * icons follow the text colour in light and dark mode. Names use hyphens
+	 * ('account-balance-wallet'); '-fill' variants mark active states. Decorative by
+	 * default (aria-hidden); pass 'label' for an icon that is the only content of a control.
 	 *
 	 * @param array{label?:string,class?:string} $args
 	 */
 	public static function icon( string $name, int $size = 20, array $args = array() ): string {
-		if ( null === self::$icons ) {
-			$file        = DELICAT_BUILDER_V9_DIR . 'includes/lib/icons-lucide.php';
-			$map         = file_exists( $file ) ? require $file : array();
-			self::$icons = is_array( $map ) ? $map : array();
-		}
-		$name = sanitize_key( $name );
-		if ( ! isset( self::$icons[ $name ] ) ) {
+		$icons = self::icons();
+		$name  = str_replace( '_', '-', sanitize_key( $name ) );
+		if ( ! isset( $icons[ $name ] ) ) {
 			return '';
 		}
 		$size  = max( 12, min( 48, $size ) );
@@ -272,8 +269,32 @@ final class Delicat_Builder_V9_Design_System {
 		$a11y  = empty( $args['label'] )
 			? 'aria-hidden="true" focusable="false"'
 			: 'role="img" aria-label="' . esc_attr( (string) $args['label'] ) . '"';
-		// Inner markup is the fixed Lucide set shipped with the plugin.
-		return '<svg class="' . esc_attr( $class ) . '" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" ' . $a11y . '>' . self::$icons[ $name ] . '</svg>';
+		// Inner markup is the fixed Material Symbols set shipped with the plugin.
+		return '<svg class="' . esc_attr( $class ) . '" width="' . $size . '" height="' . $size . '" viewBox="0 -960 960 960" fill="currentColor" ' . $a11y . '>' . $icons[ $name ] . '</svg>';
+	}
+
+	/**
+	 * The same icon as a CSS `url("data:…")` value, for `mask-image` on markup the plugin does not
+	 * own (WooCommerce menus). Paint it with `background: currentColor`. Empty string if unknown.
+	 */
+	public static function icon_mask( string $name ): string {
+		$icons = self::icons();
+		$name  = str_replace( '_', '-', sanitize_key( $name ) );
+		if ( ! isset( $icons[ $name ] ) ) {
+			return '';
+		}
+		$svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 -960 960 960'>" . str_replace( '"', "'", $icons[ $name ] ) . '</svg>';
+		return 'url("data:image/svg+xml,' . str_replace( array( '%', '#', '<', '>', '"' ), array( '%25', '%23', '%3C', '%3E', '%22' ), $svg ) . '")';
+	}
+
+	/** @return array<string,string> Inner SVG markup keyed by icon name, loaded once per request. */
+	private static function icons(): array {
+		if ( null === self::$icons ) {
+			$file        = DELICAT_BUILDER_V9_DIR . 'includes/lib/icons-material.php';
+			$map         = file_exists( $file ) ? require $file : array();
+			self::$icons = is_array( $map ) ? $map : array();
+		}
+		return self::$icons;
 	}
 
 	/** Machine-readable token set, for the Design Studio export and design-tokens.json. */

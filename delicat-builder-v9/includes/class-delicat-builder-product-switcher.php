@@ -131,7 +131,7 @@ final class Delicat_Builder_V9_Product_Switcher {
             </div>
             <div class="dpsr-field dpsr-icon-field">
                 <label>Icône / emoji</label>
-                <input type="text" maxlength="12" name="dpsr[options][<?php echo esc_attr( $index ); ?>][icon]" value="<?php echo esc_attr( $item['icon'] ); ?>" placeholder="⚡">
+                <input type="text" maxlength="12" name="dpsr[options][<?php echo esc_attr( $index ); ?>][icon]" value="<?php echo esc_attr( $item['icon'] ); ?>" placeholder="">
             </div>
             <button type="button" class="button-link-delete dpsr-remove">Supprimer</button>
         </div>

@@ -56,7 +56,7 @@ class Delicat_Shortcode {
                 'required_trans'  => 'Veuillez entrer votre TransCode / Txn ID.',
                 'required_proof'  => 'Veuillez joindre une preuve de paiement.',
                 'required_email'  => 'Veuillez entrer votre email.',
-                'sending'         => '⏳ Envoi en cours…',
+                'sending'         => 'Envoi en cours…',
                 'send'            => 'Envoyer la demande',
                 'network_error'   => 'Erreur réseau. Veuillez réessayer.',
             ],
@@ -76,7 +76,7 @@ class Delicat_Shortcode {
         wp_enqueue_script( 'delicat-recharge' );
 
         if ( ! is_user_logged_in() ) {
-            return '<section class="dw12-shell"><div class="dw12-card dw12-guest"><h2>Ma balance 🌴</h2><p>Connectez-vous pour consulter votre wallet Delicat Store.</p><a class="dw12-action dw12-recharge" href="' . esc_url( wc_get_page_permalink( 'myaccount' ) ) . '">Connexion</a></div></section>';
+            return '<section class="dw12-shell"><div class="dw12-card dw12-guest"><h2>Ma balance</h2><p>Connectez-vous pour consulter votre wallet Delicat Store.</p><a class="dw12-action dw12-recharge" href="' . esc_url( wc_get_page_permalink( 'myaccount' ) ) . '">Connexion</a></div></section>';
         }
 
         $uid  = get_current_user_id();
@@ -107,7 +107,7 @@ class Delicat_Shortcode {
                 <span class="dw12-bubble dw12-b2" aria-hidden="true"></span>
                 <span class="dw12-bubble dw12-b3" aria-hidden="true"></span>
 
-                <h2 class="dw12-title">MA <span>🌴</span> BALANCE</h2>
+                <h2 class="dw12-title">MA BALANCE</h2>
 
                 <div class="dw12-topgrid">
                     <div class="dw12-balancebox">
@@ -123,7 +123,7 @@ class Delicat_Shortcode {
                         <div class="dw12-label purple">Mon code personnel</div>
                         <div class="dw12-code-line">
                             <strong><?php echo esc_html( $code ); ?></strong>
-                            <button type="button" class="dw12-copy" data-dsm-copy="<?php echo esc_attr( $code ); ?>" aria-label="Copier le code"><span class="dsm-copytxt">⧉</span></button>
+                            <button type="button" class="dw12-copy" data-dsm-copy="<?php echo esc_attr( $code ); ?>" aria-label="Copier le code"><span class="dsm-copytxt"><?php echo delicat_recharge_icon( 'content-copy' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></button>
                         </div>
                         <p>Partagez-le pour recevoir de l'argent.</p>
                     </div>
@@ -131,9 +131,9 @@ class Delicat_Shortcode {
 
                 <div class="dw12-actions">
                     <a href="#delicat-recharge-form" class="dw12-action dw12-recharge" data-delicat-scroll="recharge">
-                        <span class="dw12-icon">↓</span>
+                        <span class="dw12-icon"><?php echo delicat_recharge_icon( 'add' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                         <span class="dw12-text"><b>Recharger</b><small>Mon compte</small></span>
-                        <span class="dw12-arrow">›</span>
+                        <span class="dw12-arrow"><?php echo delicat_recharge_icon( 'chevron-right' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                     </a>
 
                     <!-- POPUP (was an inline dropdown). The button no longer
@@ -141,9 +141,9 @@ class Delicat_Shortcode {
                          reads far better on a phone than a panel that pushes the
                          card around. -->
                     <button type="button" class="dw12-action dw12-send" data-delicat-send-menu aria-haspopup="dialog">
-                        <span class="dw12-icon">➤</span>
+                        <span class="dw12-icon"><?php echo delicat_recharge_icon( 'send' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                         <span class="dw12-text"><b>Envoyer</b><small>De l’argent</small></span>
-                        <span class="dw12-arrow">⌄</span>
+                        <span class="dw12-arrow"><?php echo delicat_recharge_icon( 'keyboard-arrow-down' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                     </button>
                 </div>
 

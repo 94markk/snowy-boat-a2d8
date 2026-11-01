@@ -865,7 +865,7 @@ final class DIP_Plugin {
         }
     }
 
-    /** ✓/✗ list of the last « Tester la configuration Google » run. */
+    /** ✓/list of the last « Tester la configuration Google » run. */
     private function render_oauth_checks($oauth_test) {
         if (!is_array($oauth_test) || empty($oauth_test['checks']) || !is_array($oauth_test['checks'])) return;
         $labels = ['https' => 'HTTPS', 'client_id' => 'Client ID', 'client_secret' => 'Client Secret', 'google_discovery' => 'Google OpenID', 'storefront_button' => 'Bouton client'];
@@ -873,7 +873,7 @@ final class DIP_Plugin {
         foreach ($labels as $key => $label) {
             if (!array_key_exists($key, $oauth_test['checks'])) continue;
             $ok = !empty($oauth_test['checks'][$key]);
-            echo '<li class="' . ($ok ? 'is-ok' : 'is-bad') . '"><span aria-hidden="true">' . ($ok ? '✓' : '✗') . '</span> ' . esc_html($label) . '<span class="screen-reader-text"> : ' . ($ok ? 'valide' : 'à corriger') . '</span></li>';
+            echo '<li class="' . ($ok ? 'is-ok' : 'is-bad') . '"><span aria-hidden="true">' . ($ok ? '✓' : '') . '</span> ' . esc_html($label) . '<span class="screen-reader-text"> : ' . ($ok ? 'valide' : 'à corriger') . '</span></li>';
         }
         echo '</ul>';
         if (empty($oauth_test['ok']) && !empty($oauth_test['error'])) echo '<p class="dip-oauth-error">' . esc_html((string) $oauth_test['error']) . '</p>';
@@ -2140,8 +2140,8 @@ final class DIP_Plugin {
         </div>
         <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_assistant_analyze'), 'dip_assistant_analyze')); ?>">Analyser maintenant</a> <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_assistant_bundle'), 'dip_assistant_bundle')); ?>">Exporter un dossier de support sécurisé</a></p>
         <div class="dip-provider-grid">
-        <?php if (!$issues): ?><div class="dip-provider-card"><strong>✅ Aucun problème important détecté</strong><p>Continuez les tests réguliers sur staging et conservez les sauvegardes.</p></div><?php endif; ?>
-        <?php foreach (array_slice($issues,0,12) as $item): ?><div class="dip-provider-card dip-ai-<?php echo esc_attr($item['severity']); ?>"><strong><?php echo $item['severity']==='critical'?'❌ ':($item['severity']==='warning'?'⚠️ ':'💡 '); echo esc_html($item['title']); ?></strong><p><?php echo esc_html($item['explanation']); ?></p><p><b>Action :</b> <?php echo esc_html($item['fix']); ?></p></div><?php endforeach; ?>
+        <?php if (!$issues): ?><div class="dip-provider-card"><strong>Aucun problème important détecté</strong><p>Continuez les tests réguliers sur staging et conservez les sauvegardes.</p></div><?php endif; ?>
+        <?php foreach (array_slice($issues,0,12) as $item): ?><div class="dip-provider-card dip-ai-<?php echo esc_attr($item['severity']); ?>"><strong><?php echo $item['severity']==='critical'?'':($item['severity']==='warning'?'':''); echo esc_html($item['title']); ?></strong><p><?php echo esc_html($item['explanation']); ?></p><p><b>Action :</b> <?php echo esc_html($item['fix']); ?></p></div><?php endforeach; ?>
         </div>
         <h3>Explication des derniers événements</h3><div class="dip-table-scroll"><table class="widefat striped"><thead><tr><th>Événement</th><th>Signification</th><th>Action recommandée</th></tr></thead><tbody>
         <?php if(!$events): ?><tr><td colspan="3">Aucun événement récent.</td></tr><?php endif; ?>
@@ -2173,10 +2173,10 @@ final class DIP_Plugin {
           <?php foreach ([['Connexions 30 j',$summary['success']],['Tentatives bloquées',$summary['blocked']],['Appareils actifs',$devices['total']],['Google',$usage['google']],['Microsoft',$usage['microsoft']]] as $c): ?><div class="dip-provider-card"><small><?php echo esc_html($c[0]); ?></small><strong style="display:block;font-size:25px"><?php echo esc_html($c[1]); ?></strong></div><?php endforeach; ?>
         </div>
         <h3>Santé système</h3><div class="dip-provider-grid">
-        <?php foreach ($health as $c): ?><div class="dip-provider-card"><strong><?php echo $c['status']==='healthy' ? '✅ ' : '❌ '; echo esc_html($c['label']); ?></strong><p><?php echo esc_html($c['detail']); ?></p></div><?php endforeach; ?>
+        <?php foreach ($health as $c): ?><div class="dip-provider-card"><strong><?php echo $c['status']==='healthy' ? '' : ''; echo esc_html($c['label']); ?></strong><p><?php echo esc_html($c['detail']); ?></p></div><?php endforeach; ?>
         </div>
         <h3>Compatibilité</h3><div class="dip-provider-grid">
-        <?php foreach ($compat as $name=>$active): ?><div class="dip-provider-card"><strong><?php echo $active ? '✅ ' : '— '; echo esc_html($name); ?></strong><p><?php echo $active ? 'Détecté' : 'Non détecté'; ?></p></div><?php endforeach; ?>
+        <?php foreach ($compat as $name=>$active): ?><div class="dip-provider-card"><strong><?php echo $active ? '' : '— '; echo esc_html($name); ?></strong><p><?php echo $active ? 'Détecté' : 'Non détecté'; ?></p></div><?php endforeach; ?>
         </div>
         <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_export_security_csv'), 'dip_export_security_csv')); ?>">Exporter les événements CSV</a> <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_repair_schedules'), 'dip_repair_schedules')); ?>">Réparer les tâches planifiées</a></p>
         <p><strong>Mode maintenance :</strong> <?php echo ($s['social_login_maintenance'] ?? 'no') === 'yes' ? 'Actif — les boutons publics sont masqués' : 'Inactif'; ?></p>
@@ -2449,7 +2449,7 @@ final class DIP_Plugin {
             <div class="dip-stat"><span>Échecs</span><strong><?php echo esc_html($counts['fail']); ?></strong></div>
             <div class="dip-stat"><span>Extensions SDK</span><strong><?php echo esc_html(count($extensions)); ?></strong></div>
           </div>
-          <?php if (!empty($test['checks'])): ?><div class="dip-table-scroll"><table class="widefat striped"><thead><tr><th>Contrôle</th><th>État</th><th>Détail</th></tr></thead><tbody><?php foreach ($test['checks'] as $key=>$check): ?><tr><td><code><?php echo esc_html($key); ?></code></td><td><?php echo $check['status']==='pass'?'✅':($check['status']==='warn'?'⚠️':'❌'); ?> <?php echo esc_html($check['status']); ?></td><td><?php echo esc_html($check['message']); ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
+          <?php if (!empty($test['checks'])): ?><div class="dip-table-scroll"><table class="widefat striped"><thead><tr><th>Contrôle</th><th>État</th><th>Détail</th></tr></thead><tbody><?php foreach ($test['checks'] as $key=>$check): ?><tr><td><code><?php echo esc_html($key); ?></code></td><td><?php echo $check['status']==='pass'?'':($check['status']==='warn'?'':''); ?> <?php echo esc_html($check['status']); ?></td><td><?php echo esc_html($check['message']); ?></td></tr><?php endforeach; ?></tbody></table></div><?php endif; ?>
           <p><a class="button button-primary" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_sdk_self_test'), 'dip_sdk_self_test')); ?>">Exécuter les auto-tests</a>
           <a class="button" href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dip_sdk_export'), 'dip_sdk_export')); ?>">Exporter le rapport sécurisé</a></p>
           <p class="description">Hooks principaux : <code>dip_login_success</code>, <code>dip_user_created</code>, <code>dip_account_linked</code>, <code>dip_identity_extensions</code> et <code>dip_sdk_ready</code>. Aucun secret ni jeton n’est inclus dans le rapport.</p>

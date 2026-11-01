@@ -2,10 +2,17 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.16.0
+Stable tag: 6.17.0
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.0 ==
+
+* Déclaration d’âge : juste après la création du compte (et une seule fois pour chaque client existant à sa prochaine visite), une fenêtre demande « Avez-vous 18 ans ou plus ? ». Seule la réponse et sa date sont enregistrées (aucune date de naissance). Une personne de moins de 18 ans voit que ses achats doivent se faire avec l’accord d’un parent ou d’un tuteur légal, avec le lien vers la politique Protection des mineurs, puis continue. Jamais pendant le paiement ; jamais pour l’équipe.
+* Fiche utilisateur (administration) : réponse et date visibles ; case « Redemander au client à sa prochaine visite ». Chaque réponse et chaque remise à zéro sont inscrites au journal d’audit.
+* Sécurité : l’enregistrement passe par le pare-feu AJAX d’Identity (client connecté, jeton nonce, réponse unique).
+* Plus aucun emoji dans les écrans et messages ; icônes Material du Builder.
 
 == Version 6.16.0 ==
 

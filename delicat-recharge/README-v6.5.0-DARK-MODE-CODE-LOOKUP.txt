@@ -1,6 +1,6 @@
 6.5.0 — dark mode + TransCode lookup (admin)
 
-1. Recherche code (wp-admin > Recharges > 🔎 Recherche code)
+1. Recherche code (wp-admin > Recharges > Recherche code)
    Type a TransCode / Txn ID to see whether it was already used and by whom:
    recharge requests carrying that code (status, wallet credited or not,
    client, dates, link to the request), the anti-double-credit register

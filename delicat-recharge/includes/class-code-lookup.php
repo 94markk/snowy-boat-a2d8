@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 /**
  * 6.5.0 — TransCode lookup (read-only).
  *
- * Delicat Console → 🔎 Recherche code. Answers two support questions without
+ * Delicat Console → Recherche code. Answers two support questions without
  * touching anything:
  *   1. "Has this TransCode / Txn ID already been used on the site?"
  *   2. "A client says their recharge is missing: what happened to this code?"
@@ -34,7 +34,7 @@ class Delicat_Code_Lookup {
     }
 
     public static function menu(): void {
-        add_submenu_page( 'delicat-recharges', 'Recherche TransCode', '🔎 Recherche code',
+        add_submenu_page( 'delicat-recharges', 'Recherche TransCode', 'Recherche code',
             'manage_options', 'delicat-code-lookup', [ __CLASS__, 'page' ] );
     }
 
@@ -283,7 +283,7 @@ class Delicat_Code_Lookup {
         ];
         ?>
         <div class="wrap dlc-lookup">
-            <h1>🔎 Recherche TransCode / Txn ID</h1>
+            <h1>Recherche TransCode / Txn ID</h1>
             <p class="dlc-lookup-intro">Vérifiez si un code a déjà été utilisé sur le site, ou retrouvez la transaction d'un client à partir de son code.
                <strong>Lecture seule</strong> : cette page ne crédite, ne bloque et ne débloque rien.</p>
 
@@ -366,13 +366,13 @@ class Delicat_Code_Lookup {
             function field(grid, label, value){ if (value === '' || value == null) return; var d = el('div'); d.appendChild(el('span', '', label)); d.appendChild(document.createTextNode(String(value))); grid.appendChild(d); }
             function link(href, text){ var a = el('a', '', text); a.href = href; return a; }
             var verdicts = {
-                used:         ['dlc-v-used', '⛔', 'Code déjà utilisé', 'Ce code a déjà donné un crédit. Toute nouvelle soumission sera refusée automatiquement.'],
-                pending:      ['dlc-v-pending', '⏳', 'Demande en attente', 'Le code a été soumis mais n’est pas encore crédité.'],
-                not_credited: ['dlc-v-not_credited', '⚠️', 'Code soumis, jamais crédité', 'Une demande existe avec ce code mais elle n’a pas crédité de wallet (rejetée ou échouée).'],
-                sms_only:     ['dlc-v-sms_only', '📩', 'Paiement reçu (SMS) sans demande', 'Un SMS de confirmation contient ce code, mais aucun client ne l’a soumis sur le site.'],
-                free:         ['dlc-v-free', '✅', 'Code jamais utilisé', 'Aucune demande, aucun crédit et aucun SMS récent avec ce code.'],
-                partial:      ['dlc-v-partial', '🔎', 'Résultats partiels', 'Codes qui contiennent votre recherche.'],
-                none:         ['dlc-v-none', '🔎', 'Aucun résultat', 'Aucun code ne contient cette recherche.']
+                used:         ['dlc-v-used', '', 'Code déjà utilisé', 'Ce code a déjà donné un crédit. Toute nouvelle soumission sera refusée automatiquement.'],
+                pending:      ['dlc-v-pending', '', 'Demande en attente', 'Le code a été soumis mais n’est pas encore crédité.'],
+                not_credited: ['dlc-v-not_credited', '', 'Code soumis, jamais crédité', 'Une demande existe avec ce code mais elle n’a pas crédité de wallet (rejetée ou échouée).'],
+                sms_only:     ['dlc-v-sms_only', '', 'Paiement reçu (SMS) sans demande', 'Un SMS de confirmation contient ce code, mais aucun client ne l’a soumis sur le site.'],
+                free:         ['dlc-v-free', '', 'Code jamais utilisé', 'Aucune demande, aucun crédit et aucun SMS récent avec ce code.'],
+                partial:      ['dlc-v-partial', '', 'Résultats partiels', 'Codes qui contiennent votre recherche.'],
+                none:         ['dlc-v-none', '', 'Aucun résultat', 'Aucun code ne contient cette recherche.']
             };
             function render(d){
                 out.textContent = '';

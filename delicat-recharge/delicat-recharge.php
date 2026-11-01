@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.6.0
+ * Version:     6.6.1
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
@@ -25,7 +25,16 @@ if ( ! defined( 'DELICAT_VERSION' ) ) {
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.6.0' );
+    define( 'DELICAT_ASSET_VERSION', '6.6.1' );
+}
+if ( ! function_exists( 'delicat_recharge_icon' ) ) {
+    /**
+     * 6.6.1: a Material Symbols glyph from the Delicat Design System (Builder 9.6+).
+     * Empty when the Builder is not active, so the form never shows a broken icon.
+     */
+    function delicat_recharge_icon( string $name, int $size = 18 ): string {
+        return function_exists( 'delicat_ds_icon' ) ? delicat_ds_icon( $name, $size ) : '';
+    }
 }
 if ( ! function_exists( 'delicat_recharge_finish_request' ) ) {
     /**

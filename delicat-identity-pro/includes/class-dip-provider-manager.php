@@ -151,7 +151,7 @@ final class DIP_Provider_Manager {
                             <input type="hidden" name="provider_order[]" value="<?php echo esc_attr($id); ?>">
                             <p><code><?php echo esc_html($p['callback']); ?></code></p>
                             <p><a class="button" href="<?php echo esc_url(wp_nonce_url(add_query_arg(['action' => 'dip_provider_test', 'provider' => $id], admin_url('admin-post.php')), 'dip_provider_test_' . $id)); ?>">Tester <?php echo esc_html($p['label']); ?></a></p>
-                            <?php if (is_array($test)): ?><p><strong><?php echo !empty($test['ok']) ? '✓' : '⚠'; ?></strong> <?php echo esc_html($test['message']); ?></p><?php endif; ?>
+                            <?php if (is_array($test)): ?><p><strong><?php echo !empty($test['ok']) ? '✓' : ''; ?></strong> <?php echo esc_html($test['message']); ?></p><?php endif; ?>
                         </div>
                     </article>
                 <?php endforeach; ?>

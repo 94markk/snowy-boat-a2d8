@@ -117,10 +117,10 @@
 		}
 
 		if ( t !== 'heading' && t !== 'content' && t !== 'hidden' ) {
-			html += '<div class="dmc-help-builder"><strong>❓ Aide client & apparence du champ</strong>' +
+			html += '<div class="dmc-help-builder"><strong>Aide client & apparence du champ</strong>' +
 				'<div class="dmc-row-inline">' +
 				'<label>Placeholder <input type="text" class="dmc-f-placeholder" value="' + esc( f.placeholder ) + '" placeholder="Ex: Entrez votre Client ID"></label>' +
-				'<label>Icône champ <input type="text" class="dmc-f-icon" value="' + esc( f.icon ) + '" placeholder="👤"></label>' +
+				'<label>Icône champ <input type="text" class="dmc-f-icon" value="' + esc( f.icon ) + '" placeholder=""></label>' +
 				'<label><input type="checkbox" class="dmc-f-help-enabled"' + ( f.help_enabled ? ' checked' : '' ) + '> Activer ?</label>' +
 				'<label>Icône aide <input type="text" class="dmc-f-help-icon" value="' + esc( f.help_icon || '?' ) + '" placeholder="?"></label>' +
 				'</div>' +
@@ -131,7 +131,7 @@
 				'</div>' +
 				'<label class="dmc-f-descwrap">Texte d’aide <textarea class="dmc-f-help-text widefat" rows="2">' + esc( f.help_text ) + '</textarea></label>' +
 			'</div>' +
-			'<div class="dmc-validation-builder"><strong>✅ Validation intelligente</strong>' +
+			'<div class="dmc-validation-builder"><strong>Validation intelligente</strong>' +
 				'<div class="dmc-row-inline">' +
 				'<label>Longueur min <input type="number" min="0" max="500" class="dmc-f-minlength" value="' + esc( f.min_length || '' ) + '"></label>' +
 				'<label>Longueur max <input type="number" min="0" max="500" class="dmc-f-maxlength" value="' + esc( f.max_length || '' ) + '"></label>' +
@@ -262,38 +262,38 @@
 
 	var templates = {
 		freefire: [
-			{ type:'text', label:'Player ID', required:true, placeholder:'Ex: 548392311', icon:'🎮', min_length:6, max_length:15, transform:'digits', pattern:'[0-9]{6,15}', error_message:'Veuillez entrer un Player ID valide.' },
-			{ type:'select', label:'Région du compte', required:true, icon:'🌍', options:[{label:'Amérique',value:'america',price:0},{label:'Brésil',value:'brazil',price:0},{label:'Europe',value:'europe',price:0}] }
+			{ type:'text', label:'Player ID', required:true, placeholder:'Ex: 548392311', icon:'', min_length:6, max_length:15, transform:'digits', pattern:'[0-9]{6,15}', error_message:'Veuillez entrer un Player ID valide.' },
+			{ type:'select', label:'Région du compte', required:true, icon:'', options:[{label:'Amérique',value:'america',price:0},{label:'Brésil',value:'brazil',price:0},{label:'Europe',value:'europe',price:0}] }
 		],
 		gaming: [
-			{ type:'text', label:'Player ID / UID', required:true, placeholder:'Entrez votre identifiant', icon:'👤', min_length:4, max_length:30, error_message:'Cet identifiant est obligatoire.' },
-			{ type:'text', label:'Pseudo', placeholder:'Nom affiché dans le jeu', icon:'✨', max_length:40 }
+			{ type:'text', label:'Player ID / UID', required:true, placeholder:'Entrez votre identifiant', icon:'', min_length:4, max_length:30, error_message:'Cet identifiant est obligatoire.' },
+			{ type:'text', label:'Pseudo', placeholder:'Nom affiché dans le jeu', icon:'', max_length:40 }
 		],
 		giftcard: [
-			{ type:'email', label:'E-mail de livraison', required:true, placeholder:'client@email.com', icon:'✉️', error_message:'Veuillez entrer une adresse e-mail valide.' },
-			{ type:'select', label:'Région de la carte', required:true, icon:'🌍', options:[{label:'USA',value:'usa',price:0},{label:'Canada',value:'canada',price:0},{label:'France',value:'france',price:0}] }
+			{ type:'email', label:'E-mail de livraison', required:true, placeholder:'client@email.com', icon:'', error_message:'Veuillez entrer une adresse e-mail valide.' },
+			{ type:'select', label:'Région de la carte', required:true, icon:'', options:[{label:'USA',value:'usa',price:0},{label:'Canada',value:'canada',price:0},{label:'France',value:'france',price:0}] }
 		],
 		subscription: [
-			{ type:'email', label:'Adresse e-mail', required:true, placeholder:'client@email.com', icon:'✉️', error_message:'Veuillez entrer une adresse e-mail valide.' },
-			{ type:'text', label:'Nom du profil (optionnel)', required:false, placeholder:'Ex: Marken', icon:'👤', max_length:60 }
+			{ type:'email', label:'Adresse e-mail', required:true, placeholder:'client@email.com', icon:'', error_message:'Veuillez entrer une adresse e-mail valide.' },
+			{ type:'text', label:'Nom du profil (optionnel)', required:false, placeholder:'Ex: Marken', icon:'', max_length:60 }
 		],
 		netflix: [
-			{ type:'email', label:'Adresse e-mail', required:true, placeholder:'client@email.com', icon:'✉️', error_message:'Veuillez entrer une adresse e-mail valide.' },
-			{ type:'text', label:'Nom du profil (optionnel)', required:false, placeholder:'Ex: Profil 1', icon:'👤', max_length:60 }
+			{ type:'email', label:'Adresse e-mail', required:true, placeholder:'client@email.com', icon:'', error_message:'Veuillez entrer une adresse e-mail valide.' },
+			{ type:'text', label:'Nom du profil (optionnel)', required:false, placeholder:'Ex: Profil 1', icon:'', max_length:60 }
 		],
 		dls: [
-			{ type:'email', label:'Adresse e-mail', required:true, placeholder:'client@email.com', icon:'✉️', error_message:'Veuillez entrer une adresse e-mail valide.' },
+			{ type:'email', label:'Adresse e-mail', required:true, placeholder:'client@email.com', icon:'', error_message:'Veuillez entrer une adresse e-mail valide.' },
 			{ type:'text', label:'ID de compte KONAMI', required:true, placeholder:'Entrez l’identifiant du compte', icon:'', min_length:4, max_length:120, error_message:'Veuillez entrer l’identifiant du compte.' },
-			{ type:'tel', label:'Numéro WhatsApp', required:true, placeholder:'Ex: +509 37 00 00 00', icon:'📱', min_length:7, max_length:24, error_message:'Veuillez entrer un numéro WhatsApp valide.' }
+			{ type:'tel', label:'Numéro WhatsApp', required:true, placeholder:'Ex: +509 37 00 00 00', icon:'', min_length:7, max_length:24, error_message:'Veuillez entrer un numéro WhatsApp valide.' }
 		],
 		codm: [
-			{ type:'text', label:'Player ID / UID', required:true, placeholder:'Entrez votre Player ID', icon:'🎮', min_length:4, max_length:40, error_message:'Veuillez entrer votre Player ID.' },
-			{ type:'select', label:'Région', required:true, icon:'🌍', options:[{label:'LATAM',value:'latam',price:0},{label:'USA',value:'usa',price:0},{label:'Europe',value:'europe',price:0}] },
-			{ type:'tel', label:'Numéro WhatsApp (optionnel)', required:false, placeholder:'Ex: +509 37 00 00 00', icon:'📱', min_length:7, max_length:24 }
+			{ type:'text', label:'Player ID / UID', required:true, placeholder:'Entrez votre Player ID', icon:'', min_length:4, max_length:40, error_message:'Veuillez entrer votre Player ID.' },
+			{ type:'select', label:'Région', required:true, icon:'', options:[{label:'LATAM',value:'latam',price:0},{label:'USA',value:'usa',price:0},{label:'Europe',value:'europe',price:0}] },
+			{ type:'tel', label:'Numéro WhatsApp (optionnel)', required:false, placeholder:'Ex: +509 37 00 00 00', icon:'', min_length:7, max_length:24 }
 		],
 		wallet: [
-			{ type:'tel', label:'Numéro du compte', required:true, placeholder:'Ex: 509XXXXXXXX', icon:'📱', min_length:8, max_length:20, transform:'digits', error_message:'Veuillez entrer un numéro valide.' },
-			{ type:'text', label:'Nom du titulaire', required:true, icon:'👤', min_length:2, max_length:80 }
+			{ type:'tel', label:'Numéro du compte', required:true, placeholder:'Ex: 509XXXXXXXX', icon:'', min_length:8, max_length:20, transform:'digits', error_message:'Veuillez entrer un numéro valide.' },
+			{ type:'text', label:'Nom du titulaire', required:true, icon:'', min_length:2, max_length:80 }
 		]
 	};
 	$(document).on('click','.dmc-template',function(){

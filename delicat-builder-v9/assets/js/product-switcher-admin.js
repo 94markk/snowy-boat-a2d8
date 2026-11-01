@@ -26,12 +26,12 @@
   });
   $('#dpsr-free-fire').on('click',function(){
     var presets=[
-      {label:'Free Fire (AMÉRIQUE)',icon:'🇺🇸'},
-      {label:'Free Fire (LATAM)',icon:'🌎'},
-      {label:'Free Fire (EUROPE)',icon:'🇪🇺'},
-      {label:'Free Fire (MENA)',icon:'🌍'},
-      {label:'Free Fire (ASIE)',icon:'🌏'},
-      {label:'Free Fire (AFRIQUE)',icon:'🌍'}
+      {label:'Free Fire (AMÉRIQUE)',icon:''},
+      {label:'Free Fire (LATAM)',icon:''},
+      {label:'Free Fire (EUROPE)',icon:''},
+      {label:'Free Fire (MENA)',icon:''},
+      {label:'Free Fire (ASIE)',icon:''},
+      {label:'Free Fire (AFRIQUE)',icon:''}
     ];
     $rows.empty(); presets.forEach(addRow); reindex();
     $('select[name="dpsr[type]"]').val('regions');

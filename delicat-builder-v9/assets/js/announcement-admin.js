@@ -57,7 +57,7 @@
 		var primary = root.querySelector('[data-dbv9-annc-preview-primary]');
 		var secondary = root.querySelector('[data-dbv9-annc-preview-secondary]');
 		var imageUrl = value('dbv9-annc-image-field', '');
-		var emojiValue = value('dbv9-annc-emoji-field', '🎉');
+		var emojiValue = value('dbv9-annc-emoji-field', '');
 		var titleValue = value('dbv9-annc-title-field', 'Bienvenue sur Délicat Store');
 		var textValue = value('dbv9-annc-message-field', '');
 		var primaryValue = value('dbv9-annc-plabel', 'Voir l’offre');
@@ -78,7 +78,7 @@
 		} else {
 			if (media) media.hidden = true;
 			if (emoji) {
-				emoji.textContent = emojiValue || '🎉';
+				emoji.textContent = emojiValue || '';
 				emoji.hidden = !emojiValue;
 			}
 		}

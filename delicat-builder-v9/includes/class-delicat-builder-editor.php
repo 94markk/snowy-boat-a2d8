@@ -446,7 +446,7 @@ final class Delicat_Builder_V9_Editor {
 			<section class="delicat-page-dashboard__workspace">
 				<div class="delicat-page-toolbar">
 					<div class="delicat-page-search">
-						<span aria-hidden="true">⌕</span>
+						<span aria-hidden="true"></span>
 						<input type="search" id="delicat-page-search" placeholder="<?php esc_attr_e( 'Search pages…', 'delicat-builder-v9' ); ?>" autocomplete="off">
 					</div>
 					<div class="delicat-page-filters" role="group" aria-label="<?php esc_attr_e( 'Filter pages', 'delicat-builder-v9' ); ?>">
@@ -484,7 +484,7 @@ final class Delicat_Builder_V9_Editor {
 							data-search="<?php echo esc_attr( strtolower( wp_strip_all_tags( get_the_title( $page ) . ' ' . $page->post_name . ' ' . $page->ID ) ) ); ?>"
 						>
 							<div class="delicat-page-card__top">
-								<div class="delicat-page-card__icon" aria-hidden="true"><?php echo esc_html( $is_home ? '⌂' : '▤' ); ?></div>
+								<div class="delicat-page-card__icon" aria-hidden="true"><?php echo esc_html( $is_home ? '' : '▤' ); ?></div>
 								<div class="delicat-page-card__badges">
 									<span class="delicat-page-badge <?php echo $is_enabled ? 'is-enabled' : 'is-disabled'; ?>">
 										<i aria-hidden="true"></i>
@@ -526,7 +526,7 @@ final class Delicat_Builder_V9_Editor {
 				</div>
 
 				<div class="delicat-page-empty" id="delicat-page-empty" hidden>
-					<div aria-hidden="true">⌕</div>
+					<div aria-hidden="true"></div>
 					<strong><?php esc_html_e( 'No pages match this filter.', 'delicat-builder-v9' ); ?></strong>
 					<span><?php esc_html_e( 'Change the search or filter to see your pages.', 'delicat-builder-v9' ); ?></span>
 				</div>

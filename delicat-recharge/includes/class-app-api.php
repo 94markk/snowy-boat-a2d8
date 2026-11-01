@@ -257,7 +257,7 @@ class Delicat_App_Api {
             Delicat_Natcash_Auto::norm_code( $code ), $id
         ) );
         if ( $dupe > 0 ) {
-            return rest_ensure_response( [ 'ok' => false, 'message' => '⛔ Ce TransCode a déjà été utilisé.' ] );
+            return rest_ensure_response( [ 'ok' => false, 'message' => 'Ce TransCode a déjà été utilisé.' ] );
         }
 
         // Verify mode: the code must strictly match a real received SMS —
@@ -269,7 +269,7 @@ class Delicat_App_Api {
             if ( empty( $chk['ok'] ) ) {
                 return rest_ensure_response( [
                     'ok'      => false,
-                    'message' => '⚠️ ' . ( $chk['reason'] ?? 'Vérification échouée.' ),
+                    'message' => '' . ( $chk['reason'] ?? 'Vérification échouée.' ),
                 ] );
             }
         }
@@ -277,7 +277,7 @@ class Delicat_App_Api {
         // AUTHORITATIVE ONE-TIME GATE (DB UNIQUE index). The $dupe SELECT above
         // is a read-then-write and can lose a race; this cannot.
         if ( ! Delicat_Database::claim_code( $code, $id, (float) $record->montant, 'app_manual' ) ) {
-            return rest_ensure_response( [ 'ok' => false, 'message' => '⛔ Ce TransCode a déjà été crédité.' ] );
+            return rest_ensure_response( [ 'ok' => false, 'message' => 'Ce TransCode a déjà été crédité.' ] );
         }
 
         // ATOMIC CLAIM to avoid any double-credit.
@@ -317,7 +317,7 @@ class Delicat_App_Api {
 
         return rest_ensure_response( [
             'ok' => true,
-            'message' => sprintf( '✅ %.2f HTG crédités (%s).', $record->montant, $verify ? 'vérifié SMS' : 'manuel' ),
+            'message' => sprintf( '%.2f HTG crédités (%s).', $record->montant, $verify ? 'vérifié SMS' : 'manuel' ),
         ] );
     }
 
@@ -370,7 +370,7 @@ class Delicat_App_Api {
 
         // Already recorded anywhere? Then it's already blocked — nothing to do.
         if ( Delicat_Database::trans_code_exists( $trans_code ) ) {
-            return rest_ensure_response( [ 'ok' => false, 'message' => '⛔ Ce code est déjà enregistré (déjà bloqué pour le site).' ] );
+            return rest_ensure_response( [ 'ok' => false, 'message' => 'Ce code est déjà enregistré (déjà bloqué pour le site).' ] );
         }
 
         $user_id = 0;
@@ -393,7 +393,7 @@ class Delicat_App_Api {
                 ? Delicat_Natcash_Auto::verify_received( $tab, $trans_code, $montant )
                 : [ 'ok' => false, 'reason' => 'Vérification indisponible.' ];
             if ( empty( $chk['ok'] ) ) {
-                return rest_ensure_response( [ 'ok' => false, 'message' => '⚠️ ' . ( $chk['reason'] ?? 'Vérification échouée.' ) ] );
+                return rest_ensure_response( [ 'ok' => false, 'message' => '' . ( $chk['reason'] ?? 'Vérification échouée.' ) ] );
             }
             $mode = 'credit'; // verified true → credit
         }
@@ -420,18 +420,18 @@ class Delicat_App_Api {
                 sprintf( 'Recharge #%d — saisie manuelle (app)', $id ), (int) $id );
             if ( is_wp_error( $res ) ) {
                 Delicat_Database::update( (int) $id, [
-                    'note_admin' => sprintf( '⚠️ [APP %s] crédit échoué, code bloqué — %s', $label, current_time( 'mysql' ) ),
+                    'note_admin' => sprintf( '[APP %s] crédit échoué, code bloqué — %s', $label, current_time( 'mysql' ) ),
                 ] );
                 return rest_ensure_response( [ 'ok' => false, 'message' => 'Code enregistré (bloqué) mais crédit échoué: ' . $res->get_error_message() ] );
             }
             Delicat_Database::update( (int) $id, [
                 'wallet_credited' => 1,
-                'note_admin'      => sprintf( '💳 [APP %s] saisie manuelle%s — wallet crédité — %s', $label, ( $mode_raw === 'verify' ? ' (vérifié SMS)' : '' ), current_time( 'mysql' ) ),
+                'note_admin'      => sprintf( '[APP %s] saisie manuelle%s — wallet crédité — %s', $label, ( $mode_raw === 'verify' ? ' (vérifié SMS)' : '' ), current_time( 'mysql' ) ),
             ] );
             do_action( 'delicat_recharge_approved', (int) $id );
             return rest_ensure_response( [
                 'ok'      => true,
-                'message' => sprintf( '✅ %.2f HTG crédités. Code « %s » bloqué.', $montant, $trans_code ),
+                'message' => sprintf( '%.2f HTG crédités. Code « %s » bloqué.', $montant, $trans_code ),
             ] );
         }
 
@@ -442,11 +442,11 @@ class Delicat_App_Api {
         }
         Delicat_Database::update( (int) $id, [
             'wallet_credited' => 1,
-            'note_admin'      => sprintf( '🔒 [BLOCAGE-MANUEL] [APP %s] déjà validé hors-ligne, wallet non crédité par le plugin — %s', $label, current_time( 'mysql' ) ),
+            'note_admin'      => sprintf( '[BLOCAGE-MANUEL] [APP %s] déjà validé hors-ligne, wallet non crédité par le plugin — %s', $label, current_time( 'mysql' ) ),
         ] );
         return rest_ensure_response( [
             'ok'      => true,
-            'message' => sprintf( '🔒 Code « %s » enregistré et bloqué. Toute soumission sur le site sera refusée.', $trans_code ),
+            'message' => sprintf( 'Code « %s » enregistré et bloqué. Toute soumission sur le site sera refusée.', $trans_code ),
         ] );
     }
 

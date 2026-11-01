@@ -1,3 +1,22 @@
+9.6.1 — Icônes Material, plus aucun emoji, sécurité renforcée
+(1) Un seul jeu d’icônes : Material Symbols (Google), style arrondi, 96 icônes avec version pleine pour
+l’onglet actif ; elles suivent la couleur du texte en clair et en sombre (delicat_ds_icon).
+(2) Plus aucun emoji dans l’interface ni dans les messages (430 retirés dans les trois extensions) ; là où un
+emoji servait d’icône (menu du compte, garanties des abonnements, bouton WhatsApp, promo du menu), il est
+remplacé par une icône Material. Les emojis déjà saisis dans vos réglages restent convertis en icônes.
+(3) Sécurité : la politique de sécurité complète (cadres, balise base, objets, HTTPS) est rétablie sur les
+pages Mon compte, paiement et connexion, où WordPress la remplaçait ; nouvel en-tête
+Cross-Origin-Opener-Policy (les fenêtres Google et de paiement continuent de fonctionner) ; page de connexion
+protégée comme le reste du site (nosniff, HSTS, Permissions-Policy) ; option obsolète interest-cohort
+remplacée (plus d’erreur dans la console du navigateur).
+(4) Plus léger : les icônes du menu Mon compte ne sont envoyées que sur les pages du compte qui affichent ce
+menu (et pas du tout quand Delicat Identity dessine le sien) ; les feuilles de style partagées des autres
+pages sont légèrement plus petites qu’en 9.5.4.
+(5) Fiabilité : une adresse avec plusieurs points dans le nom (par exemple un ancien fichier page.xxxx.css
+supprimé) ne provoque plus d’erreur fatale au chargement de WordPress ; le mode sans échec du Builder ne se
+déclenche plus à cause d’un script extérieur qui cherche une classe Builder absente.
+Installer avec Delicat Identity 6.17.0 et Delicat Recharge 6.6.1, puis purger LiteSpeed / Cloudflare.
+
 9.6.0 — Delicat Design System 2.0 : une seule identité visuelle pour tout le site (phase 2 de la refonte)
 (1) Couleurs de la marque partout : bleu #2563EB pour les boutons et les liens, bleu nuit #00004F du logo pour
 la marque. Le violet, le rose et l’orange qui variaient d’une page à l’autre (boutique, panier, menu, compte,

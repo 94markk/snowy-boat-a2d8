@@ -39,10 +39,10 @@
                 var $el = $('#' + $(this).data('target'));
                 if ($el.hasClass('dr-revealed')) {
                     $el.removeClass('dr-revealed').text($el.attr('data-masked'));
-                    $(this).text('👁️');
+                    $(this).text('');
                 } else {
                     $el.addClass('dr-revealed').text($el.attr('data-full'));
-                    $(this).text('🙈');
+                    $(this).text('');
                 }
             });
 
@@ -113,7 +113,7 @@
                     return showMsg(d.i18n.required_amount, 'error');
                 }
                 if (parseFloat(montant) > 100000) {
-                    return showMsg('❌ Le montant maximum autorisé est de 100,000 HTG.', 'error');
+                    return showMsg('Le montant maximum autorisé est de 100,000 HTG.', 'error');
                 }
                 if (tab === 'natcash') {
                     var ncS = ($('#dr-nc-sender').val() || '').trim();
@@ -439,7 +439,7 @@
                                     : (parseFloat(opts.requestedAmount) || 0);
                                 showRechargeSuccess(successAmount, opts.currency || 'HTG', bal.fmt || null);
                                 opts.showSuccessOnIncrease = false;
-                                showMsg('✅ Recharge réussie ! <strong>' + formatRechargeAmount(successAmount) + ' ' + (opts.currency || 'HTG') + '</strong> ajoutés à votre compte.', 'success', true);
+                                showMsg('Recharge réussie ! <strong>' + formatRechargeAmount(successAmount) + ' ' + (opts.currency || 'HTG') + '</strong> ajoutés à votre compte.', 'success', true);
                             }
                             clearInterval(balanceTimer); balanceTimer = null;
                         }

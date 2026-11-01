@@ -48,7 +48,7 @@ foreach ( $dr_enabled as $dr_k => $dr_v ) {
 }
 
 if ( $dr_first === '' ) {
-    echo '<div class="dr-wrap dr-modern"><div class="dr-message dr-error" style="display:block;">⛔ Les recharges sont temporairement indisponibles. Merci de réessayer plus tard.</div></div>';
+    echo '<div class="dr-wrap dr-modern"><div class="dr-message dr-error" style="display:block;">Les recharges sont temporairement indisponibles. Merci de réessayer plus tard.</div></div>';
     return;
 }
 ?>
@@ -96,14 +96,14 @@ if ( $dr_first === '' ) {
                         <strong><?php echo esc_html( $dr_tl ); ?></strong>
                         <?php if ( $dr_tk === 'natcash_tc' ) : ?><small class="dr-tab-badge">Recommandé</small><?php else : ?><small>Recharge classique</small><?php endif; ?>
                     </span>
-                    <span class="dr-tab-check" aria-hidden="true">✓</span>
+                    <span class="dr-tab-check" aria-hidden="true"><?php echo delicat_recharge_icon( 'check' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                 </button>
             <?php endforeach; ?>
         </div>
 
         <?php if ( ! empty( $dr_enabled['natcash_tc'] ) ) : ?>
             <p class="dr-default-method-note">
-                <span aria-hidden="true">⚡</span>
+                <span aria-hidden="true"><?php echo delicat_recharge_icon( 'bolt' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                 <span class="dr-method-note-copy"><strong>Natcash Auto (TC)</strong> • validation automatique • rapide &amp; sécurisée</span>
             </p>
         <?php endif; ?>
@@ -128,37 +128,37 @@ if ( $dr_first === '' ) {
                     </div>
 
                     <details class="dr-how-card">
-                        <summary class="dr-section-title"><span>Comment ça marche ?</span><span class="dr-how-chevron" aria-hidden="true">⌄</span></summary>
+                        <summary class="dr-section-title"><span>Comment ça marche ?</span><span class="dr-how-chevron" aria-hidden="true"><?php echo delicat_recharge_icon( 'keyboard-arrow-down' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></summary>
                         <div class="dr-steps">
-                            <div class="dr-step"><span class="dr-step-num">1</span><span class="dr-step-icon">↗</span><strong>Transférez</strong><small>Envoyez le montant exact.</small></div>
+                            <div class="dr-step"><span class="dr-step-num">1</span><span class="dr-step-icon"><?php echo delicat_recharge_icon( 'arrow-forward' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><strong>Transférez</strong><small>Envoyez le montant exact.</small></div>
                             <div class="dr-step-line" aria-hidden="true"></div>
                             <div class="dr-step"><span class="dr-step-num">2</span><span class="dr-step-icon">•••</span><strong>Entrez le code</strong><small>Saisissez le TransCode reçu.</small></div>
                             <div class="dr-step-line" aria-hidden="true"></div>
-                            <div class="dr-step"><span class="dr-step-num">3</span><span class="dr-step-icon">✓</span><strong>Vérification</strong><small>Votre demande est contrôlée.</small></div>
+                            <div class="dr-step"><span class="dr-step-num">3</span><span class="dr-step-icon"><?php echo delicat_recharge_icon( 'check' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><strong>Vérification</strong><small>Votre demande est contrôlée.</small></div>
                         </div>
                     </details>
 
                     <div class="dr-pay-card dr-account-card">
                         <div class="dr-account-row">
-                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true">📞</span>
+                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true"><?php echo delicat_recharge_icon( 'call' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                             <div class="dr-account-copy"><small>Numéro MonCash</small><strong id="dr-mc-num"><?php echo $dr_mc_num; ?></strong></div>
-                            <button type="button" class="dr-copy-btn" data-dr-copy="<?php echo esc_attr( $dr_mc_num ); ?>" aria-label="Copier le numéro MonCash"><span aria-hidden="true">⧉</span><span class="dr-copy-label">Copier</span></button>
+                            <button type="button" class="dr-copy-btn" data-dr-copy="<?php echo esc_attr( $dr_mc_num ); ?>" aria-label="Copier le numéro MonCash"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'content-copy' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><span class="dr-copy-label">Copier</span></button>
                         </div>
                         <div class="dr-account-divider"></div>
                         <div class="dr-account-row">
-                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true">👤</span>
+                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true"><?php echo delicat_recharge_icon( 'person' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                             <div class="dr-account-copy"><small>Nom enregistré</small><strong id="dr-mc-nom" class="dr-name-mask" data-full="<?php echo esc_attr( $dr_mc_nom_full ); ?>" data-masked="<?php echo esc_attr( delicat_mask_name( $dr_mc_nom_full ) ); ?>"><?php echo $dr_mc_nom_masked; ?></strong></div>
-                            <button type="button" class="dr-eye" data-target="dr-mc-nom" title="Afficher / masquer le nom" aria-label="Afficher ou masquer le nom"><span aria-hidden="true">👁</span></button>
+                            <button type="button" class="dr-eye" data-target="dr-mc-nom" title="Afficher / masquer le nom" aria-label="Afficher ou masquer le nom"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'visibility' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></button>
                         </div>
                     </div>
                 </div>
-                <p class="dr-manual-badge"><span aria-hidden="true">⏳</span> Traitement manuel — recharge après vérification.</p>
+                <p class="dr-manual-badge"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'hourglass-top' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span> Traitement manuel — recharge après vérification.</p>
             </div>
 
             <div class="dr-info-box dr-info-natcash" style="<?php echo $dr_first === 'natcash' ? '' : 'display:none;'; ?>">
                 <div class="dr-info-main">
                     <div class="dr-method-intro">
-                        <span class="dr-method-icon" aria-hidden="true">⚡</span>
+                        <span class="dr-method-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'bolt' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                         <div>
                             <p class="dr-info-eyebrow">Méthode sélectionnée</p>
                             <p class="dr-info-title">Natcash Automatique</p>
@@ -167,18 +167,18 @@ if ( $dr_first === '' ) {
                     </div>
                     <div class="dr-pay-card dr-account-card">
                         <div class="dr-account-row">
-                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true">📞</span>
+                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true"><?php echo delicat_recharge_icon( 'call' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                             <div class="dr-account-copy"><small>Numéro Natcash</small><strong id="dr-nc-num"><?php echo $dr_nc_num; ?></strong></div>
                         </div>
                         <div class="dr-account-divider"></div>
                         <div class="dr-account-row">
-                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true">👤</span>
+                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true"><?php echo delicat_recharge_icon( 'person' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                             <div class="dr-account-copy"><small>Nom enregistré</small><strong id="dr-nc-nom" class="dr-name-mask" data-full="<?php echo esc_attr( $dr_nc_nom_full ); ?>" data-masked="<?php echo esc_attr( delicat_mask_name( $dr_nc_nom_full ) ); ?>"><?php echo $dr_nc_nom_masked; ?></strong></div>
-                            <button type="button" class="dr-eye" data-target="dr-nc-nom" title="Afficher / masquer le nom" aria-label="Afficher ou masquer le nom"><span aria-hidden="true">👁</span></button>
+                            <button type="button" class="dr-eye" data-target="dr-nc-nom" title="Afficher / masquer le nom" aria-label="Afficher ou masquer le nom"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'visibility' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></button>
                         </div>
                     </div>
                 </div>
-                <p class="dr-manual-badge"><span aria-hidden="true">⏱</span> Validation automatique en quelques secondes après réception du SMS.</p>
+                <p class="dr-manual-badge"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'schedule' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span> Validation automatique en quelques secondes après réception du SMS.</p>
             </div>
 
             <div class="dr-info-box dr-info-natcash_tc" style="<?php echo $dr_first === 'natcash_tc' ? '' : 'display:none;'; ?>">
@@ -195,27 +195,27 @@ if ( $dr_first === '' ) {
                     </div>
 
                     <details class="dr-how-card">
-                        <summary class="dr-section-title"><span>Comment ça marche ?</span><span class="dr-how-chevron" aria-hidden="true">⌄</span></summary>
+                        <summary class="dr-section-title"><span>Comment ça marche ?</span><span class="dr-how-chevron" aria-hidden="true"><?php echo delicat_recharge_icon( 'keyboard-arrow-down' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></summary>
                         <div class="dr-steps">
-                            <div class="dr-step"><span class="dr-step-num">1</span><span class="dr-step-icon" aria-hidden="true">↗</span><strong>Transférez</strong><small>Envoyez le montant au numéro Natcash.</small></div>
+                            <div class="dr-step"><span class="dr-step-num">1</span><span class="dr-step-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'arrow-forward' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><strong>Transférez</strong><small>Envoyez le montant au numéro Natcash.</small></div>
                             <div class="dr-step-line" aria-hidden="true"></div>
-                            <div class="dr-step"><span class="dr-step-num">2</span><span class="dr-step-icon" aria-hidden="true">💬</span><strong>TransCode</strong><small>Entrez le code reçu par SMS.</small></div>
+                            <div class="dr-step"><span class="dr-step-num">2</span><span class="dr-step-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'chat' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><strong>TransCode</strong><small>Entrez le code reçu par SMS.</small></div>
                             <div class="dr-step-line" aria-hidden="true"></div>
-                            <div class="dr-step"><span class="dr-step-num">3</span><span class="dr-step-icon" aria-hidden="true">✓</span><strong>Recharge auto</strong><small>Validation automatique du compte.</small></div>
+                            <div class="dr-step"><span class="dr-step-num">3</span><span class="dr-step-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'check' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><strong>Recharge auto</strong><small>Validation automatique du compte.</small></div>
                         </div>
                     </details>
 
                     <div class="dr-pay-card dr-account-card">
                         <div class="dr-account-row">
-                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true">📞</span>
+                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true"><?php echo delicat_recharge_icon( 'call' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                             <div class="dr-account-copy"><small>Numéro Natcash (TC)</small><strong><?php echo $dr_nc_num; ?></strong></div>
-                            <button type="button" class="dr-copy-btn" data-dr-copy="<?php echo esc_attr( $dr_nc_num ); ?>" aria-label="Copier le numéro Natcash"><span aria-hidden="true">⧉</span><span class="dr-copy-label">Copier</span></button>
+                            <button type="button" class="dr-copy-btn" data-dr-copy="<?php echo esc_attr( $dr_nc_num ); ?>" aria-label="Copier le numéro Natcash"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'content-copy' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><span class="dr-copy-label">Copier</span></button>
                         </div>
                         <div class="dr-account-divider"></div>
                         <div class="dr-account-row">
-                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true">👤</span>
+                            <span class="dr-account-icon dr-account-emoji" aria-hidden="true"><?php echo delicat_recharge_icon( 'person' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                             <div class="dr-account-copy"><small>Nom enregistré</small><strong id="dr-nc-nom-tc" class="dr-name-mask" data-full="<?php echo esc_attr( $dr_nc_nom_full ); ?>" data-masked="<?php echo esc_attr( delicat_mask_name( $dr_nc_nom_full ) ); ?>"><?php echo $dr_nc_nom_masked; ?></strong></div>
-                            <button type="button" class="dr-eye" data-target="dr-nc-nom-tc" title="Afficher / masquer le nom" aria-label="Afficher ou masquer le nom"><span aria-hidden="true">👁</span></button>
+                            <button type="button" class="dr-eye" data-target="dr-nc-nom-tc" title="Afficher / masquer le nom" aria-label="Afficher ou masquer le nom"><span aria-hidden="true"><?php echo delicat_recharge_icon( 'visibility' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></button>
                         </div>
                     </div>
                 </div>
@@ -229,7 +229,7 @@ if ( $dr_first === '' ) {
                     <h3>Informations de recharge</h3>
                 </div>
                 <div class="dr-live-method" aria-live="polite">
-                    <span class="dr-live-method-tc">⚡ Natcash Auto</span>
+                    <span class="dr-live-method-tc">Natcash Auto</span>
                     <span class="dr-live-method-moncash">MonCash</span>
                     <span class="dr-live-method-natcash">Natcash</span>
                 </div>
@@ -249,7 +249,7 @@ if ( $dr_first === '' ) {
                 <div class="dr-field">
                     <label for="dr-email">Votre email <span class="dr-req">*</span></label>
                     <div class="dr-control dr-control-email">
-                        <span class="dr-control-icon" aria-hidden="true">@</span>
+                        <span class="dr-control-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'mail' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                         <input type="email" id="dr-email" placeholder="votre@email.com" autocomplete="email">
                     </div>
                 </div>
@@ -266,11 +266,11 @@ if ( $dr_first === '' ) {
             <div class="dr-field dr-field-trans"<?php echo $dr_first === 'natcash' ? ' style="display:none;"' : ''; ?>>
                 <label for="dr-trans">TransCode / Txn ID <span class="dr-req">*</span></label>
                 <div class="dr-control dr-control-code">
-                    <span class="dr-control-icon" aria-hidden="true">#</span>
+                    <span class="dr-control-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'confirmation-number' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                     <input type="text" id="dr-trans" placeholder="Ex : 1223445566777" autocomplete="off" inputmode="numeric">
                 </div>
                 <details class="dr-help">
-                    <summary><span aria-hidden="true">?</span> Où trouver mon TransCode ?</summary>
+                    <summary><span aria-hidden="true"><?php echo delicat_recharge_icon( 'help' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span> Où trouver mon TransCode ?</summary>
                     <div class="dr-help-body">
                         <p class="dr-help-tc">Après votre transfert Natcash, ouvrez le SMS de confirmation et recopiez le TransCode affiché.</p>
                         <p class="dr-help-moncash">Utilisez le TransCode / identifiant de transaction affiché dans votre confirmation MonCash.</p>
@@ -281,17 +281,17 @@ if ( $dr_first === '' ) {
             <div class="dr-field dr-field-natcash"<?php echo $dr_first === 'natcash' ? '' : ' style="display:none;"'; ?>>
                 <label for="dr-nc-sender">Votre numéro Natcash (celui qui envoie) <span class="dr-req">*</span></label>
                 <div class="dr-control dr-control-phone">
-                    <span class="dr-control-icon" aria-hidden="true">☎</span>
+                    <span class="dr-control-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'call' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                     <input type="tel" id="dr-nc-sender" placeholder="Ex : 43180354" inputmode="tel" autocomplete="tel">
                 </div>
             </div>
 
             <button type="button" class="dr-submit" id="dr-submit">
                 <span class="dr-btn-label">
-                    <span class="dr-submit-icon" aria-hidden="true">↗</span>
+                    <span class="dr-submit-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'arrow-forward' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
                     <span class="dr-submit-copy"><strong>Envoyer la demande</strong><small>Validation sécurisée et rapide</small></span>
                 </span>
-                <span class="dr-btn-spin" style="display:none;">⏳ Envoi en cours…</span>
+                <span class="dr-btn-spin" style="display:none;">Envoi en cours…</span>
             </button>
 
             <div class="dr-form-security">

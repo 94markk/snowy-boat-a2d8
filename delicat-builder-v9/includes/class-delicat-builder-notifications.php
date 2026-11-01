@@ -231,8 +231,8 @@ final class Delicat_Builder_V9_Notifications {
 	}
 
 	private static function icon( string $category ): string {
-		$icons = array( 'orders' => '📦', 'wallet' => '💰', 'chat' => '💬', 'promotions' => '🎁', 'security' => '🛡️', 'general' => '🔔' );
-		return $icons[ $category ] ?? '🔔';
+		$icons = array( 'orders' => '', 'wallet' => '', 'chat' => '', 'promotions' => '', 'security' => '', 'general' => '' );
+		return $icons[ $category ] ?? '';
 	}
 
 	public static function normalize_item( $item ): array {
@@ -1064,7 +1064,7 @@ final class Delicat_Builder_V9_Notifications {
 		$has_legacy = (bool) get_option( self::LEGACY_SERVICE, '' );
 		?>
 		<div class="wrap">
-			<h1>🔔 <?php esc_html_e( 'Delicat V9 Notifications', 'delicat-builder-v9' ); ?></h1>
+			<h1><?php esc_html_e( 'Delicat V9 Notifications', 'delicat-builder-v9' ); ?></h1>
 			<?php if ( self::app_push_via_api() ) : ?>
 			<div class="notice notice-info inline"><p><?php echo esc_html( 'pro.55 — Les notifications de l’application sont envoyées par Delicat App API (appareils enregistrés dans Delicat App → Notifications push). Ce module garde le site : cloche, historique et Web Push.' ); ?></p></div>
 			<?php endif; ?>
@@ -1077,7 +1077,7 @@ final class Delicat_Builder_V9_Notifications {
 					<input type="hidden" name="action" value="delicat_builder_v9_notifications_publish"><?php wp_nonce_field( 'delicat_builder_v9_notifications_publish' ); ?>
 					<p><label>Titre<br><input class="regular-text" required maxlength="191" name="title"></label></p>
 					<p><label>Message<br><textarea class="large-text" rows="4" required maxlength="2000" name="message"></textarea></label></p>
-					<p><label>Catégorie <select name="category"><option value="orders">📦 Commandes</option><option value="wallet">💰 Wallet</option><option value="promotions">🎁 Promotions</option><option value="security">🛡️ Sécurité</option><option value="general">🔔 Général</option></select></label></p>
+					<p><label>Catégorie <select name="category"><option value="orders">Commandes</option><option value="wallet">Wallet</option><option value="promotions">Promotions</option><option value="security">Sécurité</option><option value="general">Général</option></select></label></p>
 					<p><label>Lien interne<br><input class="large-text" type="url" name="link" placeholder="<?php echo esc_attr( home_url( '/my-account/' ) ); ?>"></label></p>
 					<p><label>Code promo <input name="code"></label></p>
 					<p><label><input type="checkbox" name="send_app" value="1" checked> Envoyer en Push (navigateur + app)</label><br><label><input type="checkbox" name="urgent" value="1"> Urgent</label></p>
@@ -1096,7 +1096,7 @@ final class Delicat_Builder_V9_Notifications {
 				</form><p><strong><?php echo esc_html( (string) count( $devices ) ); ?></strong> appareil(s) liés.</p></div>
 			</div>
 			<h2>Historique récent</h2><table class="widefat striped"><thead><tr><th>Date</th><th>Visibilité</th><th>Catégorie</th><th>Titre</th><th>Message</th></tr></thead><tbody>
-			<?php foreach ( array_slice( self::items(), 0, 30 ) as $item ) : $visibility = empty( $item['bell'] ) ? '🔒 Push privé' : ( 'user' === $item['audience'] ? '👤 Client concerné' : '🌍 Public' ); ?>
+			<?php foreach ( array_slice( self::items(), 0, 30 ) as $item ) : $visibility = empty( $item['bell'] ) ? 'Push privé' : ( 'user' === $item['audience'] ? 'Client concerné' : 'Public' ); ?>
 				<tr><td><?php echo esc_html( wp_date( 'd/m/Y H:i', (int) $item['created'] ) ); ?></td><td><?php echo esc_html( $visibility ); ?></td><td><?php echo esc_html( self::icon( $item['category'] ) . ' ' . $item['category'] ); ?></td><td><strong><?php echo esc_html( $item['title'] ); ?></strong></td><td><?php echo esc_html( $item['message'] ); ?></td></tr>
 			<?php endforeach; ?>
 			</tbody></table>

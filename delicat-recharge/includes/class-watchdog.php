@@ -74,7 +74,7 @@ class Delicat_Watchdog {
 	private function alert_down( int $silence ): void {
 		$hrs  = round( $silence / HOUR_IN_SECONDS, 1 );
 		$body = sprintf(
-			"⚠️ Aucun SMS reçu du forwarder depuis %s heures.\n\n"
+			"Aucun SMS reçu du forwarder depuis %s heures.\n\n"
 			. "La validation automatique est probablement ARRÊTÉE.\n\n"
 			. "À vérifier sur le téléphone forwarder :\n"
 			. "• Il est allumé et chargé\n"
@@ -89,7 +89,7 @@ class Delicat_Watchdog {
 		// Deferred so no customer request is slowed by mail/push.
 		add_action( 'shutdown', function () use ( $body ) {
 			delicat_recharge_finish_request();
-			wp_mail( get_option( 'admin_email' ), '⚠️ Delicat — validation automatique arrêtée', $body );
+			wp_mail( get_option( 'admin_email' ), 'Delicat — validation automatique arrêtée', $body );
 		}, 25 );
 
 		if ( class_exists( 'Delicat_Push' ) && method_exists( 'Delicat_Push', 'send' ) ) {
@@ -97,7 +97,7 @@ class Delicat_Watchdog {
 				delicat_recharge_finish_request();
 				try {
 					Delicat_Push::send(
-						'⚠️ Validation auto arrêtée',
+						'Validation auto arrêtée',
 						sprintf( 'Aucun SMS du forwarder depuis %s h. Vérifiez le téléphone.', $hrs ),
 						'', true
 					);
@@ -111,7 +111,7 @@ class Delicat_Watchdog {
 			delicat_recharge_finish_request();
 			wp_mail(
 				get_option( 'admin_email' ),
-				'✅ Delicat — validation automatique rétablie',
+				'Delicat — validation automatique rétablie',
 				"Le forwarder renvoie des SMS. La validation automatique fonctionne à nouveau."
 			);
 		}, 25 );
@@ -120,7 +120,7 @@ class Delicat_Watchdog {
 			add_action( 'shutdown', function () {
 				delicat_recharge_finish_request();
 				try {
-					Delicat_Push::send( '✅ Validation auto rétablie',
+					Delicat_Push::send( 'Validation auto rétablie',
 						'Le forwarder est de nouveau actif.' );
 				} catch ( \Throwable $e ) {}
 			}, 26 );
@@ -144,15 +144,15 @@ class Delicat_Watchdog {
 			$badge = '<span style="color:#888;font-weight:700;">— jamais vu</span>';
 			$detail = 'Le forwarder n\'a encore jamais contacté le site.';
 		} elseif ( $silence > $limit * HOUR_IN_SECONDS ) {
-			$badge = '<span style="color:#c62828;font-weight:700;">🔴 ARRÊTÉ</span>';
+			$badge = '<span style="color:#c62828;font-weight:700;">ARRÊTÉ</span>';
 			$detail = sprintf( 'Dernier SMS reçu il y a %s.', human_time_diff( time() - $silence, time() ) );
 		} else {
-			$badge = '<span style="color:#2e7d32;font-weight:700;">🟢 ACTIF</span>';
+			$badge = '<span style="color:#2e7d32;font-weight:700;">ACTIF</span>';
 			$detail = sprintf( 'Dernier SMS reçu il y a %s.', human_time_diff( time() - $silence, time() ) );
 		}
 		?>
 		<div style="margin:18px 0;border:1px solid #e0e0e0;border-radius:12px;background:#fff;padding:16px 18px;">
-			<h2 style="margin:0 0 6px;font-size:16px;">📡 Validation automatique — état du forwarder</h2>
+			<h2 style="margin:0 0 6px;font-size:16px;">Validation automatique — état du forwarder</h2>
 			<p style="margin:0 0 10px;font-size:15px;"><?php echo $badge; // phpcs:ignore ?>
 				&nbsp;<span style="color:#555;"><?php echo esc_html( $detail ); ?></span></p>
 			<form method="post" style="margin:0;">

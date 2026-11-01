@@ -985,7 +985,7 @@ final class Delicat_Builder_V9_Reviews {
 		$rl_key = 'dlc_rv_vote_' . $user_id;
 		$used   = (int) get_transient( $rl_key );
 		if ( $used >= (int) apply_filters( 'delicat_builder_v9_review_vote_limit', 60 ) ) {
-			wp_send_json_error( array( 'message' => __( 'Doucement 🙂 Réessaie dans quelques minutes.', 'delicat-builder-v9' ) ), 429 );
+			wp_send_json_error( array( 'message' => __( 'Doucement Réessaie dans quelques minutes.', 'delicat-builder-v9' ) ), 429 );
 		}
 		set_transient( $rl_key, $used + 1, 10 * MINUTE_IN_SECONDS );
 		if ( ! self::ensure_votes_table() ) {

@@ -75,7 +75,7 @@ final class Delicat_Builder_V9_Maintenance {
 		$bar->add_node(
 			array(
 				'id'    => 'delicat-maintenance',
-				'title' => '⚠ ' . __( 'Maintenance', 'delicat-builder-v9' ),
+				'title' => '' . __( 'Maintenance', 'delicat-builder-v9' ),
 				'href'  => admin_url( 'admin.php?page=delicat-builder-v9-maintenance' ),
 				'meta'  => array( 'title' => __( 'La boutique est fermée aux visiteurs', 'delicat-builder-v9' ) ),
 			)

@@ -830,7 +830,7 @@ final class Delicat_Builder_V9_Multi_Currency {
 	}
 
 	private function flag( string $code ): string {
-		$map = array( 'HTG'=>'🇭🇹','USD'=>'🇺🇸','CAD'=>'🇨🇦','EUR'=>'🇪🇺','GBP'=>'🇬🇧','DOP'=>'🇩🇴','BRL'=>'🇧🇷','MXN'=>'🇲🇽','JPY'=>'🇯🇵','CLP'=>'🇨🇱','AUD'=>'🇦🇺','CHF'=>'🇨🇭' );
+		$map = array( 'HTG'=>'','USD'=>'','CAD'=>'','EUR'=>'','GBP'=>'','DOP'=>'','BRL'=>'','MXN'=>'','JPY'=>'','CLP'=>'','AUD'=>'','CHF'=>'' );
 		return $map[ $code ] ?? '';
 	}
 

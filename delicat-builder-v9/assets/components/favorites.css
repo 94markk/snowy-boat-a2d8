@@ -1,4 +1,4 @@
-/* RC58 "Retrouve ce que tu aimes ✨" — server-rendered link cards. Every colour, size and column count comes from the section fields via custom properties. */
+/* RC58 "Retrouve ce que tu aimes" — server-rendered link cards. Every colour, size and column count comes from the section fields via custom properties. */
 .delicat-fav{width:100%;color:var(--dbv9-fav-title,#111827)}
 .delicat-fav__head{margin:0 0 20px}
 .delicat-fav--center .delicat-fav__head{text-align:center}

@@ -62,7 +62,7 @@ class Delicat_Natcash_Auto {
     }
 
     public function menu(): void {
-        add_submenu_page( 'delicat-recharges', 'Natcash Auto — Diagnostic', '🔍 Natcash SMS',
+        add_submenu_page( 'delicat-recharges', 'Natcash Auto — Diagnostic', 'Natcash SMS',
             'manage_options', 'delicat-natcash-log', [ $this, 'log_page' ] );
     }
 
@@ -85,7 +85,7 @@ class Delicat_Natcash_Auto {
         $total = count( $entries );
         $ok_count = 0;
         foreach ( $entries as $e ) {
-            $is_ok = ( isset( $e['result'] ) && strpos( (string) $e['result'], '✅' ) !== false )
+            $is_ok = ( isset( $e['result'] ) && strpos( (string) $e['result'], '' ) !== false )
                      || ! empty( $e['resolved'] );   // later fixed by hand counts as OK
             if ( $is_ok ) $ok_count++;
         }
@@ -111,7 +111,7 @@ class Delicat_Natcash_Auto {
         ?>
         <div class="wrap dlc-diag">
             <h1 style="display:flex;align-items:center;gap:10px;">
-                <span>🔍 Natcash Auto</span>
+                <span>Natcash Auto</span>
                 <span style="font-size:13px;font-weight:400;color:#666;">Diagnostic en temps réel</span>
             </h1>
 
@@ -147,7 +147,7 @@ class Delicat_Natcash_Auto {
             <!-- Pending requests: the other side of every mismatch -->
             <div class="dlc-panel">
                 <div class="dlc-panel-head">
-                    <strong>⏳ Demandes en attente</strong>
+                    <strong>Demandes en attente</strong>
                     <span class="dlc-hint">Un SMS ne se valide que s'il correspond exactement à l'une de ces lignes (TransCode + montant).</span>
                 </div>
                 <?php if ( empty( $pending ) ) : ?>
@@ -173,7 +173,7 @@ class Delicat_Natcash_Auto {
             <!-- SMS activity -->
             <div class="dlc-panel">
                 <div class="dlc-panel-head">
-                    <strong>📩 Derniers SMS reçus</strong>
+                    <strong>Derniers SMS reçus</strong>
                     <span class="dlc-hint">
                         <label style="font-weight:400;">
                             <input type="checkbox" id="dlc-auto" checked> Actualisation auto (20s)
@@ -191,7 +191,7 @@ class Delicat_Natcash_Auto {
                         <?php foreach ( $entries as $e ) :
                             $res      = (string) ( $e['result'] ?? '' );
                             $resolved = ! empty( $e['resolved'] );
-                            $ok       = strpos( $res, '✅' ) !== false;
+                            $ok       = strpos( $res, '' ) !== false;
                             $trust    = (string) ( $e['trust'] ?? '' );
                             if ( $resolved )        $cls = 'res';
                             elseif ( $ok )          $cls = 'ok';
@@ -205,8 +205,8 @@ class Delicat_Natcash_Auto {
                                         <?php
                                         if ( $cls === 'res' )      echo 'RÉGULARISÉ';
                                         elseif ( $cls === 'ok' )   echo 'VALIDÉ';
-                                        elseif ( $cls === 'sus' )  echo '🚨 SUSPECT';
-                                        elseif ( $cls === 'held' ) echo '⏸ RETENU';
+                                        elseif ( $cls === 'sus' )  echo 'SUSPECT';
+                                        elseif ( $cls === 'held' ) echo 'RETENU';
                                         elseif ( $cls === 'dup' )  echo 'DOUBLON';
                                         else                       echo 'NON VALIDÉ';
                                         ?>
@@ -218,7 +218,7 @@ class Delicat_Natcash_Auto {
                                 <?php
                                 $details = [];
                                 if ( $resolved ) {
-                                    echo '<div class="dlc-resolved">✅ Régularisé '
+                                    echo '<div class="dlc-resolved">Régularisé '
                                         . esc_html( (string) ( $e['resolved_by'] ?? '' ) )
                                         . ( ! empty( $e['resolved_at'] ) ? ' — ' . esc_html( (string) $e['resolved_at'] ) : '' )
                                         . '</div>';
@@ -239,7 +239,7 @@ class Delicat_Natcash_Auto {
 
             <!-- Setup -->
             <details class="dlc-panel dlc-setup">
-                <summary><strong>⚙️ Adresse du forwarder</strong></summary>
+                <summary><strong>Adresse du forwarder</strong></summary>
                 <p class="dlc-hint" style="margin:10px 0;">Configurez l'app SMS Forwarder pour envoyer les SMS en POST à cette adresse. Gardez-la secrète.</p>
                 <code class="dlc-url" id="dlc-url"><?php echo esc_html( $forward_url ); ?></code>
                 <button type="button" class="button" id="dlc-copy" style="margin-top:8px;">Copier l'adresse</button>
@@ -297,7 +297,7 @@ class Delicat_Natcash_Auto {
                 var u=document.getElementById('dlc-url');
                 if(!u) return;
                 navigator.clipboard.writeText(u.textContent.trim()).then(function(){
-                    btn.textContent='✅ Copié'; setTimeout(function(){ btn.textContent="Copier l'adresse"; },1800);
+                    btn.textContent='Copié'; setTimeout(function(){ btn.textContent="Copier l'adresse"; },1800);
                 });
             }); }
         })();
@@ -587,7 +587,7 @@ class Delicat_Natcash_Auto {
         if ( ! $attended && class_exists( 'Delicat_SMS_Guard' ) ) {
             $policy = Delicat_SMS_Guard::policy_flags( 'natcash', (float) $p['amount'] );
             if ( $policy ) {
-                $log( '⏸ RETENU #' . (int) $row->id . ' — approbation manuelle', array_merge( $p, [ 'trust' => 'held', 'flags' => $policy ] ) );
+                $log( 'RETENU #' . (int) $row->id . ' — approbation manuelle', array_merge( $p, [ 'trust' => 'held', 'flags' => $policy ] ) );
                 Delicat_SMS_Guard::on_hold( 'natcash', [], $p, $policy );
                 return rest_ensure_response( [ 'matched' => false, 'held' => true, 'id' => (int) $row->id,
                     'reason' => 'Retenu pour approbation manuelle : ' . implode( ' ', $policy ) ] );
@@ -657,10 +657,10 @@ class Delicat_Natcash_Auto {
             Delicat_SMS_Guard::after_credit( 'natcash', (float) $row->montant );
         }
 
-        $log( '✅ APPROUVÉ Natcash-TC #' . (int) $row->id, array_merge( $p, [ 'trust' => 'ok' ] ) );
+        $log( 'APPROUVÉ Natcash-TC #' . (int) $row->id, array_merge( $p, [ 'trust' => 'ok' ] ) );
         return rest_ensure_response( [
             'matched' => true, 'id' => (int) $row->id,
-            'message' => sprintf( '✅ Recharge Natcash #%d approuvée (%s HTG).', $row->id, number_format( (float) $row->montant, 2 ) ),
+            'message' => sprintf( 'Recharge Natcash #%d approuvée (%s HTG).', $row->id, number_format( (float) $row->montant, 2 ) ),
         ] );
     }
 
@@ -701,7 +701,7 @@ class Delicat_Natcash_Auto {
             $base   += [ 'balance' => $verdict['balance'], 'trust' => $verdict['trusted'] ? 'ok' : ( $verdict['spoof'] ? 'suspect' : 'held' ), 'flags' => $verdict['flags'] ];
             $log     = function ( $result, $extra = [] ) use ( $raw, $base ) { self::log_entry( $raw, $result, array_merge( $base, $extra ) ); };
             if ( ! $verdict['trusted'] && Delicat_SMS_Guard::mode() === 'hold' ) {
-                $log( ( $verdict['spoof'] ? '🚨 SUSPECT' : '⏸ RETENU' ) . ' — non crédité', $parsed );
+                $log( ( $verdict['spoof'] ? 'SUSPECT' : 'RETENU' ) . ' — non crédité', $parsed );
                 Delicat_SMS_Guard::on_hold( 'moncash', $verdict, $parsed, $verdict['flags'] );
                 return rest_ensure_response( [ 'matched' => false, 'held' => true,
                     'reason' => ( $verdict['spoof'] ? 'SMS suspect (spoof) : ' : 'Retenu : ' ) . implode( ' ', $verdict['flags'] ) ] );
@@ -752,7 +752,7 @@ class Delicat_Natcash_Auto {
             $policy = Delicat_SMS_Guard::policy_flags( 'moncash', (float) $parsed['amount'] );
             if ( $policy ) {
                 Delicat_Database::release_code( $parsed['trans_code'] ); // not credited → free it
-                $log( '⏸ RETENU #' . (int) $row->id . ' — approbation manuelle', array_merge( $parsed, [ 'trust' => 'held', 'flags' => $policy ] ) );
+                $log( 'RETENU #' . (int) $row->id . ' — approbation manuelle', array_merge( $parsed, [ 'trust' => 'held', 'flags' => $policy ] ) );
                 Delicat_SMS_Guard::on_hold( 'moncash', [], $parsed, $policy );
                 return rest_ensure_response( [ 'matched' => false, 'held' => true, 'id' => (int) $row->id,
                     'reason' => 'Retenu pour approbation manuelle : ' . implode( ' ', $policy ) ] );
@@ -795,10 +795,10 @@ class Delicat_Natcash_Auto {
             Delicat_SMS_Guard::after_credit( 'moncash', (float) $row->montant );
         }
 
-        $log( '✅ APPROUVÉ MonCash #' . (int) $row->id, array_merge( $parsed, [ 'trust' => 'ok' ] ) );
+        $log( 'APPROUVÉ MonCash #' . (int) $row->id, array_merge( $parsed, [ 'trust' => 'ok' ] ) );
         return rest_ensure_response( [
             'matched' => true, 'id' => (int) $row->id,
-            'message' => sprintf( '✅ Recharge MonCash #%d approuvée (%s HTG).', $row->id, number_format( (float) $row->montant, 2 ) ),
+            'message' => sprintf( 'Recharge MonCash #%d approuvée (%s HTG).', $row->id, number_format( (float) $row->montant, 2 ) ),
         ] );
     }
 
@@ -913,7 +913,7 @@ class Delicat_Natcash_Auto {
                 $log     = function ( $result, $extra = [] ) use ( $raw, $base ) { self::log_entry( $raw, $result, array_merge( $base, $extra ) ); };
                 if ( ! $verdict['trusted'] && Delicat_SMS_Guard::mode() === 'hold' ) {
                     $wpdb->get_var( $wpdb->prepare( 'SELECT RELEASE_LOCK(%s)', $guard_lock ) );
-                    $log( ( $verdict['spoof'] ? '🚨 SUSPECT' : '⏸ RETENU' ) . ' — non crédité', $p );
+                    $log( ( $verdict['spoof'] ? 'SUSPECT' : 'RETENU' ) . ' — non crédité', $p );
                     Delicat_SMS_Guard::on_hold( 'natcash', $verdict, $p, $verdict['flags'] );
                     return rest_ensure_response( [ 'matched' => false, 'held' => true,
                         'reason' => ( $verdict['spoof'] ? 'SMS suspect (spoof) : ' : 'Retenu : ' ) . implode( ' ', $verdict['flags'] ) ] );
@@ -926,7 +926,7 @@ class Delicat_Natcash_Auto {
                 // Not a receipt (transfer out, withdrawal, payment…): keep the
                 // balance reference fresh when the new balance chains.
                 if ( Delicat_SMS_Guard::chain_outgoing( 'natcash', $raw, $ctx ) ) {
-                    $log( 'ℹ️ Mouvement sortant — solde de référence mis à jour' );
+                    $log( 'Mouvement sortant — solde de référence mis à jour' );
                     Delicat_SMS_Guard::retry_held( 'natcash' );
                     return rest_ensure_response( [ 'matched' => false, 'reason' => 'SMS non-reçu : solde de référence mis à jour.' ] );
                 }

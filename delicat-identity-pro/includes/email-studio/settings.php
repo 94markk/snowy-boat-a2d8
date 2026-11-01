@@ -87,7 +87,7 @@ function dipes_default_email_copy() {
         ),
         'customer_new_account' => array(
             'subject' => 'Bienvenue chez {site_name} — votre compte est prêt', 'heading' => 'Bienvenue chez {site_name}', 'preheader' => 'Votre espace client est prêt. Sécurisez votre compte et commencez à l’utiliser.',
-            'badge' => 'Compte créé', 'intro_title' => 'Bienvenue {first_name} 👋', 'intro_text' => 'Votre compte <strong>{site_name}</strong> a été créé avec succès. Vous pouvez maintenant suivre vos commandes, retrouver vos achats et gérer votre espace client en toute simplicité.',
+            'badge' => 'Compte créé', 'intro_title' => 'Bienvenue {first_name}', 'intro_text' => 'Votre compte <strong>{site_name}</strong> a été créé avec succès. Vous pouvez maintenant suivre vos commandes, retrouver vos achats et gérer votre espace client en toute simplicité.',
             'cta_label' => '{account_primary_label}', 'cta_url' => '{account_primary_url}', 'accent' => '#16a34a',
         ),
         'customer_reset_password' => array(

@@ -192,7 +192,7 @@ class Delicat_Push {
     const URGENT_THRESHOLD = 5000;
 
     public static function notify_new_request( object $r ): void {
-        $title = '🔔 Nouvelle recharge';
+        $title = 'Nouvelle recharge';
         $body  = sprintf(
             "%s — %s HTG via %s\nClient: %s",
             'Demande #' . $r->id,
@@ -213,7 +213,7 @@ class Delicat_Push {
     }
 
     public static function notify_approved( object $r ): void {
-        $title = '✅ Wallet rechargé';
+        $title = 'Wallet rechargé';
         $body  = sprintf(
             "%s HTG crédités à %s (demande #%d)",
             number_format( (float) $r->montant, 2 ),

@@ -279,18 +279,18 @@ final class Delicat_Builder_V9_Homepage {
 		 */
 		$legacy_reference_copy = array(
 			'home-jeux-carousel' => array(
-				'title'    => array( 'JEUX 🎮', 'JEUX 🎮️', 'JEUX 🕹', 'JEUX 🕹️' ),
-				'tag_text' => array( '🎮 JEUX', '🎮 Jeux', '🕹 JEUX', '🕹 Jeux' ),
+				'title'    => array( 'JEUX', 'JEUX', 'JEUX', 'JEUX' ),
+				'tag_text' => array( 'JEUX', 'Jeux', 'JEUX', 'Jeux' ),
 			),
 			'home-abonnement-carousel' => array(
-				'tag_text' => array( '▶ STREAMING', '▶ Streaming', '▶️ STREAMING', '▶️ Streaming', '📺 Streaming' ),
+				'tag_text' => array( '▶ STREAMING', '▶ Streaming', '▶️ STREAMING', '▶️ Streaming', 'Streaming' ),
 			),
 			'home-exchange-carousel' => array(
-				'title'    => array( 'ÉCHANGES & SERVICES 💳', 'ÉCHANGES 💵', 'ECHANGES 💵', 'ÉCHANGES 💳' ),
-				'tag_text' => array( '💳 FINANCE', '💳 Finance', '💰 FINANCE', '💰 Finance', '💵 Finance' ),
+				'title'    => array( 'ÉCHANGES & SERVICES', 'ÉCHANGES', 'ECHANGES', 'ÉCHANGES' ),
+				'tag_text' => array( 'FINANCE', 'Finance', 'FINANCE', 'Finance', 'Finance' ),
 			),
 			'home-gift-card-carousel' => array(
-				'tag_text' => array( '🎁 Gift Card', '🎁 GIFT CARD' ),
+				'tag_text' => array( 'Gift Card', 'GIFT CARD' ),
 			),
 		);
 		foreach ( array( 'title', 'subtitle', 'eyebrow', 'tag_text' ) as $authored ) {

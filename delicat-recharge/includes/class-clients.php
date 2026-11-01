@@ -69,19 +69,19 @@ class Delicat_Clients {
         switch ( $action ) {
             case 'ban_login':
                 update_user_meta( $user_id, 'dr_banned_login', 1 );
-                wp_send_json_success( [ 'message' => '🔒 Connexion bloquée pour ' . $user->user_email ] );
+                wp_send_json_success( [ 'message' => 'Connexion bloquée pour ' . $user->user_email ] );
 
             case 'unban_login':
                 delete_user_meta( $user_id, 'dr_banned_login' );
-                wp_send_json_success( [ 'message' => '🔓 Connexion réactivée pour ' . $user->user_email ] );
+                wp_send_json_success( [ 'message' => 'Connexion réactivée pour ' . $user->user_email ] );
 
             case 'ban_actions':
                 update_user_meta( $user_id, 'dr_banned_actions', 1 );
-                wp_send_json_success( [ 'message' => '⛔ Recharges/achats bloqués pour ' . $user->user_email ] );
+                wp_send_json_success( [ 'message' => 'Recharges/achats bloqués pour ' . $user->user_email ] );
 
             case 'unban_actions':
                 delete_user_meta( $user_id, 'dr_banned_actions' );
-                wp_send_json_success( [ 'message' => '✅ Recharges/achats réactivés pour ' . $user->user_email ] );
+                wp_send_json_success( [ 'message' => 'Recharges/achats réactivés pour ' . $user->user_email ] );
 
             case 'adjust_balance':
                 $amount = floatval( $_POST['amount'] ?? 0 );
@@ -92,10 +92,10 @@ class Delicat_Clients {
                 $note = sprintf( 'Ajustement admin (%s) – %s', $type, date( 'd/m/Y H:i' ) );
                 if ( $type === 'credit' ) {
                     $res = Delicat_TeraWallet::credit( $user_id, $amount, $note );
-                    $msg = sprintf( '✅ %.2f HTG ajoutés au wallet de %s.', $amount, $user->user_email );
+                    $msg = sprintf( '%.2f HTG ajoutés au wallet de %s.', $amount, $user->user_email );
                 } else {
                     $res = Delicat_TeraWallet::debit( $user_id, $amount, $note );
-                    $msg = sprintf( '➖ %.2f HTG retirés du wallet de %s.', $amount, $user->user_email );
+                    $msg = sprintf( '%.2f HTG retirés du wallet de %s.', $amount, $user->user_email );
                 }
                 if ( is_wp_error( $res ) ) {
                     wp_send_json_error( [ 'message' => $res->get_error_message() ] );
@@ -157,16 +157,16 @@ class Delicat_Clients {
         $exp_n = wp_create_nonce( 'dr_export_nonce' );
         ?>
         <div class="wrap">
-            <h1>👥 Clients
+            <h1>Clients
                 <a href="<?php echo esc_url( admin_url( 'admin.php?page=delicat-clients&dr_export=clients&_wpnonce=' . $exp_n ) ); ?>"
-                   class="page-title-action">⬇️ Exporter CSV</a>
+                   class="page-title-action">Exporter CSV</a>
             </h1>
 
             <form method="get" style="margin:12px 0;">
                 <input type="hidden" name="page" value="delicat-clients">
                 <input type="search" name="s" value="<?php echo esc_attr( $search ); ?>"
                        placeholder="Nom, email…" style="padding:6px 10px;width:260px;">
-                <button class="button">🔍 Rechercher</button>
+                <button class="button">Rechercher</button>
                 <?php if ( $search ) : ?>
                     <a href="<?php echo admin_url( 'admin.php?page=delicat-clients' ); ?>" class="button">✖ Réinitialiser</a>
                 <?php endif; ?>
@@ -198,13 +198,13 @@ class Delicat_Clients {
                             <?php echo $txn; ?> transaction(s)</a></td>
                         <td>
                             <?php if ( $banned_login ) : ?>
-                                <span style="background:#d9534f;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">🔒 Connexion bloquée</span><br>
+                                <span style="background:#d9534f;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">Connexion bloquée</span><br>
                             <?php endif; ?>
                             <?php if ( $banned_actions ) : ?>
-                                <span style="background:#f0ad4e;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">⛔ Actions bloquées</span>
+                                <span style="background:#f0ad4e;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">Actions bloquées</span>
                             <?php endif; ?>
                             <?php if ( ! $banned_login && ! $banned_actions ) : ?>
-                                <span style="background:#5cb85c;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">✅ Actif</span>
+                                <span style="background:#5cb85c;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;">Actif</span>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -213,13 +213,13 @@ class Delicat_Clients {
                                 printf( '<button class="button button-small dr-caction" data-uid="%d" data-act="%s" data-nonce="%s" data-ajax="%s" style="background:%s;color:#fff;border:none;margin:2px;">%s</button>',
                                     $u->ID, $act, $nonce, $ajax, $color, $label );
                             };
-                            if ( $banned_login )   $btn( 'unban_login', '🔓 Débloquer login', '#5cb85c' );   else $btn( 'ban_login', '🔒 Bloquer login', '#d9534f' );
-                            if ( $banned_actions ) $btn( 'unban_actions', '✅ Débloquer actions', '#5cb85c' ); else $btn( 'ban_actions', '⛔ Bloquer actions', '#f0ad4e' );
+                            if ( $banned_login )   $btn( 'unban_login', 'Débloquer login', '#5cb85c' );   else $btn( 'ban_login', 'Bloquer login', '#d9534f' );
+                            if ( $banned_actions ) $btn( 'unban_actions', 'Débloquer actions', '#5cb85c' ); else $btn( 'ban_actions', 'Bloquer actions', '#f0ad4e' );
                             ?>
                             <button class="button button-small dr-adjust" data-uid="<?php echo $u->ID; ?>"
                                     data-nonce="<?php echo $nonce; ?>" data-ajax="<?php echo $ajax; ?>"
                                     data-email="<?php echo esc_attr( $u->user_email ); ?>"
-                                    style="background:#1565c0;color:#fff;border:none;margin:2px;">💰 Ajuster solde</button>
+                                    style="background:#1565c0;color:#fff;border:none;margin:2px;">Ajuster solde</button>
                         </td>
                     </tr>
                 <?php endforeach; endif; ?>
@@ -242,7 +242,7 @@ class Delicat_Clients {
         <div class="wrap">
             <h1>
                 <a href="<?php echo admin_url( 'admin.php?page=delicat-clients' ); ?>" class="page-title-action">← Retour</a>
-                👤 <?php echo esc_html( $u->display_name ); ?>
+                <?php echo esc_html( $u->display_name ); ?>
             </h1>
 
             <div style="display:flex;gap:20px;flex-wrap:wrap;margin:20px 0;">
@@ -273,9 +273,9 @@ class Delicat_Clients {
                         <td><?php echo strtoupper( $r->tab ); ?> / <?php echo esc_html( $r->methode ); ?></td>
                         <td><strong><?php echo number_format( $r->montant, 2 ); ?> HTG</strong></td>
                         <td><?php echo esc_html( $r->trans_code ?: '—' ); ?></td>
-                        <td><?php echo $r->preuve_url ? '<a href="' . esc_url( Delicat_Files::view_url( $r->preuve_url ) ) . '" target="_blank">📎</a>' : '—'; ?></td>
+                        <td><?php echo $r->preuve_url ? '<a href="' . esc_url( Delicat_Files::view_url( $r->preuve_url ) ) . '" target="_blank" rel="noopener noreferrer">Voir la preuve</a>' : '—'; ?></td>
                         <td><span style="background:<?php echo $sc[ $r->statut ] ?? '#999'; ?>;color:#fff;padding:3px 9px;border-radius:10px;font-size:11px;"><?php echo $sl[ $r->statut ] ?? $r->statut; ?></span></td>
-                        <td><?php echo $r->wallet_credited ? '✅' : '—'; ?></td>
+                        <td><?php echo $r->wallet_credited ? '' : '—'; ?></td>
                         <td style="white-space:nowrap;"><?php echo esc_html( $r->created_at ); ?></td>
                     </tr>
                 <?php endforeach; endif; ?>

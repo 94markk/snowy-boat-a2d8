@@ -78,7 +78,7 @@ class Delicat_Ajax_Handler {
         // someone else's name (by typing their email) and have it approved.
         if ( ! is_user_logged_in() ) {
             wp_send_json_error( [
-                'message'  => '🔒 Connectez-vous pour effectuer une recharge.',
+                'message'  => 'Connectez-vous pour effectuer une recharge.',
                 'need_login' => true,
                 'login_url'  => wp_login_url( wp_get_referer() ?: home_url( '/' ) ),
             ], 401 );
@@ -98,7 +98,7 @@ class Delicat_Ajax_Handler {
         // Server-side service switch: refuse any service the admin turned OFF,
         // even if the client bypassed the hidden UI. (manuel is admin-only.)
         if ( ! Delicat_Database::service_on( $tab ) ) {
-            wp_send_json_error( [ 'message' => '⛔ Ce moyen de paiement est temporairement indisponible. Merci de choisir une autre méthode.' ] );
+            wp_send_json_error( [ 'message' => 'Ce moyen de paiement est temporairement indisponible. Merci de choisir une autre méthode.' ] );
         }
         if ( $montant <= 0 ) {
             wp_send_json_error( [ 'message' => 'Le montant doit être supérieur à zéro.' ] );
@@ -106,7 +106,7 @@ class Delicat_Ajax_Handler {
         // Maximum amount cap (security: prevents typos / abuse)
         if ( $montant > Delicat_Database::MAX_MONTANT ) {
             wp_send_json_error( [ 'message' => sprintf(
-                '❌ Le montant maximum autorisé est de %s HTG.',
+                'Le montant maximum autorisé est de %s HTG.',
                 number_format( Delicat_Database::MAX_MONTANT, 0, '.', ',' )
             ) ] );
         }
@@ -132,7 +132,7 @@ class Delicat_Ajax_Handler {
             if ( class_exists( 'Delicat_Guard' ) ) {
                 Delicat_Guard::flag( get_current_user_id(), 'TransCode déjà utilisé soumis', 3 );
             }
-            wp_send_json_error( [ 'message' => '❌ Désolé votre code de transaction a déjà été utilisé.' ] );
+            wp_send_json_error( [ 'message' => 'Désolé votre code de transaction a déjà été utilisé.' ] );
         }
 
         // --- User info ---
@@ -144,12 +144,12 @@ class Delicat_Ajax_Handler {
         $user_email = $user->user_email;
 
         if ( ! $user_id || ! $user_email ) {
-            wp_send_json_error( [ 'message' => '🔒 Session invalide. Reconnectez-vous.' ], 401 );
+            wp_send_json_error( [ 'message' => 'Session invalide. Reconnectez-vous.' ], 401 );
         }
 
         // Block clients banned from transacting.
         if ( class_exists( 'Delicat_Clients' ) && ! Delicat_Clients::can_transact( $user_id ) ) {
-            wp_send_json_error( [ 'message' => '⛔ Votre compte ne peut pas effectuer de recharge actuellement. Contactez le support.' ] );
+            wp_send_json_error( [ 'message' => 'Votre compte ne peut pas effectuer de recharge actuellement. Contactez le support.' ] );
         }
 
         // Anti-abuse: generous cap so a client topping up before a purchase is
@@ -158,7 +158,7 @@ class Delicat_Ajax_Handler {
         $rl_key = 'delicat_sub_' . $user_id;
         $hits   = (int) get_transient( $rl_key );
         if ( $hits >= 20 ) {
-            wp_send_json_error( [ 'message' => '⏳ Trop de demandes. Patientez quelques minutes.' ], 429 );
+            wp_send_json_error( [ 'message' => 'Trop de demandes. Patientez quelques minutes.' ], 429 );
         }
         set_transient( $rl_key, $hits + 1, 5 * MINUTE_IN_SECONDS );
 
@@ -223,16 +223,16 @@ class Delicat_Ajax_Handler {
         // exact amount) was already received, auto-credit right now.
         if ( $this->try_instant_verify( (int) $id, 'moncash', $trans_code, $montant ) ) {
             wp_send_json_success( array_merge( [
-                'message'       => sprintf( '✅ Paiement MonCash vérifié ! <strong>%s HTG</strong> ajoutés à votre wallet.', number_format( $montant, 2 ) ),
+                'message'       => sprintf( 'Paiement MonCash vérifié ! <strong>%s HTG</strong> ajoutés à votre wallet.', number_format( $montant, 2 ) ),
                 'auto_approved' => true,
             ], $this->wallet_balance_payload( $user_id ) ) );
         }
 
         $record = Delicat_Database::get( $id );
-        $this->defer_submission( $record, '🟢 MONCASH — vérification auto par SMS' );
+        $this->defer_submission( $record, 'MONCASH — vérification auto par SMS' );
 
         wp_send_json_success( [
-            'message'       => '⏳ Demande MonCash enregistrée ! Envoyez le paiement avec le TransCode <strong>' . esc_html( $trans_code ) . '</strong>. Votre wallet sera crédité automatiquement dès réception du SMS MonCash.',
+            'message'       => 'Demande MonCash enregistrée ! Envoyez le paiement avec le TransCode <strong>' . esc_html( $trans_code ) . '</strong>. Votre wallet sera crédité automatiquement dès réception du SMS MonCash.',
             'auto_approved' => false,
         ] );
     }
@@ -259,16 +259,16 @@ class Delicat_Ajax_Handler {
         // Instant strict verify against an already-received Natcash SMS.
         if ( $this->try_instant_verify( (int) $id, 'natcash', $trans_code, $montant ) ) {
             wp_send_json_success( array_merge( [
-                'message'       => sprintf( '✅ Paiement Natcash vérifié ! <strong>%s HTG</strong> ajoutés à votre wallet.', number_format( $montant, 2 ) ),
+                'message'       => sprintf( 'Paiement Natcash vérifié ! <strong>%s HTG</strong> ajoutés à votre wallet.', number_format( $montant, 2 ) ),
                 'auto_approved' => true,
             ], $this->wallet_balance_payload( $user_id ) ) );
         }
 
         $record = Delicat_Database::get( $id );
-        $this->defer_submission( $record, '🔵 NATCASH (Transcode) — vérification auto par SMS' );
+        $this->defer_submission( $record, 'NATCASH (Transcode) — vérification auto par SMS' );
 
         wp_send_json_success( [
-            'message'       => '⏳ Demande enregistrée. Dès réception du SMS Natcash correspondant (TransCode + montant exact), votre wallet sera crédité automatiquement.',
+            'message'       => 'Demande enregistrée. Dès réception du SMS Natcash correspondant (TransCode + montant exact), votre wallet sera crédité automatiquement.',
             'auto_approved' => false,
         ] );
     }
@@ -301,12 +301,12 @@ class Delicat_Ajax_Handler {
             // Store PIN + sender on the row for the SMS matcher.
             Delicat_Database::update( (int) $id, [ 'nc_pin' => $pin, 'nc_sender' => $nc_sender ] );
             $record = Delicat_Database::get( $id );
-            $this->defer_submission( $record, '🔔 NATCASH — en attente de confirmation SMS' );
+            $this->defer_submission( $record, 'NATCASH — en attente de confirmation SMS' );
         }
 
         wp_send_json_success( [
             'message' => sprintf(
-                '⏳ Demande enregistrée. <strong>Important :</strong> lors de votre transfert Natcash, mettez le code <strong style="font-size:1.4em;color:#0d1b4d;letter-spacing:2px;">%s</strong> dans le champ « contenu ». Ce code expire dans <strong>8 minutes</strong> et ne peut être utilisé qu\'une seule fois. Votre recharge sera validée automatiquement dès réception du paiement.',
+                'Demande enregistrée. <strong>Important :</strong> lors de votre transfert Natcash, mettez le code <strong style="font-size:1.4em;color:#0d1b4d;letter-spacing:2px;">%s</strong> dans le champ « contenu ». Ce code expire dans <strong>8 minutes</strong> et ne peut être utilisé qu\'une seule fois. Votre recharge sera validée automatiquement dès réception du paiement.',
                 esc_html( $pin )
             ),
             'auto_approved' => false,
@@ -329,11 +329,11 @@ class Delicat_Ajax_Handler {
                 $this->credit_wallet( $user_id, $montant, $id );
                 $record = Delicat_Database::get( $id );
                 Delicat_Email::send_user_auto_approved( $record, true );
-                Delicat_Email::send_admin_notification( $record, '✅ AUTO-APPROUVÉ (Natcash)' );
+                Delicat_Email::send_admin_notification( $record, 'AUTO-APPROUVÉ (Natcash)' );
                 $this->fire_webhook( $record );
             }
             wp_send_json_success( array_merge( [
-                'message'       => sprintf( '✅ Paiement Natcash vérifié ! <strong>%.2f HTG</strong> ajoutés à votre wallet.', $montant ),
+                'message'       => sprintf( 'Paiement Natcash vérifié ! <strong>%.2f HTG</strong> ajoutés à votre wallet.', $montant ),
                 'auto_approved' => true,
             ], $this->wallet_balance_payload( $user_id ) ) );
         } else {
@@ -344,11 +344,11 @@ class Delicat_Ajax_Handler {
 
             if ( ! is_wp_error( $id ) ) {
                 $record = Delicat_Database::get( $id );
-                $this->defer_submission( $record, '🔔 NATCASH — révision manuelle requise' );
+                $this->defer_submission( $record, 'NATCASH — révision manuelle requise' );
             }
 
             wp_send_json_success( [
-                'message'       => '⏳ Demande Natcash enregistrée. Notre équipe vérifiera votre TransCode et rechargera votre wallet dans les plus brefs délais.',
+                'message'       => 'Demande Natcash enregistrée. Notre équipe vérifiera votre TransCode et rechargera votre wallet dans les plus brefs délais.',
                 'auto_approved' => false,
             ] );
         }
@@ -371,10 +371,10 @@ class Delicat_Ajax_Handler {
         }
 
         $record = Delicat_Database::get( $id );
-        $this->defer_submission( $record, '📋 MANUEL — preuve jointe, à vérifier' );
+        $this->defer_submission( $record, 'MANUEL — preuve jointe, à vérifier' );
 
         wp_send_json_success( [
-            'message'       => '✅ Demande envoyée ! Notre équipe examinera votre preuve de paiement et rechargera votre compte sous peu.',
+            'message'       => 'Demande envoyée ! Notre équipe examinera votre preuve de paiement et rechargera votre compte sous peu.',
             'auto_approved' => false,
         ] );
     }
@@ -412,7 +412,7 @@ class Delicat_Ajax_Handler {
             // warns in the UI, so the block has to happen here.
             $rec_code = (string) ( $record->trans_code ?? '' );
             if ( $rec_code !== '' && ! Delicat_Database::claim_code( $rec_code, $id, (float) $record->montant, 'admin_approve' ) ) {
-                wp_send_json_error( [ 'message' => '⛔ Ce TransCode a déjà été crédité (double approbation évitée).' ] );
+                wp_send_json_error( [ 'message' => 'Ce TransCode a déjà été crédité (double approbation évitée).' ] );
             }
 
             // ATOMIC CLAIM: only proceed if this row is still uncredited. Prevents
@@ -464,7 +464,7 @@ class Delicat_Ajax_Handler {
 
             // 4) Respond instantly.
             wp_send_json_success( [
-                'message'  => sprintf( '✅ %.2f HTG crédités instantanément au wallet de %s.', $record->montant, $record->user_email ),
+                'message'  => sprintf( '%.2f HTG crédités instantanément au wallet de %s.', $record->montant, $record->user_email ),
                 'credited' => true,
             ] );
 
@@ -473,7 +473,7 @@ class Delicat_Ajax_Handler {
             $record = Delicat_Database::get( $id );
             $this->defer_notifications( $record );
 
-            wp_send_json_success( [ 'message' => '❌ Demande rejetée. Le client a été notifié.' ] );
+            wp_send_json_success( [ 'message' => 'Demande rejetée. Le client a été notifié.' ] );
 
         } else {
             wp_send_json_error( [ 'message' => 'Action invalide.' ] );
@@ -524,7 +524,7 @@ class Delicat_Ajax_Handler {
 
         // Already recorded? Don't create a duplicate — it's already blocked.
         if ( Delicat_Database::trans_code_exists( $trans_code ) ) {
-            wp_send_json_error( [ 'message' => '⛔ Ce code est déjà enregistré (il est donc déjà bloqué pour le site).' ] );
+            wp_send_json_error( [ 'message' => 'Ce code est déjà enregistré (il est donc déjà bloqué pour le site).' ] );
         }
 
         // Resolve the client (required for credit mode, optional for block).
@@ -545,7 +545,7 @@ class Delicat_Ajax_Handler {
                 ? Delicat_Natcash_Auto::verify_received( $tab, $trans_code, $montant )
                 : [ 'ok' => false, 'reason' => 'Vérification indisponible.' ];
             if ( empty( $chk['ok'] ) ) {
-                wp_send_json_error( [ 'message' => '⚠️ ' . ( $chk['reason'] ?? 'Vérification échouée.' ) . ' Rien n’a été crédité.' ] );
+                wp_send_json_error( [ 'message' => '' . ( $chk['reason'] ?? 'Vérification échouée.' ) . ' Rien n’a été crédité.' ] );
             }
             $mode = 'credit';
         }
@@ -561,19 +561,19 @@ class Delicat_Ajax_Handler {
             $credited = $this->credit_wallet( $user_id, $montant, $id );
             if ( ! $credited ) {
                 Delicat_Database::update( $id, [
-                    'note_admin' => '⚠️ [BLOCAGE-MANUEL] Crédit wallet échoué (TeraWallet inactif ?). Code bloqué. — ' . current_time( 'mysql' ),
+                    'note_admin' => '[BLOCAGE-MANUEL] Crédit wallet échoué (TeraWallet inactif ?). Code bloqué. — ' . current_time( 'mysql' ),
                 ] );
                 wp_send_json_error( [ 'message' => 'Transaction enregistrée (code bloqué) mais le crédit wallet a échoué. Vérifiez TeraWallet.' ] );
             }
             Delicat_Database::update( $id, [
-                'note_admin' => '💳 Saisie manuelle console' . ( $mode_raw === 'verify' ? ' (vérifié SMS)' : '' ) . ' — wallet crédité — ' . current_time( 'mysql' ),
+                'note_admin' => 'Saisie manuelle console' . ( $mode_raw === 'verify' ? ' (vérifié SMS)' : '' ) . ' — wallet crédité — ' . current_time( 'mysql' ),
             ] );
             $record = Delicat_Database::get( $id );
             do_action( 'delicat_recharge_approved', (int) $id );
             $this->defer_notifications( $record );
             wp_send_json_success( [
                 'message' => sprintf(
-                    '✅ %s HTG crédités à %s. Le code « %s » est maintenant bloqué sur le site.',
+                    '%s HTG crédités à %s. Le code « %s » est maintenant bloqué sur le site.',
                     number_format( $montant, 2 ), $email, $trans_code
                 ),
             ] );
@@ -588,11 +588,11 @@ class Delicat_Ajax_Handler {
         // [BLOCAGE-MANUEL] tag suppresses the Refund button (nothing to refund).
         Delicat_Database::update( $id, [
             'wallet_credited' => 1,
-            'note_admin'      => '🔒 [BLOCAGE-MANUEL] Déjà validé hors-ligne — wallet non crédité par le plugin — ' . current_time( 'mysql' ),
+            'note_admin'      => '[BLOCAGE-MANUEL] Déjà validé hors-ligne — wallet non crédité par le plugin — ' . current_time( 'mysql' ),
         ] );
         wp_send_json_success( [
             'message' => sprintf(
-                '🔒 Transaction enregistrée. Le code « %s » est bloqué : si le client le soumet sur le site, ce sera refusé.',
+                'Transaction enregistrée. Le code « %s » est bloqué : si le client le soumet sur le site, ce sera refusé.',
                 $trans_code
             ),
         ] );
@@ -622,7 +622,7 @@ class Delicat_Ajax_Handler {
             'service' => $tab,
             'on'      => (bool) $state[ $tab ],
             'state'   => $state,
-            'message' => sprintf( '%s %s', self::service_label( $tab ), $on ? 'activé ✅' : 'désactivé ⛔' ),
+            'message' => sprintf( '%s %s', self::service_label( $tab ), $on ? 'activé' : 'désactivé' ),
         ] );
     }
 

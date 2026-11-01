@@ -490,25 +490,25 @@ final class Delicat_Builder_V9_Swatches {
     private function delivery_presets() {
         return array(
             ''          => 'Aucun badge',
-            'instant'   => '⚡ Livraison instantanée',
-            'five_min'  => '🕒 Dans environ 5 min',
-            'manual'    => '👤 Validation manuelle',
-            'custom'    => '✏️ Personnalisé',
+            'instant'   => 'Livraison instantanée',
+            'five_min'  => 'Dans environ 5 min',
+            'manual'    => 'Validation manuelle',
+            'custom'    => 'Personnalisé',
         );
     }
 
     private function marketing_presets() {
         return array(
             ''            => 'Aucun badge',
-            'popular'     => '🔥 Populaire',
-            'best_choice' => '⭐ Meilleur choix',
-            'best_value'  => '💎 Meilleure valeur',
-            'promo'       => '🏷️ Promo',
-            'new'         => '✨ Nouveau',
-            'secure'      => '🛡️ Sécurisé',
-            'bonus'       => '🎁 Bonus',
-            'fastest'     => '⚡ Le + rapide',
-            'custom'      => '✏️ Personnalisé',
+            'popular'     => 'Populaire',
+            'best_choice' => 'Meilleur choix',
+            'best_value'  => 'Meilleure valeur',
+            'promo'       => 'Promo',
+            'new'         => 'Nouveau',
+            'secure'      => 'Sécurisé',
+            'bonus'       => 'Bonus',
+            'fastest'     => 'Le + rapide',
+            'custom'      => 'Personnalisé',
         );
     }
 
@@ -567,11 +567,11 @@ final class Delicat_Builder_V9_Swatches {
 
         echo '<div class="form-row form-row-full ddsw-delivery-admin" style="clear:both;padding:12px 14px;margin:10px 0;background:#f7f8ff;border:1px solid #dbe4f0;border-radius:12px;box-sizing:border-box">';
         echo '<input type="hidden" name="_ddsw_badges_present[' . esc_attr( $variation_id ) . ']" value="1">';
-        echo '<strong style="display:block;margin-bottom:9px;font-size:13px">🏷️ Badges de cette variation</strong>';
+        echo '<strong style="display:block;margin-bottom:9px;font-size:13px">Badges de cette variation</strong>';
         echo '<p style="margin:0 0 10px;color:#64748b">Ces badges appartiennent uniquement à cette variation et restent synchronisés avec WooCommerce.</p>';
 
         echo '<div style="padding:10px 0;border-top:1px dashed #dbe2ea">';
-        echo '<strong style="display:block;margin-bottom:7px">🚚 Livraison</strong>';
+        echo '<strong style="display:block;margin-bottom:7px">Livraison</strong>';
         echo '<p class="form-field form-row form-row-full"><label for="_ddsw_delivery_preset_' . esc_attr( $variation_id ) . '">Type de badge</label><select id="_ddsw_delivery_preset_' . esc_attr( $variation_id ) . '" name="_ddsw_delivery_preset[' . esc_attr( $variation_id ) . ']" class="ddsw-delivery-preset" style="width:100%">';
         foreach ( $this->delivery_presets() as $key => $label ) {
             echo '<option value="' . esc_attr( $key ) . '" ' . selected( $delivery_preset, $key, false ) . '>' . esc_html( $label ) . '</option>';
@@ -582,7 +582,7 @@ final class Delicat_Builder_V9_Swatches {
             'name' => '_ddsw_delivery_text[' . $variation_id . ']',
             'value' => $text,
             'label' => 'Texte personnalisé',
-            'placeholder' => '⚡ Livraison instantanée',
+            'placeholder' => 'Livraison instantanée',
             'desc_tip' => true,
             'description' => 'Utilisé quand le type Personnalisé est choisi. Les presets remplissent automatiquement le texte.',
             'wrapper_class' => 'form-row form-row-full ddsw-delivery-custom-row',
@@ -592,7 +592,7 @@ final class Delicat_Builder_V9_Swatches {
         echo '</div>';
 
         echo '<div style="clear:both;padding:10px 0;border-top:1px dashed #dbe2ea">';
-        echo '<p class="form-field form-row form-row-full"><label for="_ddsw_recommended_' . esc_attr( $variation_id ) . '">⭐ Plan recommandé</label><label style="display:inline-flex;align-items:center;gap:7px;width:auto;margin:0"><input type="checkbox" id="_ddsw_recommended_' . esc_attr( $variation_id ) . '" name="_ddsw_recommended[' . esc_attr( $variation_id ) . ']" value="yes" ' . checked( $recommended, 'yes', false ) . '> Marquer cette variation comme recommandée</label><span class="description" style="display:block;margin-top:4px">Affiche le badge Recommandé sur cette variation.</span></p>';
+        echo '<p class="form-field form-row form-row-full"><label for="_ddsw_recommended_' . esc_attr( $variation_id ) . '">Plan recommandé</label><label style="display:inline-flex;align-items:center;gap:7px;width:auto;margin:0"><input type="checkbox" id="_ddsw_recommended_' . esc_attr( $variation_id ) . '" name="_ddsw_recommended[' . esc_attr( $variation_id ) . ']" value="yes" ' . checked( $recommended, 'yes', false ) . '> Marquer cette variation comme recommandée</label><span class="description" style="display:block;margin-top:4px">Affiche le badge Recommandé sur cette variation.</span></p>';
         woocommerce_wp_text_input( array(
             'id' => '_ddsw_recommended_label_' . $variation_id,
             'name' => '_ddsw_recommended_label[' . $variation_id . ']',
@@ -604,7 +604,7 @@ final class Delicat_Builder_V9_Swatches {
         echo '</div>';
 
         echo '<div style="clear:both;padding:10px 0 0;border-top:1px dashed #dbe2ea">';
-        echo '<strong style="display:block;margin-bottom:7px">🔥 Badge marketing</strong>';
+        echo '<strong style="display:block;margin-bottom:7px">Badge marketing</strong>';
         echo '<p class="form-field form-row form-row-full"><label for="_ddsw_badge2_preset_' . esc_attr( $variation_id ) . '">Type de badge</label><select id="_ddsw_badge2_preset_' . esc_attr( $variation_id ) . '" name="_ddsw_badge2_preset[' . esc_attr( $variation_id ) . ']" class="ddsw-marketing-preset" style="width:100%">';
         foreach ( $this->marketing_presets() as $key => $label ) {
             echo '<option value="' . esc_attr( $key ) . '" ' . selected( $badge2_preset, $key, false ) . '>' . esc_html( $label ) . '</option>';
@@ -615,7 +615,7 @@ final class Delicat_Builder_V9_Swatches {
             'name' => '_ddsw_badge2_text[' . $variation_id . ']',
             'value' => $badge2,
             'label' => 'Texte personnalisé',
-            'placeholder' => '🔥 Populaire',
+            'placeholder' => 'Populaire',
             'desc_tip' => true,
             'description' => 'Utilisé pour Personnalisé. Presets disponibles : Populaire, Meilleur choix, Meilleure valeur, Promo, Nouveau, Sécurisé, Bonus, Le + rapide.',
             'wrapper_class' => 'form-row form-row-full ddsw-marketing-custom-row',
@@ -628,7 +628,7 @@ final class Delicat_Builder_V9_Swatches {
         echo '<strong style="display:block;margin-bottom:7px">✓ Caractéristiques du plan</strong>';
         echo '<p class="form-field form-row form-row-full"><label for="_ddsw_features_' . esc_attr( $variation_id ) . '">Une caractéristique par ligne</label><textarea rows="4" id="_ddsw_features_' . esc_attr( $variation_id ) . '" name="_ddsw_features[' . esc_attr( $variation_id ) . ']" style="width:100%" placeholder="Qualité HD&#10;1 Profil&#10;PIN unique&#10;Livraison instantanée">' . esc_textarea( $features ) . '</textarea><span class="description">Affichées dans les cartes du preset Delicat ABONNEMENT premium. Maximum 8 lignes.</span></p>';
         echo '</div>';
-        echo '<p style="clear:both;margin:8px 0 0;color:#64748b"><strong>Exemple :</strong> ⭐ Recommandé + 🔥 Populaire + ⚡ Livraison instantanée peuvent être affichés ensemble.</p>';
+        echo '<p style="clear:both;margin:8px 0 0;color:#64748b"><strong>Exemple :</strong> Recommandé + Populaire + Livraison instantanée peuvent être affichés ensemble.</p>';
         echo '</div>';
     }
 
@@ -738,7 +738,7 @@ final class Delicat_Builder_V9_Swatches {
                     <nav class="ddsw-studio-nav" aria-label="Sections Swatch Studio">
                         <?php
                         $tabs = array(
-                            'general'      => array( '⚙', 'Général' ),
+                            'general'      => array( '', 'Général' ),
                             'layout'       => array( '▦', 'Disposition' ),
                             'subscription' => array( '▣', 'Cartes abonnement' ),
                             'colors'       => array( '◐', 'Couleurs' ),
@@ -747,7 +747,7 @@ final class Delicat_Builder_V9_Swatches {
                             'motion'       => array( '✧', 'Animations' ),
                             'buttons'      => array( '▭', 'Boutons' ),
                             'mobile'       => array( '▯', 'Mobile' ),
-                            'advanced'     => array( '⌘', 'Avancé' ),
+                            'advanced'     => array( '', 'Avancé' ),
                             'preview'      => array( '◉', 'Aperçu en direct' ),
                         );
                         foreach ( $tabs as $key => $tab ) {
@@ -979,7 +979,7 @@ final class Delicat_Builder_V9_Swatches {
                             <?php $this->studio_heading( 'Aperçu en direct', 'Modifiez les paramètres dans les autres onglets : cet aperçu se met à jour sans recharger.' ); ?>
                             <div class="ddsw-preview-stage" data-ddsw-preview>
                                 <div class="ddsw-preview-heading">
-                                    <span>✨</span>
+                                    <span></span>
                                     <div><h2><?php echo esc_html( $s['subscription_heading'] ); ?></h2><p><?php echo esc_html( $s['subscription_subtitle'] ); ?></p></div>
                                 </div>
                                 <div class="ddsw-preview-cards">
@@ -989,7 +989,7 @@ final class Delicat_Builder_V9_Swatches {
                                         <span class="cta">Choisir ce plan</span>
                                     </article>
                                     <article class="ddsw-preview-plan selected">
-                                        <b class="badge gold">♛ Meilleur choix</b><h3>3 mois</h3><strong>G1,600</strong>
+                                        <b class="badge gold">Meilleur choix</b><h3>3 mois</h3><strong>G1,600</strong>
                                         <ul><li>Qualité HD</li><li>1 Profil</li><li>PIN unique</li><li>Livraison instantanée</li></ul>
                                         <span class="cta">Plan sélectionné</span>
                                     </article>
@@ -999,7 +999,7 @@ final class Delicat_Builder_V9_Swatches {
                                         <span class="cta">Choisir ce plan</span>
                                     </article>
                                 </div>
-                                <div class="ddsw-preview-trust"><span>🛡 Paiement 100% sécurisé</span><span>⚡ Livraison rapide</span><span>◉ Support humain</span></div>
+                                <div class="ddsw-preview-trust"><span>Paiement 100% sécurisé</span><span>Livraison rapide</span><span>◉ Support humain</span></div>
                             </div>
                         </section>
                     </main>
@@ -1270,7 +1270,7 @@ final class Delicat_Builder_V9_Swatches {
         }
         echo '</div>';
         if ( $is_subscription_preset && 'yes' === $this->get( 'subscription_show_trust' ) ) {
-            echo '<div class="ddsw-subscription-trust"><span><i aria-hidden="true">🛡</i>' . esc_html( $this->get( 'subscription_trust_1' ) ) . '</span><span><i aria-hidden="true">⚡</i>' . esc_html( $this->get( 'subscription_trust_2' ) ) . '</span><span><i aria-hidden="true">◉</i>' . esc_html( $this->get( 'subscription_trust_3' ) ) . '</span></div>';
+            echo '<div class="ddsw-subscription-trust"><span><i aria-hidden="true">' . delicat_ds_icon( 'verified-user', 16 ) . '</i>' . esc_html( $this->get( 'subscription_trust_1' ) ) . '</span><span><i aria-hidden="true">' . delicat_ds_icon( 'bolt', 16 ) . '</i>' . esc_html( $this->get( 'subscription_trust_2' ) ) . '</span><span><i aria-hidden="true">◉</i>' . esc_html( $this->get( 'subscription_trust_3' ) ) . '</span></div>';
         }
         if ( $has_out_of_stock && 'yes' === $this->get( 'out_stock_popup' ) ) {
             $phone = preg_replace( '/\D+/', '', (string) $this->get( 'out_stock_phone' ) );
@@ -1280,7 +1280,7 @@ final class Delicat_Builder_V9_Swatches {
             echo '<span class="ddsw-oos-icon" aria-hidden="true">!</span>';
             echo '<h3 id="ddsw-oos-title">' . esc_html( $this->get( 'out_stock_title' ) ) . '</h3>';
             echo '<p>' . esc_html( $this->get( 'out_stock_message' ) ) . '</p>';
-            echo '<a class="ddsw-oos-whatsapp" href="#" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">✆</span> ' . esc_html( $this->get( 'out_stock_button' ) ) . '</a>';
+            echo '<a class="ddsw-oos-whatsapp" href="#" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">' . delicat_ds_icon( 'chat', 18 ) . '</span> ' . esc_html( $this->get( 'out_stock_button' ) ) . '</a>';
             echo '</div></div>';
         }
     }

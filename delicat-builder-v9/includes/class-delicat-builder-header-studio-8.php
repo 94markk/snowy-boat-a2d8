@@ -395,7 +395,7 @@ return ob_get_clean();
   function initHeaderStudio(){
     var $preview=$('#dsb8hs-preview'), $sort=$('#dsb8hs-sort');
     if(!$preview.length || !$sort.length) return;
-    var labels={menu:'☰',logo:'DELICAT TOP UP',spacer:'',bell:'🔔',theme:'◐',account:'●',cart:'🛒'};
+    var labels={menu:'',logo:'DELICAT TOP UP',spacer:'',bell:'',theme:'◐',account:'●',cart:''};
     function numberValue(key,fallback){var n=parseInt($('[data-preview="'+key+'"]').val(),10);return isNaN(n)?fallback:n;}
     function draw(){
       var order=[]; $preview.empty();

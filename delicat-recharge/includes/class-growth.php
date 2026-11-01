@@ -299,7 +299,7 @@ class Delicat_Growth {
         $tier_lines = [];
         foreach ( $tiers as $thr => $pct ) { $tier_lines[] = $thr . '|' . $pct; }
         ?>
-        <h2>🎁 Croissance (Promo / Parrainage / Fidélité)</h2>
+        <h2>Croissance (Promo / Parrainage / Fidélité)</h2>
         <table class="form-table">
             <tr><th>Activer les bonus</th>
                 <td>

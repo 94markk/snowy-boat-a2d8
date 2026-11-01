@@ -78,10 +78,10 @@ class Delicat_Email {
         if ( ! $r->user_email ) return;
 
         $wallet_msg = $wallet_ok
-            ? '<p style="color:#2e7d32;font-weight:bold;">✅ ' . number_format( $r->montant, 2 ) . ' HTG ont été ajoutés à votre wallet Delicat Store.</p>'
-            : '<p style="color:#e65100;">⚠️ Le crédit wallet a échoué automatiquement. Notre équipe le fera manuellement sous peu.</p>';
+            ? '<p style="color:#2e7d32;font-weight:bold;">' . number_format( $r->montant, 2 ) . ' HTG ont été ajoutés à votre wallet Delicat Store.</p>'
+            : '<p style="color:#e65100;">Le crédit wallet a échoué automatiquement. Notre équipe le fera manuellement sous peu.</p>';
 
-        $subject = sprintf( '[%s] ✅ Wallet rechargé — %.2f HTG', self::site_name(), $r->montant );
+        $subject = sprintf( '[%s] Wallet rechargé — %.2f HTG', self::site_name(), $r->montant );
         $body = self::wrap( "
             <h2>Recharge confirmée !</h2>
             <p>Bonjour,</p>
@@ -109,7 +109,7 @@ class Delicat_Email {
         if ( ! $r->user_email ) return;
 
         if ( $r->statut === 'approuve' ) {
-            $subject = sprintf( '[%s] ✅ Wallet rechargé — %.2f HTG', self::site_name(), $r->montant );
+            $subject = sprintf( '[%s] Wallet rechargé — %.2f HTG', self::site_name(), $r->montant );
             $content = "<p>Bonne nouvelle ! Votre demande <strong>#" . $r->id . "</strong> a été <span style='color:#2e7d32;font-weight:bold;'>approuvée</span>.</p>
                         <p><strong>" . number_format( $r->montant, 2 ) . " HTG</strong> ont été ajoutés à votre wallet.</p>
                         <p><a href='" . home_url( '/my-wallet/' ) . "'
@@ -117,7 +117,7 @@ class Delicat_Email {
                             Voir mon wallet →
                         </a></p>";
         } elseif ( $r->statut === 'rejete' ) {
-            $subject = sprintf( '[%s] ❌ Demande #%d rejetée', self::site_name(), $r->id );
+            $subject = sprintf( '[%s] Demande #%d rejetée', self::site_name(), $r->id );
             $content = "<p>Malheureusement, votre demande <strong>#" . $r->id . "</strong> de <strong>" . number_format( $r->montant, 2 ) . " HTG</strong>
                         a été <span style='color:#c62828;font-weight:bold;'>rejetée</span>.</p>
                         <p>Si vous pensez qu'il s'agit d'une erreur, contactez notre support sur WhatsApp.</p>";
@@ -144,9 +144,9 @@ class Delicat_Email {
 
     private static function badge( string $statut ): string {
         $map = [
-            'en_attente' => [ '#f0ad4e', '⏳ En attente' ],
-            'approuve'   => [ '#5cb85c', '✅ Approuvé' ],
-            'rejete'     => [ '#d9534f', '❌ Rejeté' ],
+            'en_attente' => [ '#f0ad4e', 'En attente' ],
+            'approuve'   => [ '#5cb85c', 'Approuvé' ],
+            'rejete'     => [ '#d9534f', 'Rejeté' ],
         ];
         [ $color, $label ] = $map[ $statut ] ?? [ '#999', $statut ];
         return "<span style='background:{$color};color:#fff;padding:3px 10px;border-radius:10px;font-size:12px;'>{$label}</span>";

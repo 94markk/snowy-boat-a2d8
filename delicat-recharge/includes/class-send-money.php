@@ -287,7 +287,7 @@ class Delicat_Send_Money {
 		);
 		add_action( 'shutdown', function () use ( $body ) {
 			delicat_recharge_finish_request();
-			wp_mail( get_option( 'admin_email' ), '🚨 Delicat — transfert bloqué', $body );
+			wp_mail( get_option( 'admin_email' ), 'Delicat — transfert bloqué', $body );
 		}, 20 );
 	}
 
@@ -305,7 +305,7 @@ class Delicat_Send_Money {
 		);
 		add_action( 'shutdown', function () use ( $user, $body ) {
 			delicat_recharge_finish_request();
-			wp_mail( $user->user_email, '💰 Vous avez reçu de l’argent — Delicat Store', $body );
+			wp_mail( $user->user_email, 'Vous avez reçu de l’argent — Delicat Store', $body );
 		}, 21 );
 	}
 
@@ -393,7 +393,7 @@ class Delicat_Send_Money {
 					$res = self::execute( $ref, $uid, (int) $recipient->ID, $amount, self::fee_for( $amount ) );
 
 					$notice = ( $res === true )
-						? self::msg( 'ok', sprintf( '✅ %s HTG envoyés à %s.',
+						? self::msg( 'ok', sprintf( '%s HTG envoyés à %s.',
 							number_format( $amount, 2 ), esc_html( self::user_code( (int) $recipient->ID ) ) ) )
 						: self::msg( 'err', (string) $res );
 				}
@@ -443,20 +443,20 @@ class Delicat_Send_Money {
 				<div class="dsm-dialog dsm-dialog-menu" role="document">
 					<div class="dsm-drag-handle" aria-hidden="true"></div>
 					<div class="dsm-head">
-						<span class="dsm-title" id="dsm-menu-title">💸 Envoyer de l’argent</span>
+						<span class="dsm-title" id="dsm-menu-title">Envoyer de l’argent</span>
 						<button type="button" class="dsm-x" data-dsm-close aria-label="Fermer">&times;</button>
 					</div>
 					<div class="dsm-menu">
 						<button type="button" data-dsm-goto="send">
-							<span class="dsm-mi">👤</span>
+							<span class="dsm-mi"><?php echo delicat_recharge_icon( 'person' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 							<span class="dsm-mt"><strong>À un autre client</strong><small>Envoi par code personnel</small></span>
 						</button>
 						<button type="button" data-dsm-goto="qr">
-							<span class="dsm-mi">🔳</span>
+							<span class="dsm-mi"><?php echo delicat_recharge_icon( 'qr-code-2' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 							<span class="dsm-mt"><strong>Recevoir par QR code</strong><small>Partagez votre code</small></span>
 						</button>
 						<button type="button" data-dsm-goto="history">
-							<span class="dsm-mi">🕘</span>
+							<span class="dsm-mi"><?php echo delicat_recharge_icon( 'history' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 							<span class="dsm-mt"><strong>Historique des envois</strong><small>Vos transferts récents</small></span>
 						</button>
 					</div>
@@ -476,7 +476,7 @@ class Delicat_Send_Money {
 					</div>
 
 					<div class="dsm-balance">
-						<span class="dsm-balance-icon" aria-hidden="true">◈</span>
+						<span class="dsm-balance-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'account-balance-wallet' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span>
 						<span class="dsm-balance-copy"><small>Solde disponible</small><strong><?php echo esc_html( number_format( $balance, 2 ) ); ?> HTG</strong></span>
 						<span class="dsm-secure-pill">Sécurisé</span>
 					</div>
@@ -508,7 +508,7 @@ class Delicat_Send_Money {
 
 							<div class="dsm-field">
 								<label class="dsm-label" for="dsm-recipient">Code du destinataire</label>
-								<div class="dsm-input-shell"><span class="dsm-input-icon" aria-hidden="true">◎</span><input class="dsm-input" id="dsm-recipient" name="dsm_recipient" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="Ex : DSGZKE7X" maxlength="12" value="<?php echo esc_attr( $incoming_code ); ?>" required></div>
+								<div class="dsm-input-shell"><span class="dsm-input-icon" aria-hidden="true"><?php echo delicat_recharge_icon( 'person' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span><input class="dsm-input" id="dsm-recipient" name="dsm_recipient" type="text" inputmode="latin" autocomplete="off" spellcheck="false" placeholder="Ex : DSGZKE7X" maxlength="12" value="<?php echo esc_attr( $incoming_code ); ?>" required></div>
 								<p class="dsm-hint">Demandez son code personnel au destinataire.</p>
 							</div>
 
@@ -525,7 +525,7 @@ class Delicat_Send_Money {
 							</div>
 
 							<div class="dsm-actions">
-								<button type="submit" class="dsm-btn dsm-btn-primary"><span>Continuer</span><span aria-hidden="true">→</span></button>
+								<button type="submit" class="dsm-btn dsm-btn-primary"><span>Continuer</span><span aria-hidden="true"><?php echo delicat_recharge_icon( 'arrow-forward' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></span></button>
 								<button type="button" class="dsm-btn dsm-btn-ghost" data-dsm-close>Annuler</button>
 							</div>
 						</form>
@@ -540,7 +540,7 @@ class Delicat_Send_Money {
 				<div class="dsm-dialog dsm-dialog-qr" role="document">
 					<div class="dsm-drag-handle" aria-hidden="true"></div>
 					<div class="dsm-head">
-						<span class="dsm-title" id="dsm-qr-title">🔳 Recevoir de l’argent</span>
+						<span class="dsm-title" id="dsm-qr-title">Recevoir de l’argent</span>
 						<button type="button" class="dsm-x" data-dsm-close aria-label="Fermer">&times;</button>
 					</div>
 					<p class="dsm-hint dsm-center">Faites scanner ce code pour recevoir de l’argent.</p>
@@ -900,7 +900,7 @@ DSM_CSS;
         e.preventDefault();
         var val = copy.getAttribute('data-dsm-copy') || '';
         var done = function(){
-          var old = copy.textContent; copy.textContent = '✅ Copié';
+          var old = copy.textContent; copy.textContent = 'Copié';
           setTimeout(function(){ copy.textContent = old; }, 1600);
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
