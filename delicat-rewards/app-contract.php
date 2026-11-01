@@ -44,7 +44,13 @@ function delicat_rewards_app_flags() {
 
 /** « Mes bonus » of one customer (contract C1). A claim token only ever goes to its own customer. */
 function delicat_rewards_app_rewards( $user_id ) {
-	return delicat_rewards_app_state( (int) $user_id );
+	$user_id = (int) $user_id;
+	/* 3.3.0: spend, totals and progress are private. Only the signed-in customer reads them; a
+	   server-side integration that needs another account opts in with the filter. */
+	if ( $user_id !== (int) get_current_user_id() && ! apply_filters( 'delicat_rewards_app_allow_other_user', false, $user_id ) ) {
+		return new WP_Error( 'loyalty_auth', 'Cette action n’est pas autorisée pour ce compte.', array( 'status' => 403 ) );
+	}
+	return delicat_rewards_app_state( $user_id );
 }
 
 /**

@@ -90,7 +90,7 @@ function delicat_reward_delivery( $order_id, $user_id ) {
     // Even internal callers cannot reveal another customer's keys.
     if ( $user_id < 1 || $user_id !== (int) get_current_user_id() ) return new WP_Error( 'not_found', 'Récompense introuvable.', array( 'status' => 404 ) );
     $order = wc_get_order( (int) $order_id );
-    if ( ! $order || (int) $order->get_customer_id() !== $user_id || ! $order->get_meta( '_delicat_reward' ) ) {
+    if ( ! $order || ! is_a( $order, 'WC_Order' ) || (int) $order->get_customer_id() !== $user_id || ! $order->get_meta( '_delicat_reward' ) ) {
         return new WP_Error( 'not_found', 'Récompense introuvable.', array( 'status' => 404 ) );
     }
     $revoked = $order->has_status( array( 'refunded', 'cancelled', 'failed', 'trash' ) ) || (float) $order->get_total_refunded() > 0 || count( $order->get_refunds() ) > 0;

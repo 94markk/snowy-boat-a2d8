@@ -2,9 +2,18 @@
 /**
  * Plugin Name: Delicat Rewards — Admin Edition
  * Description: Complete Delicat Rewards system with branding controls and secure license server for Client editions.
- * Version:     3.2.4
+ * Version:     3.3.0
  * Author:      Delicat Store Haiti
  * Requires PHP: 7.4
+ *
+ * NEW IN 3.3.0 — Bonus Free Fire page and security fixes (bonus-page.php).
+ *   • One page, two tabs: « Classement » (Meilleur Client) and « Mes bonus », [delicat_bonus_free_fire];
+ *     the older shortcodes open it on their tab. Celebrations, light and dark, Material icons only.
+ *   • Cache-safe HTML; one no-store request (delicat_bonus_boot) for the session and both tabs.
+ *   • Free lines (100 % coupon, $0 orders) earn no tier progress; per-customer rate-limit lock; a
+ *     database one-shot per claim number; leaderboard rebuilt once, never in parallel; app « Mes bonus »
+ *     only for the signed-in customer; licence keys in lower case and a signed client nonce; refund ids
+ *     are not reward orders; login/e-mail parts never shown in website names; CSV and slug-pattern guards.
  *
  * NEW IN 3.2.4 — Persistent multi-supplier purchase mappings and secure 403 recovery.
  *   • Purchase IDs survive replacements/deletion; exact named historic packs recover.
@@ -179,7 +188,7 @@ define( 'DELICAT_BOARD_SPEND_WEIGHT', 0.70 ); // Meilleur Client: money is prima
 define( 'DELICAT_BOARD_ORDER_WEIGHT', 0.30 ); // distinct WooCommerce orders
 define( 'DELICAT_LEDGER_DEBT_KEY',    '#debt' ); // reserved signed-ledger key: purchases still owed (sanitize_key can never produce it)
 define( 'DELICAT_DEBT_MONTHS',        13 );    // how many past months a refund after a claim is carried forward from
-if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.2.4' ); // keep in step with the header
+if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.3.0' ); // keep in step with the header
 
 /** Capability required for every Delicat admin screen and action. */
 require_once __DIR__ . '/reward-delivery.php';
@@ -514,7 +523,7 @@ function delicat_pid_by_diamonds( $n ) {
 	}
 	$pattern = (string) delicat_cfg( 'slug_pattern' );
 	if ( false === strpos( $pattern, '%d' ) ) return 0;
-	return delicat_pid_by_slug( sprintf( $pattern, $n ) );
+	return delicat_pid_by_slug( str_replace( '%d', (string) $n, $pattern ) ); // not sprintf: a stray %s cannot crash PHP 8
 }
 
 /** Denominations the rewards can be composed from (dashboard order). */
@@ -1247,9 +1256,13 @@ function delicat_order_refund_share( $order ) {
  */
 function delicat_order_units( $order, array $tiers ) {
 	$out = array( 'qty' => 0, 'spend' => 0.0, 'tiers' => array() );
+	$free_counts = (bool) apply_filters( 'delicat_free_lines_count', false );
 	foreach ( $order->get_items() as $item ) {
 		$qty = delicat_item_qty( $order, $item );
 		if ( $qty < 1 || ! delicat_item_delivered( $order, $item ) ) continue;
+		/* 3.3.0: a line nobody paid for (100 % coupon, stacked coupons, a $0 order made by hand)
+		   earns no progress. Checked before refunds, which keep their own rule below. */
+		if ( ! $free_counts && (float) $item->get_total() <= 0 ) continue;
 		if ( delicat_item_is_ff( $item ) ) { $out['qty'] += $qty; $out['spend'] += delicat_item_spend( $order, $item ); }
 		$ids = delicat_item_ids( $item ); // variation id + parent id
 		$matched = array();
@@ -1818,20 +1831,30 @@ function delicat_leaderboard_touch() {
 }
 
 function delicat_leaderboard() {
-	$start  = delicat_competition_start();
-	$cached = get_transient( 'delicat_leaderboard' );
-	if ( is_array( $cached ) && isset( $cached['rows'], $cached['built'] ) && (int) ( $cached['start'] ?? -1 ) === $start ) {
+	$start = delicat_competition_start();
+	$fresh = function () use ( $start ) {
+		$cached = get_transient( 'delicat_leaderboard' );
+		if ( ! is_array( $cached ) || ! isset( $cached['rows'], $cached['built'] ) || (int) ( $cached['start'] ?? -1 ) !== $start ) return null;
 		$dirty = (int) get_transient( 'delicat_leaderboard_dirty' );
-		if ( $dirty < (int) $cached['built'] || time() - (int) $cached['built'] < MINUTE_IN_SECONDS ) return $cached['rows'];
-	}
-	/* One rebuild at a time: meanwhile other visitors see the last board of the same period. */
+		return ( $dirty < (int) $cached['built'] || time() - (int) $cached['built'] < MINUTE_IN_SECONDS ) ? $cached['rows'] : null;
+	};
+	$rows = $fresh();
+	if ( null !== $rows ) return $rows;
+	/* One rebuild at a time: meanwhile other visitors see the last board of the same period.
+	   3.3.0: a request that waited for the lock reads the board the other one built, and none
+	   rebuilds without the lock (up to 3.2.4 every waiting request rebuilt the whole board right
+	   after the weekly reset). Only the page and the app read this; the weekly award and the
+	   admin pages compute their own rows. */
 	$locked = delicat_lock( 'delicat_leaderboard_build', 0 );
 	if ( ! $locked ) {
 		$stale = get_transient( 'delicat_leaderboard_stale' );
 		if ( is_array( $stale ) && isset( $stale['rows'] ) && (int) ( $stale['start'] ?? -1 ) === $start ) return $stale['rows'];
 		$locked = delicat_lock( 'delicat_leaderboard_build', 5 );
+		if ( ! $locked ) return array(); // still being built: an empty board for this view, never a parallel build
 	}
 	try {
+		$rows = $fresh();
+		if ( null !== $rows ) return $rows;
 		$entry = array( 'built' => time(), 'start' => $start, 'rows' => array() );
 		$entry['rows'] = delicat_collect_leaderboard_rows( $start );
 		set_transient( 'delicat_leaderboard', $entry, 5 * MINUTE_IN_SECONDS );
@@ -2095,11 +2118,23 @@ function delicat_display_name( $user_id, $masked = null ) {
 		$v = trim( wp_strip_all_tags( (string) $v ) );
 		return '' !== $v && false === strpos( $v, '@' ) && ! in_array( $flat( $v ), $taken, true ) ? $v : '';
 	};
+	/* 3.3.0: also refuse a name that merely contains the login or the e-mail local part
+	   (« jeanrobert509 » typed as a first name), as the app already did. */
+	$contains = function ( $v ) use ( $flat, $u, $local ) {
+		$seen = $flat( $v );
+		foreach ( array( $u->user_login, $local[0] ) as $secret ) {
+			$secret = $flat( $secret );
+			if ( strlen( $secret ) >= 4 && false !== strpos( $seen, $secret ) ) return true;
+		}
+		return false;
+	};
 	$first = $safe( $u->first_name );
 	$last  = $safe( $u->last_name );
+	if ( '' !== $first && $contains( $first ) ) $first = '';
+	if ( '' !== $last && $contains( $last ) ) $last = '';
 	if ( ! $masked ) {
 		$full = $safe( $u->display_name );
-		if ( '' !== $full ) return mb_substr( $full, 0, 60 );
+		if ( '' !== $full && ! $contains( $full ) ) return mb_substr( $full, 0, 60 );
 		if ( '' !== $first ) return mb_substr( trim( $first . ' ' . $last ), 0, 60 );
 		return delicat_public_alias( $u->ID );
 	}
@@ -2131,7 +2166,7 @@ function delicat_unlock( $name ) {
  * A tiny global guard makes the transient read/increment/write sequence atomic. */
 function delicat_rate_ok( $user_id ) {
 	$user_id = (int) $user_id;
-	if ( ! delicat_lock( 'delicat_rate_guard', 1 ) ) return false;
+	if ( ! delicat_lock( 'delicat_rate_guard_' . $user_id, 1 ) ) return false;
 	try {
 		$k = 'delicat_rl_' . $user_id;
 		$n = (int) get_transient( $k );
@@ -2152,8 +2187,42 @@ function delicat_rate_ok( $user_id ) {
 		set_transient( $k, $n + 1, MINUTE_IN_SECONDS );
 		set_transient( $dk, $dn + 1, DAY_IN_SECONDS );
 		return true;
-	} finally { delicat_unlock( 'delicat_rate_guard' ); }
+	} finally { delicat_unlock( 'delicat_rate_guard_' . $user_id ); }
 }
+
+/**
+ * Takes the one-shot slot of a claim: INSERT IGNORE on the options table's unique name is
+ * atomic in the database, whatever the lock layer did. Returns the slot name, or '' when the
+ * slot was already taken.
+ */
+function delicat_claim_slot( $user_id, $month, $tier, $claim_number ) {
+	global $wpdb;
+	$name = 'delicat_cs_' . preg_replace( '/[^0-9-]/', '', (string) $month ) . '_' . substr( hash_hmac( 'sha256', (int) $user_id . '|' . $tier . '|' . (int) $claim_number, delicat_secret() ), 0, 24 );
+	$done = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", $name, (string) time() ) );
+	if ( 1 === (int) $done ) return $name;
+	/* A slot left by a request that died while issuing (no reward order was created for this
+	   claim number, or the number would have moved on): taken over after 15 minutes, atomically. */
+	$held = (string) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s", $name ) );
+	if ( '' !== $held && ctype_digit( $held ) && time() - (int) $held > 15 * MINUTE_IN_SECONDS ) {
+		$moved = $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value=%s WHERE option_name=%s AND option_value=%s", (string) time(), $name, $held ) );
+		if ( 1 === (int) $moved ) return $name;
+	}
+	return '';
+}
+function delicat_claim_slot_release( $slot ) {
+	global $wpdb;
+	if ( $slot ) $wpdb->delete( $wpdb->options, array( 'option_name' => $slot ), array( '%s' ) );
+}
+/* Slots of months that are over are no longer needed: swept by WordPress's own daily clean-up event. */
+add_action( 'wp_scheduled_delete', function () {
+	global $wpdb;
+	$keep = wp_date( 'Y-m', strtotime( '-1 month', delicat_month_start() ), wp_timezone() );
+	$rows = $wpdb->get_col( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE 'delicat\\_cs\\_%' LIMIT 500" );
+	foreach ( (array) $rows as $name ) {
+		$month = substr( (string) $name, 11, 7 );
+		if ( preg_match( '/^\d{4}-\d{2}$/', $month ) && $month < $keep ) $wpdb->delete( $wpdb->options, array( 'option_name' => $name ), array( '%s' ) );
+	}
+} );
 
 /* =========================================================================
    HARDENED CLAIM HANDLER
@@ -2253,16 +2322,30 @@ function delicat_claim_for_current_user( $tier, $token ) {
 			return new WP_Error( 'not_allowed', 'Réclamation non autorisée.', array( 'status' => 403 ) );
 		}
 
+		/* 3.3.0: one claim number, one reward, enforced by the database itself (a unique option
+		   name), so two requests that both passed the lock on a pooled or replicated database
+		   still cannot issue the same reward twice. */
+		$slot = delicat_claim_slot( $user_id, $month, $tier, $claimed_now );
+		if ( ! $slot ) {
+			return new WP_Error( 'busy', 'Réclamation déjà en cours. Vérifiez « Mes PINs récompenses ».', array( 'status' => 409 ) );
+		}
+
 		/* Reserve the claim (signed) BEFORE issuing anything. */
 		$claims           = $ledger['claims'];
 		$before           = isset( $claims[ $tier ] ) ? (int) $claims[ $tier ] : 0;
 		$claims[ $tier ]  = $before + 1;
 		delicat_ledger_save( $user_id, $month, $claims, $ledger['debt'] ?? null );
 
-		$order_id = delicat_issue_reward( $user_id, $tier, $request_hash );
+		$order_id = 0;
+		try {
+			$order_id = delicat_issue_reward( $user_id, $tier, $request_hash );
+		} finally {
+			if ( ! $order_id ) delicat_claim_slot_release( $slot ); // an exception never leaves the slot taken
+		}
 		if ( ! $order_id ) {
 			$claims[ $tier ] = $before;                 // roll back — never a free second reward
 			delicat_ledger_save( $user_id, $month, $claims, $ledger['debt'] ?? null );
+			delicat_claim_slot_release( $slot );
 			return new WP_Error( 'issue_failed', 'Récompense indisponible. Contactez le support.', array( 'status' => 500 ) );
 		}
 
@@ -3541,7 +3624,7 @@ function delicat_month_reward_orders( $month ) {
 /* ---- CSV export ---- */
 function delicat_csv_safe_row( array $row ) {
 	foreach ( $row as &$v ) {
-		if ( is_string( $v ) && preg_match( '/^[=+\-@]/', $v ) ) $v = "'" . $v;
+		if ( is_string( $v ) && preg_match( '/^[=+\-@\t\r]/', $v ) ) $v = "'" . $v;
 	}
 	unset( $v ); return $row;
 }
@@ -4191,140 +4274,12 @@ CSS;
 /* =========================================================================
    SHORTCODE 1 — REWARDS PROGRAM  [delicat_rewards]
    ========================================================================= */
-add_shortcode( 'delicat_rewards', 'delicat_rewards_view' );
+/* 3.3.0: [delicat_rewards] opens the Bonus Free Fire page on « Mes bonus » (bonus-page.php). */
 
 /* =========================================================================
    SHORTCODE 2 — MEILLEUR CLIENT (leaderboard)  [delicat_meilleur_client]
    ========================================================================= */
-add_shortcode( 'delicat_meilleur_client', function () {
-	/* Viewer-specific (login state, REST nonce, own rank): never kept by a page cache. */
-	if ( ! defined( 'DONOTCACHEPAGE' ) ) define( 'DONOTCACHEPAGE', true );
-	if ( ! headers_sent() ) nocache_headers();
-	delicat_print_fonts();
-	if ( ! delicat_meilleur_on() ) return delicat_paused_html();
-	if ( ! is_user_logged_in() && (int) delicat_cfg( 'board_public' ) !== 1 ) {
-		return delicat_login_html( 'Konekte pou w wè klasman Meilleur Client la.' );
-	}
-	delicat_print_css();
-	ob_start();
-	echo '<script>window.DELICAT=' . delicat_config_json() . ';</script>';
-	echo <<<'HTML'
-<div class="dlc" id="dlc-board">
-HTML;
-	echo delicat_winners_html();
-	echo <<<'HTML'
-  <section class="hero">
-    <div class="kicker" id="dlcKicker"></div>
-    <h1 id="dlcBoardTitle"></h1>
-    <div class="games" id="dlcGames"></div>
-    <div class="reset"><span id="dlcResetLabel"></span> <b id="dlcCd">--j · --:--:--</b></div>
-    <div class="reward"><div class="cup">🏆</div><div>
-      <div class="r-lab" id="dlcRewardLabel"></div>
-      <div class="r-big" id="dlcPrize">572 💎 Gratis</div>
-      <div class="r-sub" id="dlcRewardSub"></div>
-    </div></div>
-    <div class="score-rule">Classement : 70 % montant dépensé · 30 % commandes</div>
-  </section>
-  <div class="you"><div class="badge-rank" id="dlcYouRank">#—</div>
-    <div><div class="y-lab" id="dlcYouLabel"></div><div class="y-name" id="dlcYouName"></div><div class="y-stats" id="dlcYouStats"></div></div>
-  </div>
-  <div class="lbl" id="dlcTopLbl"></div>
-  <div id="dlcBoard"></div>
-  <div class="foot"><span id="dlcFoot1"></span><br><span id="dlcFoot2"></span><br><a id="dlcFootUrl" href="#"></a></div>
-</div>
-<a class="dlc-wa" id="dlcWa" href="#" target="_blank" rel="noopener" aria-label="WhatsApp">
-  <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15l-1.3 4.8 4.9-1.3A10 10 0 1 0 12 2zm0 18a8 8 0 0 1-4.1-1.1l-.3-.2-2.9.8.8-2.8-.2-.3A8 8 0 1 1 12 20zm4.4-6c-.2-.1-1.4-.7-1.6-.8s-.4-.1-.5.1-.6.8-.8 1-.3.1-.5 0a6.6 6.6 0 0 1-1.9-1.2 7.3 7.3 0 0 1-1.4-1.7c-.1-.3 0-.4.1-.5l.4-.5c.1-.2.1-.3.2-.5s0-.3 0-.5-.5-1.3-.7-1.7-.4-.4-.5-.4h-.5a.9.9 0 0 0-.7.3 2.8 2.8 0 0 0-.9 2.1 4.9 4.9 0 0 0 1 2.6 11 11 0 0 0 4.3 3.8c.6.3 1.1.4 1.5.5a3.5 3.5 0 0 0 1.6.1c.5-.1 1.4-.6 1.6-1.1s.2-1 .1-1.1-.2-.2-.5-.3z"/></svg>
-</a>
-<script>
-(function(){
-  var C=window.DELICAT, T=C.texts||{};
-  function txt(k,f){return (T[k]!==undefined&&T[k]!==null&&String(T[k])!=='')?String(T[k]):f;}
-  var setText=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
-  setText('dlcKicker',txt('boardKicker','')); setText('dlcBoardTitle',txt('boardTitle','MEILLEUR CLIENT')); setText('dlcGames',txt('boardGames',''));
-  setText('dlcResetLabel',txt('boardResetLabel','RESET NAN')); setText('dlcRewardLabel',txt('boardRewardLabel','RÉCOMPENSE')); setText('dlcRewardSub',txt('boardRewardSub',''));
-  setText('dlcYouLabel',txt('boardYouLabel','Pozisyon ou')); setText('dlcYouName',txt('boardLoginText','Konekte')); setText('dlcTopLbl',txt('boardHeading','KLASMAN'));
-  setText('dlcFoot1',txt('boardFooter1','')); setText('dlcFoot2',txt('boardFooter2',''));
-  var fu=document.getElementById('dlcFootUrl'); if(fu&&C.boardFooterUrl){fu.href=C.boardFooterUrl;fu.textContent=(new URL(C.boardFooterUrl)).hostname.replace(/^www\./,'');}
-  var wa=document.getElementById('dlcWa'); if(wa&&C.wa) wa.href=C.wa;
-  function esc(s){var d=document.createElement('div');d.textContent=(s==null?'':String(s));return d.innerHTML;}
-  var pz=document.getElementById('dlcPrize'); if(pz&&C.prize) pz.textContent=C.prize+' '+txt('boardPrizeSuffix','💎 Gratis');
-  var sessionPromise=null;
-  function renewSession(){
-    if(sessionPromise)return sessionPromise;
-    sessionPromise=fetch(C.sessionUrl,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'action=delicat_rewards_session'}).then(function(r){return r.json();}).then(function(j){
-      if(!j.success||!j.data||Number(j.data.userId)!==Number(C.userId))throw new Error('Votre session a changé. Rechargez la page.');
-      C.nonce=j.data.nonce;
-    }).finally(function(){sessionPromise=null;});return sessionPromise;
-  }
-  function api(p,retried){
-    return fetch(C.rest+p,{credentials:'same-origin',cache:'no-store',headers:{'X-WP-Nonce':C.nonce}}).then(function(r){return r.text().then(function(body){
-      var d;try{d=JSON.parse(body);}catch(e){d=null;}
-      if(r.ok&&d)return d;
-      if(!retried&&d&&d.code==='rest_cookie_invalid_nonce'&&C.loggedIn)return renewSession().then(function(){return api(p,true);});
-      if(r.status===403&&C.loggedIn&&(!d||['rest_forbidden','rest_disabled','rest_cannot_access','rest_cookie_invalid_nonce'].indexOf(d.code)>=0))return renewSession().then(function(){
-        return fetch(C.sessionUrl,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({action:'delicat_rewards_transport',nonce:C.nonce,path:p,method:'GET',params:'{}'}).toString()}).then(function(a){return a.json().then(function(j){if(!a.ok)throw new Error(j.message||'Accès bloqué.');return j;});});
-      });
-      throw new Error(d&&d.message||'Classement indisponible. Réessayez.');
-    });});
-  }
-  function render(top,you){
-    var b=document.getElementById('dlcBoard');b.innerHTML='';
-    var lbl=document.getElementById('dlcTopLbl'); if(lbl) lbl.textContent=txt('boardHeading','KLASMAN')+' — TOP '+(top.length||0);
-    var medal=['👑','🥈','🥉'],PZ=C.prizes||[];
-    function initials(n){var w=String(n||'').trim().split(/\s+/);var a=(w[0]||'?').charAt(0),c=(w[1]||'').charAt(0);return (a+c).toUpperCase()||'?';}
-    if(top.length){
-      var pod=document.createElement('div');pod.className='podium';
-      [1,0,2].forEach(function(idx,j){
-        if(!top[idx])return;
-        var p=top[idx],d=document.createElement('div');
-        var pw=Math.max(4,Math.min(100,parseInt(p.pct,10)||0));
-        d.className='pod pod-'+(idx+1);d.style.animationDelay=(j*0.08)+'s';
-        d.innerHTML='<div class="pod-medal">'+medal[idx]+'</div>'+
-          '<div class="pod-ava">'+esc(initials(p.name))+'</div>'+
-          '<div class="pod-name">'+esc(p.name||'Kliyan')+'</div>'+
-          '<div class="pod-rank">#'+(idx+1)+'</div>'+
-          '<div class="pod-score">'+pw+'%</div>'+
-          (PZ[idx]>0?'<div class="pod-prize">'+parseInt(PZ[idx],10)+' '+esc(txt('boardPrizeSuffix','💎 Gratis'))+'</div>':'')+
-          '<div class="pod-bar"><i style="width:'+pw+'%"></i></div>';
-        pod.appendChild(d);
-      });
-      b.appendChild(pod);
-    }
-    top.slice(3).forEach(function(p,k){
-      var row=document.createElement('div');row.className='row';row.style.animationDelay=((k+3)*0.05)+'s';
-      var pw=Math.max(4,Math.min(100,parseInt(p.pct,10)||0));
-      row.innerHTML='<div class="rank">#'+(k+4)+'</div>'+
-        '<div class="name">'+esc(p.name||'Kliyan')+
-          '<div class="heat"><i style="width:'+pw+'%"></i></div></div>'+
-        '<div class="row-score">'+pw+'%</div>';
-      b.appendChild(row);
-    });
-    if(!top.length)b.innerHTML='<div class="login">'+esc(txt('boardEmptyText','Poko gen kòmand semèn sa a.'))+'</div>';
-    if(you){
-      document.getElementById('dlcYouRank').textContent='#'+you.rank;
-      var el=document.getElementById('dlcYouName');
-      var stats=document.getElementById('dlcYouStats');if(stats)stats.textContent='Score : '+(parseInt(you.pct,10)||0)+'%';
-      if(you.rank===1){ el.textContent=txt('boardFirstText','🏆 Ou Premye plas la! Kontinye konsa!'); }
-      else if(you.gap>0){ el.textContent=txt('boardGapText','Vous êtes #{rank}e — {gap} point(s) derrière la place #{ahead} 🔥').replace('{rank}',you.rank).replace('{gap}',you.gap).replace('{ahead}',you.ahead); }
-      else { el.textContent=txt('boardRankText','Ou nan plas #{rank} 🔥').replace('{rank}',you.rank); }
-    }
-    else if(!C.loggedIn){document.getElementById('dlcYouName').innerHTML='<a href="'+esc(C.loginUrl)+'" style="font-weight:700">'+esc(txt('boardLoginText','Konekte pou wè pozisyon ou'))+'</a>';var s1=document.getElementById('dlcYouStats');if(s1)s1.textContent='';}
-    else {document.getElementById('dlcYouName').textContent=txt('boardStartText','Fè premye top-up ou pou antre nan klasman an!');var s2=document.getElementById('dlcYouStats');if(s2)s2.textContent='';}
-  }
-  api('/leaderboard').then(function(d){render(d.top||[],d.you);})
-    .catch(function(e){document.getElementById('dlcBoard').textContent=e.message;});
-
-  /* countdown to the next reset (day + hour come from the dashboard) */
-  /* The server sends the real next reset (site time zone); the browser clock only ticks. */
-  var skew=C.serverNow?C.serverNow*1000-Date.now():0;
-  function nextReset(){if(C.nextReset){var t=C.nextReset*1000,now=Date.now()+skew;while(t<=now)t+=604800000;return new Date(t-skew);}var n=new Date(),d=new Date(n);d.setHours(C.resetHour,0,0,0);var add=(C.resetDay-n.getDay()+7)%7;if(add===0&&n>=d)add=7;d.setDate(d.getDate()+add);return d;}
-  function tick(){var s=Math.max(0,Math.floor((nextReset()-new Date())/1000));var dd=Math.floor(s/86400),h=String(Math.floor(s%86400/3600)).padStart(2,'0'),m=String(Math.floor(s%3600/60)).padStart(2,'0'),se=String(s%60).padStart(2,'0');document.getElementById('dlcCd').textContent=String(dd).padStart(2,'0')+'j · '+h+':'+m+':'+se;}
-  setInterval(tick,1000);tick();
-})();
-</script>
-HTML;
-	return ob_get_clean();
-} );
+/* 3.3.0: [delicat_meilleur_client] opens the Bonus Free Fire page on « Classement » (bonus-page.php). */
 
 
 /* =========================================================================
@@ -4351,7 +4306,10 @@ add_action( 'rest_api_init', function () {
 	register_rest_route( 'delicat-license/v1', '/validate', array(
 		'methods' => 'POST', 'permission_callback' => '__return_true',
 		'callback' => function( WP_REST_Request $req ) {
-			$key = strtoupper( preg_replace( '/[^A-Z0-9-]/', '', (string) $req->get_param( 'license_key' ) ) );
+			$key = preg_replace( '/[^A-Z0-9-]/', '', strtoupper( (string) $req->get_param( 'license_key' ) ) );
+			/* A client that sends a nonce gets it back inside the signed reply, so a recorded reply
+			   cannot be replayed to it; older clients that send none get the same reply as before. */
+			$client_nonce = preg_replace( '/[^A-Za-z0-9_-]/', '', substr( (string) $req->get_param( 'nonce' ), 0, 64 ) );
 			$domain = delicat_license_normalize_domain( $req->get_param( 'domain' ) );
 			if ( strlen( $key ) < 20 || ! $domain ) return new WP_REST_Response( array( 'valid'=>false, 'code'=>'invalid_request' ), 400 );
 			$ip = sanitize_text_field( $_SERVER['REMOTE_ADDR'] ?? '' );
@@ -4367,6 +4325,7 @@ add_action( 'rest_api_init', function () {
 				if ( $valid && empty($lic['domain']) ) { $lic['domain']=$domain; $lic['activated_at']=current_time('mysql'); }
 				$lic['last_check']=current_time('mysql'); $lic['last_ip']=$ip; $all[$hash]=$lic; delicat_license_save_records($all);
 				$payload=array('valid'=>$valid,'code'=>$code,'domain'=>$domain,'expires'=>(string)($lic['expires']??''),'checked_at'=>$now,'edition'=>'client');
+				if ( '' !== $client_nonce ) $payload['nonce'] = $client_nonce;
 				$payload['signature']=delicat_license_signature($payload,$key);
 				return new WP_REST_Response($payload,$valid?200:403);
 			} finally {
@@ -4407,3 +4366,4 @@ function delicat_license_admin_page(){
 
 require_once __DIR__ . '/competition-admin.php';
 require_once __DIR__ . '/app-contract.php';
+require_once __DIR__ . '/bonus-page.php';

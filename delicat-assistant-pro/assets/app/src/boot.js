@@ -68,6 +68,18 @@
   ['pointerenter', 'touchstart', 'focus'].forEach(function (type) {
     btn.addEventListener(type, function () { load(); }, { once: true, passive: true });
   });
+  // Product pages: the launcher sits 12 px above Builder's buy bar, whatever its height (one rect read
+  // when the bar appears or the window resizes; nothing on scroll).
+  function lift() {
+    var dock = d.body && d.body.classList.contains('dnp-dock-visible') && w.innerWidth <= 820 ? d.querySelector('.dnp-mobile-dock') : null;
+    var r = dock && !dock.hidden ? dock.getBoundingClientRect() : null;
+    if (r && r.height) root.style.setProperty('--dsa7-lift', Math.max(0, Math.round(w.innerHeight - r.top + 12)) + 'px');
+    else root.style.removeProperty('--dsa7-lift');
+  }
+  if (d.body && w.MutationObserver) new MutationObserver(lift).observe(d.body, { attributes: true, attributeFilter: ['class'] });
+  w.addEventListener('resize', lift, { passive: true });
+  lift();
+
   // Any link or button on the site can open the chat: data-delicat-assistant="team|help|community".
   d.addEventListener('click', function (e) {
     var t = e.target && e.target.closest ? e.target.closest('[data-delicat-assistant],a[href$="#delicat-assistant"]') : null;
@@ -78,7 +90,16 @@
 
   // Guides shared on WhatsApp (?dap_guide=id) and #delicat-assistant open the chat directly.
   var guide = /[?&]dap_guide=([a-z0-9_]+)/.exec(location.search);
+  // Shared community links (?dap_group=slug) open that room. A visitor who must sign in first finds the
+  // room open after the login, in the same tab, within 15 minutes.
+  var shared = /[?&]dap_group=([a-z0-9-]{1,80})(?:[&#]|$)/.exec(location.search);
+  var signedIn = !!(d.body && d.body.classList.contains('logged-in'));
+  if (shared) store('dsa7g', { s: shared[1], t: Date.now() });
+  var later = store('dsa7g');
+  var room = later && later.s && Date.now() - later.t < 900000 && (shared || signedIn) ? later.s : '';
+  if (room && signedIn) store('dsa7g', { s: '', t: 0 });
   if (guide || location.hash === '#delicat-assistant') open({ guide: guide ? guide[1] : '' });
+  else if (room) open({ view: 'community', group: room });
 
   // [delicat_assistant] / [delicat_groups] embeds mount without a tap.
   var inline = d.querySelector('[data-dsa7-inline]');
@@ -111,7 +132,7 @@
 
   // Nudge bubble: after the configured delay, a few times per visit at most.
   var N = C.nudge;
-  if (N && N.max > 0 && !guide) {
+  if (N && N.max > 0 && !guide && !room) {
     var seen = store('dsa7n') || { c: 0 };
     if (seen.c < N.max) {
       setTimeout(function () {
@@ -121,6 +142,9 @@
         nudge.hidden = false;
         seen.c++;
         store('dsa7n', seen);
+        var away = function (e) { if (e.type === 'scroll' || !root.contains(e.target)) { hideNudge(0); w.removeEventListener('scroll', away); d.removeEventListener('pointerdown', away, true); } };
+        w.addEventListener('scroll', away, { passive: true });
+        d.addEventListener('pointerdown', away, true);
         setTimeout(function () { hideNudge(0); }, N.visible * 1000);
       }, N.delay * 1000);
     }

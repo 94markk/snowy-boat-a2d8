@@ -3,7 +3,7 @@ Contributors: delicat-store
 Tags: woocommerce, customer support, live chat, chatbot, whatsapp
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 7.0.0
+Stable tag: 7.0.1
 
 A multilingual WooCommerce help center with a private agent inbox, automated answers, mobile-app support, tickets and WhatsApp handoff.
 
@@ -43,6 +43,14 @@ Yes. The human support timeline remains focused, and an authorized agent can ope
 No. WhatsApp is shown only when it is enabled and a valid number has been saved.
 
 == Changelog ==
+
+= 7.0.1 =
+* En français : le site ne se bloque plus après la fermeture du chat. En 7.0.0, la fenêtre fermée restait invisible au-dessus de la page et recevait les touchers : sur téléphone plus rien ne répondait, sur ordinateur le bouton du chat ne se rouvrait plus. Fermé veut maintenant dire retiré de la page (après l'animation de sortie).
+* Le bouton du chat ne cache plus la barre d'achat d'une fiche produit (« Total · Ajouter au panier · Acheter maintenant ») : il se place 12 px au-dessus, quelle que soit sa hauteur. La bulle « Besoin d'aide ? » ne s'affiche plus par-dessus une carte « Vente en direct » ni sur une fiche produit, et disparaît dès que le visiteur fait défiler ou touche la page.
+* Partager un groupe : bouton Partager dans un groupe public (et dans son menu). Le lien (?dap_group=nom-du-groupe, sur n'importe quelle page du site) ouvre le chat dans ce groupe ; un visiteur qui doit d'abord se connecter retrouve le groupe ouvert après la connexion (même onglet, 15 minutes). Les salons cachés ne se partagent pas et restent réservés à leurs membres. Le lien de chaque groupe public est aussi affiché dans Groupes clients › Salons.
+* Messages des groupes : un message envoyé apparaît tout de suite avec « Envoi… » ; en cas d'échec le texte revient dans la zone de saisie. Les messages déjà affichés ne sont plus redessinés à chaque nouveau message (plus de clignotement des images, la sélection de texte et le focus restent). Plusieurs messages de suite d'une même personne sont regroupés (un seul nom et un seul avatar). « Copier le texte » dans le menu d'un message. Une citation d'un message retiré n'affiche plus « : » devant « Message retiré ». Le bouton « Messages précédents » reste utilisable après un premier chargement.
+* Conversation avec l'équipe : un seul « Équipe Delicat » par suite de réponses ; un message renvoyé après une erreur ne laisse plus l'ancien message d'erreur affiché.
+* Fixed: after the chat was closed, its invisible window stayed over the page and took every tap (the site looked frozen on phones; the launcher could not reopen on desktop). The launcher clears the product buy bar; the nudge yields to live-sale cards and product pages and leaves on the first scroll or tap. Shareable public group links (?dap_group=slug) that survive the sign-in. Group messages: instant sending state, no full redraw on each poll, grouped runs, copy text, quote and "earlier messages" fixes.
 
 = 7.0.0 =
 * En français : assistance du site reconstruite. Sur chaque page, seulement un bouton (environ 7 Ko dans la page, aucune requête, aucun nonce ni identifiant client dans le HTML : les pages restent en cache pour tout le monde). Le chat (un seul fichier, 30 Ko compressé) se charge au premier toucher et s’ouvre en moins d’une seconde sur un téléphone en 4G lente (0,45 à 0,9 s sur le site de test, fichier non compressé), contre 1,7 à 2,1 s en 6.6.4. Les clients connectés ne chargent plus groups.css ni groups.js ; le nombre de messages non lus est vérifié au plus une fois par minute, une fois la page affichée (plus à chaque page).

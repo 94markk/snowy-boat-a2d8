@@ -263,6 +263,108 @@ async function api(p, action, data) {
     await d.ctx.close();
   }
 
+  /* ------------------------------------------------------------ closing gives the page back (7.0.1) */
+  {
+    // What is at a point of the page: a closed chat must not be there (shadow content reports its host).
+    const hitIsChat = (p, x, y) => p.evaluate(([x, y]) => { const el = document.elementFromPoint(x, y); return !!el && !!el.closest('#dsa7-app'); }, [x, y]);
+    const { ctx, p } = await context(b, null);
+    await step('phone: after closing, taps reach the page, it scrolls and the launcher reopens', async () => {
+      await openChat(p);
+      await p.locator('#dsa7-app').locator('button[aria-label="Fermer"]').click();
+      await p.waitForTimeout(500);
+      const vp = p.viewportSize();
+      for (const [x, y] of [[vp.width / 2, vp.height / 2], [vp.width / 2, 120], [vp.width - 40, vp.height - 200]]) ok(!(await hitIsChat(p, x, y)), `closed chat still covers ${x},${y}`);
+      const y0 = await p.evaluate(() => scrollY);
+      await p.mouse.wheel(0, 600);
+      await p.waitForTimeout(400);
+      ok(await p.evaluate(() => scrollY) > y0, 'page does not scroll after closing');
+      await p.click('#dsa7-launcher');
+      await p.locator('.app.on').waitFor({ timeout: 4000 });
+    });
+    await ctx.close();
+    const d = await context(b, null, { desktop: true });
+    await step('desktop: after closing, the launcher under the old panel reopens the chat', async () => {
+      await openChat(d.p);
+      await d.p.keyboard.press('Escape');
+      await d.p.waitForTimeout(500);
+      const r = await d.p.locator('#dsa7-launcher').boundingBox();
+      ok(!(await hitIsChat(d.p, r.x + r.width / 2, r.y + r.height / 2)), 'closed panel covers the launcher');
+      await d.p.click('#dsa7-launcher');
+      await d.p.locator('.app.on').waitFor({ timeout: 4000 });
+    });
+    await d.ctx.close();
+    const pr = await context(b, null);
+    await step('product page: the launcher stays above the buy bar', async () => {
+      await pr.p.goto(base + '/product/free-fire/', { waitUntil: 'load' });
+      await noAge(pr.p);
+      await pr.p.mouse.wheel(0, 500);
+      await pr.p.waitForFunction(() => document.body.classList.contains('dnp-dock-visible'), null, { timeout: 6000 });
+      await pr.p.waitForTimeout(300);
+      const l = await pr.p.locator('#dsa7-launcher').boundingBox();
+      for (const sel of ['.dnp-mobile-dock', '.delicat-bottom-nav']) {
+        const el = pr.p.locator(sel).first();
+        if (!(await el.count()) || !(await el.isVisible())) continue;
+        const r = await el.boundingBox();
+        const overlap = l.x < r.x + r.width && l.x + l.width > r.x && l.y < r.y + r.height && l.y + l.height > r.y;
+        ok(!overlap, `launcher overlaps ${sel}`);
+      }
+      await pr.p.screenshot({ path: `${out}/product-launcher.png` });
+    });
+    await pr.ctx.close();
+  }
+
+  /* ------------------------------------------------------------ shared group links, message list (7.0.1) */
+  {
+    const app = (p) => p.locator('#dsa7-app');
+    const { ctx, p } = await context(b, 'client1');
+    await step('shared link: ?dap_group= opens the chat in that room', async () => {
+      await p.goto(base + '/?dap_group=communaute-delicat', { waitUntil: 'load' });
+      await noAge(p);
+      await p.locator('.app.on').waitFor({ timeout: 8000 });
+      await app(p).locator('.gm').first().waitFor({ timeout: 8000 });
+      ok((await app(p).locator('#dsa7-title').textContent()).includes('Communauté'), 'room title: ' + await app(p).locator('#dsa7-title').textContent());
+    });
+    await step('share button: the link points at this room', async () => {
+      await p.evaluate(() => { try { delete Navigator.prototype.share; } catch (e) {} }); // the copy sheet, as on most desktops
+      await app(p).locator('button[aria-label="Partager le groupe"]').click();
+      const v = await app(p).locator('.sheet input.field').inputValue();
+      ok(/[?&]dap_group=communaute-delicat\b/.test(v), 'link ' + v);
+      await p.keyboard.press('Escape');
+    });
+    await step('room: a new message leaves the earlier messages in place, a run is grouped', async () => {
+      await app(p).locator('.gm').first().evaluate((el) => { el.__kept = 1; });
+      const input = app(p).locator('.composer textarea');
+      for (const text of ['Premier message de la série', 'Deuxième message de la série']) {
+        await input.fill(text);
+        await app(p).locator('.composer .send').click();
+        await app(p).locator('.gm.me:not(.pending)', { hasText: text }).waitFor({ timeout: 8000 });
+        await p.waitForTimeout(5600); // slow mode
+      }
+      ok(await app(p).locator('.gm').first().evaluate((el) => el.__kept === 1), 'the list was rebuilt');
+      ok(await app(p).locator('.gm.me.cont', { hasText: 'Deuxième message' }).count() === 1, 'second message of the run is not grouped');
+      ok(!p.errors.length, p.errors.join(' | '));
+    });
+    await ctx.close();
+    const g = await context(b, null);
+    await step('shared link: a guest signs in and finds the room open', async () => {
+      await g.p.goto(base + '/?dap_group=communaute-delicat', { waitUntil: 'load' });
+      await noAge(g.p);
+      await g.p.locator('.app.on').waitFor({ timeout: 8000 });
+      await app(g.p).locator('.empty a.btn').waitFor({ timeout: 8000 }); // sign-in card, no error
+      await g.p.goto(base + '/wp-login.php');
+      await g.p.fill('#user_login', 'client2');
+      await g.p.fill('#user_pass', 'ClientPass!2026');
+      await Promise.all([g.p.waitForNavigation(), g.p.click('#wp-submit')]);
+      await g.p.waitForLoadState('load'); // the page the login lands on (wallet, account…) opens the room
+      await g.p.locator('.app.on').waitFor({ timeout: 8000 });
+      await app(g.p).locator('.gm').first().waitFor({ timeout: 8000 });
+      await g.p.goto(base + '/', { waitUntil: 'load' }); // only once
+      await g.p.waitForTimeout(1500);
+      ok(!(await g.p.locator('.app.on').count()), 'the room opened again on the next page');
+    });
+    await g.ctx.close();
+  }
+
   /* ------------------------------------------------------------ Builder instant navigation */
   {
     const { ctx, p } = await context(b, null);

@@ -36,6 +36,7 @@ const STR = {
     copied: 'Copié', shared: 'Guide copié', open: 'Ouvrir', viewOrder: 'Voir la commande', secureTag: 'Sécurisé', accountTag: 'Compte requis', deleted: 'Message supprimé',
     typing: 'L’équipe écrit…', jump: 'Aller aux derniers messages', loading: 'Chargement…', today: 'Aujourd’hui', yesterday: 'Hier',
     signIn: 'Connectez-vous pour rejoindre la communauté et discuter avec les autres clients.', signInBtn: 'Se connecter', banned: 'Votre accès aux groupes a été suspendu.',
+    share: 'Partager le groupe', shareText: 'Rejoignez le groupe « %s » sur Delicat Store', shareTitle: 'Inviter dans le groupe', linkCopied: 'Lien du groupe copié', copyLink: 'Copier le lien', copyText: 'Copier le texte',
     members: '%s membres', join: 'Rejoindre le groupe', leave: 'Quitter le groupe', rules: 'Règles du groupe', noRooms: 'Aucun groupe pour le moment.',
     yourName: 'Vous apparaissez comme', change: 'Modifier', save: 'Enregistrer', nameTitle: 'Votre nom dans les groupes', nameHint: '2 à 24 caractères. Pas d’e-mail ni de numéro.',
     toGroup: 'Au groupe', askTeam: 'Question à l’équipe', askHint: 'Votre question reste visible dans le groupe et l’équipe y répond. Pour une commande ou un paiement, utilisez « Continuer en privé ».',
@@ -64,6 +65,7 @@ const STR = {
     copied: 'Copied', shared: 'Guide copied', open: 'Open', viewOrder: 'View order', secureTag: 'Secure', accountTag: 'Account required', deleted: 'Message deleted',
     typing: 'The team is typing…', jump: 'Jump to latest messages', loading: 'Loading…', today: 'Today', yesterday: 'Yesterday',
     signIn: 'Sign in to join the community and chat with other customers.', signInBtn: 'Sign in', banned: 'Your access to the groups has been suspended.',
+    share: 'Share the group', shareText: 'Join the “%s” group on Delicat Store', shareTitle: 'Invite to the group', linkCopied: 'Group link copied', copyLink: 'Copy link', copyText: 'Copy text',
     members: '%s members', join: 'Join the group', leave: 'Leave the group', rules: 'Group rules', noRooms: 'No groups yet.',
     yourName: 'You appear as', change: 'Change', save: 'Save', nameTitle: 'Your name in the groups', nameHint: '2 to 24 characters. No e-mail or phone number.',
     toGroup: 'To the group', askTeam: 'Ask the team', askHint: 'Your question stays visible in the group and the team answers there. For an order or a payment, use “Continue privately”.',
@@ -92,6 +94,7 @@ const STR = {
     copied: 'Kopye', shared: 'Gid la kopye', open: 'Louvri', viewOrder: 'Gade kòmand lan', secureTag: 'Sekirize', accountTag: 'Bezwen yon kont', deleted: 'Mesaj efase',
     typing: 'Ekip la ap ekri…', jump: 'Ale nan dènye mesaj yo', loading: 'Ap chaje…', today: 'Jodi a', yesterday: 'Yè',
     signIn: 'Konekte pou antre nan kominote a epi pale ak lòt kliyan.', signInBtn: 'Konekte', banned: 'Aksè ou nan gwoup yo sispann.',
+    share: 'Pataje gwoup la', shareText: 'Antre nan gwoup « %s » sou Delicat Store', shareTitle: 'Envite moun nan gwoup la', linkCopied: 'Lyen gwoup la kopye', copyLink: 'Kopye lyen an', copyText: 'Kopye tèks la',
     members: '%s manm', join: 'Antre nan gwoup la', leave: 'Kite gwoup la', rules: 'Règ gwoup la', noRooms: 'Pa gen gwoup pou kounye a.',
     yourName: 'Non ou nan gwoup yo', change: 'Chanje', save: 'Anrejistre', nameTitle: 'Non ou nan gwoup yo', nameHint: '2 a 24 karaktè. Pa mete imel ni nimewo.',
     toGroup: 'Bay gwoup la', askTeam: 'Kesyon pou ekip la', askHint: 'Kesyon ou rete vizib nan gwoup la epi ekip la reponn la. Pou yon kòmand oswa yon peman, sèvi ak « Kontinye an prive ».',
@@ -252,7 +255,7 @@ function ensureBoot() {
 /* ================================================================ state */
 const S = { open: false, inline: false, view: 'home', sheet: null, lastActivity: Date.now() };
 const chat = { items: [], last: 0, agentRead: 0, typing: false, status: '', unread: 0, loaded: false, thread: false, readSent: 0, pending: new Map() };
-const G = { list: null, room: null, msgs: [], last: 0, more: false, rules: [], replyTo: null, ask: false, loading: false, totalUnread: 0, slowUntil: 0 };
+const G = { list: null, room: null, msgs: [], last: 0, more: false, rules: [], replyTo: null, ask: false, loading: false, totalUnread: 0, slowUntil: 0, pending: new Map(), posting: 0 };
 
 let host = null;
 let shadow = null;
@@ -263,6 +266,7 @@ let subEl = null;
 let dotEl = null;
 let backBtn = null;
 let menuBtn = null;
+let shareBtn = null;
 let bodyEl = null;
 let tabsEl = null;
 let returnFocus = null;
@@ -285,10 +289,12 @@ function build(mountPoint) {
   subEl = h('span');
   backBtn = h('button', { class: 'ib', type: 'button', 'aria-label': t('back'), hidden: true, onclick: () => goBack() }, icon('arrow_back'));
   menuBtn = h('button', { class: 'ib', type: 'button', 'aria-label': t('more'), hidden: true, onclick: () => viewMenu() }, icon('more_vert'));
+  shareBtn = h('button', { class: 'ib', type: 'button', 'aria-label': t('share'), title: t('share'), hidden: true, onclick: () => shareRoom() }, icon('share'));
   const top = h('header', { class: 'top' },
     backBtn,
     h('span', { class: 'mark', 'aria-hidden': 'true' }, icon('support_agent')),
     h('div', { class: 'ttl' }, titleEl, h('p', null, dotEl, subEl)),
+    shareBtn,
     menuBtn,
     S.inline ? null : h('button', { class: 'ib', type: 'button', 'aria-label': t('close'), onclick: () => close() }, icon('close')),
   );
@@ -316,6 +322,7 @@ function build(mountPoint) {
   W.addEventListener('online', () => { if (S.open || S.inline) schedule(200); });
 }
 function fitViewport() {
+  if (app && !S.open && !S.inline) return; // closed: no style writes while the visitor scrolls the page
   if (!app || S.inline || !W.matchMedia('(max-width: 640px)').matches) { if (app) { app.style.removeProperty('--vvh'); app.style.top = ''; } return; }
   const v = W.visualViewport;
   app.style.setProperty('--vvh', v.height + 'px');
@@ -381,6 +388,7 @@ async function open(opts = {}) {
   }
   show(target || S.view || 'home', true);
   if (opts.guide) quick('guide_' + opts.guide);
+  if (opts.group) openRoom(String(opts.group).slice(0, 80));
   ensureBoot().then(afterBoot).catch(() => {});
   // Focus moves into the dialog: the composer if there is one, else the first visible control.
   setTimeout(() => {
@@ -450,6 +458,7 @@ function show(view, force) {
   for (const k of Object.keys(V)) delete V[k];
   backBtn.hidden = !(view === 'community' && G.room);
   menuBtn.hidden = view !== 'agent' && !(view === 'community' && G.room);
+  shareBtn.hidden = true;
   renderTabs();
   if (view === 'home') renderHome();
   else if (view === 'bot' || view === 'agent') renderChat(view);
@@ -491,6 +500,8 @@ function setLang(code) {
   try { localStorage.setItem('dap_language', code); } catch (e) { /* storage blocked */ }
   backBtn.setAttribute('aria-label', t('back'));
   menuBtn.setAttribute('aria-label', t('more'));
+  shareBtn.setAttribute('aria-label', t('share'));
+  shareBtn.title = t('share');
   show(S.view, true);
 }
 function waLink(base) {
@@ -548,7 +559,12 @@ function paintChat(scroll) {
     if (kind === 'bot') frag.append(botBubble({ sender: 'assistant', type: 'text', body: t('welcome') }));
     else frag.append(h('div', { class: 'empty' }, h('div', { class: 'ico' }, icon('support_agent', 'l')), h('b', null, t('emptyTeam')), t('emptyTeamSub')));
   }
-  for (const m of items) frag.append(messageEl(m, kind));
+  let prevAgent = '';
+  for (const m of items) {
+    const agentName = m.sender === 'agent' && (m.type || 'text') === 'text' ? String(m.sender_name || '') + '|' : '';
+    frag.append(messageEl(m, kind, !!agentName && agentName === prevAgent));
+    prevAgent = agentName;
+  }
   for (const p of chat.pending.values()) if (p.kind === kind) frag.append(p.el);
   if (kind === 'agent' && chat.typing) frag.append(h('div', { class: 'msg' }, h('div', { class: 'bub typing', 'aria-label': t('typing') }, h('i'), h('i'), h('i'))));
   V.log.replaceChildren(frag);
@@ -628,6 +644,7 @@ async function sendChat(kind, text, clientId) {
   S.lastActivity = Date.now();
   const id = clientId || uid();
   const old = chat.pending.get(id);
+  if (old && old.err) old.err.remove();
   const el = pendingEl(kind, text, 'sending');
   chat.pending.set(id, { kind, el, text });
   if (old && old.el.isConnected) old.el.replaceWith(el); else if (V.log && V.kind === kind) { const em = V.log.querySelector('.empty'); if (em) em.remove(); V.log.append(el); toBottom(true); }
@@ -643,7 +660,10 @@ async function sendChat(kind, text, clientId) {
     schedule(2500);
   } catch (e) {
     setDelivery(el.querySelector('.meta'), 'failed', () => sendChat(kind, text, id));
-    if (V.log) { V.log.append(errorBox(e.message)); toBottom(true); }
+    const err = errorBox(e.message);
+    const p = chat.pending.get(id);
+    if (p) p.err = err;
+    if (V.log) { V.log.append(err); toBottom(true); }
   }
 }
 async function quick(action) {
@@ -741,7 +761,7 @@ async function markRead() {
 function botBubble(m) {
   return h('div', { class: 'msg' }, h('div', { class: 'bub' }, clean(m.body)));
 }
-function messageEl(m, kind) {
+function messageEl(m, kind, sameAgent) {
   const me = m.sender === 'customer';
   const type = m.type || 'text';
   if (type === 'image') {
@@ -754,7 +774,7 @@ function messageEl(m, kind) {
   if (type === 'text' || type === 'rating') {
     const body = type === 'rating' ? ((m.meta && m.meta.title) || m.body) : m.body;
     const text = me || m.sender === 'agent' ? String(body || '') : clean(body);
-    const who = m.sender === 'agent' ? h('div', { class: 'who' }, h('span', { class: 'staff' }, icon('verified', 's'), m.sender_name || t('teamLabel'))) : null;
+    const who = m.sender === 'agent' && !sameAgent ? h('div', { class: 'who' }, h('span', { class: 'staff' }, icon('verified', 's'), m.sender_name || t('teamLabel'))) : null;
     return h('div', { class: 'msg' + (me ? ' me' : '') + (m.sender === 'agent' ? ' staffmsg' : '') }, who, h('div', { class: 'bub' }, richText(text)), metaLine(m, me, kind));
   }
   if (m.sender === 'system' && type === 'system' && !(m.meta && (m.meta.buttons || m.meta.title))) return h('div', { class: 'sysline' }, clean(m.body));
@@ -990,6 +1010,7 @@ function editName() {
   });
 }
 async function openRoom(id) {
+  G.pending.clear();
   G.room = { slug: id, loading: true };
   G.msgs = [];
   G.last = 0;
@@ -999,6 +1020,7 @@ async function openRoom(id) {
   show('community', true);
   try {
     await ensureBoot();
+    if (!boot.user || !boot.user.loggedIn) { G.room = null; show('community', true); return; }
     const d = await gcall('dsa2_groups_open', { group: id });
     G.room = d.group;
     G.rules = d.rules || [];
@@ -1018,6 +1040,7 @@ function renderRoom() {
   const r = G.room;
   backBtn.hidden = false;
   menuBtn.hidden = !r || r.loading;
+  shareBtn.hidden = !r || r.loading || !!+r.private;
   if (!r || r.loading) {
     setHeader(t('community'), t('loading'));
     bodyEl.replaceChildren(h('div', { class: 'view' }, h('div', { class: 'loader', role: 'status', 'aria-label': t('loading') })));
@@ -1031,7 +1054,7 @@ function renderRoom() {
   const pinbar = pin ? h('div', { class: 'pinbar' }, icon('keep', 's'), h('span', null, h('b', null, t('pinned') + ' · '), pin.body)) : null;
   const view = h('div', { class: 'view' }, pinbar, h('div', { class: 'body', style: 'flex:1;min-height:0' }, scroll, jump), roomComposer());
   bodyEl.replaceChildren(view);
-  Object.assign(V, { kind: 'room', log, scroll, jump });
+  Object.assign(V, { kind: 'room', log, scroll, jump, nodes: new Map() });
   scroll.addEventListener('scroll', () => { jump.hidden = nearBottom(); }, { passive: true });
   paintRoom();
   toBottom(false);
@@ -1077,30 +1100,54 @@ function renderRoomComposer() {
 }
 function paintRoom() {
   if (!V.log || V.kind !== 'room') return;
-  const frag = D.createDocumentFragment();
-  if (G.more) {
-    frag.append(h('button', { class: 'btn more', type: 'button', onclick: (e) => loadEarlier(e.currentTarget) }, t('earlier')));
-  }
-  if (G.rules.length && !G.more) {
-    frag.append(h('div', { class: 'card' }, h('h4', null, icon('shield'), t('rules')), h('ul', { class: 'rules' }, G.rules.map((r) => h('li', null, r)))));
-  }
+  // Messages that did not change keep their node: no image reload, no lost text selection, no lost
+  // focus when a poll brings one new message (7.0 rebuilt the whole list every few seconds).
+  const cache = V.nodes || (V.nodes = new Map());
+  const seen = new Set();
+  const node = (key, sig, make) => {
+    seen.add(key);
+    const hit = cache.get(key);
+    if (hit && hit.sig === sig) return hit.el;
+    const el = make();
+    cache.set(key, { sig, el });
+    return el;
+  };
+  const canMod = !!(boot.groups && boot.groups.canModerate);
+  const canPost = !!(G.room && +G.room.canPost);
+  const want = [];
+  if (G.more) want.push(node('more', '', () => h('button', { class: 'btn more', type: 'button', onclick: (e) => loadEarlier(e.currentTarget) }, t('earlier'))));
+  if (G.rules.length && !G.more) want.push(node('rules', G.rules.join('|'), () => h('div', { class: 'card' }, h('h4', null, icon('shield'), t('rules')), h('ul', { class: 'rules' }, G.rules.map((r) => h('li', null, r))))));
   let lastDay = '';
+  let prev = null;
   for (const m of G.msgs) {
     const at = m.at ? new Date(m.at) : null;
     const day = at ? at.toDateString() : '';
-    if (day && day !== lastDay) { frag.append(h('div', { class: 'day' }, dayLabel(at))); lastDay = day; }
-    frag.append(groupMessageEl(m));
+    if (day && day !== lastDay) { want.push(node('d' + day, '', () => h('div', { class: 'day' }, dayLabel(at)))); lastDay = day; prev = null; }
+    // Same author within five minutes: one avatar and one name for the run, like every messaging app.
+    const cont = !!prev && prev.ak && prev.ak === m.ak && prev.role === m.role && !+prev.hidden && !+m.hidden
+      && m.type !== 'question' && prev.type !== 'question' && at && prev.at && (at - new Date(prev.at)) < 300000;
+    const sig = JSON.stringify([m.body, m.hidden, m.question, m.pinned, m.flags, m.reports, m.url, m.replyTo, cont, canPost, canMod]);
+    want.push(node('m' + m.id, sig, () => groupMessageEl(m, cont)));
+    prev = m;
   }
-  V.log.replaceChildren(frag);
+  for (const [key, p] of G.pending) { seen.add(key); want.push(p.el); }
+  for (const key of [...cache.keys()]) if (!seen.has(key)) cache.delete(key);
+  const log = V.log;
+  let cur = log.firstChild;
+  for (const el of want) {
+    if (cur === el) { cur = cur.nextSibling; continue; }
+    log.insertBefore(el, cur);
+  }
+  while (cur) { const next = cur.nextSibling; cur.remove(); cur = next; }
 }
-function groupMessageEl(m) {
+function groupMessageEl(m, cont) {
   const staff = m.role === 'agent';
   const me = !!+m.mine;
   const at = m.at ? new Date(m.at).toLocaleTimeString(LOCALE[lang], { hour: '2-digit', minute: '2-digit' }) : '';
   const isQ = m.type === 'question';
   const who = h('div', { class: 'who' }, staff ? h('span', { class: 'staff' }, m.author, icon('verified', 's'), t('staff')) : m.author);
   const bub = h('div', { class: 'bub' },
-    m.replyTo ? h('div', { class: 'quote' }, (m.replyTo.author || '') + ' : ' + (m.replyTo.excerpt || '')) : null,
+    m.replyTo ? h('div', { class: 'quote' }, m.replyTo.author ? m.replyTo.author + ' : ' + (m.replyTo.excerpt || '') : (m.replyTo.excerpt || '')) : null,
     m.type === 'image' && safeUrl(m.url) ? h('a', { href: safeUrl(m.url), target: '_blank', rel: 'noopener noreferrer' }, h('img', { src: safeUrl(m.url), alt: t('image'), loading: 'lazy', style: 'max-width:220px;border-radius:12px;display:block' }))
       : richText(+m.hidden && !(boot.groups && boot.groups.canModerate) ? t('removed') : String(m.body || '')));
   const meta = h('div', { class: 'meta' }, at,
@@ -1116,18 +1163,26 @@ function groupMessageEl(m) {
   // Staff only (the server sends flags to moderators): which masking rules fired, and the report count.
   const flags = m.flags ? h('div', { class: 'flags' }, 'Filtres : ' + m.flags.replace(/,/g, ', ') + (m.reports ? ' · ' + m.reports + ' signalement(s)' : '')) : null;
   const col = h('div', { class: 'msg' + (me ? ' me' : '') + (staff ? ' staffmsg' : '') + (+m.hidden ? ' hiddenmsg' : '') }, who, isQ && !me ? h('span', { class: 'qtag' }, icon('campaign', 's'), t('question')) : null, bub, meta, flags, acts);
-  return h('div', { class: 'gm' + (me ? ' me' : '') + (isQ ? ' q' : ''), data: { id: String(m.id) } }, h('span', { class: 'av' + (staff ? ' staff' : ''), 'aria-hidden': 'true' }, m.initials || initials(m.author)), col);
+  return h('div', { class: 'gm' + (me ? ' me' : '') + (isQ ? ' q' : '') + (cont ? ' cont' : ''), data: { id: String(m.id) } }, h('span', { class: 'av' + (staff ? ' staff' : ''), 'aria-hidden': 'true' }, m.initials || initials(m.author)), col);
 }
 async function postRoom(text, input, send) {
   S.lastActivity = Date.now();
-  send.disabled = true;
   const ask = G.ask;
+  const reply = G.replyTo;
+  const key = 'p' + uid();
+  const meta = h('div', { class: 'meta' });
+  setDelivery(meta, 'sending');
+  G.pending.set(key, { el: h('div', { class: 'gm me pending' }, h('div', { class: 'msg me' }, h('div', { class: 'bub' }, text), meta)) });
+  G.posting++;
+  input.value = '';
+  G.replyTo = null;
+  if (ask) G.ask = false;
+  renderRoomComposer();
+  paintRoom();
+  toBottom(true);
   try {
-    const d = await gcall(ask ? 'dsa2_groups_ask' : 'dsa2_groups_send', { group: G.room.id, message: text, after_id: G.last, reply_to: G.replyTo ? G.replyTo.id : 0 });
-    input.value = '';
-    input.dispatchEvent(new Event('input'));
-    G.replyTo = null;
-    if (ask) G.ask = false;
+    const d = await gcall(ask ? 'dsa2_groups_ask' : 'dsa2_groups_send', { group: G.room.id, message: text, after_id: G.last, reply_to: reply ? reply.id : 0 });
+    G.pending.delete(key);
     mergeRoom(d.messages || []);
     if (d.group) G.room = d.group;
     if (d.filtered) toast(t('filtered'));
@@ -1136,9 +1191,19 @@ async function postRoom(text, input, send) {
     toBottom(true);
     schedule(2500);
   } catch (e) {
-    send.disabled = false;
-    if (e.code === 'slow_mode' && e.data.wait) { G.slowUntil = Date.now() + e.data.wait * 1000; setTimeout(() => { send.disabled = !input.value.trim(); }, e.data.wait * 1000); }
+    G.pending.delete(key);
+    G.replyTo = reply;
+    G.ask = ask;
+    renderRoomComposer();
+    if (V.roomInput && !V.roomInput.value) { V.roomInput.value = text; V.roomInput.dispatchEvent(new Event('input')); }
+    paintRoom();
+    if (e.code === 'slow_mode' && e.data.wait) {
+      G.slowUntil = Date.now() + e.data.wait * 1000;
+      setTimeout(() => { if (V.roomInput) V.roomInput.dispatchEvent(new Event('input')); }, e.data.wait * 1000);
+    }
     toast(e.message);
+  } finally {
+    G.posting--;
   }
 }
 async function uploadRoom(file) {
@@ -1172,7 +1237,7 @@ function mergeRoom(list) {
   if (G.msgs.length > 300) { G.msgs = G.msgs.slice(-240); G.more = true; }
 }
 async function pollRoom() {
-  if (!G.room || !G.room.id) return;
+  if (!G.room || !G.room.id || G.posting) return;
   const stick = nearBottom();
   const d = await gcall('dsa2_groups_poll', { group: G.room.id, after_id: G.last });
   const fresh = d.messages || [];
@@ -1196,6 +1261,7 @@ async function loadEarlier(btn) {
     G.msgs = older.concat(G.msgs);
     paintRoom();
     V.scroll.scrollTop += V.scroll.scrollHeight - before;
+    btn.disabled = false; // the button node is reused while older messages remain
   } catch (e) { btn.disabled = false; toast(e.message); }
 }
 function readRoom() {
@@ -1209,6 +1275,7 @@ function readRoom() {
 function messageMenu(m) {
   const g = boot.groups || {};
   const opts = [];
+  if (!+m.hidden && m.body && m.type !== 'image' && navigator.clipboard) opts.push({ icon: 'content_copy', label: t('copyText'), run: () => navigator.clipboard.writeText(String(m.body)).then(() => toast(t('copied')), () => {}) });
   if (!+m.mine && !+m.hidden) opts.push({ icon: 'flag', label: t('report'), run: () => reportMessage(m) });
   if (+m.mine && m.type === 'question' && m.question === 'open') opts.push({ icon: 'lock', label: t('private'), run: () => movePrivate(m) });
   if (g.canModerate) {
@@ -1228,9 +1295,31 @@ function roomMenu() {
   const r = G.room;
   const opts = [{ icon: 'shield', label: t('rules'), run: () => openSheet(t('rules'), '', [], h('ul', { class: 'rules', style: 'margin:0 6px 10px' }, G.rules.map((x) => h('li', null, x)))) },
     { icon: 'edit', label: t('nameTitle'), run: () => editName() }];
+  if (!+r.private) opts.unshift({ icon: 'share', label: t('share'), run: () => shareRoom() });
   if (+r.joined) opts.push({ icon: 'logout', label: t('leave'), bad: true, run: async () => { try { const d = await gcall('dsa2_groups_leave', { group: r.id }); G.room = d.group; renderRoom(); } catch (e) { toast(e.message); } } });
   if (g.canModerate) opts.push({ icon: 'lock', label: t('lock'), run: () => moderate('lock', null, { group_id: r.id, locked: +r.locked ? 0 : 1 }) });
   openSheet(r.name, '', opts);
+}
+/* A public room's link: any page of the site with ?dap_group=slug opens the chat in that room. A visitor
+ * who has to sign in first finds the room open after the login (boot.js keeps it for 15 minutes). */
+function roomLink(r) {
+  const home = safeUrl((boot && boot.urls && boot.urls.home) || '/') || location.origin + '/';
+  const u = new URL(home);
+  u.searchParams.set('dap_group', r.slug || String(r.id));
+  return u.href;
+}
+async function shareRoom() {
+  const r = G.room;
+  if (!r || r.loading || +r.private) return;
+  const url = roomLink(r);
+  const text = t('shareText', r.name);
+  if (navigator.share) {
+    try { await navigator.share({ title: r.name, text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  const field = h('input', { class: 'field', type: 'text', readonly: true, value: url, 'aria-label': t('copyLink'), onfocus: (e) => e.currentTarget.select() });
+  const opts = [{ icon: 'open_in_new', label: 'WhatsApp', run: () => W.open('https://wa.me/?text=' + encodeURIComponent(text + '\n' + url), '_blank', 'noopener,noreferrer') }];
+  if (navigator.clipboard) opts.unshift({ icon: 'content_copy', label: t('copyLink'), run: () => navigator.clipboard.writeText(url).then(() => toast(t('linkCopied')), () => {}) });
+  openSheet(t('shareTitle'), text, opts, h('div', { class: 'form', style: 'padding:0 6px 8px' }, field));
 }
 function reportMessage(m) {
   const reasons = [['scam', 'rScam'], ['abuse', 'rAbuse'], ['spam', 'rSpam'], ['other', 'rOther']];

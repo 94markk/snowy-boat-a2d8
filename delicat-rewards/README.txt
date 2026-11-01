@@ -1,4 +1,48 @@
-DELICAT REWARDS — ADMIN EDITION 3.2.4
+DELICAT REWARDS — ADMIN EDITION 3.3.0
+
+NOUVEAUTÉS 3.3.0 — PAGE « BONUS FREE FIRE » ET SÉCURITÉ
+- Une seule page, deux onglets : « Classement » (Meilleur client de la semaine) et « Mes bonus »
+  (progression, réclamation, Mes PINs récompenses). Shortcode : [delicat_bonus_free_fire].
+  Les anciens shortcodes fonctionnent toujours et ouvrent la même page sur leur onglet :
+  [delicat_meilleur_client] → Classement, [delicat_rewards] → Mes bonus.
+  Option : [delicat_bonus_free_fire tab="bonus"] pour ouvrir sur Mes bonus, title="" pour cacher le titre.
+  Lien direct vers un onglet : …/votre-page/#mes-bonus ou #classement.
+- Nouveau design : carte dégradée avec compte à rebours et prix de la 1re place, podium (1er, 2e, 3e)
+  avec les diamants de chaque place, classement avec barres, « Votre position » toujours visible en bas,
+  cartes de bonus avec barre de progression, bouton « Réclamer » animé. Mode clair et sombre, icônes
+  Material uniquement (les emoji des textes du tableau de bord ne sont plus affichés).
+- Célébrations : confettis et « Bravo ! » à la réclamation d'une récompense, confettis quand un bonus
+  devient disponible (une fois) et quand le client passe 1er de la semaine (une fois par semaine).
+  Rien ne bouge pour les personnes qui ont réduit les animations sur leur téléphone.
+- Plus rapide : la page ne contient plus aucune donnée personnelle (elle peut rester en cache) ; une
+  seule demande apporte la session, les bonus et le classement des deux onglets ; elle part pendant que
+  la page se charge encore. Fichiers de la page : 11 Ko (JS) + 5 Ko (CSS) compressés, chargés seulement
+  sur cette page. Aucune police externe.
+- Sécurité (revue complète du code 3.2.4, aucune faille critique ni clé secrète trouvée dans le code) :
+  · une ligne de commande gratuite (coupon 100 %, commande à 0) ne fait plus progresser un bonus ;
+  · une réclamation = un numéro unique enregistré par la base de données elle-même : même si deux
+    demandes passent le verrou en même temps, une seule récompense est créée ;
+  · les limites de réclamation sont par client : un compte qui envoie beaucoup de demandes ne bloque
+    plus les réclamations des autres ;
+  · le classement est recalculé une seule fois à la fois (avant, chaque visiteur relançait le calcul
+    complet juste après le reset du dimanche) ;
+  · l'application ne peut lire « Mes bonus » que du client connecté ;
+  · licences : une clé tapée en minuscules est reconnue ; un client qui envoie un « nonce » le reçoit
+    signé dans la réponse (une réponse enregistrée ne peut pas être rejouée) ; les clients actuels
+    continuent de fonctionner ;
+  · un numéro de remboursement demandé comme commande récompense répond « introuvable » (plus d'erreur) ;
+  · un prénom qui contient l'identifiant ou l'adresse e-mail du compte n'est plus affiché sur le site ;
+  · export CSV et motif de slug protégés contre des valeurs piégées.
+
+INSTALLATION 3.3.0
+1. WordPress > Extensions > Ajouter > Téléverser : delicat-rewards-admin-v3.3.0.zip, remplacer l'extension
+   existante (les réglages, commandes et registres sont conservés).
+2. Créez la page « Bonus Free Fire » (Pages > Ajouter, contenu : [delicat_bonus_free_fire]) et mettez-la
+   dans le menu, ou gardez vos pages actuelles : elles affichent déjà la nouvelle page.
+3. Purgez LiteSpeed Cache et Cloudflare.
+4. Testez avec un compte client : les deux onglets, puis une réclamation si un bonus est disponible.
+
+DELICAT REWARDS — 3.2.4
 
 NOUVEAUTÉS 3.2.4 — FOURNISSEURS MULTIPLES ET ERREURS 403
 - Les achats du même pack sont cumulés, quel que soit le fournisseur :

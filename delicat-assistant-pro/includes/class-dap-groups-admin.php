@@ -323,7 +323,11 @@ class DSA2_Groups_Admin {
             <?php endif; ?>
             <?php foreach ( $rows as $row ) : ?>
                 <tr>
-                    <td><strong><?php echo esc_html( $row->icon . ' ' . $row->name ); ?></strong><br><code><?php echo esc_html( $row->slug ); ?></code></td>
+                    <td><strong><?php echo esc_html( $row->icon . ' ' . $row->name ); ?></strong><br><code><?php echo esc_html( $row->slug ); ?></code>
+                        <?php if ( 'public' === $row->visibility && 'active' === $row->status ) : $link = add_query_arg( 'dap_group', $row->slug, home_url( '/' ) ); ?>
+                            <br><label class="screen-reader-text" for="dapg-link-<?php echo (int) $row->id; ?>">Lien à partager</label>
+                            <input id="dapg-link-<?php echo (int) $row->id; ?>" type="text" class="regular-text code" readonly value="<?php echo esc_url( $link ); ?>" onfocus="this.select()" style="margin-top:6px;max-width:100%" title="Lien à partager : il ouvre le chat dans ce groupe">
+                        <?php endif; ?></td>
                     <td><?php echo (int) $row->member_count; ?></td>
                     <td><?php echo (int) $row->message_count; ?></td>
                     <td><?php echo (int) $row->slow_mode; ?> s</td>

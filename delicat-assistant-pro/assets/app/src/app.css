@@ -39,16 +39,19 @@ svg.i.l { width: 26px; height: 26px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------------------------------------------------------------- frame */
-.scrim { position: fixed; inset: 0; background: var(--ds-color-overlay, rgba(15, 23, 42, .48)); z-index: 2147483001; opacity: 0; transition: opacity .2s; }
-.scrim.on { opacity: 1; }
+/* Closed means gone: a faded-out layer that still takes taps would sit over the whole page (7.0.1 fix:
+ * the site looked frozen after closing the chat). visibility flips after the fade, so the exit still animates. */
+.scrim { position: fixed; inset: 0; background: var(--ds-color-overlay, rgba(15, 23, 42, .48)); z-index: 2147483001; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity .2s, visibility 0s linear .2s; }
+.scrim.on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .2s, visibility 0s; }
 .app {
   position: fixed; z-index: 2147483002; display: flex; flex-direction: column; overflow: hidden;
   font-size: calc(15px * var(--a-scale)); line-height: 1.5;
   background: var(--a-bg); color: var(--a-text);
   inset: 0; height: var(--vvh, 100dvh); width: 100%;
-  transform: translateY(16px); opacity: 0; transition: transform .22s var(--a-ease), opacity .18s;
+  transform: translateY(16px); opacity: 0; visibility: hidden; pointer-events: none;
+  transition: transform .22s var(--a-ease), opacity .18s, visibility 0s linear .22s;
 }
-.app.on { transform: none; opacity: 1; }
+.app.on { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition: transform .22s var(--a-ease), opacity .18s, visibility 0s; }
 @media (min-width: 641px) {
   .scrim { display: none; }
   .app {
@@ -58,7 +61,7 @@ svg.i.l { width: 26px; height: 26px; }
   }
   :host([data-side=left]) .app { right: auto; left: max(20px, env(safe-area-inset-left)); }
 }
-.app.inline { position: relative; inset: auto; width: 100%; height: var(--dsa7-inline-h, 640px); transform: none; opacity: 1; border-radius: 16px; box-shadow: 0 0 0 1px var(--a-line); z-index: auto; }
+.app.inline { position: relative; inset: auto; width: 100%; height: var(--dsa7-inline-h, 640px); transform: none; opacity: 1; visibility: visible; pointer-events: auto; border-radius: 16px; box-shadow: 0 0 0 1px var(--a-line); z-index: auto; }
 .still .app, .still .scrim { transition: none; }
 
 /* ---------------------------------------------------------------- header */
@@ -222,6 +225,10 @@ svg.i.l { width: 26px; height: 26px; }
 .gm.me { align-self: flex-end; grid-template-columns: 1fr; }
 .gm.me .av, .gm.me .who { display: none; }
 .gm .msg { max-width: 100%; }
+.gm.cont { margin-top: -6px; }
+.gm.cont > .av { visibility: hidden; height: 0; }
+.gm.cont .who { display: none; }
+.gm.pending .bub { opacity: .72; }
 .gm .who { margin-left: 2px; }
 .gm.q .bub { border: 1.5px solid color-mix(in srgb, var(--ds-color-warning, #f59e0b) 65%, var(--a-line)); }
 .gm.q.me .bub { border-color: transparent; }

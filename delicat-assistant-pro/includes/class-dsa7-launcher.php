@@ -292,6 +292,7 @@ final class DSA7_Launcher {
                 'shop'    => DSA2_Data::store_url( 'shop' ),
                 'account' => $account,
                 'login'   => $account ? $account : wp_login_url( home_url( '/' ) ),
+                'home'    => home_url( '/' ),
             ),
             'groups'   => $groups,
         ) );

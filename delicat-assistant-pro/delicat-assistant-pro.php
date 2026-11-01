@@ -2,13 +2,13 @@
 /**
  * Plugin Name: Delicat Assistant Pro
  * Description: Secure mobile-first customer assistant for WooCommerce with wallet, orders, multilingual FAQ, WhatsApp and live admin chat.
- * Version: 7.0.0
+ * Version: 7.0.1
  * Author: Delicat Store
  * Text Domain: delicat-assistant
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DSA2_VERSION', '7.0.0' );
+define( 'DSA2_VERSION', '7.0.1' );
 define( 'DSA2_FILE', __FILE__ );
 define( 'DSA2_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DSA2_URL', plugin_dir_url( __FILE__ ) );
