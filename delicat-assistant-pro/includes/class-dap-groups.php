@@ -483,7 +483,9 @@ class DSA2_Groups {
             // Names frozen by earlier versions are checked too: a customer never appears under a staff-like name.
             if ( self::ROLE_AGENT !== $row->author_role && self::reserved_name( $author ) ) $author = sprintf( __( 'Client #%d', 'delicat-assistant' ), (int) $row->user_id ); // phpcs:ignore WordPress.WP.I18n.MissingTranslatorsComment
             $flags = array_filter( explode( ',', (string) $row->flags ) );
-            $author_key = substr( wp_hash( 'dsa7-author|' . (int) $row->user_id, 'nonce' ), 0, 12 );
+            // Scoped to the room: groups a run of messages by one person here, but cannot link that person
+            // across rooms (or to a later name) the way a site-wide key could.
+            $author_key = substr( wp_hash( 'dsa7-author|' . (int) $row->group_id . '|' . (int) $row->user_id, 'nonce' ), 0, 12 );
             $question = '';
             if ( 'question' === $row->message_type ) {
                 $question = in_array( 'answered', $flags, true ) ? 'answered' : ( in_array( 'private', $flags, true ) ? 'private' : 'open' );
