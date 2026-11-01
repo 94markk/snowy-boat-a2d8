@@ -21,6 +21,7 @@ defined( 'ABSPATH' ) || exit;
 const DELICAT_REF_DB         = 1;
 const DELICAT_REF_MAX_POINTS = 100;
 const DELICAT_REF_VPN_ANON_PER_HOUR = 300; // provider lookups from link visits (no account), per hour
+const DELICAT_REF_SIGNALS_PER_KIND = 100; // rows kept per account and kind (device, ip, fp, email, phone)
 const DELICAT_REF_IP_WINDOW  = 259200; // 3 days: network addresses are compared only while this recent
 
 /* ============================================================== storage */
@@ -108,9 +109,9 @@ function delicat_ref_defaults() {
 		'share_text'       => 'Rejoins-moi sur Delicat Store pour tes diamants Free Fire ! Crée ton compte avec mon lien et fais ton premier achat : {lien} (code {code})',
 	);
 }
-function delicat_ref_cfg( $key = null ) {
+function delicat_ref_cfg( $key = null, $reload = false ) {
 	static $c = null;
-	if ( null === $c ) {
+	if ( null === $c || $reload ) { // read once per request; $reload after the settings change
 		$saved = get_option( 'delicat_ref_config', array() );
 		$c = wp_parse_args( is_array( $saved ) ? $saved : array(), delicat_ref_defaults() );
 	}
@@ -247,10 +248,23 @@ function delicat_ref_signal( $user_id, $kind, $hash ) {
 	global $wpdb;
 	if ( (int) $user_id < 1 || ! preg_match( '/^[a-f0-9]{64}$/', (string) $hash ) ) return;
 	$t = delicat_ref_table( 'signals' ); $now = current_time( 'mysql', 1 );
-	// Known: refreshed. New: kept while the account has fewer than 100 of this kind, so a flood of fresh
-	// cookies cannot push the first ones (the evidence) out, nor grow the table without end.
+	// Known: refreshed. New: always recorded, within DELICAT_REF_SIGNALS_PER_KIND rows per account and kind.
+	// At the limit, room is made without losing what detection uses: network addresses older than the
+	// comparison window go first; for the other kinds the account's first 20 rows (the evidence) stay and
+	// the least recently seen of the others gives way. A flood can neither stop new signals being recorded
+	// nor push the first ones out, and the table cannot grow without end.
 	if ( $wpdb->query( $wpdb->prepare( "UPDATE $t SET seen_at=%s WHERE user_id=%d AND kind=%s AND hash=%s", $now, (int) $user_id, $kind, $hash ) ) ) return; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	if ( (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id=%d AND kind=%s", (int) $user_id, $kind ) ) >= 100 ) return; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$count = function () use ( $wpdb, $t, $user_id, $kind ) { return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id=%d AND kind=%s", (int) $user_id, $kind ) ); }; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( $count() >= DELICAT_REF_SIGNALS_PER_KIND ) {
+		if ( 'ip' === $kind ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM $t WHERE user_id=%d AND kind='ip' AND seen_at<%s", (int) $user_id, gmdate( 'Y-m-d H:i:s', time() - DELICAT_REF_IP_WINDOW ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
+		if ( $count() >= DELICAT_REF_SIGNALS_PER_KIND ) {
+			$first = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t WHERE user_id=%d AND kind=%s ORDER BY id ASC LIMIT 1 OFFSET 19", (int) $user_id, $kind ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$gone  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT id FROM $t WHERE user_id=%d AND kind=%s AND id>%d ORDER BY seen_at ASC, id ASC LIMIT 1", (int) $user_id, $kind, $first ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			if ( $gone ) $wpdb->delete( $t, array( 'id' => $gone ) );
+		}
+	}
 	$wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $t (user_id,kind,hash,seen_at) VALUES (%d,%s,%s,%s)", (int) $user_id, $kind, $hash, $now ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 }
 /** Records what this request tells about the signed-in customer (device, network, browser, e-mail). */

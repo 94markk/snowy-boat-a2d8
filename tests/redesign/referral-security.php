@@ -162,9 +162,11 @@ try {
 	$check( 'points stop at 100', 100 === delicat_ref_points( $inv ) );
 
 	/* Many new friends in a day go to review. */
+	$saved_cfg = get_option( 'delicat_ref_config' ); update_option( 'delicat_ref_config', array_merge( (array) $saved_cfg, array( 'daily_cap' => 5 ) ), false ); delicat_ref_cfg( null, true ); // the default limit
 	$burst = array(); $inv2 = $user( 'rs_inv2' );
 	for ( $i = 0; $i < 6; $i++ ) { $_SERVER['REMOTE_ADDR'] = '198.18.' . ( 10 + $i ) . '.1'; $new_phone(); $b = $user( 'rs_b' . $i ); $burst[] = delicat_ref_attach( $b, $inv2, 'link' ); }
 	$check( 'velocity: the 6th new friend in 24 h goes to review', 'signed_up' === $burst[4] && 'review' === $burst[5] && false !== strpos( (string) delicat_ref_row_for( $b )->reason, 'velocity' ), wp_json_encode( $burst ) );
+	update_option( 'delicat_ref_config', $saved_cfg, false ); delicat_ref_cfg( null, true );
 
 	/* Rate limits. */
 	wp_set_current_user( 0 ); $_SERVER['REMOTE_ADDR'] = '203.0.113.90';
@@ -242,6 +244,17 @@ try {
 	wp_update_post( array( 'ID' => $draft, 'post_status' => 'publish', 'post_password' => 'x' ) );
 	$check( 'links: a draft or a password-protected page is never used as the page', ! delicat_ref_public_page( $draft ) && delicat_ref_public_page( get_page_by_path( 'bonus-free-fire' )->ID ) );
 	wp_delete_post( $draft, true );
+
+	/* Signal limit: new signals are always recorded; old network addresses and non-evidence rows make room. */
+	$full = $user( 'rs_full' ); $st_t = delicat_ref_table( 'signals' ); $old_at = gmdate( 'Y-m-d H:i:s', time() - 10 * DAY_IN_SECONDS );
+	for ( $i = 0; $i < 100; $i++ ) {
+		$wpdb->insert( $st_t, array( 'user_id' => $full, 'kind' => 'ip', 'hash' => hash( 'sha256', 'ip' . $i ), 'seen_at' => $old_at ) );
+		$wpdb->insert( $st_t, array( 'user_id' => $full, 'kind' => 'device', 'hash' => hash( 'sha256', 'dev' . $i ), 'seen_at' => gmdate( 'Y-m-d H:i:s', time() - ( 200 - $i ) * MINUTE_IN_SECONDS ) ) );
+	}
+	delicat_ref_signal( $full, 'ip', hash( 'sha256', 'ip-new' ) ); delicat_ref_signal( $full, 'device', hash( 'sha256', 'dev-new' ) );
+	$has = function ( $kind, $h ) use ( $wpdb, $st_t, $full ) { return (bool) $wpdb->get_var( $wpdb->prepare( "SELECT 1 FROM $st_t WHERE user_id=%d AND kind=%s AND hash=%s", $full, $kind, $h ) ); };
+	$check( 'signals: a full account still records a new network address (old ones make room)', $has( 'ip', hash( 'sha256', 'ip-new' ) ) && 1 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $st_t WHERE user_id=%d AND kind='ip'", $full ) ) );
+	$check( 'signals: a full account still records a new device, keeps its first ones, stays at 100', $has( 'device', hash( 'sha256', 'dev-new' ) ) && $has( 'device', hash( 'sha256', 'dev0' ) ) && $has( 'device', hash( 'sha256', 'dev19' ) ) && ! $has( 'device', hash( 'sha256', 'dev20' ) ) && 100 === (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $st_t WHERE user_id=%d AND kind='device'", $full ) ) );
 
 	/* A blocked account's hashed evidence survives its deletion. */
 	$gone = $user( 'rs_gone' ); delicat_ref_signal( $gone, 'device', hash( 'sha256', 'rs-gone-device' ) ); delicat_ref_block( $gone, 'same_device', false );
