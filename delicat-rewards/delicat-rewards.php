@@ -2,9 +2,12 @@
 /**
  * Plugin Name: Delicat Rewards — Admin Edition
  * Description: Complete Delicat Rewards system with branding controls and secure license server for Client editions.
- * Version:     3.4.0
+ * Version:     3.4.1
  * Author:      Delicat Store Haiti
  * Requires PHP: 7.4
+ *
+ * NEW IN 3.4.1 — A friend's first order must be a retail order (delicat_order_is_retail): purchases at
+ *   reseller price (Delicat Resellers) and staff orders do not earn referral points.
  *
  * NEW IN 3.4.0 — Referral programme « Parrainage » (referral.php, referral-admin.php).
  *   • Third tab on the Bonus Free Fire page: personal code DLC…… and link, share buttons (WhatsApp,
@@ -206,7 +209,7 @@ define( 'DELICAT_BOARD_SPEND_WEIGHT', 0.70 ); // Meilleur Client: money is prima
 define( 'DELICAT_BOARD_ORDER_WEIGHT', 0.30 ); // distinct WooCommerce orders
 define( 'DELICAT_LEDGER_DEBT_KEY',    '#debt' ); // reserved signed-ledger key: purchases still owed (sanitize_key can never produce it)
 define( 'DELICAT_DEBT_MONTHS',        13 );    // how many past months a refund after a claim is carried forward from
-if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.4.0' ); // keep in step with the header
+if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.4.1' ); // keep in step with the header
 
 /** Capability required for every Delicat admin screen and action. */
 require_once __DIR__ . '/reward-delivery.php';

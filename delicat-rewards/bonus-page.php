@@ -104,7 +104,7 @@ function delicat_bonus_page( $atts = array() ) {
 			<h2 class="dbf-hero-title"><?php echo esc_html( $t( 'boardTitle', 'MEILLEUR CLIENT' ) ); ?></h2>
 			<p class="dbf-games"><?php echo esc_html( $t( 'boardGames', 'Free Fire' ) ); ?></p>
 			<div class="dbf-glass"><span class="dbf-glass-i" data-icon="timer"></span><div><small><?php echo esc_html( $t( 'boardResetLabel', 'RESET NAN' ) ); ?></small><b id="dbf-board-clock">—</b></div></div>
-			<div class="dbf-glass"><span class="dbf-glass-i" data-icon="trophy"></span><div><small><?php echo esc_html( $t( 'boardRewardLabel', 'RÉCOMPENSE · 1ÈRE PLACE' ) ); ?></small><b><?php echo $prize > 0 ? esc_html( number_format_i18n( $prize ) . ' diamants' ) : '—'; ?></b></div></div>
+			<div class="dbf-glass"><span class="dbf-glass-i" data-icon="trophy"></span><div><small><?php echo esc_html( $t( 'boardRewardLabel', 'RÉCOMPENSE · 1ÈRE PLACE' ) ); ?></small><b><?php echo $prize > 0 ? esc_html( delicat_num( $prize ) . ' diamants' ) : '—'; ?></b></div></div>
 			<?php $sub = $t( 'boardRewardSub', '' ); if ( '' !== $sub ) : ?><p class="dbf-hero-sub"><?php echo esc_html( $sub ); ?></p><?php endif; ?>
 		</div>
 		<h2 class="dbf-h"><?php echo esc_html( $t( 'boardHeading', 'KLASMAN' ) ); ?></h2>
@@ -157,7 +157,7 @@ function delicat_bonus_page( $atts = array() ) {
 		<div class="dbf-ref-body" id="dbf-ref-body" aria-busy="true"><div class="dbf-card dbf-skel" aria-hidden="true"></div></div>
 		<details class="dbf-how"><summary>Règles du parrainage</summary><ol>
 			<li>Partagez votre code ou votre lien personnel.</li>
-			<li>Votre ami crée son compte avec votre lien (ou tape votre code dans les <?php echo (int) $rc['code_days']; ?> jours suivant son inscription), puis paie un premier achat d’au moins <?php echo esc_html( number_format_i18n( (int) $rc['min_order'] ) ); ?> HTG<?php echo $rc['exclude_wallet'] ? ' par MonCash, NatCash ou un autre moyen de paiement (pas avec le crédit boutique)' : ''; ?> dans les <?php echo (int) $rc['order_days']; ?> jours.</li>
+			<li>Votre ami crée son compte avec votre lien (ou tape votre code dans les <?php echo (int) $rc['code_days']; ?> jours suivant son inscription), puis paie un premier achat d’au moins <?php echo esc_html( delicat_num( (int) $rc['min_order'] ) ); ?> HTG<?php echo $rc['exclude_wallet'] ? ' par MonCash, NatCash ou un autre moyen de paiement (pas avec le crédit boutique)' : ''; ?> dans les <?php echo (int) $rc['order_days']; ?> jours.</li>
 			<li>Le point est validé <?php echo (int) $rc['hold_days']; ?> jours après son achat terminé, s’il n’est ni remboursé ni annulé.</li>
 			<li>Un compte par personne et par téléphone. Une invitation ne compte pas si le compte est ouvert sur le même téléphone, avec le même numéro ou la même adresse e-mail qu’un autre compte, ou avec un VPN. Plusieurs comptes sur un même téléphone sont retirés du programme de récompenses.</li>
 			<li>Maximum <?php echo (int) $refmax; ?> points. Chaque palier se réclame une fois : diamants Free Fire ou crédit boutique, au choix.</li>
@@ -176,7 +176,7 @@ function delicat_bonus_page( $atts = array() ) {
 		<span class="dbf-av dbf-av--lg" data-ref="initials">?</span>
 		<p class="dbf-kicker">Invitation</p>
 		<h2><span data-ref="name">Un ami</span> vous invite sur Delicat Store</h2>
-		<p class="dbf-muted">Créez votre compte avec cette invitation, puis payez votre premier achat d’au moins <?php echo esc_html( number_format_i18n( (int) $rc['min_order'] ) ); ?> HTG : votre ami gagne un point de parrainage.</p>
+		<p class="dbf-muted">Créez votre compte avec cette invitation, puis payez votre premier achat d’au moins <?php echo esc_html( delicat_num( (int) $rc['min_order'] ) ); ?> HTG : votre ami gagne un point de parrainage.</p>
 		<div class="dbf-invite-actions">
 			<a class="dbf-btn" href="<?php echo esc_url( delicat_ref_signup_url( (string) get_permalink() ) ); ?>" data-dl-open data-dl-open-register><span data-icon="person_add"></span>Créer mon compte</a>
 			<a class="dbf-btn dbf-btn--ghost" href="<?php echo esc_url( wp_login_url( (string) get_permalink() ) ); ?>" data-dl-open>J’ai déjà un compte</a>

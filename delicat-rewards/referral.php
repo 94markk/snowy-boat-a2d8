@@ -24,6 +24,11 @@ const DELICAT_REF_VPN_ANON_PER_HOUR = 300; // provider lookups from link visits 
 const DELICAT_REF_SIGNALS_PER_KIND = 100; // rows kept per account and kind (device, ip, fp, email, phone)
 const DELICAT_REF_IP_WINDOW  = 259200; // 3 days: network addresses are compared only while this recent
 
+/** A number for text (French WordPress writes « &nbsp; » between thousands: decoded, so it can be escaped). */
+function delicat_num( $n, $decimals = 0 ) {
+	return html_entity_decode( number_format_i18n( (float) $n, $decimals ), ENT_QUOTES, 'UTF-8' );
+}
+
 /* ============================================================== storage */
 
 function delicat_ref_table( $which ) {
@@ -547,6 +552,7 @@ function delicat_ref_row_for( $referred_id ) {
 function delicat_ref_order_counts( $order ) {
 	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) return false;
 	if ( $order->get_meta( '_delicat_reward' ) ) return false;                         // a free reward order
+	if ( function_exists( 'delicat_order_is_retail' ) && ! delicat_order_is_retail( $order ) ) return false; // reseller and staff orders (3.4.1)
 	if ( ! $order->is_paid() || ! $order->has_status( 'completed' ) ) return false;
 	// 100 % coupons, tiny orders, and what is left after a partial refund
 	if ( (float) $order->get_total() - (float) $order->get_total_refunded() < max( 1, (float) delicat_ref_cfg( 'min_order' ) ) ) return false;

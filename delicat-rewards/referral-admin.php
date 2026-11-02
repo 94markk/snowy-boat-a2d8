@@ -39,7 +39,7 @@ function delicat_tab_referral() {
 	echo '<div class="box"><h3>Programme de parrainage</h3><p>Un client invite ses amis avec son code ou son lien personnel. Chaque ami qui crée un compte et paie un premier achat réel lui donne 1 point (maximum ' . (int) DELICAT_REF_MAX_POINTS . '). Les paliers débloquent une récompense, au choix : diamants Free Fire (PIN) ou crédit boutique en HTG. Page client : onglet « Parrainage » de la page Bonus Free Fire.</p>';
 	echo '<p><strong>État :</strong> ' . ( delicat_ref_on() ? '<span style="color:#008a20">activé</span>' : '<span style="color:#b32d2e">désactivé</span> — vérifiez les récompenses ci-dessous puis activez.' ) . '</p>';
 	echo '<p>Invitations : ' . (int) ( $counts['signed_up'] ?? 0 ) . ' inscrites · ' . (int) ( $counts['qualified'] ?? 0 ) . ' achat en attente · ' . (int) ( $counts['confirmed'] ?? 0 ) . ' points donnés · ' . (int) ( $counts['review'] ?? 0 ) . ' à vérifier · ' . (int) ( $counts['rejected'] ?? 0 ) . ' refusées.';
-	foreach ( (array) $claims as $cl ) echo ' Récompenses : ' . (int) $cl->n . ' × ' . ( 'htg' === $cl->choice ? 'crédit (' . number_format_i18n( (int) $cl->total ) . ' HTG)' : 'diamants (' . number_format_i18n( (int) $cl->total ) . ')' ) . '.';
+	foreach ( (array) $claims as $cl ) echo ' Récompenses : ' . (int) $cl->n . ' × ' . ( 'htg' === $cl->choice ? 'crédit (' . delicat_num( (int) $cl->total ) . ' HTG)' : 'diamants (' . delicat_num( (int) $cl->total ) . ')' ) . '.';
 	echo '</p></div>';
 
 	/* ---- settings */
@@ -108,7 +108,7 @@ function delicat_tab_referral() {
 	if ( $stuck ) {
 		echo '<div class="box"><h3>Réclamations à vérifier (' . count( $stuck ) . ')</h3><p>Une erreur a interrompu ces réclamations : le client a peut-être déjà reçu sa récompense. Vérifiez son portefeuille et ses commandes ; « Libérer » rend le palier réclamable, « Marquer donné » le ferme.</p><table class="widefat striped"><thead><tr><th>Client</th><th>Palier</th><th>Choix</th><th>Date</th><th></th></tr></thead><tbody>';
 		foreach ( $stuck as $cl ) {
-			echo '<tr><td>' . esc_html( delicat_ref_user_label( $cl->user_id ) ) . '</td><td>' . (int) $cl->milestone . ' points</td><td>' . ( 'htg' === $cl->choice ? esc_html( number_format_i18n( (int) $cl->amount ) ) . ' HTG' : esc_html( number_format_i18n( (int) $cl->amount ) ) . ' diamants' ) . '</td><td>' . esc_html( $cl->created_at ) . '</td><td>';
+			echo '<tr><td>' . esc_html( delicat_ref_user_label( $cl->user_id ) ) . '</td><td>' . (int) $cl->milestone . ' points</td><td>' . ( 'htg' === $cl->choice ? esc_html( delicat_num( (int) $cl->amount ) ) . ' HTG' : esc_html( delicat_num( (int) $cl->amount ) ) . ' diamants' ) . '</td><td>' . esc_html( $cl->created_at ) . '</td><td>';
 			$form( 'delicat_ref_release' );
 			echo '<input type="hidden" name="id" value="' . (int) $cl->id . '"><button class="button" name="do" value="release">Libérer</button> <button class="button" name="do" value="done">Marquer donné</button></form></td></tr>';
 		}

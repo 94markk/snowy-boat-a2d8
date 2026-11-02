@@ -1,4 +1,11 @@
-DELICAT REWARDS — ADMIN EDITION 3.4.0
+DELICAT REWARDS — ADMIN EDITION 3.4.1
+
+NOUVEAUTÉS 3.4.1
+- Parrainage : le premier achat d'un ami doit être un achat client. Un achat à prix revendeur (extension
+  Delicat Resellers) ou fait par un compte de l'équipe ne donne pas de point, comme pour les bonus et le
+  classement.
+
+DELICAT REWARDS — 3.4.0
 
 NOUVEAUTÉS 3.4.0 — PARRAINAGE (« INVITER UN AMI »)
 - Un troisième onglet « Parrainage » sur la page Bonus Free Fire (lien direct : …/votre-page/#parrainage).
