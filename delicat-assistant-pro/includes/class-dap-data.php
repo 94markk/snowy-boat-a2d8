@@ -1438,6 +1438,12 @@ class DSA2_Data {
 
         $order = false;
         $id = absint( preg_replace( '/\D+/', '', $number ) );
+        // 7.1.0: a known phone number tried against many orders, or many proofs against one order, from several
+        // addresses: 5 failures per order number per hour (counted for every number, so the limit reveals nothing).
+        $fail_key = 'dap_ofail_' . md5( (string) $id );
+        if ( $id && (int) get_transient( $fail_key ) >= 5 ) {
+            wp_send_json_error( array( 'message' => self::t( $lang, 'Trop de tentatives. Réessayez plus tard.', 'Too many attempts. Try again later.', 'Twòp tantativ. Eseye ankò pita.' ) ), 429 );
+        }
         if ( $id && $proof ) {
             $candidate = wc_get_order( $id );
             // wc_get_order() also returns refunds and other order types, which have no
@@ -1452,6 +1458,7 @@ class DSA2_Data {
                 if ( $email_ok || $phone_ok ) $order = $candidate;
             }
         }
+        if ( ! $order && $id ) set_transient( $fail_key, (int) get_transient( $fail_key ) + 1, HOUR_IN_SECONDS );
         if ( ! $order ) {
             // Same answer whether the order is missing or the proof is wrong: no enumeration.
             $payload = array( 'type' => 'help_card', 'body' => 'order_not_found:' . substr( md5( $number . '|' . $proof ), 0, 8 ), 'meta' => array(

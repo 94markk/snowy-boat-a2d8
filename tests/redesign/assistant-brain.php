@@ -146,8 +146,35 @@ try {
 	$send( $users['a'], 'c’est nul, tu comprends rien' );
 	$r = $send( $users['a'], 'oui' );
 	$check( 'memory: « oui » after « voulez-vous un agent ? » connects', in_array( $r['type'], array( 'agent_card', 'contact_card' ), true ), $r['type'] );
+	$fresh( $users['a'] );
+	$send( $users['a'], 'c’est nul, tu comprends rien' );
+	$send( $users['a'], 'Quels sont vos horaires ?' );
+	$r = $send( $users['a'], 'oui' );
+	$check( 'memory: the offer lapses once the conversation moves on', ! in_array( $r['type'], array( 'agent_card', 'contact_card' ), true ), $r['type'] );
+	$r = $ask( $users['a'], '987654321' );
+	$check( 'order: a Player ID typed alone (9 digits) is not looked up as an order', false === strpos( (string) $r['body'], 'order_not_found' ) && 'order_card' !== $r['type'], $r['body'] );
 	$r = $ask( 0, 'où est ma commande', 'fr', $guest_key() );
 	$check( 'wording: no « commande ce produit » when no product is named', false === strpos( wp_json_encode( $r ), 'ce produit' ) );
+
+	/* The visitor form (number + e-mail or phone): wrong proofs are limited per order number, from any address. */
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%dap\\_ord\\_%' OR option_name LIKE '%dap\\_ofail\\_%'" );
+	wp_cache_flush();
+	$g = $guest_key();
+	$find = static function ( $proof, $ip ) use ( $num_a, $g ) {
+		wp_set_current_user( 0 );
+		$_COOKIE['dap_session'] = $g;
+		$_SERVER['REMOTE_ADDR'] = $ip;
+		$_POST = $_REQUEST = array( 'order' => $num_a, 'proof' => $proof, 'language' => 'fr', 'nonce' => wp_create_nonce( 'dsa2_frontend' ) );
+		ob_start();
+		try { DSA2_Data::ajax_find_order(); } catch ( DAB_Test_Response $e ) {}
+		return json_decode( (string) ob_get_clean(), true );
+	};
+	for ( $i = 0; $i < 5; $i++ ) $find( '+50911110' . $i . $i . $i, '198.51.100.' . ( 10 + $i ) ); // five addresses, five wrong phones
+	$blocked = $find( 'secret-mail@example.test', '198.51.100.99' ); // even the right proof, from a sixth address
+	$_SERVER['REMOTE_ADDR'] = '203.0.113.71';
+	$check( 'visitor form: after 5 wrong proofs for one order number, that number is locked for an hour', empty( $blocked['success'] ) && false !== strpos( (string) ( $blocked['data']['message'] ?? '' ), 'Trop de tentatives' ), wp_json_encode( $blocked ) );
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%dap\\_ord\\_%' OR option_name LIKE '%dap\\_ofail\\_%'" );
+	wp_cache_flush();
 
 	/* The rest of the store. */
 	if ( function_exists( 'dlr_on' ) && dlr_on() ) {

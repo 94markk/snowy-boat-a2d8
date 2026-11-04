@@ -23,6 +23,20 @@ class DSA2_Mobile_API {
      * account linking by e-mail code, with orders and wallet history behind it. The admin
      * API (delicat-assistant-admin/v1) is not affected.
      */
+    /** 7.1.0: every answer of this API except /config is private (messages carry order cards). */
+    public static function private_response( $response, $server, $request ) {
+        if ( ! $response instanceof WP_REST_Response || ! $request instanceof WP_REST_Request ) return $response;
+        $route = (string) $request->get_route();
+        foreach ( array( self::NS, self::LEGACY_NS ) as $ns ) {
+            if ( 0 === strpos( $route, '/' . $ns . '/' ) && '/' . $ns . '/config' !== $route ) {
+                $response->header( 'Cache-Control', 'private, no-store, max-age=0' );
+                $response->header( 'Vary', 'Authorization' );
+                break;
+            }
+        }
+        return $response;
+    }
+
     public static function customer_api_enabled() {
         $settings = get_option( 'dap_settings', array() );
         if ( is_array( $settings ) && array_key_exists( 'customer_api_enabled', $settings ) ) {
@@ -34,6 +48,7 @@ class DSA2_Mobile_API {
 
     public static function routes() {
         if ( ! self::customer_api_enabled() ) return;
+        add_filter( 'rest_post_dispatch', array( __CLASS__, 'private_response' ), 10, 3 );
         foreach ( array( self::NS, self::LEGACY_NS ) as $ns ) {
             register_rest_route( $ns, '/config', array( 'methods'=>'GET', 'callback'=>array(__CLASS__,'config'), 'permission_callback'=>'__return_true' ) );
             register_rest_route( $ns, '/bootstrap', array( 'methods'=>'POST', 'callback'=>array(__CLASS__,'bootstrap'), 'permission_callback'=>'__return_true' ) );

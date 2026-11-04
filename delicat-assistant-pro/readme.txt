@@ -51,7 +51,13 @@ No. WhatsApp is shown only when it is enabled and a valid number has been saved.
   Le reçu partagé ne contient ni adresse, ni téléphone, ni e-mail, ni code PIN, ni Player ID, ni note.
 * Sécurité : la commande d'un autre client reçoit exactement la même réponse qu'un numéro qui n'existe pas ; un
   visiteur non connecté est invité à se connecter (ou à utiliser le formulaire numéro + e-mail) ; 30 recherches
-  par heure et par compte au plus (90 par adresse réseau).
+  par heure et par compte au plus (300 par adresse réseau, pour les clients qui partagent l'adresse de leur
+  opérateur) ; seules les vraies commandes de la boutique sont montrées ; le total affiché tient compte des
+  remboursements.
+* Sécurité : le formulaire « numéro de commande + e-mail ou téléphone » se bloque une heure après 5 essais faux
+  sur un même numéro, quelle que soit l'adresse réseau ; les réponses de l'API client du chat portent
+  « Cache-Control: private, no-store » (jamais gardées par un cache) ; un « oui » ne répond qu'à la question
+  juste avant ; un nombre seul de plus de 7 chiffres (Player ID, téléphone) n'est plus pris pour une commande.
 * « Où est ma commande ? » (client connecté) : la carte de sa dernière commande.
 * Conversation plus naturelle : « Bonjour, je n'ai pas reçu mes diamants » reçoit la réponse sur les diamants (pas
   seulement « Bonjour ») ; « Est-ce que ça va arriver ? », « J'attends depuis 3 jours », « Il n'y a plus de

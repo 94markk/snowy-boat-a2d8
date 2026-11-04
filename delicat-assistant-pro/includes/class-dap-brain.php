@@ -20,8 +20,8 @@ defined( 'ABSPATH' ) || exit;
 
 final class DSA2_Brain {
 
-	const LOOKUPS_PER_HOUR = 30;   // per account (and three times that per address)
-	const PENDING_TTL      = 600;  // how long « oui » still answers the bot's last question
+	const LOOKUPS_PER_HOUR = 30;   // per account (and ten times that per address)
+	const PENDING_TTL      = 180;  // how long « oui » still answers the bot's last question (the next message only)
 
 	private static function t( $lang, $fr, $en, $ht ) {
 		return 'en' === $lang ? $en : ( 'ht' === $lang ? $ht : $fr );
@@ -40,9 +40,12 @@ final class DSA2_Brain {
 	/** « oui / wi / yes / ok » right after the bot offered something: what was offered, once. */
 	public static function answer_to_pending( $conv, $body ) {
 		if ( ! $conv || empty( $conv->id ) ) return '';
-		$t = self::norm( $body );
-		if ( ! preg_match( '/^(oui|ouais|wi|wi wi|yes|yeah|yep|ok|okay|oke|dako|d accord|daccord|bien sur|of course|sure|svp|s il vous plait|please|tanpri|wi tanpri|yes please|oui svp)[ !.]*$/', $t ) ) return '';
-		$key  = 'dap_pend_' . (int) $conv->id;
+		$t   = self::norm( $body );
+		$key = 'dap_pend_' . (int) $conv->id;
+		if ( ! preg_match( '/^(oui|ouais|wi|wi wi|yes|yeah|yep|ok|okay|oke|dako|d accord|daccord|bien sur|of course|sure|svp|s il vous plait|please|tanpri|wi tanpri|yes please|oui svp)[ !.]*$/', $t ) ) {
+			delete_transient( $key ); // anything else moves the conversation on: the offer lapses
+			return '';
+		}
 		$what = (string) get_transient( $key );
 		if ( '' === $what ) return '';
 		delete_transient( $key );
@@ -57,7 +60,7 @@ final class DSA2_Brain {
 		$not_amount = '(?!\s*(?:diam|dyam|dia\b|uc\b|cp\b|robux|htg|gde|goud|pin\b|jeton|piece|pyes|\$|usd|g\b))';
 		if ( preg_match( '/#\s*(\d{2,10})\b' . $not_amount . '/', $n, $m ) ) return $m[1];
 		if ( preg_match( '/\b(?:commande|cmd|order|komand|kmand|achat|facture|recu|receipt|resi)\s*(?:n\s*o\b|no\b|n°|num(?:ero)?|nimewo|number|numero)?\s*[.:#]?\s*(\d{3,10})\b' . $not_amount . '/', $n, $m ) ) return $m[1];
-		if ( preg_match( '/^(\d{4,10})$/', $n, $m ) ) return $m[1]; // the number alone
+		if ( preg_match( '/^(\d{4,7})$/', $n, $m ) ) return $m[1]; // the number alone (Player IDs and phones are longer)
 		return '';
 	}
 
@@ -65,14 +68,15 @@ final class DSA2_Brain {
 	public static function own_order( $uid, $number ) {
 		$uid = (int) $uid;
 		if ( $uid < 1 || '' === (string) $number || ! function_exists( 'wc_get_order' ) ) return null;
+		$known = array_keys( wc_get_order_statuses() );
 		$order = wc_get_order( absint( $number ) );
-		if ( $order instanceof WC_Order && (int) $order->get_customer_id() === $uid
-			&& (string) $order->get_order_number() === (string) $number && 'checkout-draft' !== $order->get_status() ) {
+		if ( $order instanceof WC_Order && 'shop_order' === $order->get_type() && (int) $order->get_customer_id() === $uid
+			&& (string) $order->get_order_number() === (string) $number && in_array( 'wc-' . $order->get_status(), $known, true ) ) {
 			return $order;
 		}
 		// Order numbers that differ from the internal ids (sequential-number plugins): this customer's orders only.
 		foreach ( (array) wc_get_orders( array( 'customer_id' => $uid, 'limit' => 100, 'orderby' => 'date', 'order' => 'DESC', 'type' => 'shop_order' ) ) as $o ) {
-			if ( $o instanceof WC_Order && (string) $o->get_order_number() === (string) $number && 'checkout-draft' !== $o->get_status() ) return $o;
+			if ( $o instanceof WC_Order && (string) $o->get_order_number() === (string) $number && in_array( 'wc-' . $o->get_status(), $known, true ) ) return $o;
 		}
 		return null;
 	}
@@ -80,7 +84,7 @@ final class DSA2_Brain {
 	/** Fixed one-hour window per account, and per address for every caller. */
 	private static function lookup_allowed( $uid ) {
 		$ip   = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
-		$keys = array( 'dap_olk_ip_' . md5( $ip ) => self::LOOKUPS_PER_HOUR * 3 );
+		$keys = array( 'dap_olk_ip_' . md5( $ip ) => self::LOOKUPS_PER_HOUR * 10 ); // carrier-NAT: many customers share one address
 		if ( $uid > 0 ) $keys[ 'dap_olk_u_' . (int) $uid ] = self::LOOKUPS_PER_HOUR;
 		foreach ( $keys as $k => $limit ) {
 			if ( (int) get_transient( $k ) >= $limit ) return false;
@@ -155,7 +159,7 @@ final class DSA2_Brain {
 		$number = (string) $o->get_order_number();
 		$state  = sanitize_key( $o->get_status() );
 		$status = wp_strip_all_tags( wc_get_order_status_name( $state ) );
-		$total  = html_entity_decode( wp_strip_all_tags( $o->get_formatted_order_total() ), ENT_QUOTES, 'UTF-8' );
+		$total  = html_entity_decode( wp_strip_all_tags( wc_price( (float) $o->get_total() - (float) $o->get_total_refunded(), array( 'currency' => $o->get_currency() ) ) ), ENT_QUOTES, 'UTF-8' );
 		$date   = $o->get_date_created() ? wc_format_datetime( $o->get_date_created() ) : '';
 		$paid   = wp_strip_all_tags( (string) $o->get_payment_method_title() );
 		$items  = array();
