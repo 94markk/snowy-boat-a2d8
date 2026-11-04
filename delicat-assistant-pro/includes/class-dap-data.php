@@ -368,7 +368,7 @@ class DSA2_Data {
             // and the engine varies the wording so it is not the same sentence anyway.
             $is_small_talk = ( 'small_talk_v3' === ( $reply['meta']['source'] ?? '' ) );
             $window = in_array( $reply['type'], array( 'agent_card', 'contact_card' ), true ) ? 20
-                : ( $is_small_talk ? 8 : 120 );
+                : ( $is_small_talk ? 8 : 15 ); // 7.1.0: was 120 s
             if ( ! self::is_duplicate_assistant_reply( $conv->id, $reply['body'], $window ) ) {
                 $reply_channel = in_array( $reply['type'], array( 'agent_card', 'contact_card', 'rate_card' ), true ) ? 'agent' : 'bot';
                 $message_id = self::add_message( $conv->id, 'assistant', $reply['body'], $reply['type'], $reply['meta'], $reply_channel );
@@ -1661,9 +1661,23 @@ class DSA2_Data {
      */
     private static function smart_reply( $body, $lang, $quiet = false, $user_id = null, $context = array(), $conv = null ) {
         $lead = '';
+        $uid_now = ( null === $user_id ) ? get_current_user_id() : (int) $user_id;
+        // 7.1.0: « oui » right after the bot offered an agent connects (it used to get « Parfait 👍 »).
+        if ( class_exists( 'DSA2_Brain', false ) && 'agent' === DSA2_Brain::answer_to_pending( $conv, $body ) ) {
+            return self::quick_action_payload( 'agent', $lang, $uid_now, $context );
+        }
         if ( class_exists( 'DSA2_SmallTalk', false ) ) {
             $st = DSA2_SmallTalk::analyze( $body, $lang, $conv );
             if ( $st ) {
+                $st_intent = (string) ( $st['intent'] ?? '' );
+                // « J'attends toujours », « fè vit »: the card promised an agent; now it really asks for one
+                // (unless a human conversation is already open: the agent is already pinged).
+                if ( ! empty( $st['pure'] ) && 'still_waiting' === $st_intent && ! $quiet ) {
+                    return self::quick_action_payload( 'agent', ! empty( $st['lang'] ) ? $st['lang'] : $lang, $uid_now, $context );
+                }
+                if ( ! empty( $st['pure'] ) && in_array( $st_intent, array( 'frustration', 'impatient', 'call_me' ), true ) && class_exists( 'DSA2_Brain', false ) ) {
+                    DSA2_Brain::remember( $conv, 'agent' ); // « voulez-vous un agent ? » — a « oui » now connects
+                }
                 if ( ! empty( $st['pure'] ) ) return $st['payload'];
                 $lead = (string) $st['lead'];
                 // Reply in the language the customer actually wrote in.
@@ -1680,11 +1694,15 @@ class DSA2_Data {
     private static function smart_reply_core( $body, $lang, $quiet = false, $user_id = null, $context = array() ) {
         $uid = ( null === $user_id ) ? get_current_user_id() : (int) $user_id;
         $context = self::sanitize_context($context);
-        if ( !empty($context['product_id']) && preg_match('/\b(ce produit|cet article|this product|this item|pwodwi sa|sa a|celui ci|celle ci|prix de ce|price of this|plan sélectionné|selected plan)\b/u', DSA2_Products::norm($body)) ) {
+        if ( !empty($context['product_id']) && preg_match('/\b(ce produit|cet article|this product|this item|pwodwi sa|atik sa|pri sa a|sa a koute|konbyen sa a|celui ci|celle ci|prix de ce|price of this|plan sélectionné|selected plan)\b/u', DSA2_Products::norm($body)) ) {
             return self::product_context_payload($context,$lang);
         }
         $t = remove_accents( strtolower( $body ) );
-        if ( preg_match( '/\b(robot|bot|machin|humain|human|vre moun|moun reyel|real person)\b/', $t ) ) {
+        // 7.1.0: order numbers (the customer's own orders only), « où est ma commande », specific trouble
+        // before the generic guides, and the store's programmes (DSA2_Brain).
+        $routed = class_exists( 'DSA2_Brain', false ) ? DSA2_Brain::route( $body, $lang, $uid, $context ) : null;
+        if ( is_array( $routed ) ) return $routed;
+        if ( 'robot' === $routed || preg_match( '/^(robot|bot|robo)\b|\b(c est un|is this a|se yon) (robot|bot|robo)\b/', $t ) ) {
             return array( 'type' => 'faq_card', 'body' => self::t( $lang,
                 'Je suis l’assistant automatique de Delicat Store 🤖 Je réponds instantanément aux questions sur les produits, le crédit boutique et les commandes — et je peux vous transférer à un agent humain à tout moment.',
                 'I’m Delicat Store’s automated assistant 🤖 I answer product, store credit and order questions instantly — and I can hand you to a human agent at any time.',
@@ -1692,13 +1710,16 @@ class DSA2_Data {
                 'meta' => array( 'title' => self::t( $lang, 'Robot ou humain ?', 'Bot or human?', 'Robo oswa moun?' ), 'buttons' => self::human_buttons( $lang ) ) );
         }
 
-        // Asking for a human wins over everything else.
-        if ( preg_match( '/\b(agent|ajan|humain|human|moun|operateur|conseiller|support|sipo|whatsapp|parler a|pale ak|talk to)\b/', $t ) ) {
+        // Asking for a human. 7.1.0: « moun » (anyone) and « humain » alone no longer escalate.
+        if ( 'agent' === $routed || preg_match( '/\b(agent|ajan|operateur|conseiller|sipo|whatsapp|parler a|pale ak|talk to)\b/', $t ) ) {
             return self::quick_action_payload( 'agent', $lang, $uid, $context );
         }
         // A specific term ("rechaje", "transcode", "livrezon", "pa antre") means the
         // customer wants the procedure, even when the sentence also says "solde".
-        $guide = DSA2_Guides::match( $t, 5 );
+        // 7.1.0: not when a game is named — « recharger mon compte Free Fire » is a game top-up, not the
+        // store-credit guide (the training rules and the top-up card below answer it).
+        $names_game = (bool) preg_match( '/\b(free\s*fire|freefire|pubg|call\s*of\s*duty|codm|efootball|blood\s*strike|dls|dream\s*league|roblox|robux|one\s*state|flex\s*city|poppo|tiktok|diamants?|dyaman|diamonds?)\b/', $t );
+        $guide = $names_game ? '' : DSA2_Guides::match( $t, 5 );
         if ( $guide ) {
             $payload = DSA2_Guides::payload( $guide, $lang );
             if ( $payload ) return $payload;
@@ -1868,6 +1889,12 @@ class DSA2_Data {
             'title'   => self::misunderstood_title( $lang ),
             'intro'   => self::misunderstood_intro( $lang, $quote ),
             'buttons' => self::human_buttons( $lang ),
+            'chips'   => array(
+                array( 'label' => self::t( $lang, 'Ma commande', 'My order', 'Kòmand mwen' ), 'action' => 'quick', 'value' => 'order_center' ),
+                array( 'label' => self::t( $lang, 'Recharger un jeu', 'Top up a game', 'Rechaje yon jwèt' ), 'action' => 'quick', 'value' => 'topup' ),
+                array( 'label' => self::t( $lang, 'Mon PIN', 'My PIN', 'PIN mwen' ), 'action' => 'quick', 'value' => 'pin' ),
+                array( 'label' => self::t( $lang, 'Guides', 'Guides', 'Gid' ), 'action' => 'quick', 'value' => 'guides' ),
+            ),
         ) );
     }
 

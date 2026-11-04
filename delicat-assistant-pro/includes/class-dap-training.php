@@ -205,6 +205,12 @@ class DSA2_Training {
         return ( $best && '' !== $best['answer'] ) ? $best : null;
     }
 
+    /** 7.1.0: the trained intent of a message ('' when none), for routing ahead of the generic guides. */
+    public static function intent_of( $message ) {
+        $normalized = self::normalize( $message );
+        return DSA2_Compat::length( $normalized ) < 2 ? '' : self::intent( $normalized );
+    }
+
     private static function intent( $t ) {
         // v6.5.0 — the automatic top-up rules come first. Delicat's headline flow is
         // "recharge automatique sur votre compte": Player ID in, currency credited in the
@@ -295,7 +301,9 @@ class DSA2_Training {
     }
 
     private static function intent_payload( $intent, $entity, $lang ) {
-        $product = $entity ? $entity : self::tr( $lang, 'ce produit', 'this product', 'pwodwi sa a' );
+        // 7.1.0: with no product named, the sentence simply leaves it out (it used to read « votre
+        // commande ce produit »); the redeem card needs a noun, so it says « code PIN ».
+        $product = $entity ? $entity : ( 'redeem' === $intent ? self::tr( $lang, 'code PIN', 'PIN code', 'kòd PIN' ) : "\x01" );
         $agent = array( 'label' => self::tr( $lang, 'Parler à un agent', 'Talk to an agent', 'Pale ak yon ajan' ), 'action' => 'quick', 'value' => 'agent' );
         $order = array( 'label' => self::tr( $lang, 'Ma commande', 'My order', 'Kòmand mwen' ), 'action' => 'quick', 'value' => 'last_order' );
 
@@ -433,9 +441,14 @@ class DSA2_Training {
         if ( ! isset( $cards[ $intent ] ) ) return null;
         $card = $cards[ $intent ];
         $store = class_exists( 'DSA2_Data', false ) ? DSA2_Data::store_name() : 'Delicat Store';
+        $text = $card[1];
+        if ( false !== strpos( $text, "\x01" ) ) {
+            $text = str_replace( array( " \x01 ", " \x01", "\x01 ", "\x01" ), array( ' ', '', '', '' ), $text );
+            $text = preg_replace( array( '/ +([.,])/', '/ {2,}/' ), array( '$1', ' ' ), $text );
+        }
         return array(
             'type' => 'faq_card',
-            'body' => str_replace( '{store}', $store, $card[1] ),
+            'body' => str_replace( '{store}', $store, $text ),
             'meta' => array( 'title' => $card[0], 'source' => 'intent_engine', 'intent' => $intent, 'chips' => $card[2] ),
         );
     }

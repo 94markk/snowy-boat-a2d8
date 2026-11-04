@@ -55,6 +55,21 @@ switch ( $cmd ) {
 	case 'count-conv':
 		echo (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}dap_conversations" );
 		break;
+	case 'order': // order <login>: a completed order with private details the chat must never show; prints id and number
+		add_filter( 'woocommerce_can_reduce_order_stock', '__return_false' );
+		$u = get_user_by( 'login', $argv[3] );
+		$o = wc_create_order( array( 'customer_id' => $u->ID ) );
+		$o->add_product( wc_get_product( get_page_by_path( 'pin-free-341-diamants', OBJECT, 'product' )->ID ), 1 );
+		foreach ( $o->get_items() as $item ) { $item->add_meta_data( 'Player ID', '987654321' ); $item->save(); }
+		$o->set_billing_email( 'secret-mail@example.test' ); $o->set_billing_phone( '+50937001234' ); $o->set_billing_address_1( '12 Rue Secrète' );
+		$o->set_payment_method_title( 'MonCash' ); $o->calculate_totals(); $o->set_status( 'completed' ); $o->save();
+		echo wp_json_encode( array( 'id' => $o->get_id(), 'number' => (string) $o->get_order_number() ) );
+		break;
+	case 'order-delete': // order-delete <id>
+		$o = wc_get_order( absint( $argv[3] ) );
+		if ( $o ) $o->delete( true );
+		echo 'ok';
+		break;
 	case 'reset-reports':
 		$g = DSA2_Groups::get_group( $argv[3] );
 		$wpdb->delete( DSA2_Groups::table( 'reports' ), array( 'group_id' => $g->id ) );

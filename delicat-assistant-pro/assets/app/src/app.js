@@ -472,7 +472,7 @@ function goBack() {
 function renderHome() {
   setHeader((boot && boot.brand) || C.brand || 'Delicat', ...teamStatusLine());
   const name = boot && boot.user && boot.user.name;
-  const tiles = [['sports_esports', 'tRecharge', 'recharge'], ['receipt_long', 'tOrder', 'order_center'], ['key', 'tPin', 'pin'], ['account_balance_wallet', 'tWallet', 'balance'], ['menu_book', 'tGuides', 'guides'], ['help', 'tFaq', 'faq']];
+  const tiles = [['sports_esports', 'tRecharge', 'topup'], ['receipt_long', 'tOrder', 'order_center'], ['key', 'tPin', 'pin'], ['account_balance_wallet', 'tWallet', 'balance'], ['menu_book', 'tGuides', 'guides'], ['help', 'tFaq', 'faq']];
   const isProduct = C.page && C.page.page_type === 'product' && C.page.product_id;
   const [statusText] = teamStatusLine();
   const view = h('div', { class: 'view' }, h('div', { class: 'scroll' }, h('div', { class: 'home' },
@@ -524,7 +524,7 @@ function renderChat(kind) {
   const send = h('button', { class: 'send', type: 'button', disabled: true, 'aria-label': t('send') }, icon('send'));
   const file = h('input', { type: 'file', accept: 'image/jpeg,image/png,image/webp,image/gif', hidden: true });
   const attach = kind === 'agent' ? h('button', { class: 'ib', type: 'button', 'aria-label': t('attach'), onclick: () => file.click() }, icon('image')) : null;
-  const chips = kind === 'bot' ? h('div', { class: 'chips' }, [['tRecharge', 'recharge'], ['tOrder', 'order_center'], ['tPin', 'pin'], ['tWallet', 'balance'], ['tGuides', 'guides'], ['team', 'agent']].map(([k, a]) =>
+  const chips = kind === 'bot' ? h('div', { class: 'chips' }, [['tRecharge', 'topup'], ['tOrder', 'order_center'], ['tPin', 'pin'], ['tWallet', 'balance'], ['tGuides', 'guides'], ['team', 'agent']].map(([k, a]) =>
     h('button', { type: 'button', onclick: () => quick(a) }, t(k)))) : null;
   const composer = h('div', { class: 'composer' }, chips, h('div', { class: 'row' }, attach, input, send));
   const view = h('div', { class: 'view' }, h('div', { class: 'body', style: 'flex:1;min-height:0' }, scroll, jump), composer, file);
@@ -655,7 +655,8 @@ async function sendChat(kind, text, clientId) {
     if (d.agent_read_id) chat.agentRead = Math.max(chat.agentRead, +d.agent_read_id);
     el.remove();
     ingest(d.messages);
-    paintChat(false);
+    const handoff = kind === 'bot' && (d.messages || []).some((m) => m && m.channel === 'agent' && (m.type === 'agent_card' || m.type === 'contact_card'));
+    if (handoff) show('agent'); else paintChat(false);
     toBottom(true);
     schedule(2500);
   } catch (e) {
@@ -830,7 +831,15 @@ function card(m) {
     });
     put(el, head(x.title), intro, h('div', { class: 'form' }, num, proof, go), x.privacy ? h('p', { class: 'note' }, icon('lock', 's'), clean(x.privacy)) : null, actsRow(x.buttons));
   } else if (type === 'order_card') {
-    put(el, head(x.title), h('p', null, x.empty ? clean(x.description) : [clean(x.status), clean(x.total), clean(x.date)].filter(Boolean).join(' · ')), linkBtn(x.url, x.button), chipButtons(x.chips));
+    const share = x.share && x.share.text ? h('button', { class: 'btn', type: 'button', data: { act: 'share' } }, icon('share', 's'), clean(x.share.label) || t('open')) : null;
+    if (share) share._share = x.share;
+    const items = (x.items || []).length ? h('ul', { class: 'items' }, x.items.map((s) => h('li', null, clean(s)))) : null;
+    const state = x.state ? h('span', { class: 'chip-s' + (x.state === 'completed' ? ' ok' : (x.state === 'failed' || x.state === 'cancelled' ? ' bad' : '')) }, icon('receipt_long', 's'), clean(x.status)) : null;
+    put(el, head(x.title), state,
+      h('p', null, x.empty ? clean(x.description) : (state ? [clean(x.total), clean(x.date)] : [clean(x.status), clean(x.total), clean(x.date)]).filter(Boolean).join(' · ')),
+      items, x.payment ? h('p', { class: 'note' }, icon('account_balance_wallet', 's'), clean(x.payment)) : null,
+      x.hint ? h('div', { class: 'tip' }, icon('info', 's'), clean(x.hint)) : null,
+      h('div', { class: 'acts' }, linkBtn(x.url, x.button), share), chipButtons(x.chips));
   } else if (type === 'agent_card') {
     put(el, head(x.title), x.eta ? h('span', { class: 'chip-s' }, icon('schedule', 's'), clean(x.eta)) : null, x.description ? h('p', null, clean(x.description)) : null,
       x.order ? h('div', { class: 'order' }, h('b', null, clean(x.order.title)), h('span', null, [x.order.status, x.order.total, x.order.date].map(clean).filter(Boolean).join(' · ')), x.order.url ? linkBtn(x.order.url, t('viewOrder')) : null) : null,

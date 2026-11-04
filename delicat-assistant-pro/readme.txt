@@ -3,7 +3,7 @@ Contributors: delicat-store
 Tags: woocommerce, customer support, live chat, chatbot, whatsapp
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 7.0.1
+Stable tag: 7.1.0
 
 A multilingual WooCommerce help center with a private agent inbox, automated answers, mobile-app support, tickets and WhatsApp handoff.
 
@@ -22,7 +22,7 @@ Features include French, English and Haitian Creole; persistent message composer
 == Installation ==
 
 1. In WordPress, open Plugins > Add New > Upload Plugin.
-2. Select the `delicat-assistant-pro-7.0.0.zip` file, choose « Replace current with uploaded », and activate it.
+2. Select the `delicat-assistant-pro-7.1.0.zip` file, choose « Replace current with uploaded », and activate it.
 3. Open Delicat Assistant > Settings to configure the brand, team availability, WhatsApp and notifications.
 4. Add users to the **Agent support Delicat** role when they should use the inbox without receiving store-wide administration rights.
 
@@ -43,6 +43,33 @@ Yes. The human support timeline remains focused, and an authorized agent can ope
 No. WhatsApp is shown only when it is enabled and a valid number has been saved.
 
 == Changelog ==
+
+= 7.1.0 =
+* Suivre une commande dans le chat : un client connecté tape « #23170 », « commande 23170 », « kòmand 23170 » ou
+  le numéro seul et voit le vrai statut de SA commande : statut, total, date, articles, moyen de paiement, ce qui
+  se passe ensuite, « Voir la commande » et « Partager le reçu » (WhatsApp ou le menu de partage du téléphone).
+  Le reçu partagé ne contient ni adresse, ni téléphone, ni e-mail, ni code PIN, ni Player ID, ni note.
+* Sécurité : la commande d'un autre client reçoit exactement la même réponse qu'un numéro qui n'existe pas ; un
+  visiteur non connecté est invité à se connecter (ou à utiliser le formulaire numéro + e-mail) ; 30 recherches
+  par heure et par compte au plus (90 par adresse réseau).
+* « Où est ma commande ? » (client connecté) : la carte de sa dernière commande.
+* Conversation plus naturelle : « Bonjour, je n'ai pas reçu mes diamants » reçoit la réponse sur les diamants (pas
+  seulement « Bonjour ») ; « Est-ce que ça va arriver ? », « J'attends depuis 3 jours », « Il n'y a plus de
+  diamants ? » ne sont plus pris pour « ça va », « attendez » ou « à plus » ; « Yo pa reponn mwen » n'est plus
+  un bonjour ; « call me back » ou « m rele pou… » ne sont plus enregistrés comme prénom.
+* Réponses plus justes : « PIN pas reçu », « diamants pas arrivés », « code invalide », « mauvais Player ID »
+  reçoivent la réponse précise avant le guide général de paiement ; « recharger mon compte Free Fire » ouvre la
+  recharge du jeu ; « parler à un humain » appelle un agent, « es-tu un robot ? » explique l'assistant, et le
+  mot « moun » seul n'appelle plus d'agent ; un « oui » après « voulez-vous un agent ? » vous connecte ;
+  « J'attends toujours » appelle vraiment un agent ; plus de « votre commande ce produit ».
+* Nouvelles réponses : Programme Revendeur (niveaux et minimums réels, et votre niveau si vous êtes revendeur),
+  Parrainage (lien vers votre code), Envoyer de l'argent (code personnel, montants et frais réels), sécurité du
+  compte (Passkey, appareils, jamais de mot de passe ni de code à l'équipe).
+* « Je n'ai pas compris » propose des raccourcis (commande, recharge, PIN, guides) en plus de l'équipe.
+* Chat : la tuile « Recharger un jeu » ouvre la recharge du jeu (elle ouvrait le crédit boutique) ; demander un
+  agent depuis l'onglet Assistant ouvre l'onglet Équipe où la réponse arrive.
+* Technique : nouveau module includes/class-dap-brain.php ; une même réponse n'est plus masquée pendant 2 minutes
+  (15 s, contre les doubles envois) ; app.js reconstruit.
 
 = 7.0.1 =
 * En français : le site ne se bloque plus après la fermeture du chat. En 7.0.0, la fenêtre fermée restait invisible au-dessus de la page et recevait les touchers : sur téléphone plus rien ne répondait, sur ordinateur le bouton du chat ne se rouvrait plus. Fermé veut maintenant dire retiré de la page (après l'animation de sortie).

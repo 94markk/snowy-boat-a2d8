@@ -2,18 +2,20 @@
 /**
  * Plugin Name: Delicat Assistant Pro
  * Description: Secure mobile-first customer assistant for WooCommerce with wallet, orders, multilingual FAQ, WhatsApp and live admin chat.
- * Version: 7.0.1
+ * Version: 7.1.0
  * Author: Delicat Store
  * Text Domain: delicat-assistant
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DSA2_VERSION', '7.0.1' );
+define( 'DSA2_VERSION', '7.1.0' );
 define( 'DSA2_FILE', __FILE__ );
 define( 'DSA2_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DSA2_URL', plugin_dir_url( __FILE__ ) );
 
 /**
+ * v7.1.0 Smarter answers: order lookup by number (own orders only) with a shareable receipt, small talk
+ *        that no longer swallows questions, specific answers before generic guides, store programmes.
  * v7.0.0 Rebuilt storefront: a 3 KB launcher (no request, no nonce in the HTML), a new chat app loaded on the
  *        first tap (isolated from the theme CSS), rebuilt community groups with "Ask the team" and a private
  *        follow-up, membership checks on every group read, report rules that cannot hide staff messages.
@@ -47,7 +49,7 @@ function dsa2_load_full_engine() {
     if ( $loaded ) return;
     foreach ( array(
         'class-dap-compat.php','class-dap-install.php','class-dap-guides.php','class-dap-products.php',
-        'class-dap-recommend.php','class-dap-training.php','class-dap-smalltalk.php','class-dap-data.php','class-dsa7-launcher.php',
+        'class-dap-recommend.php','class-dap-training.php','class-dap-smalltalk.php','class-dap-brain.php','class-dap-data.php','class-dsa7-launcher.php',
         'class-dap-quickreplies.php','class-dap-admin.php','class-dap-mobile-api.php','class-dap-admin-mobile-api.php',
         'class-dap-system-sync.php','class-dap-enterprise.php','class-dap-production.php',
         'class-dap-diagnostics.php','class-dap-groups.php','class-dap-groups-admin.php'

@@ -36,6 +36,19 @@ class DSA2_SmallTalk {
      */
     const SUPPORT_WORDS = '/\b(pin|kod|code|solde|balans|bous|commande|order|komand|achat|achte|acheter|buy|produit|pwodwi|product|recharge|rechaje|rechaj|top\s*up|moncash|natcash|transcode|paiement|peman|payment|payer|peye|rembours|refund|ranbous|player\s*id|diamant|diamond|dyaman|robux|free\s*fire|roblox|pubg|efootball|fc\s*mobile|call\s*of\s*duty|netflix|spotify|gift\s*card|kat\s*kado|livraison|delivery|livrezon|stock|prix|price|pri|tarif|montre|smartwatch|telefon|smartphone|laptop|ordinateur|garantie|warranty|revandè|revendeur|reseller|compte|kont|account|mot\s*de\s*passe|modpas|password|facture|invoice|agent|ajan|whatsapp)\b/u';
 
+    /**
+     * 7.1.0: business words by their stem (plurals, verb forms) and the question words that make a
+     * message a real request: « Bonjour, je n'ai pas reçu mes diamants » is not a greeting.
+     */
+    const SUPPORT_STEMS = '/\\b(command|order|komand|kmand|diaman|diamond|dyaman|codes?\\b|kod\\b|pin\\b|produit|pwodwi|product|recharg|rechaj|achet|achat|achte|buy|pay\\b|paie|payer|peye|peman|paiement|solde|balans|prix|price|pri\\b|tarif|rembours|refund|ranbous|livr|deliver|compte|kont\\b|account|password|modpas|revend|reseller|revande|parrain|referral|bonus|cadeau|kado|gift|wallet|portefeuille|moncash|natcash|transcode|player|joueur|jwe\\b|robux|combien|konbyen|how much|quand|kile\\b|when\\b|pourquoi|poukisa|why\\b|kote\\b|where\\b|disponible|available|delai|recu\\b|resevwa|pa rive|arrive|probleme|pwoblem|problem|erreur|error|bloque|bloke|rejete|refuse|depuis|depi\\b)/';
+
+    /** Social replies that only make sense for a short message (« ça va ? », « bye », « attends »). */
+    const SHORT_ONLY = array( 'how_are_you', 'im_fine', 'im_not_fine', 'goodbye', 'good_day', 'wait', 'yes', 'no', 'ack', 'laughing', 'nothing', 'busy', 'happy' );
+    /** Words that carry no request (greetings, politeness, address) when counting what a message says. */
+    const FILLER = array( 'bonjour', 'bonjou', 'bonsoir', 'bonswa', 'salut', 'hello', 'hi', 'hey', 'allo', 'alo', 'coucou', 'yo', 'bro', 'frere', 'fre', 'cheri', 'cherie', 'monsieur', 'madame', 'mesye', 'madanm', 'svp', 'stp', 'please', 'pls', 'tanpri', 'la', 'a', 'toi', 'vous', 'ou', 'w', 'you', 'the', 'et', 'and', 'epi' );
+    /** Never stored as the customer's name (« m rele pou kòmand mwen », « call me back »). */
+    const NOT_A_NAME = array( 'pou', 'pa', 'pas', 'not', 'back', 'the', 'a', 'an', 'ou', 'w', 'nan', 'ak', 'de', 'le', 'la', 'les', 'mon', 'ma', 'sur', 'pour', 'bien', 'ici', 'tout', 'sa', 'se', 'ki', 'yon', 'mwen', 'moi', 'me', 'here', 'now', 'on', 'in', 'about', 'because', 'paske', 'parce', 'kounye', 'maintenant', 'agent', 'ajan', 'client', 'kliyan' );
+
     /** Emoji only: no letters, no digits, and at least one non-ASCII glyph.
      *  Plain "???" or "..." is punctuation, not an emoji, and belongs to unclear_short. */
     const EMOJI_ONLY   = '/^[^\p{L}\p{N}]+$/u';
@@ -237,6 +250,15 @@ class DSA2_SmallTalk {
      *   lang    string language actually detected
      * }
      */
+    /** How many words of a normalized message say something (greetings and politeness excluded). */
+    private static function content_words( $norm ) {
+        $n = 0;
+        foreach ( preg_split( '/\\s+/', trim( (string) $norm ) ) as $w ) {
+            if ( '' !== $w && ! in_array( $w, self::FILLER, true ) ) $n++;
+        }
+        return $n;
+    }
+
     public static function analyze( $text, $lang = 'fr', $conv = null ) {
         if ( ! self::enabled() ) return null;
         $hit = self::detect( $text, $lang );
@@ -247,6 +269,15 @@ class DSA2_SmallTalk {
         if ( ! $def ) return null;
 
         $rlang = $hit['lang'];
+        $norm  = self::normalize( $text );
+        $has_business = (bool) preg_match( self::SUPPORT_WORDS, $norm ) || (bool) preg_match( self::SUPPORT_STEMS, $norm );
+        // 7.1.0: « Est-ce que ça va arriver aujourd'hui ? », « J'attends depuis 3 jours », « Il n'y a plus
+        // de diamants ? » are questions, not « ça va ? », « attends » or « à plus ».
+        if ( in_array( $hit['intent'], self::SHORT_ONLY, true ) && ( $has_business || self::content_words( $norm ) > 4 ) ) return null;
+        // « Yo pa reponn mwen »: in Kreyòl « yo » is « they », not « yo! ».
+        if ( 'greeting' === $hit['intent'] && preg_match( '/^yo\\s+(?!bro|man|frere|zanmi|tout|everybody|tt\\b)\\S/', $norm ) ) return null;
+        // A name only when it looks like one.
+        if ( 'my_name' === $hit['intent'] && ( '' === $hit['name'] || in_array( $hit['name'], self::NOT_A_NAME, true ) ) ) return null;
         $conv_id = ( $conv && ! empty( $conv->id ) ) ? (int) $conv->id : 0;
         $name = $hit['name'] ? self::remember_name( $conv, $hit['name'] ) : self::known_name( $conv );
 
@@ -260,7 +291,6 @@ class DSA2_SmallTalk {
 
         // A social opener in front of a real request: keep the greeting, let the
         // pipeline answer the request, and glue the two together afterwards.
-        $has_business = (bool) preg_match( self::SUPPORT_WORDS, self::normalize( $text ) );
         if ( $has_business ) {
             if ( empty( $def['lead'] ) ) return null;
             return array(
@@ -625,7 +655,7 @@ class DSA2_SmallTalk {
             ),
             'my_name' => array(
                 'w' => 15, 'lead' => true, 'chips' => 'default',
-                'p' => '\\b(je\\s*m\\s*appelle|je\\s*me\\s*nomme|mon\\s*nom\\s*(c\\s*est|est)|my\\s*name\\s*is|i\\s*am\\s*called|call\\s*me|mwen\\s*rele|m\\s*rele|non\\s*mwen\\s*se)\\s+([a-z]{2,20})',
+                'p' => '\\b(je\\s*m\\s*appelle|je\\s*me\\s*nomme|mon\\s*nom\\s*(c\\s*est|est)|my\\s*name\\s*is|i\\s*am\\s*called|mwen\\s*rele|m\\s*rele|non\\s*mwen\\s*se)\\s+([a-z]{2,20})',
                 'title' => array('Enchanté 🙂','Nice to meet you 🙂','Kontan fè konesans ou 🙂'),
                 'say' => array(
                     array('Enchanté {name} 🙂 Comment puis-je vous aider aujourd’hui ?','Nice to meet you {name} 🙂 How can I help you today?','Kontan fè konesans ou {name} 🙂 Kijan m ka ede w jodi a?'),
@@ -749,7 +779,7 @@ class DSA2_SmallTalk {
                 'p' => '\\b(rele\\s*m|rele\\s*mwen|appelez\\s*moi|appelle\\s*moi|call\\s*me|telefone\\s*m|tel\\s*mwen)\\b',
                 'title' => array('Rappel par un agent','A call-back from an agent','Yon ajan ap rele w'),
                 'say' => array(
-                    array('Je ne peux pas passer d’appel moi-même, mais un agent le peut. Laissez votre numéro WhatsApp et le meilleur moment — délai actuel : {eta}.','I can’t place a call myself, but an agent can. Leave your WhatsApp number and the best time — current wait: {eta}.','Mwen menm m pa ka rele, men yon ajan ka fè l. Kite nimewo WhatsApp ou ak pi bon lè a — delè kounye a: {eta}.'),
+                    array('Je ne peux pas appeler moi-même. Voulez-vous un agent ? Il vous répond ici ou sur WhatsApp — délai actuel : {eta}. Répondez « oui » ou touchez un bouton.','I can’t call you myself. Would you like an agent? They reply here or on WhatsApp — current wait: {eta}. Reply “yes” or tap a button.','Mwen menm m pa ka rele. Ou vle yon ajan? L ap reponn ou isit la oswa sou WhatsApp — delè kounye a: {eta}. Reponn « wi » oswa peze yon bouton.'),
                 ),
             ),
             'new_customer' => array(
