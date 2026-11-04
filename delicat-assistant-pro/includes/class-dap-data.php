@@ -1438,18 +1438,28 @@ class DSA2_Data {
 
         $order = false;
         $id = absint( preg_replace( '/\D+/', '', $number ) );
-        // 7.1.0: a known phone number tried against many orders, or many proofs against one order, from several
-        // addresses: 5 failures per order number per hour (counted for every number, so the limit reveals nothing).
-        $fail_key = 'dap_ofail_' . md5( (string) $id );
-        if ( $id && (int) get_transient( $fail_key ) >= 5 ) {
-            wp_send_json_error( array( 'message' => self::t( $lang, 'Trop de tentatives. Réessayez plus tard.', 'Too many attempts. Try again later.', 'Twòp tantativ. Eseye ankò pita.' ) ), 429 );
+        // 7.1.0: wrong proofs are limited three ways for an hour, counted the same whether the order exists or not
+        // (the limits reveal nothing): 5 per order number from one address; 20 per order number from all addresses
+        // together, so a stranger cannot lock the owner out with a few tries; 10 per e-mail or phone across all order
+        // numbers (a known phone tried against many orders). A signed-in owner always has the chat lookup.
+        $proof_digits = preg_replace( '/\D+/', '', $proof );
+        $proof_id     = is_email( $proof ) ? strtolower( $proof ) : ( strlen( $proof_digits ) >= 8 ? substr( $proof_digits, -8 ) : '' );
+        $fail_keys    = array();
+        if ( $id && '' !== $proof ) {
+            $fail_keys[ 'dap_ofail_' . md5( $id . '|' . self::client_ip() ) ] = 5;
+            $fail_keys[ 'dap_ofail_' . md5( (string) $id ) ]                  = 20;
+            if ( '' !== $proof_id ) $fail_keys[ 'dap_ofail_p' . md5( $proof_id ) ] = 10;
+        }
+        foreach ( $fail_keys as $fail_key => $max ) {
+            if ( (int) get_transient( $fail_key ) >= $max ) {
+                wp_send_json_error( array( 'message' => self::t( $lang, 'Trop de tentatives. Réessayez plus tard.', 'Too many attempts. Try again later.', 'Twòp tantativ. Eseye ankò pita.' ) ), 429 );
+            }
         }
         if ( $id && $proof ) {
             $candidate = wc_get_order( $id );
             // wc_get_order() also returns refunds and other order types, which have no
             // billing getters — calling them there is a fatal error.
             if ( $candidate instanceof WC_Order ) {
-                $proof_digits = preg_replace( '/\D+/', '', $proof );
                 $email_ok = is_email( $proof ) && 0 === strcasecmp( trim( $candidate->get_billing_email() ), $proof );
                 // 7.0: the digits must be the END of the billing phone (its last 8 or more),
                 // not any 8-digit run found inside it.
@@ -1458,7 +1468,9 @@ class DSA2_Data {
                 if ( $email_ok || $phone_ok ) $order = $candidate;
             }
         }
-        if ( ! $order && $id ) set_transient( $fail_key, (int) get_transient( $fail_key ) + 1, HOUR_IN_SECONDS );
+        if ( ! $order ) {
+            foreach ( $fail_keys as $fail_key => $max ) set_transient( $fail_key, (int) get_transient( $fail_key ) + 1, HOUR_IN_SECONDS );
+        }
         if ( ! $order ) {
             // Same answer whether the order is missing or the proof is wrong: no enumeration.
             $payload = array( 'type' => 'help_card', 'body' => 'order_not_found:' . substr( md5( $number . '|' . $proof ), 0, 8 ), 'meta' => array(

@@ -156,25 +156,47 @@ try {
 	$r = $ask( 0, 'où est ma commande', 'fr', $guest_key() );
 	$check( 'wording: no « commande ce produit » when no product is named', false === strpos( wp_json_encode( $r ), 'ce produit' ) );
 
-	/* The visitor form (number + e-mail or phone): wrong proofs are limited per order number, from any address. */
-	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%dap\\_ord\\_%' OR option_name LIKE '%dap\\_ofail\\_%'" );
-	wp_cache_flush();
+	/* The visitor form (number + e-mail or phone): wrong proofs are limited per address, per order number and per proof,
+	   and a stranger's few wrong tries do not lock the owner out. */
+	$reset_limits = static function () use ( $wpdb ) {
+		$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%dap\\_ord\\_%' OR option_name LIKE '%dap\\_ofail\\_%'" );
+		wp_cache_flush();
+	};
+	$reset_limits();
 	$g = $guest_key();
-	$find = static function ( $proof, $ip ) use ( $num_a, $g ) {
+	$find = static function ( $proof, $ip, $number = null ) use ( $num_a, $g ) {
 		wp_set_current_user( 0 );
 		$_COOKIE['dap_session'] = $g;
 		$_SERVER['REMOTE_ADDR'] = $ip;
-		$_POST = $_REQUEST = array( 'order' => $num_a, 'proof' => $proof, 'language' => 'fr', 'nonce' => wp_create_nonce( 'dsa2_frontend' ) );
+		$_POST = $_REQUEST = array( 'order' => null === $number ? $num_a : $number, 'proof' => $proof, 'language' => 'fr', 'nonce' => wp_create_nonce( 'dsa2_frontend' ) );
 		ob_start();
 		try { DSA2_Data::ajax_find_order(); } catch ( DAB_Test_Response $e ) {}
 		return json_decode( (string) ob_get_clean(), true );
 	};
-	for ( $i = 0; $i < 5; $i++ ) $find( '+50911110' . $i . $i . $i, '198.51.100.' . ( 10 + $i ) ); // five addresses, five wrong phones
-	$blocked = $find( 'secret-mail@example.test', '198.51.100.99' ); // even the right proof, from a sixth address
+	$locked = static function ( $res ) { return empty( $res['success'] ) && false !== strpos( (string) ( $res['data']['message'] ?? '' ), 'Trop de tentatives' ); };
+	$found  = static function ( $res ) use ( $order_a ) {
+		$last = ! empty( $res['data']['messages'] ) ? end( $res['data']['messages'] ) : array();
+		return ! empty( $res['success'] ) && 'order:' . $order_a->get_id() === ( $last['body'] ?? '' );
+	};
+	$right = 'secret-mail@example.test';
+	for ( $i = 0; $i < 5; $i++ ) $find( '+50911110' . $i . $i . $i, '198.51.100.10' ); // one address, five wrong phones
+	$r = $find( $right, '198.51.100.10' );
+	$check( 'visitor form: 5 wrong proofs from one address lock that order number for that address', $locked( $r ), wp_json_encode( $r ) );
+	for ( $i = 0; $i < 5; $i++ ) $find( '+50922220' . $i . $i . $i, '198.51.100.' . ( 20 + $i ) ); // five more addresses, one wrong try each
+	$r = $find( $right, '203.0.113.5' );
+	$check( 'visitor form: a stranger\'s wrong tries do not lock the owner out (10 failures, right proof still found)', $found( $r ), wp_json_encode( $r ) );
+	$reset_limits();
+	for ( $i = 0; $i < 10; $i++ ) $find( $right, '198.51.100.' . ( 40 + $i ), (string) ( 900000 + $i ) ); // one e-mail against ten order numbers
+	$r = $find( $right, '198.51.100.60' );
+	$check( 'visitor form: one e-mail or phone tried against 10 order numbers is locked for an hour', $locked( $r ), wp_json_encode( $r ) );
+	$reset_limits();
+	for ( $i = 0; $i < 20; $i++ ) $find( '+5093300' . sprintf( '%04d', $i ), '198.51.100.' . ( 100 + $i ) ); // twenty addresses
+	$r = $find( $right, '203.0.113.6' );
+	$check( 'visitor form: 20 wrong proofs for one order number from many addresses lock it (brute-force cap)', $locked( $r ), wp_json_encode( $r ) );
+	$r = $find( '', '203.0.113.7', (string) 900100 );
+	$check( 'visitor form: an empty proof is not counted', ! $locked( $r ) && 0 === (int) get_transient( 'dap_ofail_' . md5( '900100' ) ), wp_json_encode( $r ) );
 	$_SERVER['REMOTE_ADDR'] = '203.0.113.71';
-	$check( 'visitor form: after 5 wrong proofs for one order number, that number is locked for an hour', empty( $blocked['success'] ) && false !== strpos( (string) ( $blocked['data']['message'] ?? '' ), 'Trop de tentatives' ), wp_json_encode( $blocked ) );
-	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '%dap\\_ord\\_%' OR option_name LIKE '%dap\\_ofail\\_%'" );
-	wp_cache_flush();
+	$reset_limits();
 
 	/* The rest of the store. */
 	if ( function_exists( 'dlr_on' ) && dlr_on() ) {

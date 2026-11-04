@@ -54,8 +54,9 @@ No. WhatsApp is shown only when it is enabled and a valid number has been saved.
   par heure et par compte au plus (300 par adresse réseau, pour les clients qui partagent l'adresse de leur
   opérateur) ; seules les vraies commandes de la boutique sont montrées ; le total affiché tient compte des
   remboursements.
-* Sécurité : le formulaire « numéro de commande + e-mail ou téléphone » se bloque une heure après 5 essais faux
-  sur un même numéro, quelle que soit l'adresse réseau ; les réponses de l'API client du chat portent
+* Sécurité : le formulaire « numéro de commande + e-mail ou téléphone » limite les essais faux pendant une heure :
+  5 par numéro depuis une même adresse réseau, 20 par numéro toutes adresses confondues (un inconnu ne peut pas
+  bloquer le client avec quelques essais), 10 par e-mail ou téléphone sur tous les numéros ; les réponses de l'API client du chat portent
   « Cache-Control: private, no-store » (jamais gardées par un cache) ; un « oui » ne répond qu'à la question
   juste avant ; un nombre seul de plus de 7 chiffres (Player ID, téléphone) n'est plus pris pour une commande.
 * « Où est ma commande ? » (client connecté) : la carte de sa dernière commande.
