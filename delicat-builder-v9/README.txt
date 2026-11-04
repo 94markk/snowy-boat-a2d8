@@ -1,3 +1,19 @@
+9.7.5 — L’ancienne carte du catalogue est supprimée ; pages plus légères
+(1) Boutique, catégories, étiquettes et recherche : la carte de l’accueil est maintenant la seule carte. L’ancienne
+carte (« Disponible », bouton « Choisir → ») est supprimée du code : elle ne peut plus revenir, même si d’anciens
+réglages enregistrés la demandaient (c’était le cas après la 9.7.4 tant qu’aucun administrateur n’avait ouvert
+l’administration).
+(2) Pages plus légères, sans changement visible : la feuille de style de l’en-tête n’est plus téléchargée deux fois
+(elle était déjà dans le paquet principal ; 27 Ko et une requête de moins sur toutes les pages), et la feuille des
+blocs WooCommerce (14 Ko) n’est plus chargée sur les pages du catalogue, qui n’en affichent aucun. Page Boutique :
+CSS 301 Ko → 257 Ko, 7 → 5 fichiers.
+(3) Catalogue › Archive Builder : les réglages qui ne servaient qu’à l’ancienne carte (Style des cartes, Disponibilité,
+Nom du produit, Promotion, Texte du bouton, tailles du titre et du prix) ne sont plus affichés ; leurs valeurs
+restent enregistrées.
+(4) Technique : fichiers inutiles retirés de l’extension (design-system/ : notes et export de jetons jamais chargés) ;
+règles CSS de l’ancienne carte retirées (native-archive.css, styles critiques du catalogue, app-polish, products,
+design-studio). Installer puis purger LiteSpeed / Cloudflare.
+
 9.7.4 — Boutique et catégories : les cartes produit de l’accueil
 (1) Pages Boutique, catégories, étiquettes et recherche : chaque produit s’affiche avec la même carte que sur
 l’accueil : l’image avec ses badges (#1, Promo, Top Vente…) et le nom du produit dessus, le cœur des favoris, et

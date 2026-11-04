@@ -53,7 +53,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 			'header_padding_m'          => 14,
 			'header_margin_bottom'      => 14,
 			'max_width'                 => 1320,
-			'card_style'                => 'accueil', // 9.7.4: the homepage card
+			'card_style'                => 'accueil', // 9.7.5: the only card (the classic card was removed)
 			'image_ratio'               => 'square',
 			'grid_desktop'              => 4,
 			'grid_tablet'               => 3,
@@ -637,14 +637,13 @@ final class Delicat_Builder_V9_Archive_Builder {
 			'gamepad' => '<path d="M7.5 8h9a4.5 4.5 0 0 1 4.2 6.1l-1 2.8a2.4 2.4 0 0 1-3.9 1l-1.6-1.4H9.8l-1.6 1.4a2.4 2.4 0 0 1-3.9-1l-1-2.8A4.5 4.5 0 0 1 7.5 8Z"/><path d="M7 12v4M5 14h4M16.5 12.5h.01M18.5 15h.01"/>',
 			'gift'    => '<path d="M3 10h18v4H3zM5 14h14v7H5zM12 10v11M12 10H7.5a2.5 2.5 0 1 1 2.1-3.9L12 10Zm0 0h4.5a2.5 2.5 0 1 0-2.1-3.9L12 10Z"/>',
 			'play'    => '<path d="m9 7 8 5-8 5V7Z"/>',
-			'arrow'   => '<path d="M5 12h13M13 7l5 5-5 5"/>',
 		);
 		$path = $paths[ $token ] ?? $paths['bolt'];
 		return '<svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" class="delicat-native-category-chips__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . $path . '</svg>';
 	}
 
 	/**
-	 * pro.49 archive v4-ultra card renderer.
+	 * The catalog card. 9.7.5: the homepage card is the only one (the classic card was removed).
 	 *
 	 * The archive still uses WooCommerce's main product query, prices, stock and
 	 * permalinks, but it no longer runs content-product.php and every third-party
@@ -665,87 +664,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 		if ( ! is_string( $url ) || '' === $url ) {
 			return;
 		}
-		if ( 'accueil' === ( $config['card_style'] ?? 'accueil' ) ) {
-			self::render_home_card( $product, $url, $index, $config );
-			return;
-		}
-
-		$title       = $product->get_name();
-		$image_id    = $product->get_image_id();
-		$show_title  = ! array_key_exists( 'show_title', $config ) || ! empty( $config['show_title'] );
-		$show_price  = ! array_key_exists( 'show_price', $config ) || ! empty( $config['show_price'] );
-		$show_stock  = ! empty( $config['show_stock_badge'] );
-		$show_sale   = ! array_key_exists( 'show_sale_badge', $config ) || ! empty( $config['show_sale_badge'] );
-		$show_cat    = ! empty( $config['show_category_badge'] );
-		$show_cta    = ! array_key_exists( 'show_cta', $config ) || ! empty( $config['show_cta'] );
-		$cta_label   = trim( sanitize_text_field( (string) ( $config['cta_label'] ?? __( 'Choisir', 'delicat-builder-v9' ) ) ) );
-		$cta_label   = '' !== $cta_label ? $cta_label : __( 'Choisir', 'delicat-builder-v9' );
-		$in_stock    = $product->is_in_stock();
-		$aria_label  = sprintf( __( 'Ouvrir %s', 'delicat-builder-v9' ), $title );
-		$nav_attrs   = ! empty( $config['touch_prefetch'] )
-			? ' data-delicat-prefetch data-delicat-product-link data-delicat-instant-product'
-			: '';
-
-		/* pro.49: one navigation target per product instead of three repeated
-		 * anchors/listeners. The whole card is a link; Woo remains authoritative
-		 * for product visibility, price, stock, URL and the archive query. */
-		echo '<article class="delicat-product-card" data-product-id="' . esc_attr( (string) $id ) . '">';
-		echo '<a class="delicat-product-card__link" href="' . esc_url( $url ) . '"' . $nav_attrs . ' aria-label="' . esc_attr( $aria_label ) . '">';
-		echo '<div class="delicat-product-card__media">';
-
-		if ( $image_id ) {
-			$attrs = array(
-				'class'    => 'delicat-product-card__image',
-				'alt'      => (string) get_post_meta( $image_id, '_wp_attachment_image_alt', true ) ?: $title,
-				'decoding' => 'async',
-				'sizes'    => self::product_card_image_sizes( $config ),
-			);
-			if ( 0 === $index ) {
-				$attrs['loading']       = 'eager';
-				$attrs['fetchpriority'] = 'high';
-			} else {
-				$attrs['loading']       = 'lazy';
-				$attrs['fetchpriority'] = 'low';
-			}
-			echo wp_get_attachment_image( $image_id, 'woocommerce_thumbnail', false, $attrs ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		} else {
-			echo wc_placeholder_img( 'woocommerce_thumbnail', array( 'class' => 'delicat-product-card__image', 'loading' => 0 === $index ? 'eager' : 'lazy' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		}
-
-		if ( $show_sale && $product->is_on_sale() ) {
-			echo '<span class="delicat-product-card__sale">' . esc_html__( 'Promo', 'delicat-builder-v9' ) . '</span>';
-		}
-		if ( $show_cat ) {
-			$terms = get_the_terms( $id, 'product_cat' );
-			if ( is_array( $terms ) && ! empty( $terms ) ) {
-				$term = reset( $terms );
-				if ( $term instanceof WP_Term ) {
-					echo '<span class="delicat-product-card__category">' . esc_html( $term->name ) . '</span>';
-				}
-			}
-		}
-		echo '</div>';
-
-		echo '<div class="delicat-product-card__body">';
-		if ( $show_title ) {
-			echo '<h2 class="delicat-product-card__title">' . esc_html( $title ) . '</h2>';
-		}
-		if ( $show_price ) {
-			$price_html = self::compact_price_html( $product );
-			if ( '' !== $price_html ) {
-				echo '<span class="delicat-product-card__price">' . wp_kses_post( $price_html ) . '</span>';
-			}
-		}
-		if ( $show_stock ) {
-			$status = $in_stock ? __( 'Disponible', 'delicat-builder-v9' ) : __( 'Indisponible', 'delicat-builder-v9' );
-			echo '<span class="delicat-product-card__stock ' . ( $in_stock ? 'is-in' : 'is-out' ) . '"><span aria-hidden="true"></span>' . esc_html( $status ) . '</span>';
-		}
-		if ( $show_cta ) {
-			echo '<span class="delicat-product-card__cta" aria-hidden="true"><span>' . esc_html( $cta_label ) . '</span>';
-			echo self::category_icon_svg( 'arrow' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-			echo '</span>';
-		}
-		echo '</div></a></article>';
+		self::render_home_card( $product, $url, $index, $config );
 	}
 
 	/**
@@ -820,7 +739,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 
 	/**
 	 * The card's « À partir de » amount, split as the homepage prints it (symbol, number). Variable
-	 * products read their already-synchronised minimum price, as compact_price_html() does.
+	 * products read their already-synchronised minimum price (no variation-price range per card).
 	 */
 	private static function home_price_parts( WC_Product $product ): array {
 		$raw = (string) $product->get_price();
@@ -832,25 +751,6 @@ final class Delicat_Builder_V9_Archive_Builder {
 			's' => sanitize_text_field( html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ) ),
 			'n' => sanitize_text_field( wc_format_localized_price( wc_format_decimal( $price, wc_get_price_decimals(), true ) ) ), // « 145 », as on the homepage
 		);
-	}
-
-	/**
-	 * Variable archives only need the already-synchronised minimum product price.
-	 * Avoid generating WooCommerce's complete variation-price range for every
-	 * card on a slow catalog request; the product page still shows every option.
-	 */
-	private static function compact_price_html( WC_Product $product ): string {
-		if ( $product->is_type( 'variable' ) ) {
-			$raw = (string) $product->get_price();
-			if ( '' !== $raw && function_exists( 'wc_price' ) ) {
-				$price = (float) $raw;
-				if ( function_exists( 'wc_get_price_to_display' ) ) {
-					$price = (float) wc_get_price_to_display( $product, array( 'price' => $price ) );
-				}
-				return '<span class="delicat-product-card__price-prefix">' . esc_html__( 'À partir de', 'delicat-builder-v9' ) . '</span> ' . wc_price( $price );
-			}
-		}
-		return (string) $product->get_price_html();
 	}
 
 	private static function product_card_image_sizes( array $config ): string {
@@ -868,6 +768,13 @@ final class Delicat_Builder_V9_Archive_Builder {
 		);
 	}
 
+	/** 9.7.5: see trim_native_archive_assets(); runs just before the late stylesheets print. */
+	public static function drop_late_block_styles(): void {
+		foreach ( array( 'wc-blocks-style', 'wc-blocks-packages-style', 'wc-blocks-components', 'wc-blocks-vendors-style' ) as $handle ) {
+			wp_dequeue_style( $handle );
+		}
+	}
+
 	/**
 	 * Native archive does not render Elementor or Woo's classic catalog skin.
 	 * Drop those bytes at the final enqueue priority. Core commerce/session JS is
@@ -881,6 +788,13 @@ final class Delicat_Builder_V9_Archive_Builder {
 		if ( (bool) apply_filters( 'delicat_builder_v9_archive_trim_woo_styles', true ) ) {
 			foreach ( array( 'woocommerce-general', 'woocommerce-layout', 'woocommerce-smallscreen', 'wc-blocks-style', 'wc-blocks-packages-style', 'wc-blocks-components', 'wc-blocks-vendors-style', 'wc-blocks-cart-style', 'wc-blocks-checkout-style' ) as $handle ) {
 				wp_dequeue_style( $handle );
+			}
+			/* 9.7.5: WooCommerce queues its block stylesheet again while the page prints (after this trim), so
+			 * 14 KB arrived at the end of every catalog page that prints no block. A category description that
+			 * holds a WooCommerce block keeps it. */
+			$description = (string) get_the_archive_description();
+			if ( false === strpos( $description, 'wc-block' ) && false === strpos( $description, 'wp-block-woocommerce' ) ) {
+				add_action( 'wp_print_footer_scripts', array( __CLASS__, 'drop_late_block_styles' ), 1 );
 			}
 		}
 
@@ -981,11 +895,6 @@ final class Delicat_Builder_V9_Archive_Builder {
 		return in_array( $value, array( 1200, 1320, 1440 ), true ) ? $value : 1320;
 	}
 
-	private static function safe_card_style( $value ): string {
-		$value = sanitize_key( (string) $value );
-		return in_array( $value, array( 'accueil', 'premium', 'glass', 'minimal', 'gaming' ), true ) ? $value : 'accueil';
-	}
-
 	private static function safe_image_ratio( $value ): string {
 		$value = sanitize_key( (string) $value );
 		return in_array( $value, array( 'square', 'portrait', 'landscape' ), true ) ? $value : 'square';
@@ -1016,7 +925,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 			'header_padding_m'     => max( 10, min( 60, absint( $input['header_padding_m'] ?? $defaults['header_padding_m'] ) ) ),
 			'header_margin_bottom' => max( 0, min( 80, absint( $input['header_margin_bottom'] ?? $defaults['header_margin_bottom'] ) ) ),
 			'max_width'            => self::safe_max_width( $input['max_width'] ?? $defaults['max_width'] ),
-			'card_style'           => self::safe_card_style( $input['card_style'] ?? $defaults['card_style'] ),
+			'card_style'           => 'accueil', // 9.7.5: one card style
 			'image_ratio'          => self::safe_image_ratio( $input['image_ratio'] ?? $defaults['image_ratio'] ),
 			'grid_desktop'         => self::safe_grid_value( $input['grid_desktop'] ?? $defaults['grid_desktop'], 2, 6 ),
 			'grid_tablet'          => self::safe_grid_value( $input['grid_tablet'] ?? $defaults['grid_tablet'], 2, 4 ),
@@ -1157,9 +1066,9 @@ final class Delicat_Builder_V9_Archive_Builder {
 
 	private static function archive_editor( string $target ): void {
 		$config = self::has_draft( $target ) ? self::get_draft_config( $target ) : self::get_config( $target );
-		$checks = array( 'show_header' => 'Afficher le titre', 'show_description' => 'Description de catégorie', 'show_ordering' => 'Tri des produits', 'show_result_count' => 'Nombre de résultats', 'show_stock_badge' => 'Disponibilité', 'show_title' => 'Nom du produit', 'show_price' => 'Prix', 'show_sale_badge' => 'Promotion', 'show_cta' => 'Bouton du produit', 'show_pagination' => 'Pagination' );
-		$fields = array( 'custom_title' => 'Titre personnalisé', 'subtitle' => 'Sous-titre', 'accent_color' => 'Couleur principale', 'cta_label' => 'Texte du bouton' );
-		$numbers = array( 'products_per_page' => array( 'Produits par page', 8, 12 ), 'grid_desktop' => array( 'Colonnes ordinateur', 2, 6 ), 'grid_tablet' => array( 'Colonnes tablette', 2, 4 ), 'grid_mobile' => array( 'Colonnes téléphone', 1, 2 ), 'grid_gap_m' => array( 'Espacement mobile', 4, 28 ), 'title_size_m' => array( 'Taille du titre mobile', 11, 20 ), 'price_size_m' => array( 'Taille du prix mobile', 11, 22 ) );
+		$checks = array( 'show_header' => 'Afficher le titre', 'show_description' => 'Description de catégorie', 'show_ordering' => 'Tri des produits', 'show_result_count' => 'Nombre de résultats', 'show_price' => 'Prix', 'show_cta' => 'Bouton panier', 'show_pagination' => 'Pagination' );
+		$fields = array( 'custom_title' => 'Titre personnalisé', 'subtitle' => 'Sous-titre', 'accent_color' => 'Couleur principale' );
+		$numbers = array( 'products_per_page' => array( 'Produits par page', 8, 12 ), 'grid_desktop' => array( 'Colonnes ordinateur', 2, 6 ), 'grid_tablet' => array( 'Colonnes tablette', 2, 4 ), 'grid_mobile' => array( 'Colonnes téléphone', 1, 2 ), 'grid_gap_m' => array( 'Espacement mobile', 4, 28 ) );
 		echo '<div class="wrap"><h1>Catalogue · ' . esc_html( self::target_label( $target ) ) . '</h1><p>Catalogue léger, rendu par WooCommerce. Enregistrez un brouillon puis ouvrez l’aperçu réel.</p>';
 		if ( isset( $_GET['status'] ) ) { echo '<div class="notice notice-info"><p>Configuration enregistrée. Vérifiez le statut et l’aperçu avant de publier.</p></div>'; }
 		echo '<p><strong>' . ( self::is_published( $target ) ? 'Publié' : 'Brouillon / modèle hérité' ) . '</strong></p>';
@@ -1172,7 +1081,6 @@ final class Delicat_Builder_V9_Archive_Builder {
 		}
 		echo '<div class="dca-editor-grid"><section><h2>Présentation</h2>';
 		self::select_field( 'config[title_mode]', 'Source du titre', $config['title_mode'], array( 'dynamic' => 'Titre automatique', 'custom' => 'Personnalisé', 'hidden' => 'Masqué' ) );
-		self::select_field( 'config[card_style]', 'Style des cartes', 'accueil' === $config['card_style'] ? 'accueil' : 'minimal', array( 'accueil' => 'Comme l’accueil', 'minimal' => 'Classique' ) );
 		foreach ( $fields as $key => $label ) { self::text_field( 'config[' . $key . ']', $label, $config[ $key ] ); }
 		echo '</section><section><h2>Responsive</h2>';
 		foreach ( $numbers as $key => $args ) { self::number_field( 'config[' . $key . ']', $args[0], $config[ $key ], $args[1], $args[2] ); }

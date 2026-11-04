@@ -1,6 +1,6 @@
 {
  "version": 2,
- "builtAt": "2026-11-04T20:50:59.097Z",
+ "builtAt": "2026-11-04T22:44:44.442Z",
  "js": {
   "engine": {
    "file": "engine.b5f701d6cf14.js",
@@ -104,9 +104,9 @@
    ]
   },
   "home": {
-   "file": "home.d08768b42608.css",
-   "bytes": 146873,
-   "sha256": "d08768b42608e570dbf91b697b4b1a1eee153362304df5d59c76078b85be856a",
+   "file": "home.70fe9726c3c3.css",
+   "bytes": 146821,
+   "sha256": "70fe9726c3c35ed2d8da3d2c9d55ff445dc738b4b50265eed17d72abab4517fc",
    "sources": [
     "assets/components/base.css",
     "assets/components/products.css",
@@ -128,9 +128,9 @@
    ]
   },
   "builder": {
-   "file": "builder.6818d3a1df03.css",
-   "bytes": 213669,
-   "sha256": "6818d3a1df034439d0b0e4e5ca42496384a47eafcae794e9890d405a6a2bc23b",
+   "file": "builder.10d8b769438a.css",
+   "bytes": 213617,
+   "sha256": "10d8b769438a27f3b2271b36c405ba4749d5c2ce39b363ced5ed5ce16585bf4a",
    "sources": [
     "assets/components/base.css",
     "assets/components/testimonials.css",
@@ -153,9 +153,9 @@
    ]
   },
   "builder-design": {
-   "file": "builder-design.886ebb17c72f.css",
-   "bytes": 230918,
-   "sha256": "886ebb17c72fb211d45e2c8e7b553ac7b410c7e8a0b09297723184f9072f13ba",
+   "file": "builder-design.3f8251683019.css",
+   "bytes": 230801,
+   "sha256": "3f825168301939d601ca80d0d82226e01eb4ef7bd8eea32bdeae5814dd1efefd",
    "sources": [
     "assets/components/base.css",
     "assets/components/testimonials.css",
@@ -189,9 +189,9 @@
    ]
   },
   "builder-lite-design": {
-   "file": "builder-lite-design.e58b30522463.css",
-   "bytes": 48326,
-   "sha256": "e58b305224635974e053d784ce54a1210e312901cd347dcd975e8c47230dc172",
+   "file": "builder-lite-design.4fc515867ab2.css",
+   "bytes": 48261,
+   "sha256": "4fc515867ab2e158cda38109474ed554766671600bb1828586551167ff800118",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-document.css",
@@ -212,9 +212,9 @@
    ]
   },
   "product-design": {
-   "file": "product-design.d9da19d2516c.css",
-   "bytes": 85726,
-   "sha256": "d9da19d2516cc2cd05e257ba4a4e9e2eaa781901287fc61a2d4647efea65e967",
+   "file": "product-design.a44a73e8cf66.css",
+   "bytes": 85661,
+   "sha256": "a44a73e8cf662af9eb092baa34de14ff1e9519ae52b47146792514ecc33f1489",
    "sources": [
     "assets/css/native-product.css",
     "assets/css/reviews.css",
@@ -225,9 +225,9 @@
    ]
   },
   "shop": {
-   "file": "shop.84daf783a96e.css",
-   "bytes": 43328,
-   "sha256": "84daf783a96e2c8ecf3b9de6b3789ed765371631cd349ea6a3839003fff60c1c",
+   "file": "shop.b183be7ef88c.css",
+   "bytes": 41152,
+   "sha256": "b183be7ef88c29bf141fd586e178118a3183fbcfbe349b397bbdf5d1e643e990",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-archive.css",
@@ -236,9 +236,9 @@
    ]
   },
   "shop-design": {
-   "file": "shop-design.d64e9351cbcb.css",
-   "bytes": 60577,
-   "sha256": "d64e9351cbcbdfeddebb3be11f4ff8fd3288dc00d12e844f5caa66a01e360d80",
+   "file": "shop-design.ccdf8b26d793.css",
+   "bytes": 58336,
+   "sha256": "ccdf8b26d79340e5540262f85d1395897986b02c0ab2ebbd322923f6defd223e",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-archive.css",
@@ -282,9 +282,9 @@
    ]
   },
   "woo-design": {
-   "file": "woo-design.8f27ff0685f3.css",
-   "bytes": 86893,
-   "sha256": "8f27ff0685f3c532233fc6a13ec4d1bd9b32eb86ce5865306df74b93bfb4a800",
+   "file": "woo-design.9a933b99a3ed.css",
+   "bytes": 86828,
+   "sha256": "9a933b99a3ed0dcabea1de89b4e205f12aa03c1ebfd8ee8e97149680e110a016",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/woo-ui.css",
@@ -294,9 +294,9 @@
    ]
   },
   "polish": {
-   "file": "polish.ad6551e1f32c.css",
-   "bytes": 40880,
-   "sha256": "ad6551e1f32c473439717bdeb925da98a08d467f8a6d60293769ab2adf39efb3",
+   "file": "polish.a76c1e3d9223.css",
+   "bytes": 40822,
+   "sha256": "a76c1e3d92238354706514dbcc2d8b66fa4dcf372c22a2d05c657dba79d11947",
    "sources": [
     "assets/css/app-polish.css",
     "assets/css/app-tuning.css",
@@ -306,9 +306,9 @@
    ]
   },
   "polish-storefront": {
-   "file": "polish-storefront.6a0cedfd02c2.css",
-   "bytes": 64501,
-   "sha256": "6a0cedfd02c2a070ae4433352ae7da69df4ca956fa56f4b9bf99031ddb8068ba",
+   "file": "polish-storefront.10c99eeaa597.css",
+   "bytes": 64443,
+   "sha256": "10c99eeaa5970fe2e7802d6c6510a0b06f28fb832788d8cf939e507173b836f4",
    "sources": [
     "assets/css/app-polish.css",
     "assets/css/app-tuning.css",

@@ -220,7 +220,9 @@ final class Delicat_Builder_V9_Header_Studio_8 {
         }
     }
     private function enqueue_assets() {
-        if (!wp_style_is('delicat-builder-v9-storefront-chrome', 'enqueued')) wp_enqueue_style('delicat-builder-v9-header-studio-8');
+        // 9.7.5: the engine's chrome bundle already holds this stylesheet. The header template calls this while the
+        // page prints, after the engine folded the queue, so it used to print a second copy at the end of every page.
+        if (!(wp_style_is('delicat-builder-v9-storefront-chrome', 'enqueued') || wp_style_is('delicat-engine-chrome', 'enqueued') || wp_style_is('delicat-engine-chrome', 'done'))) wp_enqueue_style('delicat-builder-v9-header-studio-8');
         wp_enqueue_script('delicat-builder-v9-header-studio-8');
         if (function_exists('wp_script_add_data')) wp_script_add_data('delicat-builder-v9-header-studio-8', 'strategy', 'defer');
     }

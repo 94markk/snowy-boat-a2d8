@@ -163,7 +163,7 @@ final class Delicat_Builder_V9_Header_Studio_8 {
             wp_dequeue_script('dsb8-beta2-header');
         }
     }
-    private function enqueue_assets() { wp_enqueue_style('delicat-builder-v9-header-studio-8'); wp_enqueue_script('delicat-builder-v9-header-studio-8'); if (function_exists('wp_script_add_data')) wp_script_add_data('delicat-builder-v9-header-studio-8', 'strategy', 'defer'); }
+    private function enqueue_assets() { if (!(wp_style_is('delicat-builder-v9-storefront-chrome', 'enqueued') || wp_style_is('delicat-engine-chrome', 'enqueued') || wp_style_is('delicat-engine-chrome', 'done'))) wp_enqueue_style('delicat-builder-v9-header-studio-8'); /* 9.7.5: already in the chrome bundle */ wp_enqueue_script('delicat-builder-v9-header-studio-8'); if (function_exists('wp_script_add_data')) wp_script_add_data('delicat-builder-v9-header-studio-8', 'strategy', 'defer'); }
     public function shortcodes() { add_shortcode('delicat_v8_header', array($this, 'render_header')); add_shortcode('delicat_v8_icon_menu', array($this, 'render_icon_menu')); }
 
     public static function should_auto_render() {

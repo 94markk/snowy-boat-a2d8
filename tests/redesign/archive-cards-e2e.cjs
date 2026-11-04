@@ -62,6 +62,28 @@ async function step(name, fn) {
     ok(i.sw <= i.vw, `horizontal scroll ${i.sw} > ${i.vw}`);
     await ctx.close();
   });
+  await step('settings saved as « Classique » (the live store before 9.7.5): still the homepage card, no old card', async () => {
+    execFileSync('php', [path.join(__dirname, 'archive-setup.php'), site, 'legacy'], { encoding: 'utf8' });
+    try {
+      const ctx = await b.newContext({ ...devices['Pixel 7'], ignoreHTTPSErrors: true });
+      const p = await ctx.newPage();
+      await p.goto(setup.shop, { waitUntil: 'load' });
+      const i = await card(p);
+      const old = await p.evaluate(() => ({
+        stock: document.querySelectorAll('.delicat-product-card__stock, .delicat-product-card__link').length,
+        choisir: /Choisir\s*→?|Disponible/.test((document.querySelector('.delicat-archive-grid') || document.body).innerText),
+        headerCss: document.querySelectorAll('link[href*="dsb8-beta2-header.css"]').length,
+        blocksCss: document.querySelectorAll('link[href*="wc-blocks.css"]').length,
+      }));
+      ok(i.n > 0 && i.home === i.n, `cards ${i.home}/${i.n}`);
+      ok(old.stock === 0 && !old.choisir, `old card parts ${JSON.stringify(old)}`);
+      ok(old.headerCss === 0, 'header stylesheet printed again outside the chrome bundle');
+      ok(old.blocksCss === 0, 'WooCommerce block stylesheet on a catalog page without blocks');
+      await ctx.close();
+    } finally {
+      execFileSync('php', [path.join(__dirname, 'archive-setup.php'), site], { encoding: 'utf8' });
+    }
+  });
   await b.close();
   const failed = results.filter((r) => r[0] === 'FAIL').length;
   console.log(`\n${results.length - failed}/${results.length} passed`);
