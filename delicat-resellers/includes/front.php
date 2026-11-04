@@ -48,11 +48,33 @@ function dlr_login_url() {
 
 /* ============================================================== the page */
 
+/**
+ * Where the page is shown: 'page' (the [delicat_revendeur] page) or 'account' (My Account ›
+ * Programme Revendeur). Forms carry it, so they return to the place they were sent from.
+ */
+function dlr_context( $set = null ) {
+	static $ctx = 'page';
+	if ( null !== $set ) $ctx = 'account' === $set ? 'account' : 'page';
+	return $ctx;
+}
+function dlr_context_field() {
+	return 'account' === dlr_context() ? '<input type="hidden" name="dlr_ctx" value="account">' : '';
+}
+
 add_shortcode( 'delicat_revendeur', function () {
+	return dlr_render_page( 'page' );
+} );
+
+function dlr_render_page( $context ) {
 	dlr_assets();
+	dlr_context( $context );
 	$uid  = get_current_user_id();
-	$out  = '<section class="dlr" id="dlr" data-dlc-dark-skip' . ( $uid ? ' data-user-id="' . (int) $uid . '"' : '' ) . '>';
-	$out .= '<header class="dlr-hero"><p class="dlr-kicker">Delicat Store</p><h1 class="dlr-title">Programme Revendeur</h1><p>Achetez à prix revendeur et revendez à vos clients. Trois niveaux, selon votre dépôt de chaque mois.</p></header>';
+	$out  = '<section class="dlr' . ( 'account' === $context ? ' dlr--account' : '' ) . '" id="dlr" data-dlc-dark-skip' . ( $uid ? ' data-user-id="' . (int) $uid . '"' : '' ) . '>';
+	if ( 'account' === $context ) {
+		$out .= '<p class="dlr-intro">Achetez à prix revendeur et revendez à vos clients. Trois niveaux, selon votre dépôt de chaque mois.</p>'; // the account bar already says « Programme Revendeur »
+	} else {
+		$out .= '<header class="dlr-hero"><p class="dlr-kicker">Delicat Store</p><h1 class="dlr-title">Programme Revendeur</h1><p>Achetez à prix revendeur et revendez à vos clients. Trois niveaux, selon votre dépôt de chaque mois.</p></header>';
+	}
 	if ( ! dlr_on() ) {
 		return $out . '<p class="dlr-card dlr-note">' . dlr_icon( 'schedule' ) . '<span>Le programme revendeur ouvre bientôt.</span></p></section>';
 	}
@@ -78,7 +100,7 @@ add_shortcode( 'delicat_revendeur', function () {
 	}
 	$out .= dlr_view_rules();
 	return $out . '</section>';
-} );
+}
 
 function dlr_view_member( $uid, $tier ) {
 	$p     = dlr_month_progress( $uid );
@@ -128,7 +150,7 @@ function dlr_view_application( $app ) {
 		$h .= '<p class="dlr-warn" role="note">' . dlr_icon( 'info' ) . '<span>Uniquement par le système de recharge (MonCash, NatCash…). Un envoi d’argent d’un autre portefeuille Delicat vers le vôtre pendant cette étape refuse la demande automatiquement.</span></p>';
 		$h .= '<div class="dlr-actions"><a class="dlr-btn" href="' . esc_url( dlr_recharge_url() ) . '">' . dlr_icon( 'account_balance_wallet' ) . 'Recharger mon compte</a></div>';
 	}
-	$h .= '<details class="dlr-cancel"><summary>Annuler ma demande</summary><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="dlr_cancel">' . wp_nonce_field( 'dlr_cancel', '_wpnonce', true, false ) . '<button class="dlr-btn dlr-btn--ghost" type="submit">Oui, annuler la demande</button></form></details>';
+	$h .= '<details class="dlr-cancel"><summary>Annuler ma demande</summary><form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '"><input type="hidden" name="action" value="dlr_cancel">' . dlr_context_field() . wp_nonce_field( 'dlr_cancel', '_wpnonce', true, false ) . '<button class="dlr-btn dlr-btn--ghost" type="submit">Oui, annuler la demande</button></form></details>';
 	return $h . '</div>';
 }
 
@@ -160,7 +182,7 @@ function dlr_view_form( $current, array $old ) {
 	$picked = $old['tier'] ?? ( '' === $current ? 'silver' : end( $choices ) );
 	$h  = '<form class="dlr-card dlr-form" method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 	$h .= '<h2>' . ( '' === $current ? 'Faire ma demande' : 'Passer au niveau supérieur' ) . '</h2>';
-	$h .= '<input type="hidden" name="action" value="dlr_apply">' . wp_nonce_field( 'dlr_apply', '_wpnonce', true, false );
+	$h .= '<input type="hidden" name="action" value="dlr_apply">' . dlr_context_field() . wp_nonce_field( 'dlr_apply', '_wpnonce', true, false );
 	$h .= '<fieldset class="dlr-pick"><legend>Niveau souhaité</legend>';
 	foreach ( $choices as $t ) {
 		$h .= '<label class="dlr-choice dlr-t-' . esc_attr( $t ) . '"><input type="radio" name="tier" value="' . esc_attr( $t ) . '"' . checked( $picked, $t, false ) . ' required>' . dlr_icon( DLR_TIER_ICON[ $t ] ) . '<span><b>' . esc_html( dlr_tier_label( $t ) ) . '</b><small>' . esc_html( dlr_money( dlr_tier_min( $t ) ) ) . ' / mois</small></span></label>';
@@ -193,7 +215,9 @@ function dlr_view_rules() {
 /* ============================================================== form handlers */
 
 function dlr_back( $state = '' ) {
-	wp_safe_redirect( ( '' !== $state ? add_query_arg( 'dlr', $state, dlr_page_url() ) : dlr_page_url() ) . '#dlr' );
+	$account = isset( $_POST['dlr_ctx'] ) && 'account' === $_POST['dlr_ctx']; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- only picks one of two fixed addresses
+	$base    = $account ? dlr_account_url() : dlr_page_url();
+	wp_safe_redirect( ( '' !== $state ? add_query_arg( 'dlr', $state, $base ) : $base ) . '#dlr' );
 	exit;
 }
 add_action( 'admin_post_nopriv_dlr_apply', function () { wp_safe_redirect( dlr_login_url() ); exit; } );
@@ -221,6 +245,41 @@ add_action( 'admin_post_dlr_cancel', function () {
 	dlr_back( 'cancelled' );
 } );
 
+/* ============================================================== My Account › Programme Revendeur */
+
+const DLR_ENDPOINT = 'revendeur';
+
+/* WooCommerce adds the address (…/mon-compte/revendeur/) with its own account pages. */
+add_filter( 'woocommerce_get_query_vars', function ( $vars ) {
+	$vars[ DLR_ENDPOINT ] = DLR_ENDPOINT;
+	return $vars;
+} );
+function dlr_account_url() {
+	return function_exists( 'wc_get_account_endpoint_url' ) ? (string) wc_get_account_endpoint_url( DLR_ENDPOINT ) : home_url( '/' );
+}
+/* In the account menu while the programme is open, and always for a reseller (to see their level). */
+add_filter( 'woocommerce_account_menu_items', function ( $items ) {
+	$uid = get_current_user_id();
+	if ( ! $uid || ! ( dlr_on() || '' !== dlr_user_tier( $uid ) ) ) return $items;
+	$logout = $items['customer-logout'] ?? null;
+	unset( $items['customer-logout'] );
+	$items[ DLR_ENDPOINT ] = 'Programme Revendeur';
+	if ( null !== $logout ) $items['customer-logout'] = $logout;
+	return $items;
+}, 30 );
+add_filter( 'woocommerce_endpoint_' . DLR_ENDPOINT . '_title', function () {
+	return 'Programme Revendeur';
+} );
+add_action( 'woocommerce_account_' . DLR_ENDPOINT . '_endpoint', function () {
+	echo dlr_render_page( 'account' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- every value is escaped where it is built
+} );
+/* The address works once WordPress's rewrite rules include it: rebuilt once after install or update. */
+add_action( 'init', function () {
+	if ( ! get_option( 'dlr_flush' ) ) return;
+	delete_option( 'dlr_flush' );
+	flush_rewrite_rules( false );
+}, 99 );
+
 /* ============================================================== account home: the badge */
 
 add_action( 'woocommerce_before_account_navigation', function () {
@@ -228,7 +287,7 @@ add_action( 'woocommerce_before_account_navigation', function () {
 	if ( function_exists( 'WC' ) && WC()->query && '' !== (string) WC()->query->get_current_endpoint() ) return; // the account home only
 	$uid  = get_current_user_id();
 	$tier = dlr_user_tier( $uid );
-	$url  = esc_url( dlr_page_url() );
+	$url  = esc_url( dlr_account_url() );
 	if ( '' !== $tier ) {
 		$p   = dlr_month_progress( $uid );
 		$sub = $p['settled'] ? 'Niveau actif ce mois-ci' : 'Ce mois : ' . dlr_money( $p['paid'] ) . ' / ' . dlr_money( $p['min'] );

@@ -57,6 +57,9 @@ final class Delicat_Builder_V9_Runtime_Router {
             if ( ! $archive && ! $taxonomy ) return;
             self::load('includes/class-delicat-builder-archive-builder.php','Delicat_Builder_V9_Archive_Builder');
             self::load('includes/class-delicat-builder-woo-ui.php','Delicat_Builder_V9_Woo_UI');
+            /* 9.7.4: the archive cards are the homepage cards: their badge and like engines. */
+            self::load('includes/class-delicat-builder-badges.php','Delicat_Builder_V9_Badges');
+            self::load('includes/class-delicat-builder-heart-engine.php','Delicat_Builder_V9_Heart_Engine');
         } catch ( Throwable $error ) {
             update_option('delicat_builder_v9_safe_mode', 1, false);
             update_option('delicat_builder_v9_safe_mode_meta', array('version'=>DELICAT_BUILDER_V9_VERSION,'tripped'=>gmdate('c'),'context'=>'runtime_archive_route'), false);
@@ -140,6 +143,8 @@ final class Delicat_Builder_V9_Runtime_Router {
         if ( (function_exists('is_shop') && is_shop()) || (function_exists('is_product_taxonomy') && is_product_taxonomy()) ) {
             self::load('includes/class-delicat-builder-archive-builder.php','Delicat_Builder_V9_Archive_Builder');
             self::load('includes/class-delicat-builder-woo-ui.php','Delicat_Builder_V9_Woo_UI');
+            self::load('includes/class-delicat-builder-badges.php','Delicat_Builder_V9_Badges');
+            self::load('includes/class-delicat-builder-heart-engine.php','Delicat_Builder_V9_Heart_Engine');
             if ( self::raw_enabled('delicat_builder_v9_design', false) ) self::load('includes/class-delicat-builder-design.php','Delicat_Builder_V9_Design');
             return;
         }

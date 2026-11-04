@@ -110,6 +110,34 @@ const shot = async (p, name, full = true) => { if (out) await p.screenshot({ pat
     ok(c === 'rgb(255, 255, 255)', 'badge text colour ' + c);
     await shot(A.p, 'reseller-account', false);
   });
+  await step('account home: « Programme Revendeur » in « Mes services », with a shop icon, opens the account page', async () => {
+    await A.p.goto(s.account, { waitUntil: 'load' });
+    const row = A.p.locator('a.dipapp-row', { hasText: 'Programme Revendeur' });
+    ok(await row.count() === 1, 'row missing');
+    ok(await row.locator('.dipma-icon-store').count() === 1, 'shop icon missing');
+    const mask = await row.locator('.dipma-icon-store').evaluate((e) => getComputedStyle(e).getPropertyValue('--dipma-icon'));
+    ok(/svg/.test(mask), 'icon has no glyph: ' + mask.slice(0, 60));
+    ok(!(await A.p.locator('a.dipapp-row .dipma-icon-dot').count()), 'a row still shows a plain dot');
+    await Promise.all([A.p.waitForNavigation(), row.click()]);
+    ok(A.p.url().startsWith(s.accountPage), 'opened ' + A.p.url());
+    ok(/Programme Revendeur/.test(await A.p.textContent('.dipapp-topbar h1')), 'title');
+    ok(/Golden Reseller/.test(await A.p.textContent('.dlr--account .dlr-me .dlr-badge')), 'member card');
+    ok(!(await A.p.$('.dlr--account .dlr-hero')), 'big page header shown inside the account');
+    await shot(A.p, 'reseller-account-page');
+  });
+  await step('account page: apply from My Account and come back to it', async () => {
+    const C = await phone(b, { login: 'rs3' });
+    await C.p.goto(s.accountPage, { waitUntil: 'load' });
+    await C.p.click('label.dlr-choice.dlr-t-silver');
+    await C.p.fill('input[name="business"]', 'Boutique Rudy'); await C.p.fill('input[name="phone"]', '+509 3700 0003');
+    await C.p.fill('input[name="city"]', 'Jacmel'); await C.p.fill('textarea[name="channel"]', 'Vente en ligne et en boutique.');
+    await C.p.selectOption('select[name="volume"]', 'lt50'); await C.p.check('input[name="terms"]');
+    await Promise.all([C.p.waitForNavigation(), C.p.click('form.dlr-form button[type="submit"]')]);
+    ok(C.p.url().startsWith(s.accountPage), 'came back to ' + C.p.url());
+    ok(/Demande envoyée/.test(await C.p.textContent('.dlr-flash')), 'confirmation');
+    ok(php('state', 'rs3').app.status === 'pending', 'not pending');
+    await C.ctx.close();
+  });
   await step('product page: 120 HTG « Prix Golden Reseller », 150 struck through', async () => {
     await A.p.goto(s.product, { waitUntil: 'load' });
     const html = await A.p.$eval('body', (b) => b.innerText);

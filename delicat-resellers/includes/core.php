@@ -58,6 +58,7 @@ function dlr_install() {
 		if ( ! get_role( 'dlr_' . $t ) ) add_role( 'dlr_' . $t, 'Revendeur ' . ucfirst( $t ), array( 'read' => true ) );
 	}
 	if ( ! wp_next_scheduled( 'dlr_daily' ) ) wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'dlr_daily' );
+	update_option( 'dlr_flush', 1, false ); // My Account › Programme Revendeur needs its address in the rewrite rules
 	update_option( 'dlr_db', DLR_DB, false );
 }
 add_action( 'plugins_loaded', function () {
@@ -674,9 +675,10 @@ add_action( 'save_post_page', function () {
 	delete_transient( 'dlr_page_' . md5( 'delicat_revendeur' ) );
 	delete_transient( 'dlr_page_' . md5( 'delicat_recharge' ) );
 } );
+/** The reseller page; without one, the same view in My Account (Programme Revendeur). */
 function dlr_page_url() {
 	$id = dlr_page_with( 'delicat_revendeur', dlr_cfg( 'page_id' ) );
-	return $id ? (string) get_permalink( $id ) : home_url( '/' );
+	return $id ? (string) get_permalink( $id ) : dlr_account_url();
 }
 function dlr_recharge_url() {
 	$id = dlr_page_with( 'delicat_recharge', dlr_cfg( 'recharge_page_id' ) );

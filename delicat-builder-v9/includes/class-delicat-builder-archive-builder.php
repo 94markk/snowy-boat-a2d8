@@ -53,8 +53,8 @@ final class Delicat_Builder_V9_Archive_Builder {
 			'header_padding_m'          => 14,
 			'header_margin_bottom'      => 14,
 			'max_width'                 => 1320,
-			'card_style'                => 'minimal',
-			'image_ratio'               => 'landscape',
+			'card_style'                => 'accueil', // 9.7.4: the homepage card
+			'image_ratio'               => 'square',
 			'grid_desktop'              => 4,
 			'grid_tablet'               => 3,
 			'grid_mobile'               => 2,
@@ -665,6 +665,10 @@ final class Delicat_Builder_V9_Archive_Builder {
 		if ( ! is_string( $url ) || '' === $url ) {
 			return;
 		}
+		if ( 'accueil' === ( $config['card_style'] ?? 'accueil' ) ) {
+			self::render_home_card( $product, $url, $index, $config );
+			return;
+		}
 
 		$title       = $product->get_name();
 		$image_id    = $product->get_image_id();
@@ -742,6 +746,92 @@ final class Delicat_Builder_V9_Archive_Builder {
 			echo '</span>';
 		}
 		echo '</div></a></article>';
+	}
+
+	/**
+	 * 9.7.4: the homepage card on the shop, category, tag and search pages: the picture with its
+	 * badges and the name over it, the like button, and a dark footer with « À partir de » and the
+	 * round cart button. Same markup and class names as the homepage carousels
+	 * (Delicat_Builder_V9_Carousel::product_card), drawn by the same badge and like engines, so both
+	 * stay one design. WooCommerce remains the authority for visibility, price, stock and the URL.
+	 */
+	private static function render_home_card( WC_Product $product, string $url, int $index, array $config ): void {
+		$id        = $product->get_id();
+		$title     = $product->get_name();
+		$nav_attrs = ! empty( $config['touch_prefetch'] )
+			? ' data-delicat-prefetch data-delicat-product-link data-delicat-instant-product'
+			: ' data-delicat-product-link';
+		$badges = class_exists( 'Delicat_Builder_V9_Badges' )
+			? Delicat_Builder_V9_Badges::for_product( $product, array( 'mode' => 'auto', 'sales_min' => 10 ) )
+			: array( 'topic' => array(), 'status' => array() );
+		$show_price = ! array_key_exists( 'show_price', $config ) || ! empty( $config['show_price'] );
+		$show_cta   = ! array_key_exists( 'show_cta', $config ) || ! empty( $config['show_cta'] );
+		$heart      = class_exists( 'Delicat_Builder_V9_Heart_Engine' ) && Delicat_Builder_V9_Heart_Engine::enabled();
+
+		echo '<article class="delicat-product-card delicat-product-card--home" data-product-id="' . esc_attr( (string) $id ) . '">';
+		echo '<div class="delicat-product-card__media-wrap">';
+		echo '<a class="delicat-product-card__media" href="' . esc_url( $url ) . '"' . $nav_attrs . '>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed attribute list
+		if ( class_exists( 'Delicat_Builder_V9_Badges' ) ) {
+			echo Delicat_Builder_V9_Badges::render( $badges['topic'], 'topic' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render()
+		}
+		$image_id = $product->get_image_id();
+		if ( $image_id ) {
+			$attrs = array(
+				'class'    => 'delicat-product-card__image',
+				'alt'      => (string) get_post_meta( $image_id, '_wp_attachment_image_alt', true ) ?: $title,
+				'decoding' => 'async',
+				'sizes'    => self::product_card_image_sizes( $config ),
+			);
+			if ( 0 === $index ) {
+				$attrs['loading']       = 'eager';
+				$attrs['fetchpriority'] = 'high';
+			} else {
+				$attrs['loading'] = 'lazy';
+			}
+			echo wp_get_attachment_image( $image_id, 'woocommerce_thumbnail', false, $attrs ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		} else {
+			echo wc_placeholder_img( 'woocommerce_thumbnail', array( 'class' => 'delicat-product-card__image', 'loading' => 0 === $index ? 'eager' : 'lazy' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		}
+		if ( class_exists( 'Delicat_Builder_V9_Badges' ) ) {
+			echo Delicat_Builder_V9_Badges::render( $badges['status'], 'status' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render()
+		}
+		echo '<h2 class="delicat-product-card__poster-title">' . esc_html( $title ) . '</h2>';
+		echo '</a>';
+		if ( $heart ) {
+			echo Delicat_Builder_V9_Heart_Engine::render_button( $id, is_user_logged_in() && Delicat_Builder_V9_Heart_Engine::is_favorite( $id ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render_button(); signed-in archives are cached privately
+		}
+		echo '</div>';
+
+		echo '<div class="delicat-product-card__body">';
+		$price = $show_price ? self::home_price_parts( $product ) : array();
+		if ( $price ) {
+			echo '<div class="delicat-product-card__price"><span>' . esc_html__( 'À partir de', 'delicat-builder-v9' ) . '</span><strong><span class="delicat-price-symbol">' . esc_html( $price['s'] ) . '</span><span class="delicat-price-number">' . esc_html( $price['n'] ) . '</span></strong></div>';
+		}
+		if ( ! $product->is_in_stock() ) {
+			echo '<span class="delicat-product-card__soldout">' . esc_html__( 'Indisponible', 'delicat-builder-v9' ) . '</span>';
+		}
+		if ( $show_cta ) {
+			/* translators: %s: product name */
+			echo '<a class="delicat-product-card__cta" href="' . esc_url( $url ) . '"' . $nav_attrs . ' aria-label="' . esc_attr( sprintf( __( 'Voir les options de %s', 'delicat-builder-v9' ), $title ) ) . '">' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed attribute list
+				. '<svg class="delicat-product-card__cta-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M7.2 18.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6Zm9.2 0a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6ZM6.1 5.3l.5 2.1h11.7l-1.3 5.4a1.4 1.4 0 0 1-1.4 1.1H8.2a1.4 1.4 0 0 1-1.4-1.1L4.9 4.9H2.8a1 1 0 1 1 0-2h2.9l.4 2.4Zm1 4.1.6 2.5h7.5l.6-2.5H7.1Z"/></svg></a>';
+		}
+		echo '</div></article>';
+	}
+
+	/**
+	 * The card's « À partir de » amount, split as the homepage prints it (symbol, number). Variable
+	 * products read their already-synchronised minimum price, as compact_price_html() does.
+	 */
+	private static function home_price_parts( WC_Product $product ): array {
+		$raw = (string) $product->get_price();
+		if ( '' === $raw || ! is_numeric( $raw ) ) {
+			return array();
+		}
+		$price = function_exists( 'wc_get_price_to_display' ) ? (float) wc_get_price_to_display( $product, array( 'price' => (float) $raw ) ) : (float) $raw;
+		return array(
+			's' => sanitize_text_field( html_entity_decode( get_woocommerce_currency_symbol(), ENT_QUOTES, 'UTF-8' ) ),
+			'n' => sanitize_text_field( wc_format_localized_price( wc_format_decimal( $price, wc_get_price_decimals(), true ) ) ), // « 145 », as on the homepage
+		);
 	}
 
 	/**
@@ -828,7 +918,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 		if ( ! $cli && ! current_user_can( 'manage_woocommerce' ) && ! current_user_can( 'manage_options' ) ) {
 			return;
 		}
-		if ( get_option( 'delicat_builder_v9_native_archive_preset', '' ) === 'archive-v4-ultra' ) {
+		if ( get_option( 'delicat_builder_v9_native_archive_preset', '' ) === 'archive-v5-home' ) {
 			return;
 		}
 		$preset = array(
@@ -836,7 +926,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 			'header_bg' => '#fbf7ff', 'header_border' => '#eee7f8', 'title_color' => '#17152a',
 			'subtitle_color' => '#75718a', 'accent_color' => '#2563eb', 'header_radius' => 16,
 			'products_per_page' => 8, 'show_result_count' => 0, 'show_ordering' => 1,
-			'card_style' => 'minimal', 'image_ratio' => 'landscape', 'grid_desktop' => 4,
+			'card_style' => 'accueil', 'image_ratio' => 'square', 'grid_desktop' => 4,
 			'grid_tablet' => 3, 'grid_mobile' => 2, 'compact_mobile' => 1, 'fast_mode' => 1,
 			'touch_prefetch' => 0, 'cta_mode' => 'product', 'cta_label' => __( 'Choisir', 'delicat-builder-v9' ),
 			'show_stock_badge' => 1, 'show_category_badge' => 0, 'show_pagination' => 1,
@@ -859,11 +949,11 @@ final class Delicat_Builder_V9_Archive_Builder {
 		}
 		foreach ( $configs as &$config ) {
 			if ( ! is_array( $config ) ) { continue; }
-			$config = array_merge( $config, array( 'products_per_page' => 8, 'fast_mode' => 1, 'grid_mobile' => 2, 'grid_gap_d' => 10, 'grid_gap_m' => 7, 'card_radius' => 13, 'cta_radius' => 30, 'header_radius' => 14, 'header_padding_d' => 14, 'header_padding_m' => 10, 'header_margin_bottom' => 10, 'card_style' => 'minimal', 'image_ratio' => 'landscape', 'title_size_d' => 13, 'title_size_m' => 12, 'price_size_d' => 13, 'price_size_m' => 12, 'card_shadow' => 'none', 'hover_motion' => 0, 'show_result_count' => 0, 'show_category_badge' => 0, 'touch_prefetch' => 0 ) );
+			$config = array_merge( $config, array( 'products_per_page' => 8, 'fast_mode' => 1, 'grid_mobile' => 2, 'grid_gap_d' => 10, 'grid_gap_m' => 7, 'card_radius' => 13, 'cta_radius' => 30, 'header_radius' => 14, 'header_padding_d' => 14, 'header_padding_m' => 10, 'header_margin_bottom' => 10, 'card_style' => 'accueil', 'image_ratio' => 'square', 'title_size_d' => 13, 'title_size_m' => 12, 'price_size_d' => 13, 'price_size_m' => 12, 'card_shadow' => 'none', 'hover_motion' => 0, 'show_result_count' => 0, 'show_category_badge' => 0, 'touch_prefetch' => 0 ) );
 		}
 		unset( $config );
 		update_option( self::OPTION, $configs, false );
-		update_option( 'delicat_builder_v9_native_archive_preset', 'archive-v4-ultra', false );
+		update_option( 'delicat_builder_v9_native_archive_preset', 'archive-v5-home', false );
 		self::$configs_cache = $configs;
 		self::$target_cache = null;
 		self::$active_cache = null;
@@ -893,7 +983,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 
 	private static function safe_card_style( $value ): string {
 		$value = sanitize_key( (string) $value );
-		return in_array( $value, array( 'premium', 'glass', 'minimal', 'gaming' ), true ) ? $value : 'premium';
+		return in_array( $value, array( 'accueil', 'premium', 'glass', 'minimal', 'gaming' ), true ) ? $value : 'accueil';
 	}
 
 	private static function safe_image_ratio( $value ): string {
@@ -1077,11 +1167,12 @@ final class Delicat_Builder_V9_Archive_Builder {
 		wp_nonce_field( 'delicat_builder_v9_save_archive_' . $target );
 		// Preserve all settings not exposed by this compact editor.
 		foreach ( self::defaults() as $key => $value ) {
-			if ( isset( $checks[ $key ] ) || isset( $fields[ $key ] ) || isset( $numbers[ $key ] ) || 'title_mode' === $key ) { continue; }
+			if ( isset( $checks[ $key ] ) || isset( $fields[ $key ] ) || isset( $numbers[ $key ] ) || 'title_mode' === $key || 'card_style' === $key ) { continue; }
 			echo '<input type="hidden" name="config[' . esc_attr( $key ) . ']" value="' . esc_attr( (string) $config[ $key ] ) . '">';
 		}
 		echo '<div class="dca-editor-grid"><section><h2>Présentation</h2>';
 		self::select_field( 'config[title_mode]', 'Source du titre', $config['title_mode'], array( 'dynamic' => 'Titre automatique', 'custom' => 'Personnalisé', 'hidden' => 'Masqué' ) );
+		self::select_field( 'config[card_style]', 'Style des cartes', 'accueil' === $config['card_style'] ? 'accueil' : 'minimal', array( 'accueil' => 'Comme l’accueil', 'minimal' => 'Classique' ) );
 		foreach ( $fields as $key => $label ) { self::text_field( 'config[' . $key . ']', $label, $config[ $key ] ); }
 		echo '</section><section><h2>Responsive</h2>';
 		foreach ( $numbers as $key => $args ) { self::number_field( 'config[' . $key . ']', $args[0], $config[ $key ], $args[1], $args[2] ); }

@@ -467,10 +467,11 @@ final class DIP_My_Account_Modern {
             'downloads' => ['Téléchargements', 'download'],
             'edit-address' => ['Mes adresses', 'pin'],
             'payment-methods' => ['Moyens de paiement', 'wallet'],
+            'revendeur' => ['Programme Revendeur', 'store'], // Delicat Resellers 1.1 (shown while the programme is open)
         ] as $key => $info) {
             if ($key === 'woo-wallet' || $has($key)) $service_rows[] = ['label' => __($info[0], 'delicat-google-login'), 'icon' => $info[1], 'url' => $url($key)];
         }
-        $known = ['dashboard', 'edit-account', 'identity-center', 'orders', 'woo-wallet', 'downloads', 'edit-address', 'payment-methods', 'customer-logout', 'connected-accounts', 'change-password', 'security-sessions'];
+        $known = ['dashboard', 'edit-account', 'identity-center', 'orders', 'woo-wallet', 'downloads', 'edit-address', 'payment-methods', 'revendeur', 'customer-logout', 'connected-accounts', 'change-password', 'security-sessions'];
         $other_rows = [];
         foreach ($menu as $endpoint => $label) {
             if (!is_string($endpoint) || in_array($endpoint, $known, true)) continue;
@@ -481,6 +482,19 @@ final class DIP_My_Account_Modern {
             elseif (preg_match('/exchange|wallet|payment|paiement/i', $endpoint)) $icon = 'wallet';
             elseif (preg_match('/security|privacy|data|delete|supp/i', $endpoint)) $icon = 'shield';
             elseif (preg_match('/app|device/i', $endpoint)) $icon = 'device';
+            // 6.17.4: pages added by other plugins whose address says nothing: their label decides.
+            $said = strtolower(remove_accents($label));
+            if ($icon === 'dot') {
+                if (preg_match('/echange|exchange|swap|transfert/', $said)) $icon = 'swap';
+                elseif (preg_match('/\bapi\b|developpeur|integration/', $said)) $icon = 'code';
+                elseif (preg_match('/donnees|confidentialite|vie privee|supprim/', $said)) $icon = 'shield';
+                elseif (preg_match('/commande|achat/', $said)) $icon = 'orders';
+                elseif (preg_match('/portefeuille|paiement|recharge/', $said)) $icon = 'wallet';
+                elseif (preg_match('/bonus|recompense|parrain|cadeau/', $said)) $icon = 'spend';
+                elseif (preg_match('/revendeur|boutique/', $said)) $icon = 'store';
+                elseif (preg_match('/notification|message|alerte/', $said)) $icon = 'mail';
+                elseif (preg_match('/appareil|application|securite/', $said)) $icon = 'device';
+            }
             $other_rows[] = ['label' => $label, 'icon' => $icon, 'url' => $url($endpoint)];
         }
         $uid = get_current_user_id();

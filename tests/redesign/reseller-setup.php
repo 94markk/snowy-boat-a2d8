@@ -65,7 +65,7 @@ if ( 'setup' === $cmd ) {
 	}
 	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'dlr\\_lock\\_%'" );
 	dlr_cfg( null, true );
-	echo wp_json_encode( array( 'users' => $out, 'page' => dlr_page_url(), 'recharge' => dlr_recharge_url(), 'account' => wc_get_page_permalink( 'myaccount' ), 'product' => get_permalink( $p110->get_id() ), 'cart' => wc_get_cart_url(), 'products' => array( 'p110' => $p110->get_id(), 'p341' => $p341->get_id(), 'p572' => $p572->get_id() ) ) ) . "\n";
+	echo wp_json_encode( array( 'users' => $out, 'page' => dlr_page_url(), 'recharge' => dlr_recharge_url(), 'account' => wc_get_page_permalink( 'myaccount' ), 'accountPage' => function_exists( 'dlr_account_url' ) ? dlr_account_url() : '', 'product' => get_permalink( $p110->get_id() ), 'cart' => wc_get_cart_url(), 'products' => array( 'p110' => $p110->get_id(), 'p341' => $p341->get_id(), 'p572' => $p572->get_id() ) ) ) . "\n";
 	exit;
 }
 

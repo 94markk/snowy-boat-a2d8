@@ -1,3 +1,14 @@
+9.7.4 — Boutique et catégories : les cartes produit de l’accueil
+(1) Pages Boutique, catégories, étiquettes et recherche : chaque produit s’affiche avec la même carte que sur
+l’accueil : l’image avec ses badges (#1, Promo, Top Vente…) et le nom du produit dessus, le cœur des favoris, et
+le bas bleu nuit avec « À partir de G145 » et le bouton panier rond. Un produit épuisé affiche « Indisponible ».
+(2) Catalogue › Style des cartes : « Comme l’accueil » (nouveau, par défaut) ou « Classique » (l’ancienne carte).
+À la mise à jour, toutes les pages du catalogue passent à « Comme l’accueil » (préréglage archive-v5-home, appliqué
+à la première visite d’un administrateur) et le cache des pages produits est vidé.
+(3) Technique : la carte reprend les classes de la carte de l’accueil ; ses badges et son cœur viennent des mêmes
+moteurs (chargés aussi sur ces pages) ; nouveau fichier assets/css/archive-cards.css dans les styles « shop ».
+Les prix restent ceux de WooCommerce (prix revendeur compris). Installer puis purger LiteSpeed / Cloudflare.
+
 9.7.3 — Mode sombre : un seul cadre, plus de « carte dans une carte »
 (1) En mode sombre, les sections qui entouraient d'un second cadre des cartes déjà encadrées n'en dessinent
 plus : la zone du compte (Portefeuille, Commandes, commandes récentes, favoris, informations), la photo et le

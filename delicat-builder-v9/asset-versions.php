@@ -29,6 +29,7 @@ return array(
  'assets/css/announcement.css' => '3e7d67292d8b',
  'assets/css/app-polish.css' => '128c5cdb6544',
  'assets/css/app-tuning.css' => 'a585f07bfd7d',
+ 'assets/css/archive-cards.css' => 'cccc54fc8d88',
  'assets/css/blocks/cart.css' => '691b292be6e8',
  'assets/css/blocks/checkout.css' => '1456f3cb084f',
  'assets/css/blocks/product-collection.css' => '27aefa399e9f',

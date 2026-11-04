@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Resellers
  * Description: Programme revendeur de Delicat Store : niveaux Premium, Gold et Silver, demande en ligne, dépôt de qualification par le système de recharge (jamais par un envoi entre portefeuilles), prix revendeur par produit, badge sur le compte et dépôt minimum chaque mois.
- * Version:     1.0.0
+ * Version:     1.1.0
  * Author:      Delicat Store Haiti
  * Requires PHP: 7.4
  * Requires Plugins: woocommerce
@@ -14,8 +14,8 @@
  */
 defined( 'ABSPATH' ) || exit;
 
-const DLR_VERSION = '1.0.0';
-const DLR_DB      = 1;
+const DLR_VERSION = '1.1.0';
+const DLR_DB      = 2;
 define( 'DLR_FILE', __FILE__ );
 define( 'DLR_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DLR_URL', plugin_dir_url( __FILE__ ) );

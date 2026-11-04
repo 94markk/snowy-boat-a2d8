@@ -1,4 +1,15 @@
-DELICAT RESELLERS 1.0.0 — PROGRAMME REVENDEUR
+DELICAT RESELLERS 1.1.0 — PROGRAMME REVENDEUR
+
+NOUVEAUTÉS 1.1.0
+- Mon compte › Programme Revendeur : la demande, son avancement, le niveau et les dépôts du mois sont
+  maintenant dans l'espace client (adresse …/mon-compte/revendeur/). La ligne apparaît dans « Mes services »
+  avec une icône de boutique (Delicat Identity 6.17.4) tant que le programme est ouvert, et toujours pour un
+  revendeur. Les formulaires ramènent le client sur cette page.
+- La carte du badge sur l'accueil du compte mène à cette page.
+- La page avec le shortcode [delicat_revendeur] reste possible ; sans elle, les liens (e-mails, assistant)
+  mènent à la page du compte.
+- À l'installation, les adresses de WordPress sont reconstruites une fois (aucun réglage à faire).
+
 
 Trois niveaux de revendeur, chacun avec un dépôt minimum par mois :
   Premium Reseller   100 000 HTG

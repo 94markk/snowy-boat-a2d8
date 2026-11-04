@@ -2,10 +2,16 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.3
+Stable tag: 6.17.4
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.4 ==
+* Accueil du compte : « Programme Revendeur » apparaît dans « Mes services » avec une icône de boutique
+  (page Mon compte › Programme Revendeur de Delicat Resellers 1.1).
+* Les pages ajoutées par d'autres extensions reçoivent une vraie icône au lieu d'un point, d'après leur nom :
+  « Mes échanges » (flèches d'échange), « API Revendeur » (code), « Mes données » (bouclier), etc.
 
 == Version 6.17.3 ==
 * Mode sombre, espace client : une ligne touchée sur iPhone ou Android (« Commandes récentes », menus du compte)
