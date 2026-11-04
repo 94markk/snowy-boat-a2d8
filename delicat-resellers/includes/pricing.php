@@ -58,14 +58,20 @@ function dlr_reseller_price( $product, $tier, $active ) {
 function dlr_filter_price( $price, $product ) {
 	$tier = dlr_current_tier();
 	if ( '' === $tier || '' === (string) $price ) return $price;
-	// A price set while the page runs (Builder's product calculator: catalogue price + paid options):
-	// the reseller price replaces the catalogue part only, the options keep their cost.
+	// A price set while the page runs (Builder's product calculator). When it is the catalogue price plus
+	// paid options, the reseller price replaces the catalogue part and the options keep their cost. A
+	// formula that does not start from the catalogue price (an amount × a rate, a quantity) gets the
+	// product's reseller reduction as a share instead. The larger of the two is kept: a reseller never
+	// gets more off than that share, and a priced line never drops to zero.
 	if ( array_key_exists( 'price', $product->get_changes() ) ) {
 		$data   = $product->get_data();
-		$stored = (string) ( $data['price'] ?? '' );
-		if ( '' === $stored ) return $price;
+		$stored = (float) ( $data['price'] ?? 0 );
+		if ( $stored <= 0 ) return $price;
 		$r = dlr_reseller_price( $product, $tier, $stored );
-		return null === $r ? $price : (string) max( 0, $r + ( (float) $price - (float) $stored ) );
+		if ( null === $r ) return $price;
+		$now = (float) $price;
+		$out = round( max( $r + $now - $stored, $now * $r / $stored ), wc_get_price_decimals() );
+		return $out > 0 || $now <= 0 ? (string) $out : $price; // a tiny line that would round to 0 keeps its price
 	}
 	$r = dlr_reseller_price( $product, $tier, $price );
 	return null === $r ? $price : (string) $r;
@@ -76,6 +82,31 @@ add_filter( 'woocommerce_product_get_price', 'dlr_filter_price', 20, 2 );
 add_filter( 'woocommerce_product_variation_get_price', 'dlr_filter_price', 20, 2 );
 /* Variable products: the price range is read from cached variation prices, kept apart per level. */
 add_filter( 'woocommerce_variation_prices_price', function ( $price, $variation ) { return dlr_filter_price( $price, $variation ); }, 20, 2 );
+/*
+ * Delicat Builder's currency switcher (priority 99): a price typed by hand for another currency replaces
+ * the converted one, reseller price included. That fixed price gets the same reduction, in proportion.
+ * (By default Builder charges checkout and the wallet in HTG, where the reseller price applies as is.)
+ */
+function dlr_filter_fixed_currency_price( $price, $product ) {
+	if ( '' === (string) $price || ! $product instanceof WC_Product || ! class_exists( 'Delicat_Builder_V9_Multi_Currency' ) ) return $price;
+	$tier = dlr_current_tier();
+	if ( '' === $tier ) return $price;
+	$mc = Delicat_Builder_V9_Multi_Currency::instance();
+	if ( ! method_exists( $mc, 'current' ) || ! method_exists( $mc, 'base_code' ) || ! method_exists( $mc, 'no_convert' ) ) return $price;
+	$code = (string) $mc->current();
+	if ( $code === (string) $mc->base_code() || $mc->no_convert( $product ) ) return $price;
+	$fixed = get_post_meta( $product->get_id(), '_dmc_price_' . $code, true );
+	if ( ( '' === $fixed || ! is_numeric( $fixed ) ) && $product->get_parent_id() ) $fixed = get_post_meta( $product->get_parent_id(), '_dmc_price_' . $code, true );
+	if ( '' === $fixed || ! is_numeric( $fixed ) || abs( (float) $fixed - (float) $price ) > 0.0001 ) return $price; // converted by rate: already reduced
+	$data   = $product->get_data();
+	$stored = (float) ( $data['price'] ?? 0 );
+	if ( $stored <= 0 ) return $price;
+	$r = dlr_reseller_price( $product, $tier, $stored );
+	return null === $r ? $price : (string) round( (float) $fixed * $r / $stored, wc_get_price_decimals() );
+}
+add_filter( 'woocommerce_product_get_price', 'dlr_filter_fixed_currency_price', 100, 2 );
+add_filter( 'woocommerce_product_variation_get_price', 'dlr_filter_fixed_currency_price', 100, 2 );
+add_filter( 'woocommerce_variation_prices_price', function ( $price, $variation ) { return dlr_filter_fixed_currency_price( $price, $variation ); }, 100, 2 );
 add_filter( 'woocommerce_get_variation_prices_hash', function ( $hash ) {
 	$tier = dlr_current_tier();
 	if ( '' !== $tier ) {
@@ -137,13 +168,12 @@ add_action( 'woocommerce_new_order', function ( $order_id, $order = null ) { // 
 	if ( dlr_stamp_order( $order ) ) $order->save_meta_data();
 }, 20, 2 );
 
-/* Reseller purchases are not retail for Delicat Rewards: no bonus progress, no weekly ranking, no
-   referral point (Rewards 3.4.1 asks the same question for invitations). */
+/* Purchases made as a reseller (stamped _dlr_tier when the order is created) are not retail for Delicat
+   Rewards: no bonus progress, no weekly ranking, no referral point (Rewards 3.4.1 asks the same question
+   for invitations). Orders from before the activation, or after leaving the programme, stay retail. */
 add_filter( 'delicat_rewards_order_is_retail', function ( $retail, $order ) {
 	if ( ! $retail || ! $order instanceof WC_Order ) return $retail;
-	if ( $order->get_meta( '_dlr_tier' ) ) return false;
-	$uid = (int) $order->get_customer_id();
-	return ! ( $uid > 0 && dlr_on() && '' !== dlr_user_tier( $uid ) );
+	return ! $order->get_meta( '_dlr_tier' );
 }, 10, 2 );
 
 /* ============================================================== product screen */

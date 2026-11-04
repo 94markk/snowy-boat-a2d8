@@ -183,19 +183,37 @@ function dlr_log( $user_id, $event, $from = '', $to = '', $amount = 0, $note = '
 
 /* ============================================================== locks */
 
-/** A short lock shared by every PHP worker (compare-and-set on the options table). */
+/**
+ * A short lock shared by every PHP worker (compare-and-set on the options table). The value is
+ * « expiry:token »: only the worker that holds the lock removes it, even after it has expired and
+ * another worker has taken it over.
+ */
 function dlr_lock( $key, $ttl = 30 ) {
 	global $wpdb;
-	$name = 'dlr_lock_' . $key;
-	$now  = time();
-	if ( $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", $name, (string) ( $now + $ttl ) ) ) ) return true;
-	$held = (string) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s", $name ) );
-	if ( (int) $held >= $now ) return false;
-	return 1 === (int) $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value=%s WHERE option_name=%s AND option_value=%s", (string) ( $now + $ttl ), $name, $held ) );
+	$name  = 'dlr_lock_' . $key;
+	$now   = time();
+	$value = ( $now + $ttl ) . ':' . wp_generate_password( 12, false );
+	$got   = (bool) $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", $name, $value ) );
+	if ( ! $got ) {
+		$held = (string) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name=%s", $name ) );
+		if ( (int) $held >= $now ) return false;
+		$got = 1 === (int) $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value=%s WHERE option_name=%s AND option_value=%s", $value, $name, $held ) );
+	}
+	if ( $got ) dlr_lock_token( $key, $value );
+	return $got;
+}
+/** The locks this request holds: set with a value, read (and forgotten) without. */
+function dlr_lock_token( $key, $value = null ) {
+	static $mine = array();
+	if ( null !== $value ) { $mine[ $key ] = $value; return $value; }
+	$v = $mine[ $key ] ?? '';
+	unset( $mine[ $key ] );
+	return $v;
 }
 function dlr_unlock( $key ) {
 	global $wpdb;
-	$wpdb->delete( $wpdb->options, array( 'option_name' => 'dlr_lock_' . $key ) );
+	$value = dlr_lock_token( $key );
+	if ( '' !== $value ) $wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name=%s AND option_value=%s", 'dlr_lock_' . $key, $value ) );
 }
 
 /* ============================================================== months (site time zone) */
@@ -214,6 +232,14 @@ function dlr_month_shift( $key, $months ) {
 function dlr_month_name( $key ) {
 	return wp_date( 'F Y', dlr_month_bounds( $key )[0] );
 }
+/** Days after a month ends before it is settled: a recharge sent on the last evening is still being checked. */
+function dlr_grace_days() {
+	return max( 0, (int) apply_filters( 'dlr_grace_days', 3 ) );
+}
+/** The longest wait, in days, for recharges still under review (after a month, or after an application's deadline). */
+function dlr_review_days() {
+	return max( 0, (int) apply_filters( 'dlr_review_days', 10 ) );
+}
 
 /* ============================================================== deposits and transfers */
 
@@ -225,24 +251,41 @@ function dlr_source_table( $name ) {
 	return $seen[ $t ] ? $t : '';
 }
 /**
+ * The customer's recharges through the recharge system (MonCash, NatCash, manual) sent between two
+ * moments, as an SQL condition; '' when there is nothing to look at. Only rows of the account itself:
+ * a row without an account is a staff entry, and an e-mail address can change hands. FROM_UNIXTIME()
+ * gives the moment in the database's own time zone, the one CURRENT_TIMESTAMP wrote created_at in.
+ */
+function dlr_recharge_where( $user_id, $from_ts, $to_ts ) {
+	global $wpdb;
+	$tabs = array_values( array_filter( array_map( 'sanitize_key', (array) apply_filters( 'dlr_deposit_tabs', array( 'moncash', 'natcash', 'natcash_tc', 'manuel' ) ) ) ) );
+	if ( (int) $user_id < 1 || ! $tabs ) return '';
+	$in = implode( ',', array_fill( 0, count( $tabs ), '%s' ) );
+	return $wpdb->prepare( "user_id=%d AND tab IN ($in) AND created_at>=FROM_UNIXTIME(%d) AND created_at<FROM_UNIXTIME(%d)", array_merge( array( (int) $user_id ), $tabs, array( (int) $from_ts, (int) $to_ts ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+}
+/**
  * Money the customer put in through the recharge system between two moments: approved and credited
- * recharges (MonCash, NatCash, manual), by the time they were sent. A refunded recharge (statut
- * 'rejete') no longer counts. UNIX_TIMESTAMP() reads the column in the database's own time zone,
- * the one CURRENT_TIMESTAMP wrote it in, whatever that zone is.
+ * recharges, by the time they were sent. A refunded recharge (statut 'rejete') no longer counts, nor
+ * does a staff « block » entry (code burned, money taken outside the site): Delicat Recharge marks it
+ * approved and credited but puts nothing in the wallet, and tags it [BLOCAGE-MANUEL].
  */
 function dlr_deposits( $user_id, $from_ts, $to_ts = 0 ) {
 	global $wpdb;
 	$t = dlr_source_table( 'delicat_recharges' );
-	if ( '' === $t ) return 0.0;
-	$user  = get_userdata( (int) $user_id );
-	$email = $user ? (string) $user->user_email : '';
-	$to_ts = $to_ts > 0 ? (int) $to_ts : time() + DAY_IN_SECONDS;
-	$who   = '' !== $email ? $wpdb->prepare( '(user_id=%d OR (user_id=0 AND user_email=%s))', (int) $user_id, $email ) : $wpdb->prepare( 'user_id=%d', (int) $user_id );
-	$tabs  = array_values( array_filter( array_map( 'sanitize_key', (array) apply_filters( 'dlr_deposit_tabs', array( 'moncash', 'natcash', 'natcash_tc', 'manuel' ) ) ) ) );
-	if ( ! $tabs ) return 0.0;
-	$in    = implode( ',', array_fill( 0, count( $tabs ), '%s' ) );
-	$sql   = "SELECT COALESCE(SUM(montant),0) FROM $t WHERE $who AND statut='approuve' AND wallet_credited=1 AND tab IN ($in) AND UNIX_TIMESTAMP(created_at)>=%d AND UNIX_TIMESTAMP(created_at)<%d"; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	return (float) $wpdb->get_var( $wpdb->prepare( $sql, array_merge( $tabs, array( (int) $from_ts, $to_ts ) ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+	$w = '' === $t ? '' : dlr_recharge_where( $user_id, $from_ts, $to_ts > 0 ? $to_ts : time() + DAY_IN_SECONDS );
+	if ( '' === $w ) return 0.0;
+	return (float) $wpdb->get_var( $wpdb->prepare( "SELECT COALESCE(SUM(montant),0) FROM $t WHERE $w AND statut='approuve' AND wallet_credited=1 AND (note_admin IS NULL OR note_admin NOT LIKE %s)", '%' . $wpdb->esc_like( '[BLOCAGE-MANUEL]' ) . '%' ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+}
+/** Recharges sent between two moments that the team has not checked yet. */
+function dlr_pending_recharges( $user_id, $from_ts, $to_ts ) {
+	global $wpdb;
+	$t = dlr_source_table( 'delicat_recharges' );
+	$w = '' === $t ? '' : dlr_recharge_where( $user_id, $from_ts, $to_ts );
+	return '' === $w ? 0 : (int) $wpdb->get_var( "SELECT COUNT(*) FROM $t WHERE $w AND statut='en_attente'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+}
+/** What counts for an application's qualifying deposit: recharges sent after the approval and before the deadline. */
+function dlr_app_paid( $app ) {
+	return dlr_deposits( $app->user_id, dlr_ts( $app->decided_at ), dlr_ts( $app->deadline ) );
 }
 /** Completed wallet-to-wallet transfers received since a moment: array( count, total ). */
 function dlr_transfers_in( $user_id, $from_ts ) {
@@ -374,19 +417,26 @@ function dlr_decline_transfer( $app, $count, $total ) {
 	return true;
 }
 
-/** Looks at an application awaiting its deposit: transfer received, deposit complete, or time over. */
+/**
+ * Looks at an application awaiting its deposit: transfer received, deposit complete, or time over.
+ * Recharges sent before the deadline count even when the team approves them later; until then, the
+ * application waits (dlr_review_days() at most) instead of expiring.
+ */
 function dlr_check_app( $app ) {
 	if ( ! $app || 'deposit' !== $app->status ) return;
-	if ( ! dlr_lock( 'app_' . $app->id, 20 ) ) return;
+	if ( ! dlr_lock( 'app_' . $app->id, 20 ) ) { dlr_check_app_later( $app->id ); return; } // another check is running: look again shortly
 	try {
 		$app = dlr_app( $app->id ); // read again under the lock
 		if ( ! $app || 'deposit' !== $app->status ) return;
 		$since = dlr_ts( $app->decided_at );
+		$until = dlr_ts( $app->deadline );
 		list( $n, $sum_in ) = dlr_transfers_in( $app->user_id, $since );
 		if ( $n > 0 ) { dlr_decline_transfer( $app, $n, $sum_in ); return; }
-		$paid = dlr_deposits( $app->user_id, $since );
+		$paid = dlr_app_paid( $app );
 		if ( $paid >= dlr_tier_min( $app->tier ) ) { dlr_activate( $app, $paid ); return; }
-		if ( time() > dlr_ts( $app->deadline ) && dlr_app_move( $app->id, 'deposit', array( 'status' => 'expired', 'reason' => 'deadline', 'decided_at' => current_time( 'mysql', 1 ) ) ) ) {
+		if ( time() <= $until ) return;
+		if ( time() <= $until + dlr_review_days() * DAY_IN_SECONDS && dlr_pending_recharges( $app->user_id, $since, $until ) > 0 ) return; // a recharge sent in time is still being checked
+		if ( dlr_app_move( $app->id, 'deposit', array( 'status' => 'expired', 'reason' => 'deadline', 'decided_at' => current_time( 'mysql', 1 ) ) ) ) {
 			dlr_log( $app->user_id, 'expired', '', $app->tier, $paid, 'Dépôt incomplet à la date limite' );
 			dlr_mail_user( $app->user_id, 'Votre demande revendeur a expiré', sprintf( "Le dépôt de %s n’a pas été complété à temps (reçu : %s). Vous pouvez faire une nouvelle demande quand vous êtes prêt.", dlr_money( dlr_tier_min( $app->tier ) ), dlr_money( $paid ) ) );
 		}
@@ -395,8 +445,16 @@ function dlr_check_app( $app ) {
 	}
 }
 
+/** Once, a minute from now (WP-Cron): the same application looked at again. */
+function dlr_check_app_later( $app_id ) {
+	$args = array( (int) $app_id );
+	if ( ! wp_next_scheduled( 'dlr_recheck', $args ) ) wp_schedule_single_event( time() + MINUTE_IN_SECONDS, 'dlr_recheck', $args );
+}
+
 function dlr_activate( $app, $paid ) {
 	if ( ! dlr_app_move( $app->id, 'deposit', array( 'status' => 'active', 'activated_at' => current_time( 'mysql', 1 ) ) ) ) return false;
+	// Moving up: the finished months are settled first, at the level the reseller held during them.
+	if ( '' !== dlr_user_tier( $app->user_id, true ) ) dlr_evaluate_user( $app->user_id, true );
 	$from = dlr_user_tier( $app->user_id, true );
 	dlr_set_tier( $app->user_id, $app->tier, '' === $from ? 'activated' : 'upgraded', $paid, 'Demande #' . $app->id );
 	update_user_meta( $app->user_id, '_dlr_eval', dlr_month_key() ); // this month is settled by the qualifying deposit
@@ -419,20 +477,37 @@ function dlr_level_for( $deposited, $current ) {
 	return '';
 }
 
-/** Settles every finished month since the last one settled: keep, move down a level, or leave. */
-function dlr_evaluate_user( $user_id ) {
+/**
+ * Whether a finished month can be settled now: dlr_grace_days() after its end, and no recharge sent
+ * during it still waiting for the team (dlr_review_days() at most).
+ */
+function dlr_month_due( $user_id, $month ) {
+	list( $a, $b ) = dlr_month_bounds( $month );
+	$ended = time() - $b;
+	if ( $ended < dlr_grace_days() * DAY_IN_SECONDS ) return false;
+	return $ended >= dlr_review_days() * DAY_IN_SECONDS || 0 === dlr_pending_recharges( $user_id, $a, $b );
+}
+
+/**
+ * Settles every finished month since the last one settled: keep, move down a level, or leave.
+ * $now: settle them at once, without the grace days (the level is about to change).
+ */
+function dlr_evaluate_user( $user_id, $now = false ) {
 	$user_id = (int) $user_id;
-	$tier    = dlr_user_tier( $user_id, true );
-	if ( '' === $tier ) return;
+	if ( '' === dlr_user_tier( $user_id, true ) ) return;
 	$last = dlr_month_shift( dlr_month_key(), -1 ); // the last finished month
 	$done = (string) get_user_meta( $user_id, '_dlr_eval', true );
 	if ( ! preg_match( '/^\d{4}-\d{2}$/', $done ) ) { update_user_meta( $user_id, '_dlr_eval', dlr_month_key() ); return; } // set by hand: starts this month
 	if ( strcmp( $done, $last ) >= 0 ) return;
+	if ( ! $now && ! dlr_month_due( $user_id, dlr_month_shift( $done, 1 ) ) ) return;
 	if ( ! dlr_lock( 'eval_' . $user_id, 60 ) ) return;
 	try {
+		$tier = dlr_user_tier( $user_id, true ); // read again under the lock
 		$done = (string) get_user_meta( $user_id, '_dlr_eval', true );
+		if ( '' === $tier || ! preg_match( '/^\d{4}-\d{2}$/', $done ) ) return;
 		for ( $i = 0; $i < 24 && strcmp( $done, $last ) < 0; $i++ ) {
 			$month = dlr_month_shift( $done, 1 );
+			if ( ! $now && ! dlr_month_due( $user_id, $month ) ) break;
 			list( $a, $b ) = dlr_month_bounds( $month );
 			$paid  = dlr_deposits( $user_id, $a, $b );
 			$keep  = dlr_level_for( $paid, $tier );
@@ -492,11 +567,8 @@ add_action( 'delicat_recharge_approved', function ( $recharge_id ) {
 	global $wpdb;
 	$t = dlr_source_table( 'delicat_recharges' );
 	if ( '' === $t ) return;
-	$row = $wpdb->get_row( $wpdb->prepare( "SELECT user_id,user_email FROM $t WHERE id=%d", (int) $recharge_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	if ( ! $row ) return;
-	$uid = (int) $row->user_id;
-	if ( $uid < 1 && $row->user_email ) { $u = get_user_by( 'email', $row->user_email ); $uid = $u ? (int) $u->ID : 0; }
-	if ( $uid > 0 ) dlr_check_app( dlr_open_app( $uid ) );
+	$uid = (int) $wpdb->get_var( $wpdb->prepare( "SELECT user_id FROM $t WHERE id=%d", (int) $recharge_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( $uid > 0 ) dlr_check_app( dlr_open_app( $uid ) ); // a row without an account never counts (dlr_recharge_where)
 }, 20 );
 
 /* A wallet-to-wallet transfer received while the qualifying deposit is awaited: refused at once. */
@@ -504,6 +576,44 @@ add_action( 'delicat_transfer_completed', function ( $row_id, $sender, $recipien
 	$app = dlr_open_app( (int) $recipient );
 	if ( $app && 'deposit' === $app->status ) dlr_decline_transfer( $app, 1, (float) $amount );
 }, 20, 4 );
+/* The same with TeraWallet's own « Wallet transfer » (on by default in TeraWallet's settings). */
+add_action( 'woo_wallet_transfer_amount_credited', function ( $credit_id, $recipient ) {
+	global $wpdb;
+	$app = dlr_open_app( (int) $recipient );
+	if ( ! $app || 'deposit' !== $app->status ) return;
+	$amount = (float) $wpdb->get_var( $wpdb->prepare( "SELECT amount FROM {$wpdb->base_prefix}woo_wallet_transactions WHERE transaction_id=%d", (int) $credit_id ) );
+	dlr_decline_transfer( $app, 1, $amount );
+}, 20, 2 );
+/* A check that found another one running (dlr_check_app_later). */
+add_action( 'dlr_recheck', function ( $app_id ) {
+	dlr_check_app( dlr_app( (int) $app_id ) );
+} );
+/* The daily task, put back if it was lost (cron reset, migration): one read of an autoloaded option. */
+add_action( 'init', function () {
+	if ( ! wp_next_scheduled( 'dlr_daily' ) ) wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', 'dlr_daily' );
+}, 30 );
+
+/*
+ * Closing and reopening the programme: while it is closed there are no reseller prices, so the months
+ * it stayed closed are not owed. Months already settled stay as they are; the month of the reopening
+ * is owed as usual.
+ */
+add_action( 'update_option_dlr_config', function ( $old, $new ) {
+	$was = ! empty( $old['enabled'] );
+	$is  = ! empty( $new['enabled'] );
+	if ( $was && ! $is ) { update_option( 'dlr_closed', dlr_month_key(), false ); return; }
+	if ( $was || ! $is ) return;
+	$closed = (string) get_option( 'dlr_closed', '' );
+	delete_option( 'dlr_closed' );
+	$last = dlr_month_shift( dlr_month_key(), -1 );
+	if ( ! preg_match( '/^\d{4}-\d{2}$/', $closed ) || strcmp( $closed, $last ) > 0 ) return; // reopened in the month it closed
+	foreach ( get_users( array( 'meta_key' => '_dlr_tier', 'fields' => 'ID', 'number' => 5000 ) ) as $uid ) {
+		$done = (string) get_user_meta( (int) $uid, '_dlr_eval', true );
+		if ( strcmp( $done, $last ) >= 0 ) continue;
+		update_user_meta( (int) $uid, '_dlr_eval', $last );
+		dlr_log( (int) $uid, 'paused', '', '', 0, $closed . ' → ' . $last );
+	}
+}, 10, 2 );
 
 /* Daily: deadlines, missed transfers, finished months, reminders. */
 add_action( 'dlr_daily', function () {
@@ -521,7 +631,7 @@ add_action( 'init', function () {
 	$uid = get_current_user_id();
 	if ( '' === dlr_user_tier( $uid ) ) return;
 	$done = (string) get_user_meta( $uid, '_dlr_eval', true );
-	if ( strcmp( $done, dlr_month_shift( dlr_month_key(), -1 ) ) < 0 ) dlr_evaluate_user( $uid );
+	if ( strcmp( $done, dlr_month_shift( dlr_month_key(), -1 ) ) < 0 ) dlr_evaluate_user( $uid ); // returns at once during the grace days
 }, 20 );
 
 /* Account deleted: its applications and history go with it. */

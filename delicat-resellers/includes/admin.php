@@ -86,7 +86,7 @@ function dlr_admin_tab_demandes() {
 	else {
 		echo '<table class="widefat striped"><thead><tr><th>Client</th><th>Niveau</th><th>Déjà rechargé</th><th>Date limite</th><th></th></tr></thead><tbody>';
 		foreach ( $waiting as $a ) {
-			$paid = dlr_deposits( $a->user_id, dlr_ts( $a->decided_at ) );
+			$paid = dlr_app_paid( $a );
 			$min  = dlr_tier_min( $a->tier );
 			echo '<tr><td>' . dlr_admin_customer( $a->user_id ) . '</td><td>' . dlr_tag( $a->tier ) . '</td><td>' . esc_html( dlr_money( $paid ) ) . ' / ' . esc_html( dlr_money( $min ) ) . '<div class="bar"><i style="width:' . (int) min( 100, $min ? $paid / $min * 100 : 0 ) . '%"></i></div></td><td>' . esc_html( get_date_from_gmt( $a->deadline, 'd/m/Y H:i' ) ) . '</td><td>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			echo dlr_admin_form( 'dlr_admin_decide' ) . '<input type="hidden" name="id" value="' . (int) $a->id . '"><button class="button" name="do" value="check">Vérifier maintenant</button> <button class="button" name="do" value="reject">Refuser</button></form></td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -123,7 +123,7 @@ function dlr_admin_tab_revendeurs() {
 function dlr_admin_tab_historique() {
 	global $wpdb;
 	$rows = $wpdb->get_results( 'SELECT * FROM ' . dlr_table( 'log' ) . ' ORDER BY id DESC LIMIT 200' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	$ev = array( 'applied' => 'Demande envoyée', 'approved' => 'Approuvée (dépôt attendu)', 'rejected' => 'Refusée par l’équipe', 'declined' => 'Refusée : envoi entre portefeuilles', 'expired' => 'Expirée (dépôt incomplet)', 'cancelled' => 'Annulée par le client', 'activated' => 'Activé', 'upgraded' => 'Niveau supérieur', 'kept' => 'Minimum atteint', 'downgraded' => 'Niveau baissé', 'removed' => 'Retiré (minimum non atteint)', 'admin_set' => 'Changé par l’équipe' );
+	$ev = array( 'applied' => 'Demande envoyée', 'approved' => 'Approuvée (dépôt attendu)', 'rejected' => 'Refusée par l’équipe', 'declined' => 'Refusée : envoi entre portefeuilles', 'expired' => 'Expirée (dépôt incomplet)', 'cancelled' => 'Annulée par le client', 'activated' => 'Activé', 'upgraded' => 'Niveau supérieur', 'kept' => 'Minimum atteint', 'downgraded' => 'Niveau baissé', 'removed' => 'Retiré (minimum non atteint)', 'admin_set' => 'Changé par l’équipe', 'paused' => 'Programme fermé : mois non dus' );
 	echo '<div class="box"><h2>Historique (200 derniers)</h2>';
 	if ( ! $rows ) { echo '<p>Rien pour le moment.</p></div>'; return; }
 	echo '<table class="widefat striped"><thead><tr><th>Date</th><th>Client</th><th>Événement</th><th>Niveau</th><th>Montant</th><th>Détail</th></tr></thead><tbody>';

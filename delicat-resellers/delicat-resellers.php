@@ -26,4 +26,4 @@ require_once DLR_DIR . 'includes/front.php';
 if ( is_admin() ) require_once DLR_DIR . 'includes/admin.php';
 
 register_activation_hook( __FILE__, 'dlr_install' );
-register_deactivation_hook( __FILE__, function () { wp_clear_scheduled_hook( 'dlr_daily' ); } );
+register_deactivation_hook( __FILE__, function () { wp_clear_scheduled_hook( 'dlr_daily' ); wp_unschedule_hook( 'dlr_recheck' ); } );

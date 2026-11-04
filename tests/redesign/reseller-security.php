@@ -34,6 +34,25 @@ $deposit = function ( $uid, $amount, $ago_days = 0, $status = 'approuve' ) use (
 };
 $form = array( 'tier' => 'gold', 'business' => 'Boutique Test', 'phone' => '+509 3700 0001', 'city' => 'Cap-Haïtien', 'channel' => 'Je vends des diamants à mon école et sur WhatsApp.', 'volume' => '50_100', 'terms' => '1' );
 $orders = array();
+$temps  = array(); // accounts made for one check, removed at the end
+foreach ( $wpdb->get_col( "SELECT ID FROM {$wpdb->users} WHERE user_login LIKE 'dlrt\\_%'" ) as $old ) wp_delete_user( (int) $old );
+$temp = function ( $name ) use ( &$temps, $wpdb ) {
+	$id = wp_insert_user( array( 'user_login' => 'dlrt_' . $name, 'user_email' => 'dlrt_' . $name . '@example.test', 'user_pass' => wp_generate_password( 16 ), 'role' => 'customer' ) );
+	$wpdb->delete( $wpdb->prefix . 'delicat_recharges', array( 'user_id' => $id ) );
+	$temps[] = (int) $id;
+	return (int) $id;
+};
+// An application approved $days_ago days ago, its deadline $left days from now (negative: passed).
+$approved = function ( $uid, $tier, $days_ago, $left ) use ( $form, $wpdb ) {
+	$id = dlr_apply( $uid, array_merge( $form, array( 'tier' => $tier ) ) );
+	dlr_approve( $id );
+	$wpdb->update( dlr_table( 'apps' ), array( 'decided_at' => gmdate( 'Y-m-d H:i:s', time() - $days_ago * DAY_IN_SECONDS ), 'deadline' => gmdate( 'Y-m-d H:i:s', time() + $left * DAY_IN_SECONDS ) ), array( 'id' => $id ) );
+	return $id;
+};
+$last_month_ago = function () { // days ago that fall inside last month
+	list( $a ) = dlr_month_bounds( dlr_month_shift( dlr_month_key(), -1 ) );
+	return (int) floor( ( time() - $a ) / DAY_IN_SECONDS ) - 1;
+};
 
 try {
 	/* Application rules. */
@@ -84,6 +103,48 @@ try {
 	$wpdb->update( dlr_table( 'apps' ), array( 'deadline' => gmdate( 'Y-m-d H:i:s', time() - 60 ) ), array( 'id' => $id3 ) );
 	dlr_check_app( dlr_app( $id3 ) );
 	$check( 'deadline: no full deposit in time → expired', 'expired' === dlr_app( $id3 )->status );
+	$late = $temp( 'late' );
+	$idl  = $approved( $late, 'silver', 9, -2 );
+	$deposit( $late, 30000 ); // today, two days after the deadline
+	dlr_check_app( dlr_app( $idl ) );
+	$check( 'deadline: a recharge sent after the deadline does not activate', 'expired' === dlr_app( $idl )->status && '' === dlr_user_tier( $late, true ), dlr_app( $idl )->status );
+	$slow = $temp( 'slow' );
+	$ids  = $approved( $slow, 'silver', 9, -1 );
+	$pend = $deposit( $slow, 30000, 3, 'en_attente' ); // sent before the deadline, still being checked
+	dlr_check_app( dlr_app( $ids ) );
+	$check( 'deadline: a recharge sent in time and still being checked keeps the application open', 'deposit' === dlr_app( $ids )->status );
+	$wpdb->update( $rt, array( 'statut' => 'approuve', 'wallet_credited' => 1 ), array( 'id' => $pend ) );
+	do_action( 'delicat_recharge_approved', $pend );
+	$check( 'deadline: once the team approves it, that recharge activates', 'active' === dlr_app( $ids )->status && 'silver' === dlr_user_tier( $slow, true ), dlr_app( $ids )->status );
+	add_filter( 'dlr_review_days', '__return_zero' );
+	$wait = $temp( 'wait' );
+	$idw  = $approved( $wait, 'silver', 9, -1 );
+	$deposit( $wait, 30000, 3, 'en_attente' );
+	dlr_check_app( dlr_app( $idw ) );
+	$check( 'deadline: the wait for a check is limited (dlr_review_days)', 'expired' === dlr_app( $idw )->status );
+	remove_filter( 'dlr_review_days', '__return_zero' );
+
+	/* A staff « block » entry (code burned, nothing put in the wallet) is not a deposit. */
+	$burn = $temp( 'burn' );
+	$idb  = $approved( $burn, 'silver', 1, 6 );
+	$wpdb->insert( $rt, array( 'user_id' => $burn, 'user_email' => get_userdata( $burn )->user_email, 'tab' => 'moncash', 'methode' => 'moncash', 'montant' => 60000, 'trans_code' => 'B' . wp_generate_password( 9, false ), 'statut' => 'approuve', 'wallet_credited' => 1, 'note_admin' => '[BLOCAGE-MANUEL] Déjà validé hors-ligne — wallet non crédité par le plugin' ) );
+	do_action( 'delicat_recharge_approved', (int) $wpdb->insert_id );
+	$check( 'deposit: a [BLOCAGE-MANUEL] entry does not count', 'deposit' === dlr_app( $idb )->status && 0.0 === dlr_app_paid( dlr_app( $idb ) ) );
+	$wpdb->insert( $rt, array( 'user_id' => 0, 'user_email' => get_userdata( $burn )->user_email, 'tab' => 'moncash', 'methode' => 'moncash', 'montant' => 60000, 'trans_code' => 'B' . wp_generate_password( 9, false ), 'statut' => 'approuve', 'wallet_credited' => 1 ) );
+	$check( 'deposit: a row without an account does not count for the e-mail\'s owner', 0.0 === dlr_app_paid( dlr_app( $idb ) ) );
+
+	/* TeraWallet's own wallet transfer during the deposit step: refused too. */
+	$tw  = $temp( 'tw' );
+	$idt = $approved( $tw, 'silver', 1, 6 );
+	do_action( 'woo_wallet_transfer_amount_credited', 0, $tw, $rs4->ID );
+	$check( 'transfer: a TeraWallet « Wallet transfer » declines the application', 'declined' === dlr_app( $idt )->status );
+
+	/* Locks: only the holder removes its lock. */
+	$check( 'lock: taken once', true === dlr_lock( 'test', 30 ) && false === dlr_lock( 'test', 30 ) );
+	$wpdb->update( $wpdb->options, array( 'option_value' => ( time() + 30 ) . ':someone-else' ), array( 'option_name' => 'dlr_lock_test' ) ); // expired and taken over
+	dlr_unlock( 'test' );
+	$check( 'lock: an expired holder does not remove the next holder\'s lock', ( time() + 30 ) . ':someone-else' === (string) $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name='dlr_lock_test'" ) );
+	$wpdb->delete( $wpdb->options, array( 'option_name' => 'dlr_lock_test' ) );
 
 	/* Prices, as the Golden Reseller rs1. */
 	wp_set_current_user( $rs1->ID );
@@ -101,6 +162,14 @@ try {
 	$p341->set_sale_price( '' ); $p341->save(); $p341 = wc_get_product( $p341->get_id() );
 	$calc = wc_get_product( $p110->get_id() ); $calc->set_price( 200 ); // catalogue 150 + 50 of options (Builder calculator)
 	$check( 'price: calculator options keep their cost (120 + 50)', 170.0 === (float) $calc->get_price(), $calc->get_price() );
+	$calc2 = wc_get_product( $p110->get_id() ); $calc2->set_price( 8 ); // a formula that does not start from the catalogue price
+	$check( 'price: a calculator total below the catalogue price gets the share (8 × 120/150), never 0', round( 6.4, wc_get_price_decimals() ) === (float) $calc2->get_price(), $calc2->get_price() );
+	$calc3 = wc_get_product( $p110->get_id() ); $calc3->set_price( 0.4 );
+	$check( 'price: a tiny calculator line that would round to 0 keeps its price', (float) $calc3->get_price() > 0, $calc3->get_price() );
+	// Builder's currency switcher, with a price typed by hand for another currency. Builder does not load it
+	// in an AJAX request, so this runs in a plain request (reseller-setup.php currency).
+	$fx = json_decode( (string) shell_exec( escapeshellarg( PHP_BINARY ) . ' ' . escapeshellarg( __DIR__ . '/reseller-setup.php' ) . ' ' . escapeshellarg( $site ) . ' currency rs1 2>/dev/null' ), true );
+	$check( 'price: a fixed price in another currency gets the same reduction (1.50 × 120/150)', is_array( $fx ) && 1.2 === (float) $fx['price'], wp_json_encode( $fx ) );
 	$check( 'cache: Builder may reuse fragments for this reseller (role present)', true === apply_filters( 'delicat_builder_v9_server_fragment_cache_signed_in', true ) );
 	$usr = new WP_User( $rs1->ID ); $usr->remove_role( 'dlr_gold' ); clean_user_cache( $rs1->ID ); wp_set_current_user( 0 ); wp_set_current_user( $rs1->ID ); // same id: WordPress would keep the cached user
 	$check( 'cache: without the level role, Builder\'s shared fragments are not used', false === apply_filters( 'delicat_builder_v9_server_fragment_cache_signed_in', true ) );
@@ -116,6 +185,10 @@ try {
 		$check( 'rewards: a reseller order is not retail (no bonus, no ranking)', false === delicat_order_is_retail( $o ) );
 		$o4 = wc_create_order( array( 'customer_id' => $rs4->ID ) ); $o4->add_product( $p110, 1 ); $o4->calculate_totals(); $o4->save(); $orders[] = $o4->get_id();
 		$check( 'rewards: a regular customer\'s order stays retail', true === delicat_order_is_retail( wc_get_order( $o4->get_id() ) ) && ! wc_get_order( $o4->get_id() )->get_meta( '_dlr_tier' ) );
+		$before = $temp( 'before' );
+		$ob = wc_create_order( array( 'customer_id' => $before ) ); $ob->add_product( $p110, 1 ); $ob->calculate_totals(); $ob->save(); $orders[] = $ob->get_id();
+		dlr_set_tier( $before, 'silver', 'admin_set' );
+		$check( 'rewards: an order from before the activation stays retail', true === delicat_order_is_retail( wc_get_order( $ob->get_id() ) ) );
 	}
 	if ( function_exists( 'delicat_ref_order_counts' ) ) {
 		$o->set_status( 'completed' ); $o->set_total( 200 ); $o->set_date_paid( time() ); $o->save();
@@ -129,6 +202,12 @@ try {
 	$days_ago = (int) floor( ( time() - $a ) / DAY_IN_SECONDS ) - 1; // inside last month
 	$deposit( $rs3->ID, 60000, $days_ago );
 	update_user_meta( $rs3->ID, '_dlr_eval', dlr_month_shift( dlr_month_key(), -2 ) );
+	$long = static function () { return 400; };
+	add_filter( 'dlr_grace_days', $long );
+	dlr_evaluate_user( $rs3->ID );
+	$check( 'month: not settled during the grace days after its end', 'premium' === dlr_user_tier( $rs3->ID, true ) && dlr_month_shift( dlr_month_key(), -2 ) === get_user_meta( $rs3->ID, '_dlr_eval', true ) );
+	remove_filter( 'dlr_grace_days', $long );
+	add_filter( 'dlr_grace_days', '__return_zero' ); // the rest of the monthly checks: settle at once
 	dlr_evaluate_user( $rs3->ID );
 	$check( 'month: Premium with 60 000 last month moves down to Gold', 'gold' === dlr_user_tier( $rs3->ID, true ) && $last === get_user_meta( $rs3->ID, '_dlr_eval', true ) );
 	$roles = get_userdata( $rs3->ID )->roles;
@@ -138,6 +217,35 @@ try {
 	update_user_meta( $rs3->ID, '_dlr_eval', dlr_month_shift( dlr_month_key(), -3 ) ); // two unsettled months: 0 then 60 000
 	dlr_evaluate_user( $rs3->ID );
 	$check( 'month: a month under the lowest minimum ends the programme', '' === dlr_user_tier( $rs3->ID, true ) && ! array_intersect( array( 'dlr_gold', 'dlr_silver', 'dlr_premium' ), get_userdata( $rs3->ID )->roles ) );
+	// A recharge sent on the last evening, approved the next morning.
+	$eve = $temp( 'eve' );
+	dlr_set_tier( $eve, 'silver', 'admin_set' ); update_user_meta( $eve, '_dlr_eval', dlr_month_shift( dlr_month_key(), -2 ) );
+	$pend = $deposit( $eve, 30000, $last_month_ago(), 'en_attente' );
+	dlr_evaluate_user( $eve );
+	$check( 'month: waits while a recharge sent during it is still being checked', 'silver' === dlr_user_tier( $eve, true ) && dlr_month_shift( dlr_month_key(), -2 ) === get_user_meta( $eve, '_dlr_eval', true ) );
+	$wpdb->update( $rt, array( 'statut' => 'approuve', 'wallet_credited' => 1 ), array( 'id' => $pend ) );
+	dlr_evaluate_user( $eve );
+	$check( 'month: that recharge, approved later, counts for its month', 'silver' === dlr_user_tier( $eve, true ) && $last === get_user_meta( $eve, '_dlr_eval', true ) );
+	$stuck = $temp( 'stuck' );
+	dlr_set_tier( $stuck, 'silver', 'admin_set' ); update_user_meta( $stuck, '_dlr_eval', dlr_month_shift( dlr_month_key(), -2 ) );
+	$deposit( $stuck, 30000, $last_month_ago(), 'en_attente' );
+	add_filter( 'dlr_review_days', '__return_zero' );
+	dlr_evaluate_user( $stuck );
+	remove_filter( 'dlr_review_days', '__return_zero' );
+	$check( 'month: the wait for a check is limited (dlr_review_days)', '' === dlr_user_tier( $stuck, true ) );
+	// Moving up: the month before is settled at the old level first.
+	$up = $temp( 'up' );
+	dlr_set_tier( $up, 'gold', 'admin_set' ); update_user_meta( $up, '_dlr_eval', dlr_month_shift( dlr_month_key(), -2 ) );
+	$deposit( $up, 30000, $last_month_ago() ); // under Gold, enough for Silver
+	remove_filter( 'dlr_grace_days', '__return_zero' );
+	add_filter( 'dlr_grace_days', $long ); // last month not due yet on its own
+	$idu = dlr_apply( $up, array_merge( $form, array( 'tier' => 'premium' ) ) );
+	dlr_approve( $idu );
+	$deposit( $up, 100000 );
+	remove_filter( 'dlr_grace_days', $long );
+	add_filter( 'dlr_grace_days', '__return_zero' );
+	$moved = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . dlr_table( 'log' ) . " WHERE user_id=%d AND event='downgraded' AND note=%s", $up, $last ) );
+	$check( 'upgrade: last month is settled at the old level, then the new level starts', 'premium' === dlr_user_tier( $up, true ) && 1 === $moved && dlr_month_key() === get_user_meta( $up, '_dlr_eval', true ), dlr_user_tier( $up, true ) . '/' . $moved );
 
 	/* Reminder once a month, only under the minimum. */
 	dlr_set_tier( $rs3->ID, 'silver', 'admin_set' ); update_user_meta( $rs3->ID, '_dlr_eval', $last ); delete_user_meta( $rs3->ID, '_dlr_reminded' );
@@ -155,6 +263,15 @@ try {
 	$check( 'closed: reseller prices stop', 150.0 === (float) wc_get_product( $p110->get_id() )->get_price() );
 	$check( 'closed: applications are refused', is_wp_error( dlr_apply( $rs4->ID, $form ) ) );
 	$cfg['enabled'] = 1; update_option( 'dlr_config', $cfg ); dlr_cfg( null, true );
+	$check( 'closed: reopened the same month, nothing is forgiven', $last === get_user_meta( $rs3->ID, '_dlr_eval', true ) || dlr_month_key() === get_user_meta( $rs3->ID, '_dlr_eval', true ) );
+	// Closed for months: those months are not owed when it reopens.
+	$paused = $temp( 'paused' );
+	dlr_set_tier( $paused, 'silver', 'admin_set' ); update_user_meta( $paused, '_dlr_eval', dlr_month_shift( dlr_month_key(), -4 ) );
+	$cfg['enabled'] = 0; update_option( 'dlr_config', $cfg ); dlr_cfg( null, true );
+	update_option( 'dlr_closed', dlr_month_shift( dlr_month_key(), -3 ), false ); // as if it had closed three months ago
+	$cfg['enabled'] = 1; update_option( 'dlr_config', $cfg ); dlr_cfg( null, true );
+	dlr_evaluate_user( $paused );
+	$check( 'closed: months the programme was closed are not owed (no deposit, still Silver)', 'silver' === dlr_user_tier( $paused, true ) && $last === get_user_meta( $paused, '_dlr_eval', true ) );
 
 	/* Admin handlers: rights and CSRF. */
 	$id4 = dlr_apply( $rs4->ID, array_merge( $form, array( 'tier' => 'silver' ) ) );
@@ -194,6 +311,8 @@ try {
 	$check( 'deletion: applications and history go with the account', 0 === (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . dlr_table( 'apps' ) . ' WHERE user_id=%d', $tmp ) ) );
 } finally {
 	foreach ( $orders as $oid ) { $x = wc_get_order( $oid ); if ( $x ) $x->delete( true ); }
+	foreach ( $temps as $tid ) { $wpdb->delete( $rt, array( 'user_id' => $tid ) ); wp_delete_user( $tid ); }
+	delete_option( 'dlr_closed' );
 	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'dlr\\_lock\\_%'" );
 }
 echo "\n$pass/" . ( $pass + $fail ) . " passed\n";

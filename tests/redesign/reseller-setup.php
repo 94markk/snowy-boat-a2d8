@@ -7,6 +7,7 @@
 //   approve  <login>               the team approves the customer's open application (step one)
 //   state    <login>               JSON: level, roles, open application, month progress
 //   eval     <login> <done-month>  pretend months up to <done-month> are settled, then settle the rest now
+//   currency <login>               JSON: the 110 PIN's price for <login> with Builder showing USD and a fixed USD price
 // Run rewards-setup.php first (PIN products).
 $site = $argv[1] ?? '';
 $cmd  = $argv[2] ?? 'setup';
@@ -101,6 +102,18 @@ if ( 'state' === $cmd ) {
 		'app' => $app ? array( 'status' => $app->status, 'tier' => $app->tier, 'reason' => $app->reason ) : null,
 		'month' => dlr_month_progress( $u->ID ), 'eval' => get_user_meta( $u->ID, '_dlr_eval', true ),
 	) ) . "\n";
+	exit;
+}
+
+if ( 'currency' === $cmd ) { // the 150 HTG PIN with a price typed by hand in USD (1.50), seen by <login> browsing in USD
+	$u = $user( $argv[3] ?? '' );
+	$p = get_page_by_path( 'pin-free-110-diamants', OBJECT, 'product' )->ID;
+	update_post_meta( $p, '_dmc_price_USD', '1.50' );
+	add_filter( 'dmc_current_currency', static function () { return 'USD'; } );
+	wp_set_current_user( $u->ID );
+	$price = wc_get_product( $p )->get_price();
+	delete_post_meta( $p, '_dmc_price_USD' );
+	echo wp_json_encode( array( 'tier' => dlr_user_tier( $u->ID ), 'price' => (string) $price, 'builder' => class_exists( 'Delicat_Builder_V9_Multi_Currency' ) ) ) . "\n";
 	exit;
 }
 

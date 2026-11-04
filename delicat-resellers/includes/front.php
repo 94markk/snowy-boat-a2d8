@@ -117,9 +117,13 @@ function dlr_view_application( $app ) {
 		$h .= '<p>' . dlr_icon( 'hourglass_top' ) . '<span>Envoyée le ' . esc_html( wp_date( 'j F Y', dlr_ts( $app->created_at ) ) ) . '. L’équipe l’examine et vous répond par e-mail.</span></p>';
 	} else {
 		$min  = dlr_tier_min( $app->tier );
-		$paid = dlr_deposits( $app->user_id, dlr_ts( $app->decided_at ) );
+		$paid = dlr_app_paid( $app );
 		$h .= dlr_steps( 3 );
-		$h .= '<p class="dlr-strong">Approuvée. Dernière étape : rechargez au moins ' . esc_html( dlr_money( $min ) ) . ' avant le ' . esc_html( wp_date( 'j F Y à H:i', dlr_ts( $app->deadline ) ) ) . '.</p>';
+		if ( time() > dlr_ts( $app->deadline ) ) { // still open after the deadline: a recharge sent in time is being checked
+			$h .= '<p class="dlr-strong">' . dlr_icon( 'hourglass_top' ) . '<span>Le délai est passé. Une recharge envoyée avant le ' . esc_html( wp_date( 'j F Y à H:i', dlr_ts( $app->deadline ) ) ) . ' est en vérification : elle compte dès que l’équipe la valide.</span></p>';
+		} else {
+			$h .= '<p class="dlr-strong">Approuvée. Dernière étape : rechargez au moins ' . esc_html( dlr_money( $min ) ) . ' avant le ' . esc_html( wp_date( 'j F Y à H:i', dlr_ts( $app->deadline ) ) ) . '.</p>';
+		}
 		$h .= '<div class="dlr-month-row"><span>Déjà rechargé</span><b>' . esc_html( dlr_money( $paid ) ) . ' <small>/ ' . esc_html( dlr_money( $min ) ) . '</small></b></div>' . dlr_bar( $paid, $min, 'Dépôt de qualification' );
 		$h .= '<p class="dlr-warn" role="note">' . dlr_icon( 'info' ) . '<span>Uniquement par le système de recharge (MonCash, NatCash…). Un envoi d’argent d’un autre portefeuille Delicat vers le vôtre pendant cette étape refuse la demande automatiquement.</span></p>';
 		$h .= '<div class="dlr-actions"><a class="dlr-btn" href="' . esc_url( dlr_recharge_url() ) . '">' . dlr_icon( 'account_balance_wallet' ) . 'Recharger mon compte</a></div>';
