@@ -13,8 +13,8 @@ client qui a une commande payée (ou d’un acheteur du produit, pour un avis pr
 Builder s’affichent sans coche. Les deux exemples livrés avec l’extension (« Recharge Free Fire reçue en moins de
 2 minutes… » de JEAN-MARC, « Mon abonnement a été livré… » de MIKAËLL) n’étaient pas de vrais avis : ils ne
 s’affichent plus.
-(4) Comme l’annonce la politique des avis (section 1), seul un client qui a déjà une commande payée (y compris une
-commande passée sans compte avec la même adresse e-mail) peut envoyer un avis depuis la fenêtre « Laisser un avis ».
+(4) Comme l’annonce la politique des avis (section 1), seul un client qui a déjà une commande payée sur son compte
+peut envoyer un avis depuis la fenêtre « Laisser un avis ».
 Les autres ne reçoivent plus l’invitation et, s’ils touchent le bouton, la fenêtre leur dit tout de suite que les
 avis sont réservés aux clients, avant qu’ils écrivent. Un avis sans note n’est plus montré avec des étoiles
 inventées. Pour que la même règle vaille aussi pour le formulaire d’avis de WooCommerce : WooCommerce → Réglages →

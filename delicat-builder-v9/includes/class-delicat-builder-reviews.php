@@ -402,14 +402,10 @@ final class Delicat_Builder_V9_Reviews {
 			'limit'  => 1,
 			'return' => 'ids',
 		);
-		$found = ! empty( wc_get_orders( $query + array( 'customer_id' => $user_id ) ) );
-		if ( ! $found ) {
-			/* An order placed as a guest with the account's address counts too, as
-			 * in WooCommerce's own « verified owner » check. */
-			$user  = get_userdata( $user_id );
-			$email = $user instanceof WP_User ? sanitize_email( (string) $user->user_email ) : '';
-			$found = '' !== $email && ! empty( wc_get_orders( $query + array( 'billing_email' => $email, 'customer_id' => 0 ) ) );
-		}
+		/* Orders attached to the account only. Guest orders are not matched by
+		 * email: an account's address can be changed to someone else's, and the
+		 * « achat vérifié » tick would then rest on another person's purchase. */
+		$found            = ! empty( wc_get_orders( $query + array( 'customer_id' => $user_id ) ) );
 		$memo[ $user_id ] = $found;
 		return $found;
 	}

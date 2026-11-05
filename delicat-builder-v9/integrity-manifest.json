@@ -1,13 +1,13 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-05T23:10:16.521Z",
+ "built": "2026-11-05T23:13:09.846Z",
  "version": "9.8.0",
- "bytes": 7068478,
+ "bytes": 7068253,
  "count": 301,
  "files": {
   "README.txt": {
-   "bytes": 94506,
-   "sha256": "af4517d80c5f7a55de95e4a47a7f502b1fc02109f8b3ba559537ddc7e0944f8b"
+   "bytes": 94447,
+   "sha256": "01a0da1360dc35e27a636e1a36a99b1e27d88d468d489f1ce86b32ccdbce63a5"
   },
   "asset-versions.php": {
    "bytes": 6736,
@@ -391,7 +391,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9789,
-   "sha256": "8f11b8948bfcf836cb1d7f64f675a1fc958e5764d57a82043016825f2e6474bf"
+   "sha256": "930ae44e8249b315d2e5d6a7159b95773263fc729cb2cd3d5c5b4b835fdf8356"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -910,8 +910,8 @@
    "sha256": "a2f4934db50d3a6b9572897496d3d72b84d2433e5282a6761a9a0156cd82101b"
   },
   "includes/class-delicat-builder-reviews.php": {
-   "bytes": 63255,
-   "sha256": "7de796d164ed3905a6de155a23e2ce47a66564aaebdc105b226fb509aea35122"
+   "bytes": 63089,
+   "sha256": "714a57c217fdd29c7c0ec89e18008cd7a3b44c581e7dedfabbb5910e99b09982"
   },
   "includes/class-delicat-builder-runtime-router.php": {
    "bytes": 16353,
