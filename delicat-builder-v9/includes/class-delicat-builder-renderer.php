@@ -573,13 +573,16 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 				? '<div class="delicat-banner-card__text">' . wp_kses_post( wpautop( $card['text'] ) ) . '</div>'
 				: '<p class="delicat-banner-card__text">' . esc_html( $card['text'] ) . '</p>';
 		}
-		if ( '' !== $card['url'] ) {
-			$away = self::banner_is_external( $card['url'] ) ? ' target="_blank" rel="noopener noreferrer"' : ' data-delicat-prefetch';
-			$out .= '' !== $card['button']
-				? '<a class="delicat-banner-card__button" href="' . esc_url( $card['url'] ) . '"' . $away . '><span>' . esc_html( self::banner_label( $card['button'], $kind ) ) . '</span>' . Delicat_Builder_V9_Design_System::icon( 'arrow-forward', 18, array( 'class' => 'delicat-banner-card__arrow' ) ) . '</a>'
-				: '<a class="delicat-banner-card__link" href="' . esc_url( $card['url'] ) . '" aria-label="' . esc_attr( $card['title'] ) . '"' . $away . '></a>';
+		$away = '' !== $card['url'] && self::banner_is_external( $card['url'] ) ? ' target="_blank" rel="noopener noreferrer"' : ' data-delicat-prefetch';
+		if ( '' !== $card['url'] && '' !== $card['button'] ) {
+			$out .= '<a class="delicat-banner-card__button" href="' . esc_url( $card['url'] ) . '"' . $away . '><span>' . esc_html( self::banner_label( $card['button'], $kind ) ) . '</span>' . Delicat_Builder_V9_Design_System::icon( 'arrow-forward', 18, array( 'class' => 'delicat-banner-card__arrow' ) ) . '</a>';
 		}
-		return $out . '</div></article>';
+		$out .= '</div>';
+		if ( '' !== $card['url'] && '' === $card['button'] ) {
+			/* a card without a button label is one link: a direct child of the card, so it covers the picture and the band too */
+			$out .= '<a class="delicat-banner-card__link" href="' . esc_url( $card['url'] ) . '" aria-label="' . esc_attr( $card['title'] ) . '"' . $away . '></a>';
+		}
+		return $out . '</article>';
 	}
 
 	/** whatsapp, android or default, from the link first, then the title (or an explicit whatsapp/android icon). */
@@ -635,7 +638,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 	/** True for a colour that white text would not read on (WCAG relative luminance above 0.18). */
 	private static function banner_is_light( string $hex ): bool {
 		$hex = ltrim( $hex, '#' );
-		if ( strlen( $hex ) < 6 ) {
+		if ( strlen( $hex ) < 6 ) { // #RGB or #RGBA
 			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
 		}
 		$lum = 0.0;
@@ -681,7 +684,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 				'rich'     => false,
 				'button'   => (string) ( $parts[2] ?? '' ),
 				'url'      => '' !== (string) ( $parts[3] ?? '' ) ? (string) esc_url_raw( (string) $parts[3], array( 'http', 'https' ) ) : '',
-				'color'    => preg_match( '/^#[0-9a-fA-F]{3,8}$/', (string) ( $parts[4] ?? '' ) ) ? (string) $parts[4] : '',
+				'color'    => preg_match( '/^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', (string) ( $parts[4] ?? '' ) ) ? (string) $parts[4] : '',
 				'image_id' => absint( $parts[5] ?? 0 ),
 				'icon'     => (string) ( $parts[6] ?? '' ),
 			);

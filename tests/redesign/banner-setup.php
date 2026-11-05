@@ -47,3 +47,5 @@ foreach ( $pages as $slug => $over ) {
 	$saved = get_post_meta( $id, Delicat_Builder_V9_Pages::META_LAYOUT, true );
 	echo $slug, ' #', $id, ' style=', $saved[0]['content']['card_style'] ?? '?', "\n";
 }
+// rendered pages are cached under the Builder cache version: bump it so these pages show the current renderer
+update_option( 'delicat_builder_v9_cache_version', max( 1, (int) get_option( 'delicat_builder_v9_cache_version', 1 ) ) + 1, false );

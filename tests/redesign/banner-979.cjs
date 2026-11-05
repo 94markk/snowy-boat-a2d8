@@ -5,7 +5,8 @@
 //  3. a button left as "button" reads « Rejoindre » on the WhatsApp card; off-site links open in a new tab;
 //  4. every button's text reads on its background (contrast >= 4.5:1), including a light custom colour;
 //  5. Nuit card text stays white in dark mode (the engine's dark-mode pass must not darken it);
-//  6. swiping moves the active dot, and the page never scrolls sideways.
+//  6. swiping moves the active dot, and the page never scrolls sideways;
+//  7. a card without a button label is tappable over its whole area (picture, band, padding).
 const { chromium } = require('playwright');
 const base = process.argv[2] || 'https://localhost:8943';
 if (!/localhost|127\.0\.0\.1/.test(base)) { console.error('refusing: not a staging address'); process.exit(3); }
@@ -62,6 +63,15 @@ const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok
       check(`${tag} WhatsApp card recognised`, whatsapp.cls.includes('delicat-banner-card--whatsapp') && whatsapp.glyph);
       check(`${tag} named icon shows, "none" hides it`, gift.glyph && !photo.glyph && photo.cls.includes('has-media'));
       check(`${tag} card without a button label is one link`, !link.btn);
+      const hit = await page.evaluate(() => {
+        const c = document.querySelectorAll('.delicat-banner-card')[5];
+        c.parentElement.scrollLeft = c.offsetLeft - 16;
+        c.scrollIntoView({ block: 'center' });
+        const b = c.getBoundingClientRect();
+        const at = document.elementFromPoint(b.left + 8, b.top + 8); // the padding, or the Vitrine band
+        return !!(at && at.closest('a.delicat-banner-card__link'));
+      });
+      check(`${tag} the whole link card is tappable (top corner)`, hit);
       // 3. labels and links
       check(`${tag} "button" label reads Rejoindre`, whatsapp.btn && whatsapp.btn.text === 'Rejoindre', whatsapp.btn && whatsapp.btn.text);
       check(`${tag} WhatsApp opens in a new tab`, whatsapp.btn && whatsapp.btn.target === '_blank' && /noopener/.test(whatsapp.btn.rel));

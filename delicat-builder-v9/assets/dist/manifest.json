@@ -1,6 +1,6 @@
 {
  "version": 2,
- "builtAt": "2026-11-05T17:08:48.040Z",
+ "builtAt": "2026-11-05T17:15:49.368Z",
  "js": {
   "engine": {
    "file": "engine.446e36877819.js",
@@ -128,9 +128,9 @@
    ]
   },
   "builder": {
-   "file": "builder.ffef9bc2569f.css",
-   "bytes": 219506,
-   "sha256": "ffef9bc2569f36066acfbf257a348858fbc1446a4f6ab245d71293fbec3c0599",
+   "file": "builder.0a99781a4433.css",
+   "bytes": 219696,
+   "sha256": "0a99781a4433ef7fae77971a890e0dbd435767715db1eaef6a7a9119528711b6",
    "sources": [
     "assets/components/base.css",
     "assets/components/testimonials.css",
@@ -153,9 +153,9 @@
    ]
   },
   "builder-design": {
-   "file": "builder-design.4d618c197a2e.css",
-   "bytes": 236690,
-   "sha256": "4d618c197a2e147ab19ef1cb97f03f95f2c52a24059f9b66945e6e98752ab115",
+   "file": "builder-design.8df91711f6bb.css",
+   "bytes": 236880,
+   "sha256": "8df91711f6bb9cc35f7b88a7db1a3ae6a5f0f223d30ecf6edf2ac19cbc80d398",
    "sources": [
     "assets/components/base.css",
     "assets/components/testimonials.css",
