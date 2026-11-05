@@ -12,6 +12,10 @@
 //  8. the policy page no longer carries « 4,8 sur 81 »;
 //  9. a customer with no paid order is told so before writing (popup) and cannot post; a buyer can;
 // 10. the figures follow real changes on their own: a review approved / put back, a product unpublished / back.
+// 11. helpful votes: one per customer (a repeat does not count twice), switch and remove, kept after reload,
+//     not on one's own review, guests asked to sign in;
+// 12. on a phone: the review form opens inside the screen and closes cleanly; « Voir tous les avis » lists the
+//     reviews; the product page and the sheet show the product average rounded down, like the homepage.
 // Averages are shown rounded down (« sans arrondi favorable »); a review stored with duplicate rating/verified rows
 // counts once (fixture in reviews-setup.php).
 const fs = require('fs');
@@ -53,7 +57,7 @@ const contrastOf = (page, sel) => page.evaluate((sel) => {
 }, sel);
 
 async function login(browser, who) {
-  const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+  const ctx = await browser.newContext({ ignoreHTTPSErrors: true, ...PHONE });
   const p = await ctx.newPage();
   await p.goto(base + '/wp-login.php');
   await p.fill('#user_login', who);
@@ -67,6 +71,16 @@ async function login(browser, who) {
 }
 
 const prompt = (p) => p.evaluate(async (base) => (await (await fetch(base + '/wp-admin/admin-ajax.php?action=delicat_builder_v9_review_prompt', { credentials: 'same-origin' })).json()).data, base);
+
+const votes = (p, id) => p.evaluate(async ({ base, id }) => (await (await fetch(base + '/wp-admin/admin-ajax.php?action=delicat_builder_v9_review_votes&ids=' + id, { credentials: 'same-origin' })).json()).data, { base, id });
+const vote = (p, id, v) => p.evaluate(async ({ base, id, v }) => {
+  const ajax = base + '/wp-admin/admin-ajax.php';
+  const st = await (await fetch(ajax + '?action=delicat_builder_v9_review_votes&ids=' + id, { credentials: 'same-origin' })).json();
+  const body = new URLSearchParams({ action: 'delicat_builder_v9_review_vote', nonce: (st.data && st.data.nonce) || '', review: String(id), vote: v });
+  const r = await fetch(ajax, { method: 'POST', credentials: 'same-origin', body });
+  return { status: r.status, body: await r.json() };
+}, { base, id, v });
+const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
 
 const submit = (p, name) => p.evaluate(async ({ base, name }) => {
   const ajax = base + '/wp-admin/admin-ajax.php';
@@ -123,7 +137,9 @@ const submit = (p, name) => p.evaluate(async ({ base, name }) => {
       const names = r.cards.map((c) => c.name);
       const never = NEVER.filter((n) => r.text.includes(n));
       check(`${tag} shipped samples and ineligible reviews never shown`, !never.length, never.join(', '));
-      const wrongTick = r.cards.filter((c) => TICKED.includes(c.name) !== c.tick).map((c) => `${c.name}:${c.tick}`);
+      // the « RV SHEET n » reviews are verified buyers when n is odd (reviews-setup.php)
+      const ticked = (n) => TICKED.includes(n) || /^RV SHEET [1357]$/.test(n);
+      const wrongTick = r.cards.filter((c) => /^RV /.test(c.name) && ticked(c.name) !== c.tick).map((c) => `${c.name}:${c.tick}`);
       const missing = TICKED.concat(UNTICKED).filter((n) => !names.includes(n));
       check(`${tag} « Achat vérifié » tick only on buyers`, !wrongTick.length && !missing.length && r.cards.filter((c) => c.tick).every((c) => c.tickLabel === 'Achat vérifié'), wrongTick.concat(missing.map((m) => 'missing ' + m)).join(', '));
       check(`${tag} no sideways scroll, summary inside the screen`, !r.sideways && r.boxRight <= r.vw + 1, `right ${r.boxRight} / ${r.vw}`);
@@ -172,6 +188,52 @@ const submit = (p, name) => p.evaluate(async ({ base, name }) => {
     const res = await submit(p, 'RV_BUYER2');
     check('buyer can post a review (held for moderation)', res.status === 200 && res.body.success === true, `${res.status} ${JSON.stringify(res.body)}`);
     await ctx.close();
+  }
+  // 11. helpful votes
+  {
+    const id = want.ids.top;
+    const a = await login(browser, want.users.nobuy);
+    const up1 = await vote(a.p, id, 'up');
+    const up2 = await vote(a.p, id, 'up');
+    const kept = await votes(a.p, id);
+    check('a vote counts once, even sent twice', up1.status === 200 && up1.body.data.up === 1 && up2.body.data.up === 1, `${JSON.stringify(up1.body.data)} then ${JSON.stringify(up2.body.data)}`);
+    check('the vote is kept (read back on a new request)', kept.mine && kept.mine[String(id)] === 1 && kept.counts[String(id)].up === 1, JSON.stringify(kept));
+    const down = await vote(a.p, id, 'down');
+    const none = await vote(a.p, id, 'none');
+    check('a vote can be switched and removed', down.body.data.up === 0 && down.body.data.down === 1 && none.body.data.up === 0 && none.body.data.down === 0, `${JSON.stringify(down.body.data)} / ${JSON.stringify(none.body.data)}`);
+    await vote(a.p, id, 'up');
+    const b = await login(browser, want.users.buyer);
+    const second = await vote(b.p, id, 'up');
+    check('a second customer adds one', second.body.data && second.body.data.up === 2, JSON.stringify(second.body));
+    const o = await login(browser, want.users.owner);
+    const own = await vote(o.p, id, 'up');
+    check('no vote on one\'s own review', own.status === 403 && own.body.data.own === true, `${own.status} ${JSON.stringify(own.body)}`);
+    const g = await browser.newContext({ ignoreHTTPSErrors: true });
+    const gp = await g.newPage();
+    await gp.goto(base + '/', { waitUntil: 'load' });
+    const guest = await vote(gp, id, 'up');
+    check('guests are asked to sign in', guest.status === 401 && guest.body.data.login === true, `${guest.status} ${JSON.stringify(guest.body)}`);
+    // 12. on a phone
+    await b.p.goto(want.product_url, { waitUntil: 'load' });
+    const avg = await b.p.$eval('.dnp-reviews-avg', (e) => e.textContent.trim()).catch(() => '');
+    check('product page average rounded down', avg === want.product_average, `${avg} vs ${want.product_average} (exact ${want.product_raw})`);
+    await b.p.click('.dnp-reviews-btn');
+    const form = await b.p.waitForSelector('.dlc-review-star', { timeout: 8000 }).then(() => true).catch(() => false);
+    const box = await b.p.evaluate(() => { const d = document.querySelector('.dlc-review-dialog'); const r = d.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
+    check('review form opens inside the phone screen', form && box.l >= 0 && box.r <= box.w + 1 && box.t >= 0 && box.b <= box.h + 1, JSON.stringify(box));
+    await b.p.click('.dlc-review-dialog .dlc-review-close');
+    await b.p.waitForTimeout(700);
+    const closed = await b.p.evaluate(() => !document.body.classList.contains('dlc-review-modal-open') && !document.querySelector('.dlc-review-overlay.is-open'));
+    check('the form closes and gives the page back', closed);
+    await b.p.goto(want.sheet_url, { waitUntil: 'load' });
+    const sheetAvg = await b.p.$eval('.dnp-reviews-avg', (e) => e.textContent.trim()).catch(() => '');
+    check('a second product page, average rounded down too', sheetAvg === want.sheet_average, `${sheetAvg} vs ${want.sheet_average}`);
+    await b.p.click('[data-dlc-reviews-all]');
+    const items = await b.p.waitForSelector('.dlc-rv-item', { timeout: 8000 }).then(() => b.p.$$eval('.dlc-rv-item', (l) => l.length)).catch(() => 0);
+    const score = await b.p.$eval('.dlc-rv-score strong', (e) => e.textContent.trim()).catch(() => '');
+    check('« Voir tous les avis » lists the reviews with the same average', items > 0 && score.replace(',', '.') === want.sheet_average.replace(',', '.'), `${items} reviews, average ${score}`);
+    for (const c of [a, b, o]) await c.ctx.close();
+    await g.close();
   }
   await browser.close();
   // 10. the figures follow real changes (WordPress hooks only; no manual cache flush)

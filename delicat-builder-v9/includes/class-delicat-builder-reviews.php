@@ -1297,7 +1297,7 @@ final class Delicat_Builder_V9_Reviews {
 					$dist[ (string) $star ] = absint( $raw[ $star ] ?? ( $raw[ (string) $star ] ?? 0 ) );
 				}
 				$out['summary'] = array(
-					'average' => round( (float) $product->get_average_rating(), 1 ),
+					'average' => self::display_average( (float) $product->get_average_rating() ), // 9.8.0: rounded down, as everywhere
 					'count'   => (int) $product->get_review_count(),
 					'dist'    => $dist,
 					'name'    => sanitize_text_field( (string) $product->get_name() ),

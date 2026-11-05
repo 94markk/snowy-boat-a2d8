@@ -1,3 +1,9 @@
+9.8.1 — Avis : la même note partout
+(1) Fiche produit et fenêtre « Voir tous les avis » : la note moyenne est maintenant affichée comme sur la page
+d’accueil, avec une décimale arrondie vers le bas (une moyenne de 4,87 s’affiche 4,8 et non plus 4,9), comme le
+promet la politique des avis (« sans arrondi favorable »). Les étoiles et les informations lues par Google gardent la
+moyenne exacte.
+
 9.8.0 — Avis clients : des chiffres réels et vérifiables (plan de confiance, TR-01)
 (1) Page d’accueil, bloc « Ils nous font confiance » : la note et le nombre d’avis sont maintenant calculés à partir
 des avis publiés, et ne peuvent plus être tapés à la main. Avant, la note (4.8) était saisie dans le Builder et le

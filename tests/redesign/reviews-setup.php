@@ -90,6 +90,23 @@ rv_review( $products[0], 'RV PRODUCT REPLY', 0, 0, '1', $top );       // admin r
 $draft    = get_page_by_path( 'rv-draft-product', OBJECT, 'product' );
 $draft_id = $draft ? $draft->ID : wp_insert_post( array( 'post_type' => 'product', 'post_status' => 'draft', 'post_title' => 'RV draft product', 'post_name' => 'rv-draft-product' ) );
 rv_review( $draft_id, 'RV PRODUCT ON DRAFT', 1, 1, '1' );             // product not public: not counted
+// a third product with more reviews than the product page shows (6), so it offers « Voir tous les avis »;
+// dated in the past so they stay behind the named reviews on the homepage rail
+$sheet = $products[2] ?? $products[0];
+for ( $i = 1; $i <= 7; $i++ ) {
+	$cid = rv_review( $sheet, 'RV SHEET ' . $i, 0 === $i % 3 ? 3 : ( $i % 2 ? 5 : 4 ), $i % 2, '1' );
+	wp_update_comment( array( 'comment_ID' => $cid, 'comment_date' => '2025-01-0' . $i . ' 10:00:00', 'comment_date_gmt' => '2025-01-0' . $i . ' 15:00:00' ) );
+}
+// WooCommerce recounts a product's rating when a comment is saved, before the rating meta above exists: recount now
+foreach ( array_unique( array( $products[0], $products[1], $sheet ) ) as $pid ) { WC_Comments::clear_transients( $pid ); }
+$sheet_avg = (float) wc_get_product( $sheet )->get_average_rating();
+$ff_avg = (float) wc_get_product( $products[1] )->get_average_rating();
+// helpful votes from an earlier run on the review the vote checks use (staging fixture only)
+global $wpdb;
+$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->prefix}dlc_review_votes WHERE comment_id = %d", $top ) );
+delete_comment_meta( $top, Delicat_Builder_V9_Reviews::CMETA_UP );
+delete_comment_meta( $top, Delicat_Builder_V9_Reviews::CMETA_DOWN );
+delete_comment_meta( $top, Delicat_Builder_V9_Reviews::CMETA_SCORE );
 
 // expected figures, counted with plain WordPress calls
 $store = array();
@@ -138,11 +155,15 @@ file_put_contents(
 		array(
 			'store'    => array( 'count' => count( $store ), 'average' => $down( $avg( $store ) ), 'raw' => $avg( $store ) ),
 			'products' => array( 'count' => count( $prod ), 'average' => $down( $avg( $prod ) ), 'raw' => $avg( $prod ), 'verified' => $verified ),
-			'ids'      => array( 'pending' => (int) $pending, 'product' => (int) $products[1] ),
+			'ids'      => array( 'pending' => (int) $pending, 'product' => (int) $products[1], 'top' => (int) $top ),
+			'product_average' => number_format_i18n( floor( $ff_avg * 10 + 1e-9 ) / 10, 1 ), // the product page, rounded down
+			'product_raw'     => $ff_avg,
+			'sheet_url'       => get_permalink( $sheet ),
+			'sheet_average'   => number_format_i18n( floor( $sheet_avg * 10 + 1e-9 ) / 10, 1 ),
 			'product_url' => get_permalink( $products[1] ),
 			'policy'   => Delicat_Builder_V9_Legal::url( 'reviews' ),
 			'legal'    => $legal,
-			'users'    => array( 'buyer' => 'rv_buyer2', 'nobuy' => 'rv_nobuy', 'pass' => PASS ),
+			'users'    => array( 'buyer' => 'rv_buyer2', 'nobuy' => 'rv_nobuy', 'owner' => 'rv_buyer', 'pass' => PASS ),
 		),
 		JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
 	)

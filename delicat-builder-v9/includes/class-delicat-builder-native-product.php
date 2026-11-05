@@ -498,6 +498,9 @@ final class Delicat_Builder_V9_Native_Product {
 		$title = trim( (string) ( $s['reviews_title'] ?? '' ) );
 		if ( '' === $title ) $title = 'Avis clients';
 		$stars_pct = max( 0, min( 100, (int) round( $average / 5 * 100 ) ) );
+		/* 9.8.0 (TR-01): shown with one decimal rounded down, as on the homepage (« sans
+		 * arrondi favorable »); the stars and the Product data keep the exact average. */
+		$shown_avg = number_format_i18n( class_exists( 'Delicat_Builder_V9_Reviews', false ) ? Delicat_Builder_V9_Reviews::display_average( $average ) : floor( $average * 10 + 1e-9 ) / 10, 1 );
 		$name = $product->get_name();
 		/* 9.3.15: helpful votes and "Voir tout" need the engine's reviews module. */
 		$community = class_exists( 'Delicat_Builder_V9_Engine', false ) && is_callable( array( 'Delicat_Builder_V9_Engine', 'active' ) ) && Delicat_Builder_V9_Engine::active()
@@ -512,8 +515,8 @@ final class Delicat_Builder_V9_Native_Product {
 				<h2><?php echo esc_html( $title ); ?></h2>
 				<?php if ( $count > 0 ) : ?>
 				<div class="dnp-reviews-summary">
-					<strong class="dnp-reviews-avg"><?php echo esc_html( number_format_i18n( $average, 1 ) ); ?></strong>
-					<span class="dnp-reviews-stars" role="img" aria-label="<?php echo esc_attr( sprintf( '%s sur 5', number_format_i18n( $average, 1 ) ) ); ?>"><i aria-hidden="true">★★★★★</i><b aria-hidden="true" style="width:<?php echo esc_attr( $stars_pct ); ?>%">★★★★★</b></span>
+					<strong class="dnp-reviews-avg"><?php echo esc_html( $shown_avg ); ?></strong>
+					<span class="dnp-reviews-stars" role="img" aria-label="<?php echo esc_attr( sprintf( '%s sur 5', $shown_avg ) ); ?>"><i aria-hidden="true">★★★★★</i><b aria-hidden="true" style="width:<?php echo esc_attr( $stars_pct ); ?>%">★★★★★</b></span>
 					<span class="dnp-reviews-count"><?php echo esc_html( sprintf( _n( '%d avis', '%d avis', $count, 'delicat-builder-v9' ), $count ) ); ?></span>
 				</div>
 				<?php else : ?>
