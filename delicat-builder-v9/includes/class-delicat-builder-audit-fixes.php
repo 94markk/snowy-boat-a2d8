@@ -127,7 +127,7 @@ final class Delicat_Builder_V9_Audit_Fixes {
  }
  public static function image_exclusions( $list ): array {
   $list = is_array( $list ) ? $list : array();
-  return array_values( array_unique( array_merge( $list, array( 'dsb8-header__logo-image', 'dnp-image', 'fetchpriority="high"', 'data-no-lazy="1"' ) ) ) );
+  return array_values( array_unique( array_merge( $list, array( 'dsb8-header__logo-image', 'dnp-image', 'fetchpriority="high"', 'data-no-lazy="1"', 'delicat-product-card__image' ) ) ) );
  }
  public static function image_attributes( $attrs ): array {
   if ( false !== strpos( $attrs['class'] ?? '', 'dsb8-header__logo-image' ) ) {

@@ -1,13 +1,13 @@
 {
  "version": 2,
- "builtAt": "2026-11-04T22:44:44.442Z",
+ "builtAt": "2026-11-05T00:49:31.681Z",
  "js": {
   "engine": {
-   "file": "engine.b5f701d6cf14.js",
-   "bytes": 86203,
-   "sha256": "b5f701d6cf14bd51635cd45d96e423fede2bb599fe03e99386ddc05b405faf5f",
+   "file": "engine.8c972cde8efd.js",
+   "bytes": 88219,
+   "sha256": "8c972cde8efd719bf93c6145356282eff4f451fdc374c32c88a8e28e561c3051",
    "imports": [
-    "chunks/chunk.71afccc3dbb7.js",
+    "chunks/chunk.2cc3ab2d872d.js",
     "chunks/chunk.99ad77e49fbc.js",
     "chunks/chunk.385b5371c4d9.js",
     "chunks/chunk.687452d4bbe4.js",
@@ -31,14 +31,14 @@
    "sha256": "59c3469ed67dbae7025d99e983558c37032270384c5f268df19c3edbfb95f6ca",
    "name": null
   },
-  "chunks/widgets.c450e31132bf.js": {
+  "chunks/widgets.ff1a5c95676e.js": {
    "bytes": 11597,
-   "sha256": "c450e31132bff393f48fedb732a8c335b28d05ee774335d012a409dbf9788df8",
+   "sha256": "ff1a5c95676e3ee4c2186f608fd645d42301aa4da8940849a6d3c5bba0d6a9b4",
    "name": "widgets"
   },
-  "chunks/chunk.71afccc3dbb7.js": {
-   "bytes": 37312,
-   "sha256": "71afccc3dbb728fbc9cbdc115fd9ae216e42ca6e6c1882ca087140bc560ef3d0",
+  "chunks/chunk.2cc3ab2d872d.js": {
+   "bytes": 37816,
+   "sha256": "2cc3ab2d872d88dd5f48e63420e301b4a44a75a7666b08dbec48329f56cb4be9",
    "name": null
   },
   "chunks/reviews.97f7f54eab8c.js": {
@@ -84,9 +84,9 @@
  },
  "css": {
   "chrome": {
-   "file": "chrome.8867da37a8db.css",
-   "bytes": 167771,
-   "sha256": "8867da37a8db593e539d7e48847d5f8de85ef684a2e4e50781cdcf66f169a962",
+   "file": "chrome.ca665d9759dd.css",
+   "bytes": 168305,
+   "sha256": "ca665d9759dde49f92b533f3b821b4431815bbb04ab7bc8ccb47160a171edf30",
    "sources": [
     "assets/css/theme-system.css",
     "assets/dsb8-beta2-header.css",
@@ -200,9 +200,9 @@
    ]
   },
   "product": {
-   "file": "product.bf3a053088cc.css",
-   "bytes": 68477,
-   "sha256": "bf3a053088cc2f922a6d052e37ca58945b30a0f90a73f5453ca698f360879a2f",
+   "file": "product.191460dc0230.css",
+   "bytes": 68554,
+   "sha256": "191460dc02303bc4ada0641e92003d18232f76893c214080c02f6258a03bec20",
    "sources": [
     "assets/css/native-product.css",
     "assets/css/reviews.css",
@@ -212,9 +212,9 @@
    ]
   },
   "product-design": {
-   "file": "product-design.a44a73e8cf66.css",
-   "bytes": 85661,
-   "sha256": "a44a73e8cf662af9eb092baa34de14ff1e9519ae52b47146792514ecc33f1489",
+   "file": "product-design.1c3d30f71545.css",
+   "bytes": 85738,
+   "sha256": "1c3d30f715451d271f39d9156b6772b07fc08642c39696e113626da2cd09862a",
    "sources": [
     "assets/css/native-product.css",
     "assets/css/reviews.css",

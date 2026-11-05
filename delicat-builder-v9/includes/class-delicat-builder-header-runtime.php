@@ -29,6 +29,7 @@ final class Delicat_Builder_V9_Header_Studio_8 {
         add_filter('woocommerce_add_to_cart_fragments', array($this, 'cart_fragments'), 99);
         add_action('wp_ajax_delicat_builder_v9_header_remove_cart_item', array($this, 'ajax_remove_cart_item'));
         add_action('wp_ajax_nopriv_delicat_builder_v9_header_remove_cart_item', array($this, 'ajax_remove_cart_item'));
+        add_action('wc_ajax_delicat_builder_v9_header_cart', array($this, 'ajax_cart')); // 9.7.6: the panel's live basket
     }
 
     public function register_component($components) {
@@ -285,22 +286,9 @@ final class Delicat_Builder_V9_Header_Studio_8 {
         $count = $this->cart_count();
         return '<span class="dsb8-woo-cart-count-fragment" hidden data-count="'.esc_attr($count).'">'.esc_html($count).'</span>';
     }
-    private function cart_panel_markup() {
-        /* A cacheable document carries no basket: neither the count, nor the
-         * line items, nor the subtotal. WooCommerce's cart fragments and
-         * session.js fill all three in on the client. */
-        $shared = $this->shared_document();
-        $count = $this->cart_count();
-        $ajax = admin_url('admin-ajax.php');
-        $nonce = wp_create_nonce('delicat_builder_v9_header_cart_remove');
+    /** 9.7.6: the line items alone, printed in the page and sent to the panel when it refreshes. */
+    private function cart_list_markup($shared) {
         ob_start(); ?>
-        <div class="dsb8-cart-fragment" data-dsb8-cart-root data-ajax="<?php echo esc_url($ajax); ?>" data-nonce="<?php echo esc_attr($nonce); ?>">
-          <button class="dsb8-header__action dsb8-header__cart" type="button" aria-label="Ouvrir le panier" aria-expanded="false" data-dsb8-cart-trigger>
-            <?php echo $this->icon('cart'); ?><span class="dsb8-header__badge" data-dsb8-cart-count<?php echo $count?'':' hidden'; ?>><?php echo (int)$count; ?></span>
-          </button>
-          <div class="dsb8-cart-panel" role="dialog" aria-label="Panier">
-            <div class="dsb8-cart-panel__head"><strong>Votre panier</strong><button type="button" class="dsb8-cart-panel__close" aria-label="Fermer">×</button></div>
-            <div class="dsb8-cart-list">
             <?php if(!$shared && function_exists('WC') && is_object(WC()) && WC()->cart && !WC()->cart->is_empty()): foreach(WC()->cart->get_cart() as $key=>$line):
               $product = isset($line['data']) ? $line['data'] : null; if(!$product || !$product->exists()) continue;
               $name = $product->get_name(); $qty = isset($line['quantity']) ? (int)$line['quantity'] : 1;
@@ -318,8 +306,52 @@ final class Delicat_Builder_V9_Header_Studio_8 {
             <?php endforeach; else: ?>
               <div class="dsb8-cart-empty">Votre panier est vide.</div>
             <?php endif; ?>
+        <?php return ob_get_clean();
+    }
+    private function cart_foot_markup($count) {
+        if (!$count || !function_exists('WC') || !is_object(WC()) || !WC()->cart) return '';
+        return '<div class="dsb8-cart-panel__foot"><div><span>Sous-total</span><strong>'.wp_kses_post(WC()->cart->get_cart_subtotal()).'</strong></div>'
+            .'<a href="'.esc_url(wc_get_cart_url()).'">Voir le panier</a><a class="is-checkout" href="'.esc_url(wc_get_checkout_url()).'">Commander</a></div>';
+    }
+    /**
+     * 9.7.6: the panel asks for the visitor's own basket each time it opens and after a change, so it never shows
+     * the basket the page was printed with (a cacheable page carries none; a page kept by in-app navigation or the
+     * back button is older than the last add). Read-only, private, never cached.
+     */
+    public function ajax_cart() {
+        nocache_headers();
+        if (!headers_sent()) header('Cache-Control: private, no-store, max-age=0');
+        if (function_exists('wc_load_cart') && function_exists('WC') && is_object(WC()) && !WC()->cart) wc_load_cart();
+        if (!function_exists('WC') || !is_object(WC()) || !WC()->cart) {
+            wp_send_json_error(array('code'=>'no_cart','message'=>'Panier indisponible.'), 503);
+        }
+        $count = (int) WC()->cart->get_cart_contents_count();
+        wp_send_json_success(array(
+            'count' => $count,
+            'list'  => $this->cart_list_markup(false),
+            'foot'  => $this->cart_foot_markup($count),
+            'nonce' => wp_create_nonce('delicat_builder_v9_header_cart_remove'),
+        ));
+    }
+    private function cart_panel_markup() {
+        /* A cacheable document carries no basket: neither the count, nor the
+         * line items, nor the subtotal. WooCommerce's cart fragments and
+         * session.js fill all three in on the client. */
+        $shared = $this->shared_document();
+        $count = $this->cart_count();
+        $ajax = admin_url('admin-ajax.php');
+        $nonce = wp_create_nonce('delicat_builder_v9_header_cart_remove');
+        ob_start(); ?>
+        <div class="dsb8-cart-fragment" data-dsb8-cart-root data-ajax="<?php echo esc_url($ajax); ?>" data-cart-url="<?php echo esc_url(class_exists('WC_AJAX') ? WC_AJAX::get_endpoint('delicat_builder_v9_header_cart') : ''); ?>" data-nonce="<?php echo esc_attr($nonce); ?>">
+          <button class="dsb8-header__action dsb8-header__cart" type="button" aria-label="Ouvrir le panier" aria-expanded="false" data-dsb8-cart-trigger>
+            <?php echo $this->icon('cart'); ?><span class="dsb8-header__badge" data-dsb8-cart-count<?php echo $count?'':' hidden'; ?>><?php echo (int)$count; ?></span>
+          </button>
+          <div class="dsb8-cart-panel" role="dialog" aria-label="Panier">
+            <div class="dsb8-cart-panel__head"><strong>Votre panier</strong><button type="button" class="dsb8-cart-panel__close" aria-label="Fermer">×</button></div>
+            <div class="dsb8-cart-list">
+            <?php echo $this->cart_list_markup($shared); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside ?>
             </div>
-            <?php if($count): ?><div class="dsb8-cart-panel__foot"><div><span>Sous-total</span><strong><?php echo wp_kses_post(WC()->cart->get_cart_subtotal()); ?></strong></div><a href="<?php echo esc_url(wc_get_cart_url()); ?>">Voir le panier</a><a class="is-checkout" href="<?php echo esc_url(wc_get_checkout_url()); ?>">Commander</a></div><?php endif; ?>
+            <?php echo $this->cart_foot_markup($count); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside ?>
           </div>
         </div>
         <?php return ob_get_clean();

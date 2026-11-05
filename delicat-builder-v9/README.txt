@@ -1,3 +1,20 @@
+9.7.6 — Téléphone : panier toujours à jour, bandeau de l’application sous l’en-tête, images du catalogue
+(1) Panier de l’en-tête : il affiche maintenant les articles ajoutés sans recharger la page. À chaque ouverture (et
+après un ajout pendant qu’il est ouvert), il demande le panier du client à WooCommerce ; avant, il gardait le
+panier de la page affichée (vide sur une page en cache ou ouverte par la navigation de l’application).
+(2) Panier de l’en-tête sur téléphone : il s’ouvre sous le bouton panier et reste entièrement dans l’écran (il
+débordait à droite, la croix était coupée).
+(3) Bandeau « Delicat en application » (iPhone) : il s’affiche sous l’en-tête au lieu de le recouvrir ; le logo, la
+cloche et le panier restent visibles et utilisables, et le panier ouvert passe au-dessus du bandeau.
+(4) Fenêtre « Installer Delicat Store » : elle tient dans l’écran (elle dépassait à droite et la croix était coupée).
+(5) Boutique et catégories : les images des produits ne restent plus floues ou noires. Les cartes produit sont
+exclues du chargement différé de LiteSpeed (le navigateur charge déjà les images au bon moment) et, après un
+changement de page dans l’application, les images encore en attente de LiteSpeed sont chargées.
+(6) Fiche produit : la barre d’achat affiche « Choisissez une option » en entier (sur deux lignes) au lieu de
+« Choisissez u… ».
+(7) Technique : nouvelle requête WooCommerce ?wc-ajax=delicat_builder_v9_header_cart (panier du visiteur, privée,
+jamais en cache) ; moteur reconstruit. Installer puis purger LiteSpeed et Cloudflare.
+
 9.7.5 — L’ancienne carte du catalogue est supprimée ; pages plus légères
 (1) Boutique, catégories, étiquettes et recherche : la carte de l’accueil est maintenant la seule carte. L’ancienne
 carte (« Disponible », bouton « Choisir → ») est supprimée du code : elle ne peut plus revenir, même si d’anciens
