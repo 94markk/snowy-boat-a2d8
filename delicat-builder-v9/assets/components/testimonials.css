@@ -74,3 +74,13 @@ body.dbp-app .delicat-testimonials__marquee:not(.is-manual){overflow:hidden}
 .delicat-testimonials__mavatar{width:34px;height:34px;font-size:12px}
 .delicat-testimonials__mid>strong{font-size:13px}.delicat-testimonials__mid>span,.delicat-testimonials__mproduct{font-size:11px}
 }
+/* 9.8.0 (TR-01): the summary is computed from published reviews — stars filled to the real average, product reviews on their own line. */
+.delicat-testimonials__rating{grid-template-areas:"value stars" "value label" "note note";max-width:100%}
+.delicat-testimonials__rating-stars{position:relative;display:inline-block;justify-self:start;width:max-content;color:rgba(148,163,184,.5)}
+.delicat-testimonials__rating-fill{position:absolute;top:0;bottom:0;left:0;width:var(--dbv9-rating-fill,100%);overflow:hidden;color:var(--dbv9-test-stars,#ffbf2f);white-space:nowrap}
+.delicat-testimonials__rating-note{grid-area:note;max-width:30em;margin:12px 0 0;padding-top:10px;border-top:1px solid var(--dbv9-test-border,#25264d);color:var(--dbv9-test-text,#989bad);font-size:13px;line-height:1.5}
+.delicat-testimonials .delicat-testimonials__rating-note a{color:inherit;font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.delicat-testimonials .delicat-testimonials__rating-note a:focus-visible{outline:2px solid var(--ds-color-focus,#2563eb);outline-offset:2px;border-radius:4px}
+body.delicat-builder-homepage-managed.delicat-home-mode-light .delicat-testimonials__rating-note,.delicat-page-layout.delicat-page-layout--homepage-managed.delicat-home-mode-light .delicat-testimonials__rating-note{border-color:var(--dbv9-light-glass-border)!important;color:var(--dbv9-light-card-text)!important}
+html[data-delicat-theme="dark"] body .delicat-testimonials__rating-note{border-color:rgba(133,123,255,.2)!important;color:#aeb5c8!important}
+@media(max-width:640px){.delicat-testimonials__rating-note{margin-top:10px;padding-top:8px;font-size:12px}}

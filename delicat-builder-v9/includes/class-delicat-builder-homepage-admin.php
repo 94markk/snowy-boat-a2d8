@@ -309,6 +309,29 @@ public static function info(): void {
 					<div class="delicat-status"><span class="delicat-status__dot <?php echo absint( $diagnostics['product_sections'] ?? 0 ) >= 4 ? 'is-ok' : 'is-warn'; ?>"></span><strong>Product sections</strong><span><?php echo esc_html( absint( $diagnostics['product_sections'] ?? 0 ) . ' carousel(s)' ); ?></span></div>
 					<div class="delicat-status"><span class="delicat-status__dot <?php echo absint( $diagnostics['info_sections'] ?? 0 ) >= 4 ? 'is-ok' : 'is-warn'; ?>"></span><strong>Reference info sections</strong><span><?php echo esc_html( absint( $diagnostics['info_sections'] ?? 0 ) . ' / 4' ); ?></span></div>
 					<div class="delicat-status"><span class="delicat-status__dot <?php echo ! empty( $diagnostics['wc_reviews'] ) ? 'is-ok' : 'is-warn'; ?>"></span><strong>Avis WooCommerce (étoiles Google)</strong><span><?php echo ! empty( $diagnostics['wc_reviews'] ) ? 'Activés — les fiches produit publient Product + AggregateRating' : 'Désactivés — WooCommerce → Réglages → Produits : activer les avis et la notation par étoiles'; ?></span></div>
+					<?php
+					/* 9.8.0 (TR-01): the figures the homepage shows, from the same source, so they can be checked against Avis clients and Products → Reviews. */
+					if ( ! class_exists( 'Delicat_Builder_V9_Reviews', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
+						delicat_builder_v9_safe_require( 'includes/class-delicat-builder-reviews.php' );
+					}
+					if ( class_exists( 'Delicat_Builder_V9_Reviews', false ) && is_callable( array( 'Delicat_Builder_V9_Reviews', 'stats' ) ) ) :
+						$dbv9_review_stats = Delicat_Builder_V9_Reviews::stats();
+						$dbv9_store        = $dbv9_review_stats['store'];
+						$dbv9_products     = $dbv9_review_stats['products'];
+						?>
+					<div class="delicat-status"><span class="delicat-status__dot <?php echo ( $dbv9_store['count'] + $dbv9_products['count'] ) > 0 ? 'is-ok' : 'is-warn'; ?>"></span><strong>Avis affichés sur l’accueil</strong><span><?php
+						echo esc_html(
+							sprintf(
+								'Boutique : %1$s avis, moyenne %2$s/5 · Produits : %3$s avis, moyenne %4$s/5, dont %5$s achats vérifiés. Calculés à partir des avis publiés (Avis clients, Produits → Avis), notes basses comprises ; rien n’est saisi à la main.',
+								number_format_i18n( $dbv9_store['count'] ),
+								number_format_i18n( $dbv9_store['average'], 2 ),
+								number_format_i18n( $dbv9_products['count'] ),
+								number_format_i18n( $dbv9_products['average'], 2 ),
+								number_format_i18n( $dbv9_products['verified'] )
+							)
+						);
+					?></span></div>
+					<?php endif; ?>
 					<div class="delicat-status"><span class="delicat-status__dot <?php echo ! empty( $diagnostics['products_css_readable'] ) ? 'is-ok' : 'is-warn'; ?>"></span><strong>Carousel CSS</strong><span><?php echo ! empty( $diagnostics['products_css_readable'] ) ? 'Readable' : 'Missing'; ?></span></div>
 					<div class="delicat-status"><span class="delicat-status__dot <?php echo ! empty( $diagnostics['design_css_readable'] ) ? 'is-ok' : 'is-warn'; ?>"></span><strong>Design CSS</strong><span><?php echo ! empty( $diagnostics['design_css_readable'] ) ? 'Readable' : 'Missing'; ?></span></div>
 					<div class="delicat-status"><span class="delicat-status__dot <?php echo empty( $diagnostics['legacy_shortcode'] ) ? 'is-ok' : 'is-warn'; ?>"></span><strong>Old shortcode in page content</strong><span><?php echo empty( $diagnostics['legacy_shortcode'] ) ? 'None' : 'Present but safely suppressed'; ?></span></div>

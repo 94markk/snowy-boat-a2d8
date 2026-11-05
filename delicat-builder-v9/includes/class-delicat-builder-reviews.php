@@ -156,9 +156,11 @@ final class Delicat_Builder_V9_Reviews {
 				'quote'   => sanitize_text_field( $quote ),
 				'name'    => sanitize_text_field( $name ),
 				'place'   => sanitize_text_field( (string) get_post_meta( $post->ID, self::META_CITY, true ) ),
-				'rating'  => max( 1, min( 5, absint( get_post_meta( $post->ID, self::META_RATING, true ) ) ) ),
-				'product' => '',
-				'url'     => '',
+				'rating'   => max( 1, min( 5, absint( get_post_meta( $post->ID, self::META_RATING, true ) ) ) ),
+				'product'  => '',
+				'url'      => '',
+				/* 9.8.0 (TR-01): the « achat vérifié » tick means the author has a paid order. */
+				'verified' => self::customer_has_paid_order( absint( get_post_meta( $post->ID, self::META_USER, true ) ) ),
 			);
 		}
 		return $items;
@@ -176,7 +178,9 @@ final class Delicat_Builder_V9_Reviews {
 	/* RC51.30 — WooCommerce product review sync                           */
 	/* ------------------------------------------------------------------ */
 
-	const RAIL_CACHE = 'dlc_rev_rail_v2'; // RC63: items carry product + url.
+	const RAIL_CACHE = 'dlc_rev_rail_v3'; // RC63: items carry product + url; 9.8.0: + verified.
+	/** 9.8.0 (TR-01): the published review statistics, see stats(). */
+	const STATS_CACHE = 'dlc_rev_stats_v1';
 
 	/**
 	 * Approved WooCommerce product reviews (wp-admin → Products → Reviews)
@@ -208,10 +212,9 @@ final class Delicat_Builder_V9_Reviews {
 				continue;
 			}
 			$rating = absint( get_comment_meta( (int) $comment->comment_ID, 'rating', true ) );
-			if ( 0 === $rating ) {
-				$rating = 5; // Legacy reviews without a stored rating.
-			}
-			if ( $rating < $min_rating ) {
+			/* 9.8.0 (TR-01): a review saved without a rating is not shown with five
+			 * invented stars (it used to count as 5); it simply stays off the rail. */
+			if ( $rating < 1 || $rating < $min_rating ) {
 				continue;
 			}
 			$product      = get_post( (int) $comment->comment_post_ID );
@@ -230,9 +233,10 @@ final class Delicat_Builder_V9_Reviews {
 				'quote'   => sanitize_text_field( $quote ),
 				'name'    => sanitize_text_field( $name ),
 				'place'   => sanitize_text_field( $place ),
-				'rating'  => max( 1, min( 5, $rating ) ),
-				'product' => sanitize_text_field( $product_name ),
-				'url'     => esc_url_raw( $url ),
+				'rating'   => max( 1, min( 5, $rating ) ),
+				'product'  => sanitize_text_field( $product_name ),
+				'url'      => esc_url_raw( $url ),
+				'verified' => 1 === absint( get_comment_meta( (int) $comment->comment_ID, 'verified', true ) ),
 			);
 			if ( count( $items ) >= $limit ) {
 				break;
@@ -273,6 +277,86 @@ final class Delicat_Builder_V9_Reviews {
 
 	public static function flush_rail_cache(): void {
 		delete_transient( self::RAIL_CACHE );
+		delete_transient( self::STATS_CACHE );
+	}
+
+	/**
+	 * 9.8.0 (TR-01) — the one source of the review figures shown on the site.
+	 *
+	 * Two kinds of review, never added together:
+	 *  - store: reviews of Delicat Store itself (Avis clients, published posts);
+	 *  - products: WooCommerce product reviews (Products → Reviews), approved,
+	 *    top-level, on a published product, with a 1–5 rating.
+	 * Each average is the plain mean of every such review, low ratings included
+	 * (Politique des avis clients, section 5). `verified` counts the product
+	 * reviews WooCommerce marked as written by a buyer of that product.
+	 * Nothing here can be typed by hand. Cached 10 minutes; any approval,
+	 * unapproval, edit or deletion clears it (flush_rail_cache).
+	 *
+	 * @return array{store:array{count:int,average:float},products:array{count:int,average:float,verified:int}}
+	 */
+	public static function stats(): array {
+		$cached = get_transient( self::STATS_CACHE );
+		if ( is_array( $cached ) && isset( $cached['store']['count'], $cached['products']['count'] ) ) {
+			return $cached;
+		}
+		global $wpdb;
+		$store = $wpdb->get_row(
+			$wpdb->prepare(
+				"SELECT COUNT(*) AS n, AVG(CAST(m.meta_value AS UNSIGNED)) AS avg_rating
+				FROM {$wpdb->posts} p
+				INNER JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s
+				WHERE p.post_type = %s AND p.post_status = 'publish'
+				AND CAST(m.meta_value AS UNSIGNED) BETWEEN 1 AND 5",
+				self::META_RATING,
+				self::CPT
+			),
+			ARRAY_A
+		);
+		$products = $wpdb->get_row(
+			"SELECT COUNT(*) AS n, AVG(CAST(r.meta_value AS UNSIGNED)) AS avg_rating,
+				SUM(CASE WHEN v.meta_value = '1' THEN 1 ELSE 0 END) AS verified
+			FROM {$wpdb->comments} c
+			INNER JOIN {$wpdb->posts} p ON p.ID = c.comment_post_ID AND p.post_type = 'product' AND p.post_status = 'publish'
+			INNER JOIN {$wpdb->commentmeta} r ON r.comment_id = c.comment_ID AND r.meta_key = 'rating'
+			LEFT JOIN {$wpdb->commentmeta} v ON v.comment_id = c.comment_ID AND v.meta_key = 'verified'
+			WHERE c.comment_type = 'review' AND c.comment_approved = '1' AND c.comment_parent = 0
+			AND CAST(r.meta_value AS UNSIGNED) BETWEEN 1 AND 5",
+			ARRAY_A
+		);
+		$stats = array(
+			'store'    => array(
+				'count'   => absint( $store['n'] ?? 0 ),
+				'average' => round( (float) ( $store['avg_rating'] ?? 0 ), 2 ),
+			),
+			'products' => array(
+				'count'    => absint( $products['n'] ?? 0 ),
+				'average'  => round( (float) ( $products['avg_rating'] ?? 0 ), 2 ),
+				'verified' => absint( $products['verified'] ?? 0 ),
+			),
+		);
+		set_transient( self::STATS_CACHE, $stats, 10 * MINUTE_IN_SECONDS );
+		return $stats;
+	}
+
+	/**
+	 * 9.8.0 (TR-01): has this account at least one paid order (processing or
+	 * completed)? The review policy reserves reviews to clients who ordered, and
+	 * the « achat vérifié » tick on a store review rests on this.
+	 */
+	public static function customer_has_paid_order( int $user_id ): bool {
+		if ( $user_id <= 0 || ! function_exists( 'wc_get_orders' ) || ! function_exists( 'wc_get_is_paid_statuses' ) ) {
+			return false;
+		}
+		$ids = wc_get_orders(
+			array(
+				'customer_id' => $user_id,
+				'status'      => wc_get_is_paid_statuses(),
+				'limit'       => 1,
+				'return'      => 'ids',
+			)
+		);
+		return ! empty( $ids );
 	}
 
 	/** Woo review approved/unapproved or edited → refresh rail + purge homepage. */
@@ -685,6 +769,13 @@ final class Delicat_Builder_V9_Reviews {
 		/* 9.4.3: five reviews an hour per customer at most (each one emails the moderators). */
 		if ( class_exists( 'Delicat_Builder_V9_Security', false ) && ! Delicat_Builder_V9_Security::rate_limit_allowed( 'review_submit', 5, 3600 ) ) {
 			wp_send_json_error( array( 'message' => __( 'Beaucoup d’avis en peu de temps. Réessaie un peu plus tard.', 'delicat-builder-v9' ) ), 429 );
+		}
+
+		/* 9.8.0 (TR-01): « Seuls les clients ayant passé une commande » (Politique
+		 * des avis clients, section 1) — now enforced, so every review counted on
+		 * the site comes from an account with a paid order. */
+		if ( ! self::customer_has_paid_order( $user_id ) ) {
+			wp_send_json_error( array( 'message' => __( 'Les avis sont réservés aux clients qui ont déjà passé une commande.', 'delicat-builder-v9' ) ), 403 );
 		}
 
 		/* RC63: a review can target one WooCommerce product. It is stored as a

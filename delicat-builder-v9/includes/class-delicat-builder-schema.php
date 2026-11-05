@@ -284,9 +284,11 @@ final class Delicat_Builder_V9_Schema {
 					'card_gap'       => 24,
 					'card_width_d'   => 560,
 					'card_width_m'   => 76,
-					'rating_value'   => '4.8',
-					'rating_count'   => 5,
-					'rating_label'   => 'AVIS VÉRIFIÉS',
+					/* 9.8.0 (TR-01): the rating summary is computed from the published
+					 * reviews (Delicat_Builder_V9_Reviews::stats()); only its visibility
+					 * is a setting. rating_value / rating_count / rating_label are no
+					 * longer shown and stay only so older layouts keep their data. */
+					'show_rating'    => 1,
 					'review_title'   => 'DÉJÀ CLIENT ? LAISSE TON AVIS',
 					'review_text'    => 'Ton retour aide toute la communauté Delicat Store.',
 					'review_button'  => 'LAISSER UN AVIS',
@@ -294,7 +296,8 @@ final class Delicat_Builder_V9_Schema {
 					'google_review_url' => '',
 					'google_button'  => 'Noter sur Google',
 					'link_products'  => 1,
-					'items'          => "Recharge Free Fire reçue en moins de 2 minutes. Service rapide et sérieux, je commande chaque semaine.|JEAN-MARC|PORT-AU-PRINCE|5\nMon abonnement a été livré très rapidement et le support m’a répondu sur WhatsApp.|MIKAËLL|CAP-HAÏTIEN|5",
+					/* 9.8.0 (TR-01): no invented sample testimonials; real reviews fill the rail. */
+					'items'          => '',
 				);
 				break;
 
@@ -764,6 +767,7 @@ final class Delicat_Builder_V9_Schema {
 					'card_gap'       => self::clamp_int( $content['card_gap'] ?? 24, 0, 48 ),
 					'card_width_d'   => self::clamp_int( $content['card_width_d'] ?? 560, 280, 760 ),
 					'card_width_m'   => self::clamp_int( $content['card_width_m'] ?? 76, 68, 92 ),
+					'show_rating'    => isset( $content['show_rating'] ) ? self::truthy( $content['show_rating'] ) : '' !== (string) ( $content['rating_value'] ?? '4.8' ),
 					'rating_value'   => self::plain( $content['rating_value'] ?? '4.8', 8 ),
 					'rating_count'   => self::clamp_int( $content['rating_count'] ?? 5, 0, 100000 ),
 					'rating_label'   => self::plain( $content['rating_label'] ?? 'AVIS VÉRIFIÉS', 80 ),

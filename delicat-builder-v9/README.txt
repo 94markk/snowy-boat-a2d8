@@ -1,3 +1,25 @@
+9.8.0 — Avis clients : des chiffres réels et vérifiables (plan de confiance, TR-01)
+(1) Page d’accueil, bloc « Ils nous font confiance » : la note et le nombre d’avis sont maintenant calculés à partir
+des avis publiés, et ne peuvent plus être tapés à la main. Avant, la note (4.8) était saisie dans le Builder et le
+nombre affiché additionnait un chiffre saisi à la main et le vrai nombre d’avis ; c’est pourquoi l’accueil pouvait
+annoncer « 300 avis vérifiés » quand la page « Politique des avis clients » parlait de 81.
+(2) Les avis sur la boutique (menu « Avis clients ») et les avis sur les produits (Produits → Avis) sont comptés à
+part, chacun avec sa propre moyenne, notes basses comprises. Les étoiles se remplissent selon la vraie moyenne
+(4,6 n’affiche plus cinq étoiles pleines). Un lien « Comment nous traitons les avis » mène à la politique des avis.
+(3) La coche verte sur une carte d’avis veut dire « Achat vérifié » : elle n’apparaît plus que sur les avis d’un
+client qui a une commande payée (ou d’un acheteur du produit, pour un avis produit). Les phrases tapées dans le
+Builder s’affichent sans coche. Les deux exemples livrés avec l’extension (« Recharge Free Fire reçue en moins de
+2 minutes… » de JEAN-MARC, « Mon abonnement a été livré… » de MIKAËLL) n’étaient pas de vrais avis : ils ne
+s’affichent plus.
+(4) Comme l’annonce la politique des avis (section 1), seul un client qui a déjà une commande payée peut envoyer un
+avis depuis la fenêtre « Laisser un avis ». Un ancien avis produit sans note n’est plus montré avec cinq étoiles.
+(5) « Politique des avis clients » : les chiffres « 4,8 sur 81 avis » écrits dans le texte sont retirés (ils ne
+pouvaient que devenir faux) et la section 5 précise que boutique et produits sont comptés séparément. La page est
+mise à jour automatiquement si elle n’a pas été modifiée à la main ; si vous l’avez modifiée, elle reste telle quelle
+et il faut retirer ces deux chiffres vous-même.
+(6) Delicat Builder → Homepage Studio → « 3. Layout health & repair » : nouvelle ligne « Avis affichés sur l’accueil » avec les chiffres
+exacts (nombre, moyenne, achats vérifiés) pour les comparer aux listes d’avis.
+
 9.7.9 — Nouvelles cartes « Avec Délicat vous pouvez ! »
 (1) Le bandeau en cartes de la page d’accueil a trois nouveaux styles, au choix dans le Builder (section Bannière →
 Style des cartes) : « Nuit » (cartes en dégradé profond de leur couleur, grand pictogramme en filigrane, bouton blanc

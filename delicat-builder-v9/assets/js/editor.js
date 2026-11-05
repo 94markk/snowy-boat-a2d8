@@ -320,7 +320,7 @@
 			html += sectionInput('Title color', 'content.title_color', c.title_color || '', 'text', 'maxlength="7"');
 			html += sectionInput('Subtitle color', 'content.subtitle_color', c.subtitle_color || '', 'text', 'maxlength="7"');
 			html += sectionTextarea('Testimonials — quote|name|location|rating|product id or URL (optional), one per line', 'content.items', c.items || '');
-			html += '<p class="description">Approved WooCommerce product reviews (Products → Reviews) and popup reviews are merged in front of these automatically; each links to its product.</p>';
+			html += '<p class="description">Approved WooCommerce product reviews (Products → Reviews) and popup reviews are merged in front of these automatically; each links to its product. Only reviews written by a customer with a paid order carry the « Achat vérifié » tick: lines typed here never do.</p>';
 			html += checkbox('Link cards to the reviewed WooCommerce product', 'content.link_products', c.link_products !== false && c.link_products !== 0);
 			html += '<hr><h3>Cards</h3>';
 			html += sectionInput('Card background', 'content.card_bg', c.card_bg || '#0a0a23', 'text', 'maxlength="7"');
@@ -332,10 +332,9 @@
 			html += sectionInput('Card gap', 'content.card_gap', c.card_gap ?? 24, 'number', 'min="0" max="48"');
 			html += sectionInput('Card width desktop px', 'content.card_width_d', c.card_width_d ?? 560, 'number', 'min="280" max="760"');
 			html += sectionInput('Card width mobile vw', 'content.card_width_m', c.card_width_m ?? 76, 'number', 'min="68" max="92"');
-			html += '<hr><h3>Verified rating</h3>';
-			html += sectionInput('Rating value', 'content.rating_value', c.rating_value || '4.8', 'text', 'maxlength="8"');
-			html += sectionInput('Verified review count', 'content.rating_count', c.rating_count ?? 5, 'number', 'min="0" max="100000"');
-			html += sectionInput('Rating label', 'content.rating_label', c.rating_label || 'AVIS VÉRIFIÉS');
+			html += '<hr><h3>Rating summary</h3>';
+			html += checkbox('Show the rating summary', 'content.show_rating', c.show_rating !== undefined ? (c.show_rating !== false && c.show_rating !== 0 && c.show_rating !== '0') : (c.rating_value === undefined || c.rating_value !== ''));
+			html += '<p class="description">The average and the number of reviews are computed from the published reviews: store reviews (Avis clients) and product reviews (Products → Reviews) are counted separately, low ratings included. They cannot be typed. Nothing shows until a review is published.</p>';
 			html += '<hr><h3>Review CTA</h3>';
 			html += sectionInput('CTA title', 'content.review_title', c.review_title || '');
 			html += sectionInput('CTA text', 'content.review_text', c.review_text || '');

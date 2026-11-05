@@ -1009,12 +1009,28 @@ private static function how_it_works( array $content ): string {
 	return $out;
 }
 
+/**
+ * 9.8.0 (TR-01): the two sample testimonials the plugin used to ship as the
+ * section's default lines. They were written by the plugin, not by customers,
+ * so they are never shown, even on a site that still has them saved.
+ */
+private const SHIPPED_SAMPLE_QUOTES = array(
+	"recharge free fire reçue en moins de 2 minutes. service rapide et sérieux, je commande chaque semaine.",
+	"mon abonnement a été livré très rapidement et le support m'a répondu sur whatsapp.",
+);
+
+private static function is_shipped_sample_quote( string $quote ): bool {
+	$quote = str_replace( array( '’', '‘' ), "'", trim( $quote ) );
+	$quote = function_exists( 'mb_strtolower' ) ? mb_strtolower( $quote, 'UTF-8' ) : strtolower( $quote );
+	return in_array( $quote, self::SHIPPED_SAMPLE_QUOTES, true );
+}
+
 private static function testimonials( array $content ): string {
 	$lines = preg_split( '/\r\n|\r|\n/', (string) ( $content['items'] ?? '' ) );
 	$items = array();
 	foreach ( array_slice( (array) $lines, 0, 10 ) as $line ) {
 		$parts = array_map( 'trim', explode( '|', $line, 5 ) );
-		if ( count( $parts ) < 3 || '' === $parts[0] || '' === $parts[1] ) {
+		if ( count( $parts ) < 3 || '' === $parts[0] || '' === $parts[1] || self::is_shipped_sample_quote( $parts[0] ) ) {
 			continue;
 		}
 		/* RC63: optional 5th field — a WooCommerce product id or a URL — links
@@ -1037,20 +1053,18 @@ private static function testimonials( array $content ): string {
 			'quote'   => sanitize_text_field( $parts[0] ),
 			'name'    => sanitize_text_field( $parts[1] ),
 			'place'   => sanitize_text_field( $parts[2] ),
-			'rating'  => max( 1, min( 5, absint( $parts[3] ?? 5 ) ) ),
-			'product' => sanitize_text_field( $product_name ),
-			'url'     => $product_url,
+			'rating'   => max( 1, min( 5, absint( $parts[3] ?? 5 ) ) ),
+			'product'  => sanitize_text_field( $product_name ),
+			'url'      => $product_url,
+			/* 9.8.0 (TR-01): a line typed in the Builder is not a verified purchase. */
+			'verified' => false,
 		);
 	}
 	$link_products = ! isset( $content['link_products'] ) || ! empty( $content['link_products'] );
 	/* RC51.28/RC51.30: real reviews (popup submissions + approved WooCommerce
 	   product reviews) lead the rail, seeded items follow. */
-	$approved_count = 0;
 	if ( class_exists( 'Delicat_Builder_V9_Reviews', false ) && is_callable( array( 'Delicat_Builder_V9_Reviews', 'merge_items' ) ) ) {
-		$items          = Delicat_Builder_V9_Reviews::merge_items( $items );
-		$approved_count = is_callable( array( 'Delicat_Builder_V9_Reviews', 'total_verified_count' ) )
-			? Delicat_Builder_V9_Reviews::total_verified_count()
-			: Delicat_Builder_V9_Reviews::published_count();
+		$items = Delicat_Builder_V9_Reviews::merge_items( $items );
 	}
 	/* 9.3.7: seen from the app, a card about a hidden product or category (a review of
 	 * « USDT TRC20 », a seeded line linking /product-category/exchange/) goes; the rail
@@ -1078,16 +1092,7 @@ private static function testimonials( array $content ): string {
 	$out = '<div class="delicat-testimonials" style="' . esc_attr( implode( ';', array_filter( $vars ) ) ) . '">';
 	$out .= self::info_heading( $content, 'delicat-testimonials' );
 
-	if ( '' !== (string) ( $content['rating_value'] ?? '' ) ) {
-		$out .= '<div class="delicat-testimonials__rating">';
-		$out .= '<strong>' . esc_html( (string) $content['rating_value'] ) . '</strong>';
-		$out .= '<span class="delicat-testimonials__rating-stars" aria-hidden="true">★★★★★</span>';
-		$rating_count = absint( $content['rating_count'] ?? 0 ) + $approved_count;
-		if ( $rating_count > 0 || ! empty( $content['rating_label'] ) ) {
-			$out .= '<span class="delicat-testimonials__rating-label">' . esc_html( trim( $rating_count . ' ' . (string) ( $content['rating_label'] ?? '' ) ) ) . '</span>';
-		}
-		$out .= '</div>';
-	}
+	$out .= self::testimonials_rating( $content );
 
 	/* RC71: two auto-scrolling rows — top drifts right, bottom drifts left.
 	 * The initial HTML carries each review only once. core.js clones the row
@@ -1133,7 +1138,14 @@ private static function testimonials( array $content ): string {
 				$html .= '<a class="delicat-testimonials__mproduct" href="' . esc_url( $url ) . '" data-delicat-prefetch' . ( $hidden ? ' tabindex="-1"' : '' ) . '>' . esc_html( '' !== $product ? $product : __( 'Voir le produit', 'delicat-builder-v9' ) ) . '</a>';
 			}
 		}
-		$html .= '</span><svg class="delicat-testimonials__mcheck" width="18" height="18" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10.4l2.6 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></footer></article>';
+		$html .= '</span>';
+		/* 9.8.0 (TR-01): the tick means « achat vérifié » and only marks reviews
+		 * whose author bought (Politique des avis clients, section 1). */
+		if ( ! empty( $item['verified'] ) ) {
+			$label = __( 'Achat vérifié', 'delicat-builder-v9' );
+			$html .= '<svg class="delicat-testimonials__mcheck" width="18" height="18" viewBox="0 0 20 20" role="img" aria-label="' . esc_attr( $label ) . '"><title>' . esc_html( $label ) . '</title><circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 10.4l2.6 2.6L14 7.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+		}
+		$html .= '</footer></article>';
 		return $html;
 	};
 	/* 9.3.1: the rows loop on phones too; `false` here brings back the manual
@@ -1175,6 +1187,62 @@ private static function testimonials( array $content ): string {
 
 	$out .= '</div>';
 	return $out;
+}
+
+/**
+ * 9.8.0 (TR-01): the rating summary above the reviews, computed from the
+ * published reviews only (Delicat_Builder_V9_Reviews::stats()). Store reviews
+ * and product reviews are shown apart, each with its own average; nothing is
+ * typed by hand. No published review, no summary.
+ */
+private static function testimonials_rating( array $content ): string {
+	$show = isset( $content['show_rating'] ) ? ! empty( $content['show_rating'] ) : '' !== (string) ( $content['rating_value'] ?? '4.8' );
+	if ( ! $show || ! class_exists( 'Delicat_Builder_V9_Reviews', false ) || ! is_callable( array( 'Delicat_Builder_V9_Reviews', 'stats' ) ) ) {
+		return '';
+	}
+	$stats    = Delicat_Builder_V9_Reviews::stats();
+	$store    = $stats['store'];
+	$products = $stats['products'];
+	$verified = $products['verified'] > 0
+		/* translators: %s: number of product reviews written by buyers of the product. */
+		? sprintf( _n( 'dont %s achat vérifié', 'dont %s achats vérifiés', $products['verified'], 'delicat-builder-v9' ), number_format_i18n( $products['verified'] ) )
+		: '';
+	if ( $store['count'] > 0 ) {
+		$average = $store['average'];
+		/* translators: %s: number of reviews of the store. */
+		$label = sprintf( __( '%s avis sur la boutique', 'delicat-builder-v9' ), number_format_i18n( $store['count'] ) );
+		$note  = '';
+		if ( $products['count'] > 0 ) {
+			/* translators: 1: average rating, 2: number of product reviews. */
+			$note = sprintf( __( 'Avis sur nos produits : %1$s/5 sur %2$s avis', 'delicat-builder-v9' ), number_format_i18n( $products['average'], 1 ), number_format_i18n( $products['count'] ) )
+				. ( '' !== $verified ? ', ' . $verified : '' ) . '.';
+		}
+	} elseif ( $products['count'] > 0 ) {
+		$average = $products['average'];
+		/* translators: %s: number of product reviews. */
+		$label = sprintf( __( '%s avis sur nos produits', 'delicat-builder-v9' ), number_format_i18n( $products['count'] ) );
+		$note  = '' !== $verified ? ucfirst( $verified ) . '.' : '';
+	} else {
+		return '';
+	}
+	$shown  = number_format_i18n( $average, 1 );
+	$policy = class_exists( 'Delicat_Builder_V9_Legal', false ) && Delicat_Builder_V9_Legal::page_id( 'reviews' ) > 0 ? (string) Delicat_Builder_V9_Legal::url( 'reviews' ) : '';
+	$fill   = max( 0, min( 100, round( $average / 5 * 100, 1 ) ) );
+
+	$out  = '<div class="delicat-testimonials__rating">';
+	$out .= '<strong aria-hidden="true">' . esc_html( $shown ) . '</strong>';
+	/* translators: %s: average rating such as 4,8. */
+	$out .= '<span class="delicat-testimonials__rating-stars" role="img" aria-label="' . esc_attr( sprintf( __( 'Note moyenne : %s sur 5', 'delicat-builder-v9' ), $shown ) ) . '" style="--dbv9-rating-fill:' . esc_attr( (string) $fill ) . '%">';
+	$out .= '<span aria-hidden="true">★★★★★</span><span class="delicat-testimonials__rating-fill" aria-hidden="true">★★★★★</span></span>';
+	$out .= '<span class="delicat-testimonials__rating-label">' . esc_html( $label ) . '</span>';
+	if ( '' !== $note || '' !== $policy ) {
+		$out .= '<p class="delicat-testimonials__rating-note">' . esc_html( $note );
+		if ( '' !== $policy ) {
+			$out .= ( '' !== $note ? ' ' : '' ) . '<a href="' . esc_url( $policy ) . '" data-delicat-prefetch>' . esc_html__( 'Comment nous traitons les avis', 'delicat-builder-v9' ) . '</a>';
+		}
+		$out .= '</p>';
+	}
+	return $out . '</div>';
 }
 
 private static function faq( array $content ): string {
