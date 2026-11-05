@@ -1,3 +1,17 @@
+9.7.9 — Nouvelles cartes « Avec Délicat vous pouvez ! »
+(1) Le bandeau en cartes de la page d’accueil a trois nouveaux styles, au choix dans le Builder (section Bannière →
+Style des cartes) : « Nuit » (cartes en dégradé profond de leur couleur, grand pictogramme en filigrane, bouton blanc
+avec une flèche), « Épuré » (carte blanche, pastille de couleur avec l’icône, bouton pleine largeur) et « Vitrine »
+(bandeau illustré ou photo de la carte en haut, icône posée sur le bord). Les trois suivent le mode clair et le mode
+sombre du site.
+(2) Les cartes Android et WhatsApp sont reconnues toutes seules (par le lien ou le titre) : icône Android en bleu
+Délicat, logo WhatsApp en vert. Pour une autre carte, une icône peut être choisie (« Carte 1 — icône », ou 7e
+colonne des lignes « Autres cartes », par exemple redeem, bolt, sports-esports ; « none » pour aucune).
+(3) Une couleur de carte claire (jaune, par exemple) garde un texte de bouton lisible (texte foncé au lieu de blanc).
+(4) Un bouton laissé avec le texte « button » ou « bouton » affiche « Rejoindre » (WhatsApp), « Télécharger »
+(Android) ou « Découvrir ». Les liens vers un autre site (WhatsApp, Play Store) s’ouvrent dans un nouvel onglet.
+(5) L’ancien style « teinté » s’affiche désormais en « Nuit » ; rien à refaire dans les réglages.
+
 9.7.8 — Sécurité des paiements, boutique plus légère sur téléphone, référencement Google
 (1) Paiement : un client dont le paiement avait réussi mais dont la page s’était arrêtée juste après (envoi d’e-mail,
 livraison) restait bloqué sur « Un paiement est déjà en cours » à chaque commande, jusqu’à ce qu’un administrateur

@@ -1,21 +1,21 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-05T12:21:29.678Z",
- "version": "9.7.8",
- "bytes": 7017828,
+ "built": "2026-11-05T17:08:48.076Z",
+ "version": "9.7.9",
+ "bytes": 7045265,
  "count": 301,
  "files": {
   "README.txt": {
-   "bytes": 90160,
-   "sha256": "9f797f9054ec657b372ce478db3fbd0550229bf39d5f5cd4e9554d933699f23b"
+   "bytes": 91536,
+   "sha256": "c93addcbab60a5eb9f238c9bd4770ec2a25342cd413c7d9aeafa4f1c3d48d0d3"
   },
   "asset-versions.php": {
    "bytes": 6736,
-   "sha256": "850f6207e73bc7b6feba80a6c992a6af924c54af9407258699171f6d593afd69"
+   "sha256": "85a018e45ca7894217a8bbdc9352f495ab6f8f46c85f02bf888b5581346b4fcf"
   },
   "assets/components/banner.css": {
-   "bytes": 5514,
-   "sha256": "2faf23d8f3aca00c755dcf4e2e613097f72152c1ec933f34dc55f6b60e6f24bd"
+   "bytes": 12611,
+   "sha256": "7431e5a4018bb5b35586c7ac29da3ebd310b7b39c3210a72dcb31503356b0df4"
   },
   "assets/components/base.css": {
    "bytes": 29278,
@@ -309,17 +309,17 @@
    "bytes": 407,
    "sha256": "700b18d63d380bee4c7764d7e39b465c1e6becba06e94dc2bcd6f4e21ab1b22b"
   },
-  "assets/dist/builder-design.3f8251683019.css": {
-   "bytes": 230801,
-   "sha256": "3f825168301939d601ca80d0d82226e01eb4ef7bd8eea32bdeae5814dd1efefd"
+  "assets/dist/builder-design.4d618c197a2e.css": {
+   "bytes": 236690,
+   "sha256": "4d618c197a2e147ab19ef1cb97f03f95f2c52a24059f9b66945e6e98752ab115"
   },
   "assets/dist/builder-lite-design.4fc515867ab2.css": {
    "bytes": 48261,
    "sha256": "4fc515867ab2e158cda38109474ed554766671600bb1828586551167ff800118"
   },
-  "assets/dist/builder.10d8b769438a.css": {
-   "bytes": 213617,
-   "sha256": "10d8b769438a27f3b2271b36c405ba4749d5c2ce39b363ced5ed5ce16585bf4a"
+  "assets/dist/builder.ffef9bc2569f.css": {
+   "bytes": 219506,
+   "sha256": "ffef9bc2569f36066acfbf257a348858fbc1446a4f6ab245d71293fbec3c0599"
   },
   "assets/dist/chrome.bd4a4ceec8e4.css": {
    "bytes": 169650,
@@ -391,7 +391,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9789,
-   "sha256": "cb78f7a3a029822e04534749336e65bb7dfb46939c1efbb80585acff5af57865"
+   "sha256": "5930ba6249a5f76d2715da55d9943c79f31e14cb33135f6ff1423c17d899efcd"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -510,8 +510,8 @@
    "sha256": "1498b2a4d44704cb65d3336c0448ae1229f3346db2522e36810b989352abc840"
   },
   "assets/js/editor.js": {
-   "bytes": 50131,
-   "sha256": "59f5f01041a38700ba55efb6086a19a4155dba32242bf7a53e693213d600b585"
+   "bytes": 50391,
+   "sha256": "1ccc610671e5199acfcef38e1781e3ac55f3f4d97e8d28a22bd13778cd9d2f92"
   },
   "assets/js/express-checkout.js": {
    "bytes": 30673,
@@ -643,7 +643,7 @@
   },
   "delicat-builder-v9.php": {
    "bytes": 119828,
-   "sha256": "b6130e90befd2b485c6bbcfc5866baaf7945a0831d8ce5d1df7fec2594f3810e"
+   "sha256": "5f459c79e99a21405469aac21434448bc2828b1851d3772fd104f181bb3be826"
   },
   "includes/class-delicat-builder-admin.php": {
    "bytes": 23272,
@@ -902,8 +902,8 @@
    "sha256": "8d5b0ff9b8c8e2dc3899bcd5f3a24b15a9475c9c3ea88ff66af634857fa9c31c"
   },
   "includes/class-delicat-builder-renderer.php": {
-   "bytes": 102362,
-   "sha256": "e254b757c9325f39015bccc020be8e3e6c8bce7a335d5dc64a6b129613aaf8e2"
+   "bytes": 108554,
+   "sha256": "64b5caada6dff8b6703c8de35bd6272fc87b1de7503e3d26ce85c2dfafa73c2e"
   },
   "includes/class-delicat-builder-reviews-kernel.php": {
    "bytes": 2178,
@@ -918,8 +918,8 @@
    "sha256": "c1bbe8c145370087e38b4734dd32553c05e67289f44918c004b0fb399bb8594a"
   },
   "includes/class-delicat-builder-schema.php": {
-   "bytes": 55250,
-   "sha256": "d1c0c788242bb9010caac4fd2cc8197c26263fb8a2278a3051262b1e73d7b9ab"
+   "bytes": 55475,
+   "sha256": "f439d973eb84a121f7e6eac096ef64d7fccf301b7dcea967d017faa8bb74f6e1"
   },
   "includes/class-delicat-builder-security-admin.php": {
    "bytes": 10652,
@@ -1022,8 +1022,8 @@
    "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
   },
   "includes/lib/icons-material.php": {
-   "bytes": 40592,
-   "sha256": "335ea211c1b6ca460d0ca09589c5fe855e672c9f75b63f2428b624a1bfdcddfc"
+   "bytes": 41101,
+   "sha256": "15c8d0ab95aad780cb5ccf947fd619ff004b99506edd1a7fce28d09d35a8bf08"
   },
   "modules/product-fields/assets/css/calc.css": {
    "bytes": 58955,

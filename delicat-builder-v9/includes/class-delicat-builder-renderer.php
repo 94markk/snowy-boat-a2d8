@@ -494,16 +494,20 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 	 * button), the pattern of the finance apps shoppers already know. The
 	 * original single banner is the first card, so existing layouts keep
 	 * their content; more cards come from the "items" lines.
+	 *
+	 * 9.7.9: three looks. "dark" (Nuit) draws each card as a deep gradient
+	 * of its colour with a large faded glyph; "light" (Épuré) is a white
+	 * card with a coloured icon tile and a full-width button; "vitrine"
+	 * opens each card with an illustrated band (or its picture) and the icon
+	 * over its edge. The old tinted style shows as Nuit. Android and
+	 * WhatsApp cards get their own glyph and colours without any setting.
 	 */
 	private static function banner( array $content ): string {
 		$cards = self::banner_cards( $content );
 		if ( ! $cards ) {
 			return '';
 		}
-		$style = sanitize_key( (string) ( $content['card_style'] ?? 'light' ) );
-		if ( ! in_array( $style, array( 'light', 'dark', 'tint' ), true ) ) {
-			$style = 'light';
-		}
+		$style   = self::banner_style( $content['card_style'] ?? 'light' );
 		$many    = count( $cards ) > 1;
 		$heading = (string) ( $content['heading'] ?? '' );
 		$out     = '<div class="delicat-banner-rail delicat-banner-rail--' . esc_attr( $style ) . ( $many ? ' has-many' : ' is-single' ) . '" data-dbv9-banner-rail>';
@@ -513,26 +517,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 		}
 		$out .= '<div class="delicat-banner-rail__track" role="list" data-dbv9-banner-track>';
 		foreach ( $cards as $card ) {
-			$image = $card['image_id'] ? Delicat_Builder_V9_Media::image( $card['image_id'], 'large', 'delicat-banner-card__image', false, '(max-width:640px) 82vw, 340px' ) : '';
-			$out  .= '<article class="delicat-banner-card' . ( $image ? ' has-media' : '' ) . '" role="listitem"' . ( '' !== $card['color'] ? ' style="--dbc-accent:' . esc_attr( $card['color'] ) . '"' : '' ) . '>';
-			if ( $image ) {
-				$out .= '<div class="delicat-banner-card__media">' . $image . '</div>';
-			}
-			$out .= '<div class="delicat-banner-card__copy">';
-			if ( '' !== $card['title'] ) {
-				$out .= '<h3 class="delicat-banner-card__title">' . apply_filters( 'delicat_builder_v9_section_text', esc_html( $card['title'] ) ) . '</h3>';
-			}
-			if ( '' !== $card['text'] ) {
-				$out .= $card['rich']
-					? '<div class="delicat-banner-card__text">' . wp_kses_post( wpautop( $card['text'] ) ) . '</div>'
-					: '<p class="delicat-banner-card__text">' . esc_html( $card['text'] ) . '</p>';
-			}
-			if ( '' !== $card['url'] ) {
-				$out .= '' !== $card['button']
-					? '<a class="delicat-banner-card__button" href="' . esc_url( $card['url'] ) . '" data-delicat-prefetch>' . esc_html( $card['button'] ) . '</a>'
-					: '<a class="delicat-banner-card__link" href="' . esc_url( $card['url'] ) . '" aria-label="' . esc_attr( $card['title'] ) . '" data-delicat-prefetch></a>';
-			}
-			$out .= '</div></article>';
+			$out .= self::banner_card( $card, $style );
 		}
 		$out .= '</div>';
 		if ( $many && ! empty( $content['show_dots'] ) ) {
@@ -541,7 +526,133 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 		return $out . '</div>';
 	}
 
-	/** The cards of a banner: the original fields first, then one "Titre|Texte|Bouton|URL|#couleur|image id" line per card, eight at most. */
+	/** 9.7.9: light = Épuré, dark = Nuit, vitrine = Vitrine; the retired tinted style shows as Nuit. */
+	private static function banner_style( $value ): string {
+		$style = sanitize_key( (string) $value );
+		if ( 'tint' === $style ) {
+			return 'dark';
+		}
+		return in_array( $style, array( 'light', 'dark', 'vitrine' ), true ) ? $style : 'light';
+	}
+
+	/** One card of the rail (9.7.9 markup: kind class, icon, decoration, button with an arrow). */
+	private static function banner_card( array $card, string $style ): string {
+		$kind  = self::banner_kind( $card );
+		$name  = self::banner_icon_name( (string) $card['icon'], $kind );
+		$icon  = '' !== $name ? self::banner_glyph( $name, 28, 'delicat-banner-card__glyph' ) : '';
+		$deco  = '' !== $icon ? self::banner_glyph( $name, 48, 'delicat-banner-card__deco' ) : '';
+		$image = $card['image_id'] ? Delicat_Builder_V9_Media::image( $card['image_id'], 'large', 'delicat-banner-card__image', false, '(max-width:640px) 82vw, 340px' ) : '';
+		$class = 'delicat-banner-card delicat-banner-card--' . $kind . ( $image ? ' has-media' : '' ) . ( '' !== $icon ? ' has-icon' : '' );
+		$vars  = '';
+		if ( '' !== $card['color'] ) {
+			$light  = self::banner_is_light( $card['color'] );
+			$class .= ' has-color' . ( $light ? ' has-light-color' : '' );
+			$vars   = '--dbc-accent:' . $card['color'] . ';--dbc-on-accent:' . ( $light ? '#0B1033' : '#FFFFFF' );
+		}
+		$out = '<article class="' . esc_attr( $class ) . '" role="listitem"' . ( '' !== $vars ? ' style="' . esc_attr( $vars ) . '"' : '' ) . '>';
+		if ( 'vitrine' === $style ) {
+			$out .= '<div class="delicat-banner-card__art' . ( $image ? ' has-image' : '' ) . '">' . ( $image ? $image : $deco ) . '</div>';
+		} else {
+			if ( $image ) {
+				$out .= '<div class="delicat-banner-card__media">' . $image . '</div>';
+			}
+			if ( 'dark' === $style ) {
+				$out .= $deco;
+			}
+		}
+		$out .= '<div class="delicat-banner-card__copy">';
+		if ( '' !== $icon ) {
+			$go   = 'light' === $style && '' !== $card['url'] ? Delicat_Builder_V9_Design_System::icon( 'arrow-outward', 18 ) : '';
+			$out .= '<div class="delicat-banner-card__top"><span class="delicat-banner-card__icon">' . $icon . '</span>' . ( '' !== $go ? '<span class="delicat-banner-card__go">' . $go . '</span>' : '' ) . '</div>';
+		}
+		if ( '' !== $card['title'] ) {
+			$out .= '<h3 class="delicat-banner-card__title">' . apply_filters( 'delicat_builder_v9_section_text', esc_html( $card['title'] ) ) . '</h3>';
+		}
+		if ( '' !== $card['text'] ) {
+			$out .= $card['rich']
+				? '<div class="delicat-banner-card__text">' . wp_kses_post( wpautop( $card['text'] ) ) . '</div>'
+				: '<p class="delicat-banner-card__text">' . esc_html( $card['text'] ) . '</p>';
+		}
+		if ( '' !== $card['url'] ) {
+			$away = self::banner_is_external( $card['url'] ) ? ' target="_blank" rel="noopener noreferrer"' : ' data-delicat-prefetch';
+			$out .= '' !== $card['button']
+				? '<a class="delicat-banner-card__button" href="' . esc_url( $card['url'] ) . '"' . $away . '><span>' . esc_html( self::banner_label( $card['button'], $kind ) ) . '</span>' . Delicat_Builder_V9_Design_System::icon( 'arrow-forward', 18, array( 'class' => 'delicat-banner-card__arrow' ) ) . '</a>'
+				: '<a class="delicat-banner-card__link" href="' . esc_url( $card['url'] ) . '" aria-label="' . esc_attr( $card['title'] ) . '"' . $away . '></a>';
+		}
+		return $out . '</div></article>';
+	}
+
+	/** whatsapp, android or default, from the link first, then the title (or an explicit whatsapp/android icon). */
+	private static function banner_kind( array $card ): string {
+		$icon = str_replace( '_', '-', sanitize_key( (string) $card['icon'] ) );
+		if ( in_array( $icon, array( 'whatsapp', 'android' ), true ) ) {
+			return $icon;
+		}
+		$url   = strtolower( (string) $card['url'] );
+		$host  = (string) wp_parse_url( $url, PHP_URL_HOST );
+		$title = strtolower( remove_accents( (string) $card['title'] ) );
+		if ( preg_match( '/(^|\.)(wa\.me|whatsapp\.com)$/', $host ) || false !== strpos( $title, 'whatsapp' ) ) {
+			return 'whatsapp';
+		}
+		if ( 'play.google.com' === $host || preg_match( '/\.apk(\?|#|$)/', $url ) || false !== strpos( $title, 'android' ) ) {
+			return 'android';
+		}
+		return 'default';
+	}
+
+	/** The icon to show: empty or "auto" follows the kind, "none" hides it, any other name must be a shipped icon. */
+	private static function banner_icon_name( string $choice, string $kind ): string {
+		$choice = str_replace( '_', '-', sanitize_key( $choice ) );
+		if ( '' === $choice || 'auto' === $choice ) {
+			return 'default' === $kind ? '' : $kind;
+		}
+		return 'none' === $choice ? '' : $choice;
+	}
+
+	/** Brand glyphs the Material set does not carry (static markup, viewBox 0 0 24 24). */
+	private const BANNER_GLYPHS = array(
+		'whatsapp' => '<path d="M12.04 2a9.9 9.9 0 0 0-8.5 15l-1.4 5 5.1-1.3A9.9 9.9 0 1 0 12.04 2Zm0 18.1c-1.5 0-3-.4-4.3-1.2l-.3-.2-3 .8.8-2.9-.2-.3a8.2 8.2 0 1 1 7 3.8Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8-.2-.1-.4-.1-.6.1l-.8 1c-.1.2-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.2-.4.7-1.4.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.7 11.8 11.8 0 0 0 4.5 4c1.7.7 2.3.8 3.2.7.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.2-1.2-.1-.1-.3-.2-.5-.3Z"/>',
+	);
+
+	private static function banner_glyph( string $name, int $size, string $class ): string {
+		if ( isset( self::BANNER_GLYPHS[ $name ] ) ) {
+			return '<svg class="ds-icon ' . esc_attr( $class ) . '" width="' . $size . '" height="' . $size . '" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">' . self::BANNER_GLYPHS[ $name ] . '</svg>';
+		}
+		return Delicat_Builder_V9_Design_System::icon( $name, $size, array( 'class' => $class ) );
+	}
+
+	/** A label left as a placeholder ("button") reads as a fitting verb instead. */
+	private static function banner_label( string $label, string $kind ): string {
+		if ( ! in_array( strtolower( trim( $label ) ), array( 'button', 'bouton', 'btn' ), true ) ) {
+			return $label;
+		}
+		if ( 'whatsapp' === $kind ) {
+			return __( 'Rejoindre', 'delicat-builder-v9' );
+		}
+		return 'android' === $kind ? __( 'Télécharger', 'delicat-builder-v9' ) : __( 'Découvrir', 'delicat-builder-v9' );
+	}
+
+	/** True for a colour that white text would not read on (WCAG relative luminance above 0.18). */
+	private static function banner_is_light( string $hex ): bool {
+		$hex = ltrim( $hex, '#' );
+		if ( strlen( $hex ) < 6 ) {
+			$hex = $hex[0] . $hex[0] . $hex[1] . $hex[1] . $hex[2] . $hex[2];
+		}
+		$lum = 0.0;
+		foreach ( array( 0.2126, 0.7152, 0.0722 ) as $i => $weight ) {
+			$c    = hexdec( substr( $hex, $i * 2, 2 ) ) / 255;
+			$lum += $weight * ( $c <= 0.03928 ? $c / 12.92 : ( ( $c + 0.055 ) / 1.055 ) ** 2.4 );
+		}
+		return $lum > 0.18;
+	}
+
+	/** Links to another site open in a new tab (WhatsApp, Play Store); the store's own pages stay in the app. */
+	private static function banner_is_external( string $url ): bool {
+		$host = strtolower( (string) wp_parse_url( $url, PHP_URL_HOST ) );
+		return '' !== $host && strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) !== $host;
+	}
+
+	/** The cards of a banner: the original fields first, then one "Titre|Texte|Bouton|URL|#couleur|image id|icône" line per card, eight at most. */
 	private static function banner_cards( array $content ): array {
 		$cards = array();
 		$title = (string) ( $content['title'] ?? '' );
@@ -555,6 +666,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 				'url'      => (string) ( $content['button_url'] ?? '' ),
 				'color'    => '',
 				'image_id' => absint( $content['image_id'] ?? 0 ),
+				'icon'     => (string) ( $content['icon'] ?? '' ),
 			);
 		}
 		foreach ( (array) preg_split( '/\r\n|\r|\n/', (string) ( $content['items'] ?? '' ) ) as $line ) {
@@ -571,6 +683,7 @@ public static function runtime_failure( string $stage, Throwable $error, array $
 				'url'      => '' !== (string) ( $parts[3] ?? '' ) ? (string) esc_url_raw( (string) $parts[3], array( 'http', 'https' ) ) : '',
 				'color'    => preg_match( '/^#[0-9a-fA-F]{3,8}$/', (string) ( $parts[4] ?? '' ) ) ? (string) $parts[4] : '',
 				'image_id' => absint( $parts[5] ?? 0 ),
+				'icon'     => (string) ( $parts[6] ?? '' ),
 			);
 			if ( '' === $card['title'] && '' === $card['text'] ) {
 				continue;

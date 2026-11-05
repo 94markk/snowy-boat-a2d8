@@ -1,42 +1,95 @@
-/* 9.3.3 — the banner is a swipeable rail of cards (a heading, then cards with a title, a line of text, an optional picture and an optional button), the next card peeking on phones, three to a row on wide screens. Scrolling is the browser's own snap scrolling; the engine only moves the dots. */
+/* 9.3.3 — the banner is a swipeable rail of cards (a heading, then cards with a title, a line of text, an optional picture and an optional button), the next card peeking on phones, three to a row on wide screens. Scrolling is the browser's own snap scrolling; the engine only moves the dots.
+ * 9.7.9 — three looks: Nuit (--dark: a deep gradient drawn from the card colour, a large faded glyph), Épuré (--light: a white card, a coloured icon tile, a full-width button) and Vitrine (--vitrine: an illustrated band or the card picture, the icon over its edge). Colours come from the design-system tokens, so light and dark mode follow the site theme. Android and WhatsApp cards carry their own colours; a card colour set in the admin wins. */
 .delicat-banner-rail{--dbc-gap:12px;--dbc-edge:0px;position:relative}
 /* the type layer makes every h2 bold (!important); the rail's heading is light with bold words */
-.delicat-banner-rail h2.delicat-banner-rail__heading{margin:0 0 14px;font-size:clamp(1.15rem,2.4vw,1.5rem);font-weight:500!important;letter-spacing:-.01em;line-height:1.25}
+.delicat-banner-rail h2.delicat-banner-rail__heading{margin:0 0 14px;font-size:clamp(1.2rem,2.4vw,1.5rem);font-weight:500!important;letter-spacing:-.015em;line-height:1.25}
 .delicat-banner-rail h2.delicat-banner-rail__heading strong{font-weight:800!important}
-.delicat-banner-rail__track{display:flex;gap:var(--dbc-gap);margin:0 calc(-1 * var(--dbc-edge));padding:4px var(--dbc-edge) 6px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-inline:var(--dbc-edge);-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.delicat-banner-rail__track{display:flex;gap:var(--dbc-gap);margin:0 calc(-1 * var(--dbc-edge));padding:4px var(--dbc-edge) 18px;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x mandatory;scroll-padding-inline:var(--dbc-edge);-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .delicat-banner-rail__track::-webkit-scrollbar{display:none}
-.delicat-banner-card{position:relative;display:flex;flex:0 0 min(82vw,340px);flex-direction:column;min-height:200px;padding:22px 20px 20px;border:1px solid var(--delicat-border);border-radius:22px;background:var(--delicat-surface);color:var(--delicat-text);box-shadow:var(--delicat-shadow);scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden}
-.delicat-banner-rail.is-single .delicat-banner-card{flex-basis:100%;min-height:0}
-.delicat-banner-card__media{margin:-22px -20px 16px;aspect-ratio:16/9;overflow:hidden;background:rgba(128,128,128,.07)}
+
+/* card colours: the store blue by default, Android and WhatsApp presets, a custom card colour overrides --dbc-accent inline */
+.delicat-banner-card{--dbc-accent:var(--ds-color-primary-fill,#2563EB);--dbc-on-accent:#FFFFFF;--dbc-shade:rgba(0,0,48,.84);--dbc-glow:rgba(147,197,253,.42);--dbc-mark:#FFFFFF;--dbc-tile:linear-gradient(140deg,rgba(255,255,255,.24),rgba(0,0,0,.36)),var(--dbc-accent);--dbc-soft:rgba(37,99,235,.12);--dbc-ink:var(--dbc-accent);--dbc-ink-dark:#93C5FD}
+.delicat-banner-card--android:not(.has-color){--dbc-accent:#2563EB;--dbc-shade:rgba(0,0,79,.94);--dbc-glow:rgba(96,165,250,.55);--dbc-mark:#7CF0B0;--dbc-tile:linear-gradient(140deg,#3B82F6,#00004F);--dbc-soft:rgba(37,99,235,.14);--dbc-ink-dark:#60A5FA}
+.delicat-banner-card--whatsapp:not(.has-color){--dbc-accent:#0E7C66;--dbc-shade:rgba(2,34,28,.9);--dbc-glow:rgba(37,211,102,.42);--dbc-mark:#4BE38A;--dbc-tile:linear-gradient(140deg,#25D366,#075E54);--dbc-soft:rgba(37,211,102,.16);--dbc-ink-dark:#4ADE80}
+@supports(color:color-mix(in srgb,red 10%,transparent)){.delicat-banner-card.has-color{--dbc-soft:color-mix(in srgb,var(--dbc-accent) 16%,transparent)}}
+.delicat-banner-card.has-color{--dbc-ink-dark:var(--dbc-accent)}
+
+/* the card */
+.delicat-banner-card{position:relative;display:flex;flex:0 0 min(82vw,340px);flex-direction:column;padding:20px;border:1px solid var(--ds-color-border,#E2E8F0);border-radius:24px;background:var(--ds-color-surface,#FFFFFF);color:var(--ds-color-text,#111827);box-shadow:0 1px 2px rgba(16,24,40,.04),0 14px 30px -16px rgba(16,24,40,.18);scroll-snap-align:start;scroll-snap-stop:always;overflow:hidden;isolation:isolate}
+.delicat-banner-rail.is-single .delicat-banner-card{flex-basis:100%}
+.delicat-banner-card__media{margin:-20px -20px 16px;aspect-ratio:16/9;overflow:hidden;background:rgba(128,128,128,.07)}
 .delicat-banner-card__image{display:block;width:100%;height:100%;object-fit:cover}
-.delicat-banner-card__copy{display:flex;flex:1;flex-direction:column;gap:8px;min-width:0}
-.delicat-banner-card__title{margin:0;font-size:clamp(1.2rem,2.2vw,1.45rem);font-weight:800;letter-spacing:-.015em;line-height:1.2}
-.delicat-banner-card__text{margin:0 0 10px;color:var(--delicat-muted);font-size:.98rem;line-height:1.55}
+.delicat-banner-card__copy{position:relative;display:flex;flex:1;flex-direction:column;min-width:0}
+.delicat-banner-card__top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.delicat-banner-card__icon{display:grid;flex:0 0 auto;place-items:center;width:48px;height:48px;border-radius:16px}
+.delicat-banner-card__icon svg{display:block;width:28px;height:28px}
+.delicat-banner-card__deco{position:absolute;z-index:-1;pointer-events:none}
+.delicat-banner-rail .delicat-banner-card__title{margin:0 0 8px;color:inherit;font-size:clamp(1.2rem,2.2vw,1.35rem);font-weight:800;letter-spacing:-.02em;line-height:1.22}
+.delicat-banner-card__text{margin:0 0 18px;color:var(--ds-color-text-muted,#5F6B7E);font-size:.94rem;line-height:1.55}
 .delicat-banner-card__text p{margin:0 0 .6em}.delicat-banner-card__text p:last-child{margin-bottom:0}
+.delicat-banner-rail .delicat-banner-card__text a{color:inherit;text-decoration:underline}
 /* a.… : native documents colour every link in main (body.delicat-native-document main a) */
-.delicat-banner-rail a.delicat-banner-card__button{display:inline-flex;align-items:center;justify-content:center;gap:8px;align-self:flex-start;margin-top:auto;min-height:44px;padding:0 20px;border-radius:999px;background:var(--dbc-accent,#111318);color:#fff;font-weight:800;text-decoration:none;transition:transform .16s ease,filter .16s ease}
-.delicat-banner-rail a.delicat-banner-card__button::after{content:"→";font-size:1.05em}
-.delicat-banner-rail a.delicat-banner-card__button:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.delicat-banner-rail a.delicat-banner-card__button{display:inline-flex;align-items:center;justify-content:center;gap:10px;align-self:flex-start;margin-top:auto;min-height:46px;padding:0 20px;border-radius:999px;background:var(--dbc-accent);color:var(--dbc-on-accent);font-size:.95rem;font-weight:700;line-height:1.2;text-decoration:none;-webkit-tap-highlight-color:transparent;transition:transform .16s ease}
+.delicat-banner-rail a.delicat-banner-card__button:hover{transform:translateY(-1px)}
+.delicat-banner-rail a.delicat-banner-card__button:active{transform:scale(.97)}
+.delicat-banner-rail a.delicat-banner-card__button:focus-visible{outline:3px solid var(--ds-color-focus,#2563EB);outline-offset:3px}
+.delicat-banner-card__arrow{flex:0 0 auto}
 .delicat-banner-card__link{position:absolute;inset:0;z-index:1;border-radius:inherit}
-.delicat-banner-rail__dots{display:flex;justify-content:center;gap:6px;margin-top:8px}
-.delicat-banner-rail__dots i{display:block;width:6px;height:6px;border-radius:999px;background:rgba(20,22,28,.16);transition:width .22s ease,background .22s ease}
-.delicat-banner-rail__dots i.is-active{width:18px;background:var(--dbc-accent,var(--ds-color-primary,#2563eb))}
-/* card styles */
-.delicat-banner-rail--dark .delicat-banner-card{border-color:transparent;background:#111318;color:#fff;box-shadow:0 10px 30px rgba(10,12,20,.18)}
-.delicat-banner-rail--dark .delicat-banner-card__text{color:rgba(255,255,255,.72)}
-.delicat-banner-rail--dark a.delicat-banner-card__button{background:#fff;color:#111318}
-.delicat-banner-rail--tint .delicat-banner-card{border-color:transparent;background:#eef0ff;box-shadow:none}
-@supports(background:color-mix(in srgb,red 10%,#fff)){.delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,var(--ds-color-primary,#2563eb)) 12%,#fff)}}
-.delicat-banner-rail--tint a.delicat-banner-card__button{background:var(--dbc-accent,var(--ds-color-primary,#2563eb))}
-/* dark theme */
-html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card{border-color:rgba(255,255,255,.08);background:#121a2c;color:#f3f4fa;box-shadow:none}
-html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card__text{color:rgba(243,244,250,.7)}
-html.dlc-theme-dark .delicat-banner-rail--light a.delicat-banner-card__button{background:var(--dbc-accent,var(--ds-color-primary,#2563eb))}
-html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:#121a2c;color:#f3f4fa}
-@supports(background:color-mix(in srgb,red 10%,#fff)){html.dlc-theme-dark .delicat-banner-rail--tint .delicat-banner-card{background:color-mix(in srgb,var(--dbc-accent,var(--ds-color-primary,#2563eb)) 22%,#121a2c)}}
-html.dlc-theme-dark .delicat-banner-rail__dots i{background:rgba(255,255,255,.18)}
+.delicat-banner-card__link:focus-visible{outline:3px solid var(--ds-color-focus,#2563EB);outline-offset:-3px}
+
+/* Nuit: the card is a deep gradient of its colour */
+/* the glow sits on its own layer: the engine's dark-mode pass reads the first colour of a card's background as the
+   colour behind its text, and that must be the deep shade, never the glow */
+.delicat-banner-rail--dark .delicat-banner-card{border-color:transparent;background:linear-gradient(140deg,var(--dbc-shade),transparent 78%),var(--dbc-accent);color:#FFFFFF;box-shadow:0 18px 34px -20px rgba(0,0,48,.6)}
+.delicat-banner-rail--dark .delicat-banner-card::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(120% 80% at 100% 0%,var(--dbc-glow),transparent 60%);pointer-events:none}
+.delicat-banner-rail--dark .delicat-banner-card.has-light-color{background:linear-gradient(140deg,#00004F,#111827)}
+.delicat-banner-rail--dark .delicat-banner-card.has-light-color::before{background:radial-gradient(110% 75% at 100% 0%,var(--dbc-accent),transparent 58%)}
+.delicat-banner-rail--dark .delicat-banner-card__deco{right:-26px;bottom:-46px;width:168px;height:168px;color:#FFFFFF;opacity:.09}
+.delicat-banner-rail--dark .delicat-banner-card__icon{width:46px;height:46px;border:1px solid rgba(255,255,255,.2);border-radius:15px;background:rgba(255,255,255,.13);color:var(--dbc-mark)}
+.delicat-banner-rail--dark .delicat-banner-card__icon svg{width:26px;height:26px}
+.delicat-banner-rail--dark .delicat-banner-card__text{color:rgba(255,255,255,.82)}
+.delicat-banner-rail--dark a.delicat-banner-card__button{gap:12px;padding:0 6px 0 20px;background:#FFFFFF;color:#00004F}
+.delicat-banner-rail--dark .delicat-banner-card__arrow{box-sizing:content-box;padding:8px;border-radius:999px;background:var(--dbc-accent);color:var(--dbc-on-accent)}
+.delicat-banner-rail--dark .delicat-banner-card.has-light-color .delicat-banner-card__arrow{background:#00004F;color:#FFFFFF}
+
+/* Épuré: white card, coloured tile, soft glow of the card colour, full-width button */
+.delicat-banner-rail--light .delicat-banner-card::before{content:"";position:absolute;inset:0;z-index:-1;background:radial-gradient(90% 70% at 100% 0%,var(--dbc-soft),transparent 62%);pointer-events:none}
+.delicat-banner-rail--light .delicat-banner-card__icon{width:52px;height:52px;border-radius:17px;background:var(--dbc-tile);color:#FFFFFF;box-shadow:0 10px 18px -10px var(--dbc-accent)}
+.delicat-banner-card__go{display:grid;place-items:center;width:36px;height:36px;border-radius:999px;background:var(--ds-color-surface-2,#F1F5F9);color:var(--ds-color-text,#111827)}
+.delicat-banner-rail--light a.delicat-banner-card__button{align-self:stretch;justify-content:space-between;min-height:48px;padding:0 16px 0 18px;border-radius:15px}
+
+/* Vitrine: an illustrated band (or the card picture), the icon over its edge */
+.delicat-banner-rail--vitrine .delicat-banner-card{padding:0}
+.delicat-banner-card__art{position:relative;flex:0 0 auto;height:104px;overflow:hidden;background:linear-gradient(120deg,var(--dbc-shade),transparent 85%),var(--dbc-accent)}
+.delicat-banner-card__art::after{content:"";position:absolute;inset:0;background:radial-gradient(70% 120% at 100% 0%,var(--dbc-glow),transparent 65%);pointer-events:none}
+.delicat-banner-card.has-light-color .delicat-banner-card__art{background:linear-gradient(120deg,#00004F,#1E293B)}
+.delicat-banner-card.has-light-color .delicat-banner-card__art::after{background:radial-gradient(70% 120% at 100% 0%,var(--dbc-accent),transparent 70%)}
+.delicat-banner-card__art::before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.22) 1.2px,transparent 1.6px);background-size:14px 14px;-webkit-mask-image:linear-gradient(90deg,transparent,#000 70%);mask-image:linear-gradient(90deg,transparent,#000 70%)}
+.delicat-banner-card__art .delicat-banner-card__deco{z-index:1;right:-18px;bottom:-40px;width:132px;height:132px;color:#FFFFFF;opacity:.2}
+.delicat-banner-card__art.has-image{height:auto;aspect-ratio:16/9;background:rgba(128,128,128,.07)}
+.delicat-banner-card__art.has-image::before,.delicat-banner-card__art.has-image::after{content:none}
+.delicat-banner-rail--vitrine .delicat-banner-card__copy{padding:18px}
+.delicat-banner-rail--vitrine .delicat-banner-card.has-icon .delicat-banner-card__copy{padding-top:0}
+.delicat-banner-rail--vitrine .delicat-banner-card__top{margin:-28px 0 12px}
+.delicat-banner-rail--vitrine .delicat-banner-card__icon{z-index:2;box-sizing:content-box;width:48px;height:48px;border:4px solid var(--ds-color-surface,#FFFFFF);border-radius:18px;background:var(--ds-color-surface,#FFFFFF);color:var(--dbc-ink);box-shadow:0 8px 18px -8px rgba(16,24,40,.35)}
+
+/* dots: the active one is a short bar in the store colour */
+.delicat-banner-rail__dots{display:flex;justify-content:center;gap:6px;margin-top:-4px}
+.delicat-banner-rail__dots i{display:block;width:6px;height:6px;border-radius:999px;background:rgba(100,116,139,.35)}
+.delicat-banner-rail__dots i.is-active{width:22px;background:var(--ds-color-primary,#2563EB)}
+
+/* dark theme: the tokens already switch surfaces and text; shadows give way to a hairline */
+html[data-delicat-theme="dark"] .delicat-banner-card,html.dlc-theme-dark .delicat-banner-card{box-shadow:none}
+html[data-delicat-theme="dark"] .delicat-banner-rail--dark .delicat-banner-card,html.dlc-theme-dark .delicat-banner-rail--dark .delicat-banner-card{box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+html[data-delicat-theme="dark"] .delicat-banner-card,html.dlc-theme-dark .delicat-banner-card{--dbc-ink:var(--dbc-ink-dark)}
+html[data-delicat-theme="dark"] .delicat-banner-rail--vitrine .delicat-banner-card__icon,html.dlc-theme-dark .delicat-banner-rail--vitrine .delicat-banner-card__icon{background:var(--ds-color-surface-2,#182235)}
+html[data-delicat-theme="dark"] .delicat-banner-rail--light .delicat-banner-card__icon,html.dlc-theme-dark .delicat-banner-rail--light .delicat-banner-card__icon{box-shadow:none}
+
 /* phones: the rail runs edge to edge, the section's own side padding becomes the rail's */
 @media(max-width:640px){.delicat-banner-rail{--dbc-edge:var(--dbv9-space-m,16px)}.delicat-banner-rail__heading{margin-bottom:12px}}
 /* wide screens: three cards to a row; fewer cards share the row, more keep scrolling */
-@media(min-width:960px){.delicat-banner-card{flex:1 0 calc((100% - 2 * var(--dbc-gap)) / 3);min-height:220px}.delicat-banner-rail.has-many .delicat-banner-rail__track{padding-bottom:10px}}
-@media(prefers-reduced-motion:reduce){.delicat-banner-rail__track{scroll-behavior:auto}.delicat-banner-rail__dots i,.delicat-banner-rail a.delicat-banner-card__button{transition:none}}
+@media(min-width:960px){.delicat-banner-card{flex:1 0 calc((100% - 2 * var(--dbc-gap)) / 3)}.delicat-banner-rail--light .delicat-banner-card,.delicat-banner-rail--dark .delicat-banner-card{min-height:240px}}
+/* less movement and less painting when asked */
+@media(prefers-reduced-motion:reduce){.delicat-banner-rail__track{scroll-behavior:auto}.delicat-banner-rail a.delicat-banner-card__button{transition:none}.delicat-banner-rail a.delicat-banner-card__button:hover,.delicat-banner-rail a.delicat-banner-card__button:active{transform:none}}
+html.delicat-low-power .delicat-banner-card,html.delicat-save-data .delicat-banner-card{box-shadow:none}
+html.delicat-low-power .delicat-banner-card__art::before,html.delicat-save-data .delicat-banner-card__art::before,html.delicat-low-power .delicat-banner-rail--light .delicat-banner-card::before,html.delicat-save-data .delicat-banner-rail--light .delicat-banner-card::before{content:none}

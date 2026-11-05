@@ -211,14 +211,15 @@
 			html += selectField('Alignment', 'content.align', c.align, [['left','Left'],['center','Center']]);
 		} else if (section.type === 'banner') {
 			html += sectionInput('Rail heading — *stars* mark the bold words, e.g. Avec Delicat *vous pouvez !*', 'content.heading', c.heading || '');
-			html += selectField('Card style', 'content.card_style', c.card_style || 'light', [['light','Light cards'],['dark','Dark cards'],['tint','Tinted with each card colour']]);
+			html += selectField('Card style', 'content.card_style', c.card_style === 'tint' ? 'dark' : (c.card_style || 'light'), [['dark','Nuit — deep gradient cards'],['light','Épuré — white cards with a colour tile'],['vitrine','Vitrine — illustrated band on top']]);
 			html += checkbox('Show the position dots under the rail', 'content.show_dots', c.show_dots === undefined || c.show_dots === true || Number(c.show_dots) === 1);
 			html += sectionInput('Card 1 — title', 'content.title', c.title);
 			html += sectionTextarea('Card 1 — text', 'content.text', c.text);
 			html += sectionInput('Card 1 — button text', 'content.button_text', c.button_text);
 			html += sectionInput('Card 1 — button URL', 'content.button_url', c.button_url, 'url');
 			html += imageField(c.image_id || 0, 'Card 1 — image', 'content.image_id');
-			html += sectionTextarea('More cards — title|text|button|URL|#colour|image ID, one per line (eight cards in all)', 'content.items', c.items || '');
+			html += sectionInput('Card 1 — icon: empty = automatic (Android, WhatsApp), none, or a Material icon name such as redeem', 'content.icon', c.icon || '');
+			html += sectionTextarea('More cards — title|text|button|URL|#colour|image ID|icon, one per line (eight cards in all)', 'content.items', c.items || '');
 		} else if (section.type === 'products') {
 			html += sectionInput('Eyebrow / small label', 'content.eyebrow', c.eyebrow || '');
 			html += sectionInput('Title', 'content.title', c.title);
