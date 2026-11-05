@@ -25,6 +25,8 @@ final class DIP_App_Sync_V2 {
         add_action('admin_post_dip_app_sync_v2_cleanup', [__CLASS__, 'cleanup_action']);
         add_action('admin_post_dip_app_session_revoke', [__CLASS__, 'handle_session_revoke']);
         add_action('admin_post_dip_app_sessions_revoke_all', [__CLASS__, 'handle_sessions_revoke_all']);
+        // 6.17.5 (IDN-05): « Ce n’est pas moi » link of the pairing e-mail.
+        add_action('init', [__CLASS__, 'revoke_from_email'], 4);
         add_filter('dip_self_service_actions', [__CLASS__, 'self_service_actions']);
         add_filter('dip_mobile_rest_rules', [__CLASS__, 'mobile_rest_rules']);
         add_shortcode('delicat_app_pairing', [__CLASS__, 'shortcode']);
@@ -163,10 +165,21 @@ final class DIP_App_Sync_V2 {
         return strtolower((string) ($parts['scheme'] ?? 'https')) === 'http' ? 80 : 443;
     }
 
+    /**
+     * 6.17.5 (IDN-05): keyed hash of the visitor's network (/24 IPv4, /64
+     * IPv6, Cloudflare-aware), so the phone approving and the browser asking
+     * can really be compared. It was the exact address, which almost never
+     * matched (4G phone, Wi-Fi computer) and so meant nothing.
+     */
     private static function ip_hash() {
-        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::client_ip() : (isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '');
-        return $ip ? self::hash_value($ip) : '';
+        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::throttle_ip() : (isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '');
+        $network = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::network_prefix($ip) : $ip;
+        return $network ? self::hash_value('net|' . $network) : '';
     }
+
+    /** Browser session opened by a pairing: 24 hours instead of WordPress' 14 days (IDN-05). */
+    const PAIRED_SESSION_TTL = DAY_IN_SECONDS;
+    const REVOKE_META = '_dip_pairing_revoke';
 
     /**
      * 6.11.0 (owner rule of 2026-10-24). The per-address count used to live
@@ -334,6 +347,7 @@ final class DIP_App_Sync_V2 {
             ? DIP_Devices::describe_user_agent((string) $row->requested_ua)
             : ['browser' => 'Navigateur', 'platform' => 'Appareil'];
         $same_network = $row->requested_ip_hash !== '' && hash_equals((string) $row->requested_ip_hash, self::ip_hash());
+        $warning = $same_network ? '' : 'Attention : ce navigateur n’est pas sur le même réseau Internet que ce téléphone. Si quelqu’un vous a envoyé ce lien ou ce code (cadeau, diamants gratuits, aide…), refusez : c’est une arnaque.';
         return self::response([
             'status' => $status,
             'display_code' => self::display_code($row->pairing_id),
@@ -343,9 +357,10 @@ final class DIP_App_Sync_V2 {
             'age_seconds' => max(0, time() - $created),
             'expires_in' => max(0, strtotime($row->expires_at . ' UTC') - time()),
             'same_network' => $same_network,
+            'warning' => $warning,
             'site' => (string) wp_parse_url(home_url('/'), PHP_URL_HOST),
             'requires_recent_proof' => class_exists('DIP_Mobile_API') && method_exists('DIP_Mobile_API', 'recently_proven') ? !DIP_Mobile_API::recently_proven((int) $session->id) : false,
-            'message' => sprintf('Connexion demandée depuis %1$s · %2$s, il y a %3$s. Approuvez seulement si vous êtes devant ce navigateur et qu’il affiche le code %4$s.', $device['browser'], $device['platform'], human_time_diff($created, time()), self::display_code($row->pairing_id)),
+            'message' => ($warning !== '' ? $warning . ' ' : '') . sprintf('Connexion demandée depuis %1$s · %2$s, il y a %3$s. Approuvez seulement si vous êtes devant ce navigateur et qu’il affiche le code %4$s.', $device['browser'], $device['platform'], human_time_diff($created, time()), self::display_code($row->pairing_id)),
         ]);
     }
 
@@ -364,7 +379,7 @@ final class DIP_App_Sync_V2 {
             $guard = DIP_Account_Sync::login_guard(get_current_user_id());
             if (is_wp_error($guard)) return new WP_Error($guard->get_error_code(), $guard->get_error_message(), ['status'=>403]);
         }
-        // Approving signs a browser in for 14 days (and, for a 2FA account,
+        // Approving signs a browser in for 24 hours (and, for a 2FA account,
         // stands in for the second factor): like enrolling a credential, it
         // needs an app session that proved itself in the last minutes.
         // Otherwise 403 reauth_required with data.methods, as for enroll.
@@ -424,13 +439,94 @@ final class DIP_App_Sync_V2 {
         if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user->ID)) {
             DIP_Two_Factor::authorize_cookie_once($user->ID);
         }
-        wp_set_auth_cookie($user->ID, true, is_ssl());
+        // 24-hour session (was 14 days): a session obtained by tricking the
+        // customer into approving ends quickly. The token is kept so the
+        // e-mail's « Ce n’est pas moi » link can end exactly this session.
+        $session_token = '';
+        $ttl = static function () { return self::PAIRED_SESSION_TTL; };
+        $capture = static function ($cookie, $expire, $expiration, $uid, $scheme, $token) use (&$session_token) { $session_token = (string) $token; };
+        add_filter('auth_cookie_expiration', $ttl, PHP_INT_MAX);
+        add_action('set_logged_in_cookie', $capture, 10, 6);
+        try {
+            wp_set_auth_cookie($user->ID, true, is_ssl());
+        } finally {
+            remove_filter('auth_cookie_expiration', $ttl, PHP_INT_MAX);
+            remove_action('set_logged_in_cookie', $capture, 10);
+        }
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::fire_wp_login($user, 'delicat_app_pairing');
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($user->ID);
         if (class_exists('DIP_Audit')) DIP_Audit::record('app_pairing_consumed', 'info', $user->ID);
         do_action('dip_login_success', $user->ID, ['provider' => 'delicat_app_pairing']);
+        self::pairing_email($user, $row, $session_token);
 
         return self::response(['authenticated' => true, 'redirect' => self::redirect_target()]);
+    }
+
+    /**
+     * The customer is told by e-mail that a browser was signed in from the
+     * app, with a « Ce n’est pas moi » link that ends that browser session
+     * (a confirmation page first: mail scanners open links on their own).
+     */
+    private static function pairing_email(WP_User $user, $row, $session_token) {
+        if (!is_email($user->user_email)) return;
+        try { $secret = bin2hex(random_bytes(24)); } catch (Throwable $e) { return; }
+        $id = substr(hash('sha256', (string) $row->pairing_id), 0, 16);
+        $token_enc = $session_token !== '' && class_exists('DIP_Crypto') ? DIP_Crypto::encrypt($session_token) : '';
+        $entries = get_user_meta($user->ID, self::REVOKE_META, true);
+        $entries = is_array($entries) ? $entries : [];
+        foreach ($entries as $key => $entry) { if (!is_array($entry) || (int) ($entry['expires'] ?? 0) < time()) unset($entries[$key]); }
+        $entries[$id] = ['hash'=>self::hash_value('revoke|' . $secret), 'token'=>$token_enc, 'expires'=>time() + self::PAIRED_SESSION_TTL];
+        update_user_meta($user->ID, self::REVOKE_META, array_slice($entries, -5, null, true));
+        $device = class_exists('DIP_Devices') && method_exists('DIP_Devices', 'describe_user_agent') ? DIP_Devices::describe_user_agent((string) $row->requested_ua) : ['browser'=>'Navigateur', 'platform'=>'Appareil'];
+        $url = add_query_arg(['dip_pairing_revoke'=>$id, 'uid'=>(int) $user->ID, 'k'=>$secret], home_url('/'));
+        $message = sprintf('Un navigateur (%1$s · %2$s) vient d’être connecté à votre compte Delicat avec votre application, le %3$s. Cette connexion dure 24 heures.', $device['browser'], $device['platform'], wp_date('d/m/Y H:i'));
+        $advice = 'Si ce n’est pas vous, ou si quelqu’un vous a demandé d’approuver une connexion (cadeau, diamants gratuits…), déconnectez ce navigateur tout de suite avec le bouton ci-dessous, puis changez votre mot de passe.';
+        if (class_exists('DIP_Email_Hub')) {
+            DIP_Email_Hub::send_user_security($user->ID, 'Nouvelle connexion avec votre application Delicat', $message, ['title'=>'Navigateur connecté depuis l’app', 'badge'=>'Connexion par QR code', 'accent'=>'#d97706', 'advice'=>$advice, 'cta_label'=>'Ce n’est pas moi : déconnecter ce navigateur', 'cta_url'=>$url]);
+        } else {
+            wp_mail($user->user_email, 'Nouvelle connexion avec votre application Delicat', $message . "\n\n" . $advice . "\n" . $url);
+        }
+    }
+
+    /** GET shows a confirmation; the POST ends the browser session opened by that pairing. */
+    public static function revoke_from_email() {
+        $confirm = !empty($_POST['dip_pairing_revoke_confirm']);
+        $source = $confirm ? $_POST : $_GET; // phpcs:ignore WordPress.Security.NonceVerification -- the e-mailed secret is the credential.
+        if (empty($source['dip_pairing_revoke']) || empty($source['k']) || empty($source['uid'])) return;
+        if (!defined('DONOTCACHEPAGE')) define('DONOTCACHEPAGE', true);
+        do_action('litespeed_control_set_nocache', 'delicat pairing revoke');
+        nocache_headers();
+        $id = preg_replace('/[^a-f0-9]/', '', (string) wp_unslash(is_scalar($source['dip_pairing_revoke']) ? $source['dip_pairing_revoke'] : ''));
+        $secret = preg_replace('/[^a-f0-9]/', '', (string) wp_unslash(is_scalar($source['k']) ? $source['k'] : ''));
+        $uid = absint($source['uid']);
+        $entries = $uid ? get_user_meta($uid, self::REVOKE_META, true) : '';
+        $entry = is_array($entries) && isset($entries[$id]) && is_array($entries[$id]) ? $entries[$id] : null;
+        $valid = $entry && strlen($secret) === 48 && (int) ($entry['expires'] ?? 0) >= time() && hash_equals((string) $entry['hash'], self::hash_value('revoke|' . $secret));
+        header('Content-Type: text/html; charset=utf-8');
+        header('X-Frame-Options: DENY');
+        header("Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+        header('Referrer-Policy: no-referrer');
+        $style = '<style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f5f7fb;color:#11172b;font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{box-sizing:border-box;width:min(440px,calc(100% - 32px));background:#fff;border:1px solid #e4e8ef;border-radius:18px;padding:24px}h1{font-size:21px;margin:0 0 10px}button{width:100%;min-height:48px;border:0;border-radius:12px;background:#b42318;color:#fff;font-weight:700;font-size:16px}</style>';
+        $page = static function ($title, $body) use ($style) {
+            echo '<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>' . esc_html($title) . '</title>' . $style . '</head><body><main><h1>' . esc_html($title) . '</h1>' . $body . '</main></body></html>'; // phpcs:ignore WordPress.Security.EscapeOutput -- body is built from escaped parts.
+            exit;
+        };
+        if (!$valid) $page('Lien expiré', '<p>Ce lien n’est plus valable (24 heures maximum). Pour fermer les connexions, ouvrez Mon compte › Sessions et connexions, ou changez votre mot de passe avec « Mot de passe oublié ».</p>');
+        if (!$confirm) {
+            $page('Déconnecter ce navigateur ?', '<p>Le navigateur connecté avec votre application sera déconnecté. Votre téléphone reste connecté.</p><form method="post" action="' . esc_url(home_url('/')) . '"><input type="hidden" name="dip_pairing_revoke_confirm" value="1"><input type="hidden" name="dip_pairing_revoke" value="' . esc_attr($id) . '"><input type="hidden" name="uid" value="' . esc_attr((string) $uid) . '"><input type="hidden" name="k" value="' . esc_attr($secret) . '"><button type="submit">Oui, déconnecter ce navigateur</button></form>');
+        }
+        unset($entries[$id]);
+        update_user_meta($uid, self::REVOKE_META, $entries);
+        $token = !empty($entry['token']) && class_exists('DIP_Crypto') ? (string) DIP_Crypto::decrypt((string) $entry['token']) : '';
+        if (class_exists('WP_Session_Tokens')) {
+            try {
+                $manager = WP_Session_Tokens::get_instance($uid);
+                // Without the exact session, every browser session goes (the app stays).
+                if ($token !== '') $manager->destroy($token); else $manager->destroy_all();
+            } catch (Throwable $e) {}
+        }
+        if (class_exists('DIP_Audit')) DIP_Audit::record('app_pairing_revoked_from_email', 'warning', $uid, ['exact'=>$token !== '' ? 1 : 0]);
+        $page('Navigateur déconnecté', '<p>Le navigateur connecté avec votre application n’a plus accès à votre compte. Par précaution, changez votre mot de passe et vérifiez vos appareils dans Mon compte.</p>');
     }
 
     private static function account_url() {

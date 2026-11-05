@@ -101,4 +101,6 @@ add_action('plugins_loaded', ['DIP_Mobile_Passkeys', 'init'], 21);
 add_action('plugins_loaded', ['DIP_Android_App', 'init'], 16);
 
 add_action('plugins_loaded', ['DIP_Session_Router', 'init'], 19);
+// 6.17.5: WordPress privacy export/erase tools cover Identity data (IDN-08).
+add_action('plugins_loaded', ['DIP_Privacy', 'init'], 20);
 add_action('dip_flow_claim_cleanup', ['DIP_Flow_Store', 'cleanup_claim']);

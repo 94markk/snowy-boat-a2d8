@@ -8,7 +8,8 @@ final class DIP_Policy {
         $country = '';
         $trust_cf = (defined('DIP_TRUST_CLOUDFLARE_HEADERS') && DIP_TRUST_CLOUDFLARE_HEADERS)
             || (defined('DIP_TRUST_CLOUDFLARE_CONNECTING_IP') && DIP_TRUST_CLOUDFLARE_CONNECTING_IP);
-        if ($trust_cf && !empty($_SERVER['HTTP_CF_IPCOUNTRY'])) {
+        // 6.17.5: only a request that really comes from a Cloudflare edge (IDN-03).
+        if ($trust_cf && !empty($_SERVER['HTTP_CF_IPCOUNTRY']) && class_exists('DIP_Native_Auth') && DIP_Native_Auth::from_cloudflare_edge()) {
             $candidate = strtoupper(sanitize_text_field(wp_unslash($_SERVER['HTTP_CF_IPCOUNTRY'])));
             if (preg_match('/^[A-Z]{2}$/', $candidate) && $candidate !== 'XX' && $candidate !== 'T1') $country = $candidate;
         }

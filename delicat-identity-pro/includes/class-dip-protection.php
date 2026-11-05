@@ -20,7 +20,27 @@ final class DIP_Protection {
         add_action('dip_customer_sessions_revoked',[__CLASS__,'revocation_alert'],10,2);
     }
     public static function admin_actions($items) { return array_merge((array)$items,['dip_security_evidence','dip_security_mail_probe','dip_security_mail_confirm']); }
-    public static function required($uid=0) { return $uid ? user_can(absint($uid),'manage_options') : current_user_can('manage_options'); }
+    /**
+     * 6.17.5 (IDN-04): two-step verification is mandatory for every account
+     * that can touch money: administrators, shop managers and anyone who can
+     * edit orders or credit TeraWallet wallets (woo_wallet_user_capability).
+     * Before, only manage_options. Filter: dip_two_factor_required_capabilities.
+     */
+    public static function required_capabilities() {
+        $caps = ['manage_options', 'manage_woocommerce', 'edit_shop_orders', 'edit_others_shop_orders'];
+        if (function_exists('get_wallet_user_capability')) {
+            $wallet = get_wallet_user_capability();
+            if (is_string($wallet) && $wallet !== '') $caps[] = $wallet;
+        }
+        $caps = apply_filters('dip_two_factor_required_capabilities', $caps);
+        return array_values(array_unique(array_filter(array_map('sanitize_key', (array) $caps))));
+    }
+    public static function required($uid=0) {
+        $uid = absint($uid ?: get_current_user_id());
+        if (!$uid) return false;
+        foreach (self::required_capabilities() as $cap) { if (user_can($uid, $cap)) return true; }
+        return false;
+    }
     public static function setup_required() { return is_user_logged_in() && self::required() && !DIP_Two_Factor::is_enabled(); }
     public static function url($status='') { return add_query_arg(array_filter(['page'=>self::PAGE,'dip_protection_status'=>$status]),admin_url('admin.php')); }
     public static function admin_gate() {
@@ -29,15 +49,16 @@ final class DIP_Protection {
         $script=basename((string)($_SERVER['PHP_SELF']??''));
         $action=isset($_REQUEST['action'])&&is_string($_REQUEST['action']) ? sanitize_key(wp_unslash($_REQUEST['action'])) : '';
         if (!wp_doing_ajax() && $page===self::PAGE && $script==='admin.php' && $action==='') return;
-        if ($script==='admin-post.php' && in_array($action,['dip_2fa_begin','dip_2fa_confirm','dip_reauth_confirm','dip_reauth_email_code'],true)) return;
-        if (wp_doing_ajax()) wp_send_json_error(['code'=>'dip_admin_mfa_required','message'=>'Configurez la 2FA administrateur avant de continuer.','setup_url'=>self::url()],403);
+        if ($script==='admin-post.php' && in_array($action,['dip_2fa_enrol_code','dip_2fa_begin','dip_2fa_confirm','dip_reauth_confirm','dip_reauth_email_code'],true)) return;
+        if (wp_doing_ajax()) wp_send_json_error(['code'=>'dip_admin_mfa_required','message'=>'Configurez la vérification en deux étapes avant de continuer.','setup_url'=>self::url()],403);
         wp_safe_redirect(self::url('setup_required')); exit;
     }
     public static function rest_gate($result,$server,$request) {
         if ($result!==null || !self::setup_required()) return $result;
-        return new WP_Error('dip_admin_mfa_required','Configurez la 2FA administrateur avant d’utiliser les API authentifiées.',['status'=>403,'setup_url'=>self::url()]);
+        return new WP_Error('dip_admin_mfa_required','Configurez la vérification en deux étapes avant d’utiliser les API authentifiées.',['status'=>403,'setup_url'=>self::url()]);
     }
-    public static function menu() { add_menu_page('Protection Identity','Protection Identity','manage_options',self::PAGE,[__CLASS__,'screen'],'dashicons-shield-alt',59); }
+    // Every account that must use 2FA reaches its enrolment screen (shop managers too).
+    public static function menu() { if (self::required()) add_menu_page('Protection Identity','Protection Identity',current_user_can('manage_options')?'manage_options':'read',self::PAGE,[__CLASS__,'screen'],'dashicons-shield-alt',59); }
     public static function endpoint() { add_rewrite_endpoint('security-sessions',EP_ROOT|EP_PAGES); }
     public static function query_vars($vars) { $vars['security-sessions']='security-sessions';return $vars; }
     public static function account_menu($items) { if(is_user_logged_in())$items['security-sessions']='Sessions et connexions';return $items; }
@@ -76,9 +97,16 @@ final class DIP_Protection {
         wp_safe_redirect(self::url($ok?'mail_confirmed':'mail_invalid'));exit;
     }
     public static function screen() {
-        if(!current_user_can('manage_options'))return;
+        if(!self::required())return;
         wp_enqueue_style('dip-customer-dashboard',DIP_URL.'assets/customer-dashboard.css',[],DIP_VERSION);
         $uid=get_current_user_id();$e=(array)get_option(self::EVIDENCE,[]);$checks=$e['checks']??[];
+        if(!current_user_can('manage_options')){
+            // Shop managers and wallet/order staff: only their own 2FA and identity confirmation.
+            echo '<div class="wrap"><h1>Protection Identity</h1><p>La vérification en deux étapes est obligatoire pour les comptes qui gèrent les commandes ou les portefeuilles.</p>';
+            if(isset($_GET['dip_protection_status'])&&$_GET['dip_protection_status']==='setup_required')echo '<div class="notice notice-info"><p>'.esc_html('Configurez votre application Authenticator pour accéder à l’administration.').'</p></div>';
+            echo '<div style="max-width:850px">'.DIP_Two_Factor::render_settings($uid).DIP_Reauth::render_form().'</div></div>';
+            return;
+        }
         echo '<div class="wrap"><h1>Protection Identity</h1><p>Configuration administrateur, demandes d’e-mail, réception des messages et vérifications de mise en service.</p>';
         $status=isset($_GET['dip_protection_status'])&&is_string($_GET['dip_protection_status'])?sanitize_key($_GET['dip_protection_status']):'';
         $notices=['email_requested'=>'Demande enregistrée. Le client doit recevoir le code à sa nouvelle adresse avant la validation.', 'email_approved'=>'Adresse modifiée et sessions révoquées.', 'setup_required'=>'La 2FA est obligatoire : configurez votre application Authenticator pour accéder à l’administration.','confirm_identity'=>'Confirmez votre identité dans la carte ci-dessous puis recommencez.','evidence_saved'=>'Vérifications déclarées enregistrées.','mail_sent'=>'Message accepté par le transport. Vérifiez votre boîte et saisissez le code reçu pour confirmer la livraison.','mail_failed'=>'Le transport a refusé le message. Vérifiez la configuration d’envoi.','mail_confirmed'=>'Réception du message confirmée.','mail_invalid'=>'Code invalide ou expiré.'];

@@ -141,6 +141,7 @@ final class DIP_Access_Guard {
             'dip_send_password_setup',
             'dip_reauth_confirm',
             'dip_reauth_email_code',
+            'dip_2fa_enrol_code',
             'dip_2fa_begin',
             'dip_2fa_confirm',
             'dip_2fa_disable',
@@ -153,7 +154,7 @@ final class DIP_Access_Guard {
         return apply_filters('dip_sensitive_self_service_actions', [
             'dip_security_device','dip_security_logout_others','dip_device_action',
             'dip_revoke_other_sessions','dip_disconnect_provider','dip_unlink_google',
-            'dip_unlink_microsoft','dip_send_password_setup','dip_2fa_begin',
+            'dip_unlink_microsoft','dip_send_password_setup','dip_2fa_enrol_code','dip_2fa_begin',
             'dip_2fa_confirm','dip_2fa_disable','dip_2fa_recovery_regen',
         ]);
     }

@@ -231,17 +231,23 @@ final class DIP_Account_Sync {
      * Run synchronization that is only safe once ownership of the exact current
      * email address is known (OIDC proof, OTP/magic, or verification link).
      *
-     * $source: 'email_link' (the account's own verification link, default),
-     * 'oidc', 'otp', 'magic', or 'unproven' (verification switched off: the
-     * address only becomes usable for sign-in, it is never recorded as proof
-     * and never claims guest orders).
+     * $source: 'email_link' (the account's own verification link opened in
+     * the browser that registered, default), 'email_link_foreign' (that link
+     * opened in another browser), 'oidc', 'otp', 'magic', 'linked_provider'
+     * (an identity already linked to the account), or 'unproven'
+     * (verification switched off: the address only becomes usable for
+     * sign-in, it is never recorded as proof and never claims guest orders).
+     *
+     * 6.17.5: proof paths call DIP_Email_Proof::prove(), which refuses a
+     * foreign proof of an account carrying someone else's credentials, then
+     * lands here.
      */
     public static function after_verified_registration($user_id, $verified_email = '', $source = 'email_link') {
         $user_id = absint($user_id);
         $user = $user_id ? get_userdata($user_id) : false;
         if (!$user) return false;
         $source = sanitize_key((string) $source);
-        if (!in_array($source, ['email_link', 'oidc', 'otp', 'magic', 'unproven'], true)) $source = 'email_link';
+        if (!in_array($source, ['email_link', 'email_link_foreign', 'oidc', 'otp', 'magic', 'linked_provider', 'unproven'], true)) $source = 'email_link';
 
         $local_email = sanitize_email($user->user_email);
         $verified_email = sanitize_email($verified_email ?: $local_email);
@@ -264,14 +270,16 @@ final class DIP_Account_Sync {
             return true;
         }
 
-        // Account pre-hijacking: whoever created this unverified account (and
+        // Account pre-hijacking: whoever created this unproven account (and
         // chose its password, or changed its e-mail to this address) never
-        // proved the mailbox. When the real owner proves it through Google,
-        // an e-mail code or a magic link, nothing set up before that proof may
-        // keep working. The account's own verification link is different: it
-        // was sent to that mailbox for the registrant who set the password.
-        if (get_user_meta($user_id, 'dip_email_verified', true) === 'no' && in_array($source, ['oidc', 'otp', 'magic'], true)) {
-            self::reset_pre_verification_credentials($user_id, $source);
+        // proved the mailbox. When the owner proves it through Google, an
+        // e-mail code, a magic link or the verification link opened in
+        // another browser, nothing set up before that proof may keep working.
+        // Only the verification link opened in the browser that registered
+        // keeps the password: that browser chose it (IDN-01, 6.17.5).
+        $foreign_proof = in_array($source, DIP_Email_Proof::FOREIGN_SOURCES, true) && DIP_Email_Proof::is_unproven($user_id);
+        if ($foreign_proof && self::reset_pre_verification_credentials($user_id, $source)) {
+            DIP_Email_Proof::note_password_replaced($user_id);
         }
 
         update_user_meta($user_id, 'dip_email_verified', 'yes');
@@ -312,7 +320,8 @@ final class DIP_Account_Sync {
      * the password becomes a random managed one, WordPress and app sessions
      * end, quick sign-in keys and application passwords go, and a provider
      * link still pending from sign-up is dropped. The customer is told that a
-     * password can be chosen again through « Mot de passe oublié ».
+     * password can be chosen again. Returns true when the account had a
+     * password someone chose (not a random managed one).
      */
     private static function reset_pre_verification_credentials($user_id, $source) {
         $user_id = absint($user_id);
@@ -342,17 +351,18 @@ final class DIP_Account_Sync {
             'source' => sanitize_key($source),
             'password_replaced' => $had_own_password ? 1 : 0,
         ]);
-        if (!$had_own_password) return;
+        if (!$had_own_password) return false;
 
         $subject = __('Votre adresse e-mail est confirmée', 'delicat-google-login');
         $message = __('Votre adresse e-mail vient d’être confirmée. Par sécurité, le mot de passe défini avant cette confirmation ne fonctionne plus et les sessions ouvertes ont été fermées.', 'delicat-google-login');
-        $advice = __('Pour utiliser un mot de passe, choisissez « Mot de passe oublié » sur la page de connexion. Vous pouvez aussi continuer avec Google ou un code reçu par e-mail.', 'delicat-google-login');
+        $advice = __('Choisissez un nouveau mot de passe dans Mon compte › Mot de passe, ou avec « Mot de passe oublié » sur la page de connexion. Vous pouvez aussi continuer avec Google ou un code reçu par e-mail.', 'delicat-google-login');
         if (class_exists('DIP_Email_Hub')) {
             DIP_Email_Hub::send_user_security($user_id, $subject, $message, ['title'=>__('Adresse e-mail confirmée', 'delicat-google-login'), 'badge'=>__('Sécurité du compte', 'delicat-google-login'), 'accent'=>'#2563eb', 'advice'=>$advice]);
         } else {
             $user = get_userdata($user_id);
             if ($user && is_email($user->user_email)) wp_mail($user->user_email, $subject, $message . "\n\n" . $advice);
         }
+        return true;
     }
 
     /** @var int user whose password Delicat is replacing by a random managed one */
@@ -394,6 +404,8 @@ final class DIP_Account_Sync {
     public static function password_set($password, $user_id, $old_user_data = null) {
         $user_id = absint($user_id);
         if (!$user_id) return;
+        // Delicat's own random rotation (pre-verification reset) handles itself.
+        if (self::internal_password_rotation($user_id)) return;
         if ($old_user_data instanceof WP_User) {
             $old_hash = (string) $old_user_data->user_pass;
             if ($old_hash !== '' && (string) $password !== '' && wp_check_password((string) $password, $old_hash)) return;
@@ -409,7 +421,15 @@ final class DIP_Account_Sync {
         if (self::revoke_app_credentials_once($user_id, 'password_reset') && class_exists('DIP_Audit')) {
             DIP_Audit::record('password_reset_mobile_sessions_revoked', 'warning', $user_id);
         }
+        // IDN-07: passkeys and provider links added in the last 7 days go too.
+        if (!isset(self::$recent_cleaned[$user_id])) {
+            self::$recent_cleaned[$user_id] = true;
+            DIP_Recent_Credentials::cleanup($user_id, 'password_reset');
+        }
     }
+
+    /** @var array<int,bool> users whose recent credentials were reviewed in this request */
+    private static $recent_cleaned = [];
 
     private static function rehash_in_progress() {
         foreach (debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 12) as $frame) {
@@ -427,21 +447,8 @@ final class DIP_Account_Sync {
      * mailbox owner, as DIP_Identity refuses the provider merge.
      */
     public static function unproven_account_credentials($user_id) {
-        $user_id = absint($user_id);
-        if (!$user_id) return [];
-        $found = [];
-        if (class_exists('DIP_Passkeys') && method_exists('DIP_Passkeys', 'has_passkeys') && DIP_Passkeys::has_passkeys($user_id)) $found[] = 'passkey';
-        if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id)) $found[] = 'totp';
-        $keys = class_exists('DIP_Identity') ? ['google' => DIP_Identity::META_SUB, 'microsoft' => DIP_Identity::meta_sub_key('microsoft')] : [];
-        if (class_exists('DIP_Connected_Accounts')) {
-            foreach ((array) DIP_Connected_Accounts::providers() as $id => $item) {
-                if (is_array($item) && !empty($item['meta_sub']) && is_string($item['meta_sub'])) $keys[sanitize_key((string) $id)] = $item['meta_sub'];
-            }
-        }
-        foreach ($keys as $id => $key) {
-            if ((string) get_user_meta($user_id, $key, true) !== '') $found[] = $id;
-        }
-        return array_values(array_unique($found));
+        // 6.17.5: one list for every proof path (DIP_Email_Proof).
+        return DIP_Email_Proof::foreign_credentials($user_id);
     }
 
     /**
@@ -456,7 +463,7 @@ final class DIP_Account_Sync {
 
         $requires = class_exists('DIP_Passwordless_Registration') && DIP_Passwordless_Registration::requires_email_verification();
         if (!$requires) {
-            self::after_verified_registration($user_id, $user->user_email, 'unproven');
+            DIP_Email_Proof::prove($user_id, $user->user_email, 'unproven');
             return;
         }
 
@@ -467,6 +474,8 @@ final class DIP_Account_Sync {
         $sent = class_exists('DIP_Passwordless_Registration')
             ? DIP_Passwordless_Registration::send_email_verification($user_id, $user->user_email)
             : false;
+        // The browser that chose this password may confirm it and keep it (IDN-01).
+        if ($sent) DIP_Email_Proof::bind_registration_browser($user_id);
 
         if (class_exists('DIP_Audit')) DIP_Audit::record('external_registration_verification_required', 'notice', $user_id, [
             'source' => (defined('REST_REQUEST') && REST_REQUEST) ? 'rest' : (wp_doing_ajax() ? 'ajax' : 'web'),
@@ -553,7 +562,7 @@ final class DIP_Account_Sync {
         delete_user_meta($user_id, '_dip_email_verify_email_hash');
 
         if (!$requires) {
-            self::after_verified_registration($user_id, $new, 'unproven');
+            DIP_Email_Proof::prove($user_id, $new, 'unproven');
             return;
         }
 

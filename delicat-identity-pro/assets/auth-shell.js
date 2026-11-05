@@ -42,13 +42,48 @@
   }
   function error() {
     clearTimeout(assetTimer); assetTimer=null; ready = false;
-    loading.textContent = 'Chargement impossible. Fermez puis réessayez.';
+    loading.textContent = 'Chargement impossible. Fermez puis réessayez, ou ';
+    if (cfg.accountUrl) {
+      var a = document.createElement('a'); a.href = cfg.accountUrl; a.textContent = 'ouvrez la page de connexion'; a.setAttribute('data-delicat-no-app','1');
+      loading.appendChild(a); loading.appendChild(document.createTextNode('.'));
+    } else loading.textContent = 'Chargement impossible. Fermez puis réessayez.';
     loading.hidden = false; frame.hidden = true;
+  }
+  // 6.17.5: the sign-in window is no longer printed in every page. Its markup
+  // comes with the first sign of intent (one request, with the page's
+  // nonces), or from a server-rendered <template> when one is present.
+  var sourcePromise = null;
+  function fetchSource() {
+    if (source) return Promise.resolve(source);
+    if (sourcePromise) return sourcePromise;
+    var old = document.getElementById('dip-identity-modal');
+    if (old && old.tagName === 'TEMPLATE') { source = old.innerHTML; old.remove(); return Promise.resolve(source); }
+    var data = new FormData();
+    data.append('action', cfg.nonceAction || 'dip_native_fresh_nonces_v2');
+    data.append('with_modal', '1');
+    data.append('redirect', location.href);
+    sourcePromise = fetch(cfg.ajaxUrl || '/wp-admin/admin-ajax.php', {method:'POST', body:data, credentials:'same-origin', cache:'no-store', headers:{'X-Requested-With':'XMLHttpRequest'}})
+      .then(function (r) { return r.json(); })
+      .then(function (r) {
+        var html = r && r.success && r.data && typeof r.data.modal_html === 'string' ? r.data.modal_html : '';
+        if (!html) throw new Error('modal');
+        var box = document.createElement('div'); box.innerHTML = html;
+        var tpl = box.querySelector('template');
+        source = tpl ? tpl.innerHTML : html;
+        return source;
+      })
+      .catch(function (e) { sourcePromise = null; throw e; });
+    return sourcePromise;
   }
   function loadFrame() {
     var attempt=++loadId;
     clearTimeout(assetTimer); assetTimer=null;
     ready = false; loading.textContent='Chargement de la connexion…'; loading.hidden = false; frame.hidden = true;
+    assetTimer = setTimeout(function(){if(attempt===loadId)error();}, 15000);
+    fetchSource().then(function(){ if(attempt===loadId) writeFrame(attempt); }).catch(function(){ if(attempt===loadId) error(); });
+  }
+  function writeFrame(attempt) {
+    clearTimeout(assetTimer); assetTimer=null;
     var doc = frame.contentDocument;
     if (!doc) { error(); return; }
     doc.open(); doc.write('<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body></body></html>'); doc.close();
@@ -83,9 +118,8 @@
   function build() {
     if (shell && shell.isConnected) return true;
     if(shell){restore();shell=null;frame=null;opened=false;ready=false;}
-    var old = document.getElementById('dip-identity-modal'); if (!old) return false;
+    if (!cfg.lazyModal && !document.getElementById('dip-identity-modal') && !source) return false;
     stopPreparing();
-    source = old.innerHTML; old.remove();
     shell = document.createElement('dialog'); shell.id = 'dip-auth-shell'; shell.setAttribute('aria-label','Connexion Delicat Store');
     shell.setAttribute('data-dip-engine','6.13.0');
     var style = document.createElement('style');
@@ -161,7 +195,7 @@
   },true);
   ['dip:identity-open','dip:identity-open-request'].forEach(function(name){document.addEventListener(name,function(e){var d=e.detail||{};open(d.tab,d.trigger);});});
   function boot() {
-    if (!document.getElementById('dip-identity-modal')) return;
+    if (!cfg.lazyModal && !document.getElementById('dip-identity-modal')) return;
     var p=new URLSearchParams(location.search);
     if (/^#(delicat-login|dip-identity-modal)$/.test(location.hash)||p.has('dip_auth_error')||p.get('dip_verified')==='1'||p.get('dip_identity_open')==='1') open('login');
     else intents.forEach(function (name) { document.addEventListener(name, prepare, {capture:true, passive:true}); });

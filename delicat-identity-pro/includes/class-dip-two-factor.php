@@ -18,6 +18,14 @@ final class DIP_Two_Factor {
     const STEP = 30;
     const DIGITS = 6;
 
+    // 6.17.5 (IDN-04): a first enrolment starts with a code mailed to the
+    // account's address, so a stolen password alone cannot attach the
+    // thief's authenticator before the owner does.
+    const META_ENROL_CODE = '_dip_totp_enrol_code';
+    const ENROL_CODE_TTL = 600;
+    const ENROL_CODE_SENDS = 3;
+    const ENROL_CODE_TRIES = 5;
+
     const FAILURE_DAY_LIMIT = 50;
     const FAILURE_ALERT_AT = 10;
 
@@ -46,6 +54,7 @@ final class DIP_Two_Factor {
         add_action('template_redirect', [__CLASS__, 'maybe_render_challenge'], 1);
         add_action('admin_post_nopriv_dip_2fa_complete_challenge', [__CLASS__, 'complete_web_challenge']);
         add_action('admin_post_dip_2fa_complete_challenge', [__CLASS__, 'complete_web_challenge']);
+        add_action('admin_post_dip_2fa_enrol_code', [__CLASS__, 'send_enrollment_code']);
         add_action('admin_post_dip_2fa_begin', [__CLASS__, 'begin_enrollment']);
         add_action('admin_post_dip_2fa_confirm', [__CLASS__, 'confirm_enrollment']);
         add_action('admin_post_dip_2fa_disable', [__CLASS__, 'disable']);
@@ -518,7 +527,7 @@ final class DIP_Two_Factor {
         if (class_exists('DIP_Customer_Dashboard') && function_exists('wc_get_account_endpoint_url')) {
             $url = add_query_arg('dip_tab', 'security', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
         }
-        if (class_exists('DIP_Protection') && current_user_can('manage_options')) $url = DIP_Protection::url();
+        if (class_exists('DIP_Protection') && DIP_Protection::required()) $url = DIP_Protection::url();
         // Back on the 2FA card itself, so the result is in view.
         if ($status !== '') $url = add_query_arg('dip_2fa_status', sanitize_key($status), $url) . '#dip-2fa';
         return $url;
@@ -526,6 +535,65 @@ final class DIP_Two_Factor {
 
     private static function require_recent() {
         if (class_exists('DIP_Reauth') && !DIP_Reauth::is_recent()) DIP_Reauth::require_recent_or_redirect();
+    }
+
+    private static function enrol_session_hash() {
+        return hash_hmac('sha256', 'enrol|' . (string) wp_get_session_token(), wp_salt('nonce'));
+    }
+
+    /** The live enrolment e-mail code of this session ([] when none). */
+    private static function enrol_code_record($user_id) {
+        $record = get_user_meta(absint($user_id), self::META_ENROL_CODE, true);
+        if (!is_array($record) || empty($record['hash']) || (int) ($record['expires'] ?? 0) <= time()) return [];
+        return hash_equals((string) ($record['session'] ?? ''), self::enrol_session_hash()) ? $record : [];
+    }
+
+    /** Spend the e-mailed code (5 guesses per code); true when it matches. */
+    private static function consume_enrol_code($user_id, $code) {
+        $record = self::enrol_code_record($user_id);
+        if (!$record) return false;
+        $tries = class_exists('DIP_Lockout') ? (int) DIP_Lockout::counter_hit('dip_2fa_enrol_try_' . absint($user_id), self::ENROL_CODE_TTL) : 1;
+        $code = preg_replace('/\D+/', '', (string) $code);
+        if ($tries > self::ENROL_CODE_TRIES) { delete_user_meta($user_id, self::META_ENROL_CODE); return false; }
+        if (strlen($code) !== 6 || !wp_check_password($code, (string) $record['hash'])) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('two_factor_enrol_code_failed', 'warning', $user_id);
+            return false;
+        }
+        delete_user_meta($user_id, self::META_ENROL_CODE);
+        if (class_exists('DIP_Lockout')) DIP_Lockout::counter_clear('dip_2fa_enrol_try_' . absint($user_id));
+        return true;
+    }
+
+    /** Mail the one-time code that opens a first 2FA enrolment (IDN-04). */
+    public static function send_enrollment_code() {
+        if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') wp_die(esc_html__('Méthode non autorisée.', 'delicat-google-login'), '', ['response'=>405]);
+        self::require_self_service();
+        check_admin_referer(self::NONCE);
+        self::require_recent();
+        $user_id = get_current_user_id();
+        $user = get_userdata($user_id);
+        if (!is_ssl()) { wp_safe_redirect(self::security_url('https_required')); exit; }
+        if (!self::enrollment_available()) { wp_safe_redirect(self::security_url('disabled_by_admin')); exit; }
+        if (self::is_enabled($user_id)) { wp_safe_redirect(self::security_url('already_enabled')); exit; }
+        if (!$user || !is_email($user->user_email)) { wp_safe_redirect(self::security_url('enrol_code_failed')); exit; }
+        if (class_exists('DIP_Lockout') && (int) DIP_Lockout::counter_hit('dip_2fa_enrol_mail_' . $user_id, 15 * MINUTE_IN_SECONDS) > self::ENROL_CODE_SENDS) {
+            wp_safe_redirect(self::security_url('enrol_code_wait')); exit;
+        }
+        $code = (string) random_int(100000, 999999);
+        update_user_meta($user_id, self::META_ENROL_CODE, ['hash'=>wp_hash_password($code), 'expires'=>time() + self::ENROL_CODE_TTL, 'session'=>self::enrol_session_hash()]);
+        if (class_exists('DIP_Lockout')) DIP_Lockout::counter_clear('dip_2fa_enrol_try_' . $user_id);
+        $subject = __('Code pour activer la vérification en deux étapes', 'delicat-google-login');
+        $body = '<p>' . esc_html__('Votre code pour activer la vérification en deux étapes est :', 'delicat-google-login') . '</p><p style="font-size:30px;font-weight:900;letter-spacing:6px;text-align:center">' . esc_html($code) . '</p><p>' . esc_html__('Il expire dans 10 minutes. Si vous n’êtes pas à l’origine de cette demande, quelqu’un connaît peut-être votre mot de passe : changez-le immédiatement et ne communiquez ce code à personne.', 'delicat-google-login') . '</p>';
+        $sent = class_exists('DIP_Email_Hub')
+            ? DIP_Email_Hub::send_access_email($user->user_email, $subject, __('Activation de la 2FA', 'delicat-google-login'), $body, '', '', ['badge'=>__('Code unique', 'delicat-google-login'), 'accent'=>'#2563eb'])
+            : wp_mail($user->user_email, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
+        if (!$sent) {
+            delete_user_meta($user_id, self::META_ENROL_CODE);
+            wp_safe_redirect(self::security_url('enrol_code_failed')); exit;
+        }
+        if (class_exists('DIP_Audit')) DIP_Audit::record('two_factor_enrol_code_sent', 'notice', $user_id);
+        wp_safe_redirect(self::security_url('enrol_code_sent'));
+        exit;
     }
 
     public static function begin_enrollment() {
@@ -537,6 +605,8 @@ final class DIP_Two_Factor {
         if (!is_ssl()) { wp_safe_redirect(self::security_url('https_required')); exit; }
         if (!self::enrollment_available()) { wp_safe_redirect(self::security_url('disabled_by_admin')); exit; }
         if (self::is_enabled($user_id)) { wp_safe_redirect(self::security_url('already_enabled')); exit; }
+        // The secret is shown only after the code mailed to the account's address.
+        if (!self::consume_enrol_code($user_id, sanitize_text_field(wp_unslash($_POST['enrol_code'] ?? '')))) { wp_safe_redirect(self::security_url('enrol_code_invalid')); exit; }
         if (!class_exists('DIP_Crypto') || !DIP_Crypto::is_available()) { wp_safe_redirect(self::security_url('crypto_unavailable')); exit; }
         $secret = self::generate_secret();
         $encrypted = $secret !== '' ? DIP_Crypto::encrypt($secret) : '';
@@ -892,8 +962,12 @@ final class DIP_Two_Factor {
             'recovery_regenerated'=>__('Nouveaux codes de récupération générés. Les anciens ne fonctionnent plus.', 'delicat-google-login'),
             'disabled_by_admin'=>__('L’enrôlement 2FA est actuellement désactivé par l’administrateur. Une 2FA déjà active reste toutefois obligatoire.', 'delicat-google-login'),
             'code_replayed'=>__('Ce code vient déjà d’être utilisé. Attendez le code suivant de votre application (30 secondes).', 'delicat-google-login'),
+            'enrol_code_sent'=>__('Un code à 6 chiffres vient d’être envoyé à votre adresse e-mail. Saisissez-le pour afficher la clé de votre application Authenticator.', 'delicat-google-login'),
+            'enrol_code_invalid'=>__('Code e-mail incorrect ou expiré. Vérifiez le dernier e-mail reçu ou demandez un nouveau code.', 'delicat-google-login'),
+            'enrol_code_wait'=>__('Trop de codes demandés. Réessayez dans 15 minutes.', 'delicat-google-login'),
+            'enrol_code_failed'=>__('L’e-mail avec le code n’a pas pu être envoyé. Réessayez plus tard.', 'delicat-google-login'),
         ];
-        $is_error = !in_array($status, ['enabled', 'disabled', 'recovery_regenerated', 'setup'], true);
+        $is_error = !in_array($status, ['enabled', 'disabled', 'recovery_regenerated', 'setup', 'enrol_code_sent'], true);
         ob_start();
         if (class_exists('DIP_Reauth') && method_exists('DIP_Reauth', 'card_styles')) echo DIP_Reauth::card_styles(); // phpcs:ignore WordPress.Security.EscapeOutput -- static CSS
         ?>
@@ -915,8 +989,12 @@ final class DIP_Two_Factor {
               <p><strong><?php esc_html_e('2. Entrez le code à 6 chiffres généré', 'delicat-google-login'); ?></strong></p>
               <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_2fa_confirm"><?php wp_nonce_field(self::NONCE); ?><input type="text" name="totp_code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123 456" aria-label="<?php echo esc_attr__('Code à 6 chiffres', 'delicat-google-login'); ?>" required><button type="submit" class="dip-btn primary"><?php esc_html_e('Activer 2FA', 'delicat-google-login'); ?></button></form>
             </div>
+          <?php elseif (!$enabled && self::enrollment_available() && is_ssl() && self::enrol_code_record($user_id)): ?>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_2fa_begin"><?php wp_nonce_field(self::NONCE); ?><label><span><?php esc_html_e('Code reçu par e-mail', 'delicat-google-login'); ?></span><input type="text" name="enrol_code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" required></label><button type="submit" class="dip-btn primary"><?php esc_html_e('Configurer 2FA', 'delicat-google-login'); ?></button></form>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_2fa_enrol_code"><?php wp_nonce_field(self::NONCE); ?><button type="submit" class="dip-btn"><?php esc_html_e('Renvoyer le code', 'delicat-google-login'); ?></button></form>
           <?php elseif (!$enabled && self::enrollment_available() && is_ssl()): ?>
-            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_2fa_begin"><?php wp_nonce_field(self::NONCE); ?><button type="submit" class="dip-btn primary"><?php esc_html_e('Configurer 2FA', 'delicat-google-login'); ?></button></form>
+            <p><?php esc_html_e('Pour commencer, un code de vérification est envoyé à l’adresse e-mail de votre compte.', 'delicat-google-login'); ?></p>
+            <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_2fa_enrol_code"><?php wp_nonce_field(self::NONCE); ?><button type="submit" class="dip-btn primary"><?php esc_html_e('Configurer 2FA', 'delicat-google-login'); ?></button></form>
           <?php elseif (!$enabled): ?>
             <div class="dip-security-notice"><?php echo is_ssl() ? esc_html__('L’administrateur a désactivé les nouveaux enrôlements 2FA.', 'delicat-google-login') : esc_html__('HTTPS est requis avant d’activer 2FA.', 'delicat-google-login'); ?></div>
           <?php else: ?>
@@ -1005,8 +1083,8 @@ final class DIP_Two_Factor {
     private static function form_action_sources(array $state) {
         $sources = ["'self'"];
         $candidates = [(string) ($state['redirect'] ?? '')];
-        if (class_exists('DIP_Headless_Google') && defined('DIP_Headless_Google::DEFAULT_ORIGIN')) {
-            foreach ((array) apply_filters('dip_headless_allowed_origins', [DIP_Headless_Google::DEFAULT_ORIGIN]) as $origin) $candidates[] = (string) $origin;
+        if (class_exists('DIP_Headless_Google') && DIP_Headless_Google::enabled()) {
+            foreach ((array) apply_filters('dip_headless_allowed_origins', DIP_Headless_Google::settings()['origins']) as $origin) $candidates[] = (string) $origin;
         }
         foreach ($candidates as $url) {
             $parts = $url !== '' ? wp_parse_url($url) : false;

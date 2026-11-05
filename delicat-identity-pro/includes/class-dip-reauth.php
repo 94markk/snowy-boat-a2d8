@@ -277,7 +277,7 @@ final class DIP_Reauth {
     // --------------------------------------------------------------- redirects
 
     private static function security_url() {
-        if (class_exists('DIP_Protection') && current_user_can('manage_options')) return DIP_Protection::url();
+        if (class_exists('DIP_Protection') && DIP_Protection::required()) return DIP_Protection::url();
         $url = home_url('/my-account/');
         if (class_exists('DIP_Customer_Dashboard') && function_exists('wc_get_account_endpoint_url')) {
             $url = add_query_arg('dip_tab', 'security', wc_get_account_endpoint_url(DIP_Customer_Dashboard::ENDPOINT));
@@ -310,7 +310,7 @@ final class DIP_Reauth {
         if ($query !== '') parse_str($query, $args);
         if (($args['dip_tab'] ?? '') === 'security') return true;
         if (isset($args['dip_confirm_transaction']) && is_string($args['dip_confirm_transaction']) && preg_match('/^[a-f0-9]{48}$/D',$args['dip_confirm_transaction'])) return true;
-        if (class_exists('DIP_Protection') && ($args['page'] ?? '') === DIP_Protection::PAGE && current_user_can('manage_options')) return true;
+        if (class_exists('DIP_Protection') && ($args['page'] ?? '') === DIP_Protection::PAGE && DIP_Protection::required()) return true;
         $post_id = function_exists('url_to_postid') ? absint(url_to_postid($url)) : 0;
         $content = $post_id ? (string) get_post_field('post_content', $post_id) : '';
         return $content !== '' && has_shortcode($content, 'delicat_security_center');

@@ -267,8 +267,6 @@ final class DIP_My_Account_Modern {
             $cta = ['url' => $security_url . '#dip-passkeys', 'label' => __('Ajouter une Passkey', 'delicat-google-login')];
         } elseif (!$linked) {
             $recommendation = __('Ajoutez Google ou Microsoft comme méthode de connexion.', 'delicat-google-login');
-        } elseif (!$trusted) {
-            $recommendation = __('Vérifiez vos appareils et approuvez uniquement ceux que vous reconnaissez.', 'delicat-google-login');
         } elseif (!$password_fallback) {
             $recommendation = __('Ajoutez un mot de passe de secours pour éviter de perdre l’accès.', 'delicat-google-login');
         } else {

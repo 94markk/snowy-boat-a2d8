@@ -220,6 +220,8 @@ final class DIP_Identity {
 
         $previous = (string) get_user_meta($user_id, $meta_sub, true);
         update_user_meta($user_id, $meta_sub, $sub);
+        // When this identity joined the account (IDN-07: a reset drops the recent ones).
+        if ($previous !== $sub) DIP_Recent_Credentials::note_link($user_id, $provider);
         update_user_meta($user_id, $meta_linked, time());
         if ($provider === 'google' && ($this->settings['use_google_avatar'] ?? 'yes') === 'yes' && !empty($profile['picture']) && wp_http_validate_url($profile['picture'])) {
             update_user_meta($user_id, self::META_AVATAR, esc_url_raw($profile['picture']));
@@ -262,8 +264,8 @@ final class DIP_Identity {
                 // mailbox drops whatever credentials predate that proof. An
                 // already linked subject keeps today's behaviour: its owner
                 // linked it while signed in or through a proven mailbox.
-                if ($proof_source !== '') DIP_Account_Sync::after_verified_registration($user_id, $email, $proof_source);
-                else DIP_Account_Sync::after_verified_registration($user_id, $email);
+                $proven = DIP_Email_Proof::prove($user_id, $email, $proof_source !== '' ? $proof_source : 'linked_provider', $provider, $sub);
+                if (is_wp_error($proven)) return new WP_Error('email_exists', $proven->get_error_message());
             } elseif (!$google_authoritative && !$explicit_ok && !$local_proof_ok) {
                 update_user_meta($user_id, 'dip_email_verified', 'no');
                 delete_user_meta($user_id, '_dip_verified_email_fingerprint');
@@ -298,24 +300,7 @@ final class DIP_Identity {
      * markers (no dip_email_verified at all) keep today's behaviour.
      */
     private static function email_unproven($user_id) {
-        $state = (string) get_user_meta($user_id, 'dip_email_verified', true);
-        if ($state === 'no') return true;
-        $fingerprint = (string) get_user_meta($user_id, '_dip_verified_email_fingerprint', true);
-        if ($fingerprint === '') return $state === 'yes' && (string) get_user_meta($user_id, '_dip_verified_email_proof_v2', true) === '';
-        $user = get_userdata($user_id);
-        $current = $user ? hash('sha256', strtolower(sanitize_email($user->user_email))) : '';
-        return $current === '' || !hash_equals($fingerprint, $current);
-    }
-
-    /** Provider id => subject meta key, for the built-in and registered providers. */
-    private static function provider_sub_keys() {
-        $keys = ['google' => self::META_SUB, 'microsoft' => self::meta_sub_key('microsoft')];
-        if (class_exists('DIP_Connected_Accounts')) {
-            foreach ((array) DIP_Connected_Accounts::providers() as $id => $item) {
-                if (is_array($item) && !empty($item['meta_sub']) && is_string($item['meta_sub'])) $keys[sanitize_key($id)] = $item['meta_sub'];
-            }
-        }
-        return $keys;
+        return DIP_Email_Proof::is_unproven($user_id);
     }
 
     /**
@@ -326,14 +311,7 @@ final class DIP_Identity {
      * identity) belong to whoever set the account up, so the merge is refused.
      */
     private function adopt_unproven_account($user_id, $provider, $sub) {
-        $foreign = [];
-        if (class_exists('DIP_Passkeys') && method_exists('DIP_Passkeys', 'has_passkeys') && DIP_Passkeys::has_passkeys($user_id)) $foreign[] = 'passkey';
-        if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id)) $foreign[] = 'totp';
-        foreach (self::provider_sub_keys() as $id => $key) {
-            $current = (string) get_user_meta($user_id, $key, true);
-            if ($current === '' || ($id === $provider && hash_equals($current, $sub))) continue;
-            $foreign[] = $id;
-        }
+        $foreign = DIP_Email_Proof::foreign_credentials($user_id, $provider, $sub);
         if ($foreign) {
             if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user_id, ['provider'=>$provider, 'credentials'=>implode(',', array_unique($foreign))]);
             return new WP_Error('email_exists', 'Un compte dont l’adresse n’est pas encore confirmée utilise déjà cette adresse. Confirmez-la avec le lien reçu par e-mail ou connectez-vous à ce compte, puis reliez ce fournisseur.');
@@ -401,6 +379,18 @@ final class DIP_Identity {
             if (is_string($known) && hash_equals($known, $hash)) return true;
         }
         return false;
+    }
+
+    /**
+     * Is this browser one of those bound to the account's pending sign-up
+     * link (DIP_Email_Proof: the verification link opened here keeps the
+     * sign-up's own credentials)?
+     */
+    public static function pending_link_browser_matches($user_id) {
+        $user_id = absint($user_id);
+        $pending = $user_id ? get_user_meta($user_id, self::META_PENDING_LINK, true) : '';
+        if (!is_array($pending) || time() > (int) ($pending['expires'] ?? 0)) return false;
+        return self::browser_known($pending, self::pending_cookie_secret($user_id));
     }
 
     /** Remember this browser for the pending link (at most three browsers). */
@@ -513,6 +503,7 @@ final class DIP_Identity {
         $sub = (string) $pending['sub'];
         update_user_meta($user_id, self::meta_sub_key($provider), $sub);
         update_user_meta($user_id, self::meta_linked_key($provider), time());
+        DIP_Recent_Credentials::note_link($user_id, $provider);
         self::forget_disconnected_subject($user_id, $provider, $sub);
         if (class_exists('DIP_Audit')) DIP_Audit::record('pending_provider_link_promoted', 'notice', $user_id, ['provider'=>$provider]);
         $user = get_userdata($user_id);

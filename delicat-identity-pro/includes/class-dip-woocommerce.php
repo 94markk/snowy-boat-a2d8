@@ -12,7 +12,11 @@ final class DIP_WooCommerce {
         add_action('after_password_reset', [__CLASS__, 'password_confirmed'], 10, 2);
         add_action('wp_set_password', [__CLASS__, 'password_set'], 10, 3);
         add_action('profile_update', [__CLASS__, 'profile_updated'], 10, 2);
+        // 6.17.5 (IDN-10): « Mot de passe oublié » answers the same for every address.
+        add_action('lostpassword_post', [__CLASS__, 'generic_lost_password'], 99, 2);
         if (!class_exists('WooCommerce')) return;
+        add_filter('woocommerce_lost_password_confirmation_message', [__CLASS__, 'lost_password_confirmation']);
+        add_action('template_redirect', [__CLASS__, 'lost_password_notice']);
         add_action('init', [__CLASS__, 'endpoint']);
         add_action('woocommerce_account_' . self::ENDPOINT . '_endpoint', [__CLASS__, 'screen']);
         add_action('admin_post_dip_unlink_google', [__CLASS__, 'unlink']);
@@ -23,6 +27,37 @@ final class DIP_WooCommerce {
     }
 
     public static function endpoint() { add_rewrite_endpoint(self::ENDPOINT, EP_ROOT | EP_PAGES); }
+
+    /**
+     * Unknown username or e-mail: answer exactly as for a real account (the
+     * « e-mail envoyé » page) instead of « identifiant invalide », so the form
+     * no longer tells who has an account. Other errors (empty field, a
+     * captcha) still show.
+     */
+    public static function generic_lost_password($errors, $user_data = false) {
+        if ($user_data instanceof WP_User || !($errors instanceof WP_Error)) return;
+        if (array_diff($errors->get_error_codes(), ['invalid_email', 'invalidcombo'])) return;
+        if (isset($_POST['wc_reset_password']) && function_exists('wc_get_account_endpoint_url')) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WooCommerce verified its nonce before this hook.
+            wp_safe_redirect(add_query_arg('reset-link-sent', 'true', wc_get_account_endpoint_url('lost-password')));
+            exit;
+        }
+        if (did_action('login_init')) {
+            wp_safe_redirect(add_query_arg('checkemail', 'confirm', wp_login_url()));
+            exit;
+        }
+    }
+
+    public static function lost_password_confirmation($message = '') {
+        return __('Si un compte correspond à cette adresse ou à cet identifiant, un e-mail de réinitialisation vient d’être envoyé. Il peut mettre quelques minutes à arriver : vérifiez aussi les courriers indésirables, et patientez 10 minutes avant de refaire une demande.', 'delicat-google-login');
+    }
+
+    /** The confirmation notice on the « e-mail envoyé » page reads « Si un compte existe… » too. */
+    public static function lost_password_notice() {
+        if (empty($_GET['reset-link-sent']) || !function_exists('is_account_page') || !is_account_page()) return; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only page selector.
+        add_filter('gettext_woocommerce', static function ($translation, $text) {
+            return $text === 'Password reset email has been sent.' ? __('Si un compte existe, un e-mail a été envoyé.', 'delicat-google-login') : $translation;
+        }, 10, 2);
+    }
 
     public static function activate() {
         if (class_exists('WooCommerce')) { self::endpoint(); flush_rewrite_rules(false); }

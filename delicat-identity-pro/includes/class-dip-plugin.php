@@ -13,7 +13,8 @@ final class DIP_Plugin {
     const SETTINGS_REVIEW = 'dip_settings_review_pending';
     const RUNTIME_SCHEMA_OPTION = 'dip_runtime_schema_version';
     // 6.11.0: adds {prefix}dip_mobile_biometric_keys (DIP_Mobile_API::install()).
-    const RUNTIME_SCHEMA_VERSION = '6.11.0';
+    // 6.17.5: adds previous_refresh_hash/rotated_at to dip_mobile_tokens (additive).
+    const RUNTIME_SCHEMA_VERSION = '6.17.5';
     const LOG_CLEARED_OPTION = 'dip_security_log_cleared';
     /**
      * Per-address ceiling on sign-in starts over the throttle window: a flood
@@ -2346,6 +2347,7 @@ final class DIP_Plugin {
             $manager->destroy_others(wp_get_session_token());
         }
         $mobile_revoked = class_exists('DIP_Mobile_API') ? DIP_Mobile_API::revoke_all_for_user($uid, 'user_revoke_other_sessions') : 0;
+        DIP_Recent_Credentials::cleanup($uid, 'logout_others', true);
         $this->event('other_sessions_revoked', $uid, 'warning', ['mobile_revoked'=>(int)$mobile_revoked]);
         wp_safe_redirect($this->security_tab_url('sessions')); exit;
     }

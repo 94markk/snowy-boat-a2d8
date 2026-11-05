@@ -17,9 +17,10 @@ final class DIP_Headless_Google {
     const TICKET_PREFIX = 'dip_hg_ticket_';
     const CLEANUP_HOOK = 'dip_headless_google_cleanup';
     const FLOW_PREFIX = 'dip_hg_flow_';
-    // Storefront origin trusted before the setting existed; still the default
-    // until an administrator saves the Fournisseurs page.
-    const DEFAULT_ORIGIN = 'https://delicat-store-ultra-fast.louismarkenricky.chatgpt.site';
+    // Storefront origin trusted by default up to 6.17.4. 6.17.5 (IDN-06): it
+    // is never trusted by default any more; it is only quoted in the admin
+    // notice so an owner who used it knows exactly what to type.
+    const LEGACY_ORIGIN = 'https://delicat-store-ultra-fast.louismarkenricky.chatgpt.site';
     const CALLBACK_PATH = '/api/commerce/auth/google/callback';
     const OPTION = 'dip_headless_google';
 
@@ -34,6 +35,39 @@ final class DIP_Headless_Google {
         add_action('dip_account_unlinked', [__CLASS__, 'clear_subject'], 20, 2);
         add_filter('delicat_app_exchange_identity_credential', [__CLASS__, 'exchange_credential'], 20, 4);
         add_action(self::CLEANUP_HOOK, [__CLASS__, 'cleanup_tickets']);
+        add_action('admin_notices', [__CLASS__, 'admin_notice']);
+    }
+
+    /**
+     * Where the hand-off stands: never configured (off since 6.17.5, with the
+     * exact address to type to restore it), on with its addresses, or off.
+     * Shown on the dashboard, the plugins list and Identity pages while it
+     * was never configured; on the Identity Providers page always.
+     */
+    public static function admin_notice() {
+        if (!current_user_can('manage_options')) return;
+        $page = isset($_GET['page']) && is_string($_GET['page']) ? sanitize_key(wp_unslash($_GET['page'])) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- screen selection only.
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        $base = $screen ? (string) $screen->base : '';
+        $providers_page = class_exists('DIP_Provider_Manager') ? DIP_Provider_Manager::PAGE : 'delicat-identity-providers';
+        $on_identity = $page !== '' && (strpos($page, 'delicat-identity') === 0 || strpos($page, 'dip-') === 0);
+        $configured = is_array(get_option(self::OPTION, null));
+        if (!$configured && !$on_identity && !in_array($base, ['dashboard', 'plugins'], true)) return;
+        if ($configured && $page !== $providers_page) return;
+        $url = admin_url('options-general.php?page=' . $providers_page);
+        $settings = self::settings();
+        if (!$configured) {
+            echo '<div class="notice notice-warning"><p><strong>Delicat Identity :</strong> '
+                . esc_html__('la connexion Google de la boutique séparée est désactivée : depuis la version 6.17.5, aucune adresse n’est autorisée par défaut.', 'delicat-google-login')
+                . '</p><p>' . esc_html__('Si vous utilisez la boutique « delicat-store-ultra-fast », ouvrez la page Identity Providers, cochez « Activer la connexion Google de la boutique », saisissez exactement l’adresse ci-dessous dans « Origines autorisées », puis cliquez sur « Enregistrer les fournisseurs ». Sinon, enregistrez la page sans rien cocher pour faire disparaître ce message.', 'delicat-google-login')
+                . '</p><p><code>' . esc_html(self::LEGACY_ORIGIN) . '</code> <a class="button" href="' . esc_url($url) . '">' . esc_html__('Ouvrir Identity Providers', 'delicat-google-login') . '</a></p></div>';
+            return;
+        }
+        $active = $settings['enabled'] === 'yes' && $settings['origins'];
+        echo '<div class="notice ' . ($active ? 'notice-info' : 'notice-warning') . '"><p><strong>' . esc_html__('Connexion Google de la boutique séparée :', 'delicat-google-login') . '</strong> ';
+        if ($active) echo esc_html__('active pour', 'delicat-google-login') . ' <code>' . esc_html(implode(', ', $settings['origins'])) . '</code>';
+        else echo esc_html__('désactivée (aucune adresse ne reçoit de connexion Google).', 'delicat-google-login');
+        echo '</p></div>';
     }
 
     /** https://host (no path, port or credentials), or '' when invalid. */
@@ -53,7 +87,8 @@ final class DIP_Headless_Google {
     /** Storefront hand-off switch and trusted origins (administrator setting). */
     public static function settings() {
         $raw = get_option(self::OPTION, null);
-        if (!is_array($raw)) return ['enabled' => 'yes', 'origins' => [self::DEFAULT_ORIGIN]];
+        // Never saved: off, no trusted address (IDN-06, 6.17.5).
+        if (!is_array($raw)) return ['enabled' => 'no', 'origins' => []];
         $origins = array_values(array_unique(array_filter(array_map([__CLASS__, 'normalize_origin'], (array) ($raw['origins'] ?? [])))));
         return ['enabled' => ($raw['enabled'] ?? 'yes') === 'no' ? 'no' : 'yes', 'origins' => $origins];
     }
@@ -291,11 +326,11 @@ final class DIP_Headless_Google {
         $callback = self::trusted_callback(wp_unslash($_GET['return_to'] ?? ''));
         $provider = sanitize_key(wp_unslash($_GET['provider'] ?? ''));
         $next = self::safe_next(wp_unslash($_GET['next'] ?? ''));
-        // Optional PKCE-style binding (S256): when the storefront sends a
-        // challenge, the credential can only be redeemed with its verifier.
+        // PKCE (S256) is mandatory since 6.17.5 (IDN-06): the credential can
+        // only be redeemed with the verifier of the storefront that started.
         $challenge = sanitize_text_field(wp_unslash($_GET['code_challenge'] ?? ''));
         $challenge_method = sanitize_text_field(wp_unslash($_GET['code_challenge_method'] ?? ''));
-        $challenge_ok = $challenge === '' || ($challenge_method === 'S256' && preg_match('/^[A-Za-z0-9_-]{43}$/D', $challenge));
+        $challenge_ok = $challenge_method === 'S256' && preg_match('/^[A-Za-z0-9_-]{43}$/D', $challenge);
         if (!self::valid_state($state) || $callback === '' || $provider !== 'google' || !$challenge_ok) {
             wp_die(esc_html__('Demande Google Identity non autorisée.', 'delicat-google-login'), '', ['response' => 400]);
         }
@@ -630,15 +665,15 @@ final class DIP_Headless_Google {
             || !hash_equals((string) $record['state'], $state)
             || time() > (int) ($record['expires'] ?? 0)
         ) return new WP_Error('dip_headless_credential_expired', 'La confirmation Google a expiré ou a déjà été utilisée.', ['status' => 401]);
-        if (!empty($record['challenge'])) {
-            $verifier = $request->get_param('code_verifier');
-            $verifier = is_string($verifier) ? $verifier : '';
-            $computed = preg_match('/^[A-Za-z0-9._~-]{43,128}$/D', $verifier)
-                ? rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=')
-                : '';
-            if ($computed === '' || !hash_equals((string) $record['challenge'], $computed)) {
-                return new WP_Error('dip_headless_verifier_invalid', 'Justificatif Google invalide.', ['status' => 401]);
-            }
+        // PKCE is mandatory: a ticket without a challenge (issued before
+        // 6.17.5, two minutes at most) is refused too.
+        $verifier = $request->get_param('code_verifier');
+        $verifier = is_string($verifier) ? $verifier : '';
+        $computed = preg_match('/^[A-Za-z0-9._~-]{43,128}$/D', $verifier)
+            ? rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=')
+            : '';
+        if (empty($record['challenge']) || $computed === '' || !hash_equals((string) $record['challenge'], $computed)) {
+            return new WP_Error('dip_headless_verifier_invalid', 'Justificatif Google invalide.', ['status' => 401]);
         }
 
         global $wpdb;

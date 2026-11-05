@@ -75,15 +75,8 @@ final class DIP_Security_Recommendations {
             }
         }
 
-        if (!is_array($devices)) $devices = class_exists('DIP_Devices') ? DIP_Devices::user_devices($user_id) : [];
-        $trusted = false;
-        foreach ((array)$devices as $device) if (!empty($device['trusted'])) { $trusted = true; break; }
-        if (!$trusted) $items[] = ['priority'=>'medium','title'=>'Approuver votre appareil principal','detail'=>'Marquez votre appareil personnel (celui que vous utilisez en ce moment, s’il vous appartient) comme appareil de confiance.','action'=>['label'=>'Voir mes appareils','href'=>'#dip-security-devices']];
-
-        $fingerprint = (string)get_user_meta($user_id, '_dip_verified_email_fingerprint', true);
-        $current = is_email($user->user_email) ? hash('sha256', strtolower(sanitize_email($user->user_email))) : '';
-        $verified = get_user_meta($user_id, 'dip_email_verified', true) === 'yes' && $fingerprint !== '' && $current !== '' && hash_equals($fingerprint, $current);
-        if (!$verified) {
+        // 6.17.5 (IDN-15): no « approve your device » advice: trust changes nothing at sign-in.
+        if (!DIP_Email_Proof::is_proven($user_id)) {
             $item = ['priority'=>'high','title'=>'Vérifier votre adresse e-mail','detail'=>'La vérification de l’adresse protège les récupérations de compte et les changements d’identité.'];
             if (class_exists('DIP_Security_Center') && method_exists('DIP_Security_Center', 'can_request_email_verification') && DIP_Security_Center::can_request_email_verification($user_id)) {
                 $item['detail'] .= ' Recevez un lien de vérification à votre adresse actuelle.';

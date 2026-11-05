@@ -181,7 +181,8 @@ final class DIP_Account_Control {
         if (!is_user_logged_in()) return;
         $uid = get_current_user_id();
         $managed = get_user_meta($uid, DIP_Identity::META_PASSWORD_MANAGED, true) === 'yes';
-        ?><section class="dip-control-card"><h2>Modifier mon mot de passe</h2><p>Choisissez une phrase de passe d’au moins 12 caractères. Vous devrez ensuite vous reconnecter.</p>
+        $choose = $managed && isset($_GET['dip_choose_password']); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presentation flag only.
+        ?><section class="dip-control-card"><h2>Modifier mon mot de passe</h2><?php if ($choose): ?><p class="dip-security-notice is-success" role="status">Adresse e-mail confirmée, vous êtes connecté. Choisissez maintenant votre mot de passe (un mot de passe saisi avant cette confirmation ne fonctionne plus).</p><?php endif; ?><p>Choisissez une phrase de passe d’au moins 12 caractères. Vous devrez ensuite vous reconnecter.</p>
         <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>"><input type="hidden" name="action" value="dip_change_password"><?php wp_nonce_field('dip_change_password'); ?>
         <?php if (!$managed): ?><label for="dip-current-password">Mot de passe actuel</label><input id="dip-current-password" name="current_password" type="password" autocomplete="current-password" required maxlength="1024"><?php endif; ?>
         <label for="dip-new-password">Nouveau mot de passe</label><input id="dip-new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="256" required>

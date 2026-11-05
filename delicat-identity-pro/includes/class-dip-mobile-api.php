@@ -8,6 +8,11 @@ final class DIP_Mobile_API {
     const CHALLENGE_TTL = 180;
     /** 6.11.0: quick sign-in keys live in their own table and survive sign-out. */
     const BIOMETRIC_TABLE_SUFFIX = 'dip_mobile_biometric_keys';
+    const ROTATION_READY_OPTION = 'dip_mobile_rotation_ready';
+    /** A rotated refresh token reused later than this ends its session (a retry right after is tolerated). */
+    const REFRESH_REPLAY_GRACE = 60;
+    const GOOGLE_NONCE_PREFIX = 'dip_mgn_';
+    const GOOGLE_NONCE_TTL = 600;
     const BIOMETRIC_READY_OPTION = 'dip_mobile_biometric_keys_ready';
     /** Sliding lifetime of a quick sign-in key: every sign-in pushes it 90 days on. */
     const BIOMETRIC_KEY_TTL = 7776000;
@@ -75,9 +80,12 @@ final class DIP_Mobile_API {
             access_expires_at datetime NOT NULL,
             refresh_expires_at datetime NOT NULL,
             revoked_at datetime DEFAULT NULL,
+            previous_refresh_hash char(64) DEFAULT NULL,
+            rotated_at datetime DEFAULT NULL,
             PRIMARY KEY (id),
             UNIQUE KEY token_hash (token_hash),
             UNIQUE KEY refresh_hash (refresh_hash),
+            KEY previous_refresh_hash (previous_refresh_hash),
             KEY user_id (user_id),
             KEY device_hash (device_hash),
             KEY installation_hash (installation_hash),
@@ -108,11 +116,16 @@ final class DIP_Mobile_API {
         ) {$charset};");
         $found = (string) $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($keys)));
         update_option(self::BIOMETRIC_READY_OPTION, $found === $keys ? '1' : '0', true);
+        // 6.17.5 (IDN-14): previous refresh token of each session, to spot a replay.
+        $column = $wpdb->get_var($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'previous_refresh_hash'));
+        update_option(self::ROTATION_READY_OPTION, $column ? '1' : '0', true);
     }
 
     public static function routes() {
         register_rest_route('delicat-identity/v1', '/mobile/google', ['methods'=>'POST','callback'=>[__CLASS__,'google_login'],'permission_callback'=>'__return_true']);
         register_rest_route('delicat-identity/v1', '/mobile/refresh', ['methods'=>'POST','callback'=>[__CLASS__,'refresh'],'permission_callback'=>'__return_true']);
+        // 6.17.5 (IDN-14): optional one-time nonce for Google Sign-In (apps that send none keep working).
+        register_rest_route('delicat-identity/v1', '/mobile/google/nonce', ['methods'=>'POST','callback'=>[__CLASS__,'google_nonce'],'permission_callback'=>'__return_true']);
         register_rest_route('delicat-identity/v1', '/mobile/logout', ['methods'=>'POST','callback'=>[__CLASS__,'logout'],'permission_callback'=>[__CLASS__,'logged_in']]);
         register_rest_route('delicat-identity/v1', '/mobile/profile', ['methods'=>'GET','callback'=>[__CLASS__,'profile'],'permission_callback'=>[__CLASS__,'logged_in']]);
         register_rest_route('delicat-identity/v1', '/mobile/capabilities', ['methods'=>'GET','callback'=>[__CLASS__,'capabilities'],'permission_callback'=>'__return_true']);
@@ -599,6 +612,7 @@ final class DIP_Mobile_API {
             'passkeys_enabled'=>class_exists('DIP_Mobile_Passkeys') && DIP_Mobile_Passkeys::enabled(),
             'rp_id'=>self::rp_id(),
             'two_factor_supported'=>class_exists('DIP_Two_Factor'),
+            'google_nonce'=>1,
             'access_ttl'=>self::access_ttl(),'refresh_ttl'=>self::refresh_ttl(),
         ],200);
     }
@@ -637,7 +651,15 @@ final class DIP_Mobile_API {
         // session.
         $server_client_id=self::oauth_client_id($s['client_id']??'');
         if ($server_client_id==='') return self::denied('mobile_google_server_audience_not_configured');
-        $p = class_exists('DIP_Google') ? DIP_Google::verify_id_token($id_token, [$server_client_id], '') : new WP_Error('google_verifier_missing','Google verifier unavailable.');
+        // A nonce is optional (apps up to now send none). When the app sends
+        // one, it must be a nonce this server issued to this installation, not
+        // used yet, and the Google token must carry exactly it.
+        $nonce = trim(self::scalar($request->get_param('nonce')));
+        if ($nonce !== '' && !self::consume_google_nonce($nonce, $request)) {
+            if ($e = self::proof_failed($gate, 'nonce_invalid')) return $e;
+            return new WP_Error('invalid_nonce', 'Invalid or expired sign-in nonce.', ['status'=>401]);
+        }
+        $p = class_exists('DIP_Google') ? DIP_Google::verify_id_token($id_token, [$server_client_id], $nonce) : new WP_Error('google_verifier_missing','Google verifier unavailable.');
         if (is_wp_error($p)) {
             // Verifier outages (keys unreachable or unusable, OpenSSL missing)
             // are not the caller's failure and must not lock out the shared
@@ -690,6 +712,40 @@ final class DIP_Mobile_API {
         do_action('dip_login_success',(int)$resolved,$profile);
         if (class_exists('DIP_Audit')) DIP_Audit::record('login_success','info',(int)$resolved,['method'=>'mobile_google']);
         return self::issue_for_user((int)$resolved,$request,'google');
+    }
+
+    private static function google_nonce_option($nonce) {
+        return self::GOOGLE_NONCE_PREFIX . substr(hash_hmac('sha256', (string) $nonce, wp_salt('nonce')), 0, 48);
+    }
+
+    /** POST /mobile/google/nonce: a one-time nonce for the next Google Sign-In of this installation. */
+    public static function google_nonce(WP_REST_Request $request) {
+        $gate = self::throttle('google_nonce', 30, 10 * MINUTE_IN_SECONDS, $request, 600);
+        if (is_wp_error($gate)) return $gate;
+        if (!self::enabled() || !is_ssl()) return new WP_Error('mobile_api_disabled','Mobile authentication is disabled.',['status'=>403]);
+        if (!self::valid_device_request($request)) return new WP_Error('device_required','A valid device and installation identifier are required.',['status'=>400]);
+        $nonce = self::random_token(32);
+        $device = self::request_device($request);
+        $record = wp_json_encode(['installation'=>(string) $device['installation_hash'], 'expires'=>time() + self::GOOGLE_NONCE_TTL]);
+        if (!is_string($record) || !add_option(self::google_nonce_option($nonce), $record, '', false)) return new WP_Error('nonce_failed','Unable to create a sign-in nonce.',['status'=>500]);
+        $response = new WP_REST_Response(['nonce'=>$nonce, 'expires_in'=>self::GOOGLE_NONCE_TTL], 200);
+        $response->header('Cache-Control', 'no-store');
+        return $response;
+    }
+
+    /** One winner across workers (removal of the exact row), for this installation only, before expiry. */
+    private static function consume_google_nonce($nonce, WP_REST_Request $request) {
+        if (!preg_match('/^[A-Za-z0-9_-]{40,128}$/D', (string) $nonce)) return false;
+        global $wpdb;
+        $option = self::google_nonce_option($nonce);
+        $raw = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name=%s", $option));
+        $record = is_string($raw) ? json_decode($raw, true) : null;
+        if (!is_array($record)) return false;
+        $claimed = (int) $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name=%s AND option_value=%s", $option, $raw));
+        wp_cache_delete($option, 'options');
+        if ($claimed !== 1 || time() > (int) ($record['expires'] ?? 0)) return false;
+        $device = self::request_device($request);
+        return hash_equals((string) ($record['installation'] ?? ''), (string) $device['installation_hash']);
     }
 
     /** Google verifier outages: never the caller's failure (6.10.2). */
@@ -784,6 +840,12 @@ final class DIP_Mobile_API {
         }
         else { $ok=$wpdb->insert(self::table(),$data); }
         if($ok===false) return new WP_Error('token_issue_failed','Unable to create a mobile session.',['status'=>500]);
+        // Separate statement: a database without the 6.17.5 columns still renews.
+        if ($replace_id && $expected_refresh_hash !== '' && get_option(self::ROTATION_READY_OPTION) === '1') {
+            $suppress = $wpdb->suppress_errors(true);
+            $wpdb->query($wpdb->prepare('UPDATE '.self::table().' SET previous_refresh_hash=%s, rotated_at=UTC_TIMESTAMP() WHERE id=%d', $expected_refresh_hash, (int) $replace_id));
+            $wpdb->suppress_errors($suppress);
+        }
         $row_id = $replace_id ? (int) $replace_id : (int) $wpdb->get_var($wpdb->prepare('SELECT id FROM '.self::table().' WHERE token_hash=%s LIMIT 1', $data['token_hash']));
         return ['access'=>$access,'refresh'=>$refresh,'device'=>$d,'row_id'=>$row_id];
     }
@@ -864,7 +926,10 @@ final class DIP_Mobile_API {
         $token=trim(self::scalar($request->get_param('refresh_token')));
         if(!preg_match('/^[A-Za-z0-9\-_]{40,512}$/',$token)){ if ($e = self::proof_failed($gate, 'malformed_refresh')) return $e; return new WP_Error('invalid_refresh','Invalid refresh token.',['status'=>401]); }
         global $wpdb; $row=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE refresh_hash=%s AND revoked_at IS NULL AND refresh_expires_at > UTC_TIMESTAMP() LIMIT 1',self::hash_token($token)));
-        if(!$row){ if ($e = self::proof_failed($gate, 'invalid_refresh')) return $e; return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]); }
+        if(!$row){
+            if (self::refresh_replay_detected(self::hash_token($token))) { if ($e = self::proof_failed($gate, 'refresh_replayed')) return $e; return new WP_Error('refresh_replayed','Refresh token has already been rotated.',['status'=>401]); }
+            if ($e = self::proof_failed($gate, 'invalid_refresh')) return $e; return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]);
+        }
         $d=self::request_device($request);
         if(!hash_equals((string)$row->installation_hash,(string)$d['installation_hash']) || !hash_equals((string)$row->device_hash,(string)$d['device_hash'])){
             $wpdb->update(self::table(),['revoked_at'=>current_time('mysql',true)],['id'=>(int)$row->id]);
@@ -880,6 +945,29 @@ final class DIP_Mobile_API {
         $issued = self::issue((int)$row->user_id,$request,(int)$row->id,self::hash_token($token));
         if (is_wp_error($issued) && $issued->get_error_code() === 'refresh_replayed' && ($e = self::proof_failed($gate, 'refresh_replayed'))) return $e;
         return $issued;
+    }
+
+    /**
+     * 6.17.5 (IDN-14): a refresh token that was already rotated comes back.
+     * Either the app or someone who copied its token used it first: the
+     * session (the whole token family) is ended, both copies stop working
+     * and the customer signs in again. A reuse within a minute of the
+     * rotation (a retry after a lost answer) is only refused.
+     */
+    private static function refresh_replay_detected($hash) {
+        if (get_option(self::ROTATION_READY_OPTION) !== '1') return false;
+        global $wpdb;
+        $suppress = $wpdb->suppress_errors(true);
+        $row = $wpdb->get_row($wpdb->prepare('SELECT id,user_id,revoked_at,rotated_at FROM '.self::table().' WHERE previous_refresh_hash=%s LIMIT 1', $hash));
+        $wpdb->suppress_errors($suppress);
+        if (!$row) return false;
+        $rotated = $row->rotated_at ? strtotime((string) $row->rotated_at . ' UTC') : 0;
+        if ($row->revoked_at === null && $rotated && time() - $rotated > self::REFRESH_REPLAY_GRACE) {
+            $wpdb->update(self::table(), ['revoked_at'=>current_time('mysql', true)], ['id'=>(int) $row->id]);
+            self::forget_sessions();
+            if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_refresh_replay_revoked', 'critical', (int) $row->user_id);
+        }
+        return true;
     }
 
     public static function current_session_for_request($request = null, $require_device_binding = true) {
@@ -1672,6 +1760,12 @@ final class DIP_Mobile_API {
             $suppress = $wpdb->suppress_errors(true);
             $wpdb->query($wpdb->prepare('DELETE FROM '.self::biometric_table().' WHERE (revoked_at IS NOT NULL AND revoked_at < %s) OR expires_at < %s', $cutoff, $cutoff));
             $wpdb->suppress_errors($suppress);
+        }
+        // Expired Google sign-in nonces (bounded batch, unexpired ones stay).
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT option_name, option_value FROM {$wpdb->options} WHERE option_name LIKE %s LIMIT 500", $wpdb->esc_like(self::GOOGLE_NONCE_PREFIX) . '%'), ARRAY_A);
+        foreach (is_array($rows) ? $rows : [] as $nonce_row) {
+            $record = json_decode((string) ($nonce_row['option_value'] ?? ''), true);
+            if (!is_array($record) || time() > (int) ($record['expires'] ?? 0)) delete_option((string) $nonce_row['option_name']);
         }
         DIP_Lockout::purge_counters();
     }

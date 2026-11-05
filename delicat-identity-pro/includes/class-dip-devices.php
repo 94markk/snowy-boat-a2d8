@@ -86,6 +86,24 @@ final class DIP_Devices {
         return self::legacy_hash('');
     }
 
+    /** Keyed hash of this browser's device cookie, '' without one (never the User-Agent). */
+    public static function browser_key() {
+        $device_id = self::browser_device_id(false);
+        return $device_id !== '' ? hash_hmac('sha256', 'v2|' . $device_id, wp_salt('secure_auth')) : '';
+    }
+
+    /**
+     * Has this browser (by its device cookie, never the User-Agent alone)
+     * already signed in to this account? Used to keep a customer's own
+     * phone out of an account-wide lockout (6.17.5, IDN-11).
+     */
+    public static function is_known_browser($user_id) {
+        $hash = self::browser_key();
+        if ($hash === '' || !absint($user_id)) return false;
+        global $wpdb;
+        return (int) $wpdb->get_var($wpdb->prepare('SELECT COUNT(*) FROM ' . self::table() . ' WHERE user_id=%d AND device_hash=%s', absint($user_id), $hash)) > 0;
+    }
+
     /** Hash used up to 6.11.0: HMAC(full User-Agent | device cookie). */
     private static function legacy_hash($device_id) {
         $material = self::raw_ua() . '|' . ($device_id !== '' ? $device_id : 'legacy-no-device-cookie');

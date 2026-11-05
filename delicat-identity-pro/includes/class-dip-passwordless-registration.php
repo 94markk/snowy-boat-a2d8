@@ -71,17 +71,53 @@ final class DIP_Passwordless_Registration {
         return !user_can($user, 'manage_options') && !user_can($user, 'manage_woocommerce') && !user_can($user, 'edit_posts');
     }
 
+    /** Refused staff requests are summed up in one e-mail per staff account per window (IDN-12). */
+    const STAFF_DIGEST_WINDOW = 12 * HOUR_IN_SECONDS;
+    const STAFF_DIGEST_META = '_dip_passwordless_refused_digest';
+
     /**
      * A staff address asked for a code or link: nothing that signs in is
      * sent. The mailbox owner is told why (the page itself stays generic, so
-     * it never reveals which addresses belong to staff).
+     * it never reveals which addresses belong to staff). 6.17.5: one e-mail
+     * per 12 hours at most; later refusals are counted and reported in the
+     * next one, instead of one e-mail per refused request.
      */
     private static function notify_privileged_request($user, $method) {
         if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_request_refused', 'notice', $user->ID, ['method'=>sanitize_key($method)]);
+        $digest = get_user_meta($user->ID, self::STAFF_DIGEST_META, true);
+        $digest = is_array($digest) ? $digest : ['sent_at'=>0, 'pending'=>0];
+        if ((int) ($digest['sent_at'] ?? 0) > time() - self::STAFF_DIGEST_WINDOW) {
+            $digest['pending'] = (int) ($digest['pending'] ?? 0) + 1;
+            update_user_meta($user->ID, self::STAFF_DIGEST_META, $digest);
+            return;
+        }
+        $count = (int) ($digest['pending'] ?? 0) + 1;
+        update_user_meta($user->ID, self::STAFF_DIGEST_META, ['sent_at'=>time(), 'pending'=>0]);
         $subject = __('Connexion par e-mail indisponible pour ce compte', 'delicat-google-login');
-        $body = '<p>' . esc_html__('Une demande de connexion par code ou lien e-mail a été reçue pour votre compte. Ce mode de connexion est réservé aux comptes clients : connectez-vous avec votre mot de passe et la vérification en deux étapes.', 'delicat-google-login') . '</p><p>' . esc_html__('Si vous n’êtes pas à l’origine de cette demande, aucune action n’est nécessaire.', 'delicat-google-login') . '</p>';
+        $summary = $count > 1
+            ? sprintf(__('%d demandes de connexion par code ou lien e-mail ont été reçues pour votre compte depuis notre dernier message.', 'delicat-google-login'), $count)
+            : __('Une demande de connexion par code ou lien e-mail a été reçue pour votre compte.', 'delicat-google-login');
+        $body = '<p>' . esc_html($summary . ' ' . __('Ce mode de connexion est réservé aux comptes clients : connectez-vous avec votre mot de passe et la vérification en deux étapes.', 'delicat-google-login')) . '</p><p>' . esc_html__('Si vous n’êtes pas à l’origine de ces demandes, aucune action n’est nécessaire. Les demandes suivantes seront regroupées dans un seul message toutes les 12 heures.', 'delicat-google-login') . '</p>';
         if (class_exists('DIP_Email_Hub')) DIP_Email_Hub::send_access_email($user->user_email, $subject, __('Connexion sécurisée requise', 'delicat-google-login'), $body, '', '', ['badge'=>__('Compte protégé', 'delicat-google-login'), 'accent'=>'#d97706']);
         else wp_mail($user->user_email, $subject, $body, ['Content-Type: text/html; charset=UTF-8']);
+    }
+
+    /**
+     * 6.17.5 (IDN-10): a sign-up with an address that already has an
+     * account gets the same « vérifiez votre e-mail » answer as a new one;
+     * the owner of that mailbox is told (at most every 6 hours) how to sign
+     * in instead. Used only while e-mail verification is required.
+     */
+    public static function notify_existing_account_signup($email) {
+        $user = get_user_by('email', sanitize_email((string) $email));
+        if (!$user || !is_email($user->user_email)) return;
+        if (class_exists('DIP_Lockout') && (int) DIP_Lockout::counter_hit('dip_signup_existing_' . (int) $user->ID, 6 * HOUR_IN_SECONDS) > 1) return;
+        if (class_exists('DIP_Audit')) DIP_Audit::record('signup_existing_account', 'notice', $user->ID);
+        $login = function_exists('wc_get_page_permalink') ? wc_get_page_permalink('myaccount') : wp_login_url();
+        $lost = function_exists('wc_get_account_endpoint_url') ? wc_get_account_endpoint_url('lost-password') : wp_lostpassword_url();
+        $body = '<p>' . esc_html__('Quelqu’un vient d’essayer de créer un compte Delicat avec votre adresse e-mail. Vous avez déjà un compte : aucun nouveau compte n’a été créé.', 'delicat-google-login') . '</p><p>' . esc_html__('Si c’était vous, connectez-vous avec votre mot de passe, Google ou un lien reçu par e-mail. Mot de passe oublié ?', 'delicat-google-login') . ' <a href="' . esc_url($lost) . '">' . esc_html__('Choisir un nouveau mot de passe', 'delicat-google-login') . '</a></p><p>' . esc_html__('Si ce n’était pas vous, aucune action n’est nécessaire.', 'delicat-google-login') . '</p>';
+        if (class_exists('DIP_Email_Hub')) DIP_Email_Hub::send_access_email($user->user_email, __('Vous avez déjà un compte Delicat', 'delicat-google-login'), __('Vous avez déjà un compte', 'delicat-google-login'), $body, __('Me connecter', 'delicat-google-login'), $login, ['badge'=>__('Compte existant', 'delicat-google-login')]);
+        else wp_mail($user->user_email, __('Vous avez déjà un compte Delicat', 'delicat-google-login'), $body, ['Content-Type: text/html; charset=UTF-8']);
     }
 
     public static function defaults() {
@@ -194,11 +230,6 @@ final class DIP_Passwordless_Registration {
         </div><?php
     }
 
-    private static function rate_key($email, $action) {
-        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::client_ip() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-        return self::RATE_PREFIX . md5(strtolower((string) $email) . '|' . sanitize_key($action) . '|' . hash_hmac('sha256', $ip, wp_salt('auth')));
-    }
-
     private static function client_key() {
         // Bind OTPs to a stable first-party browser identifier rather than the
         // IP address, which can legitimately change on mobile networks between
@@ -226,18 +257,49 @@ final class DIP_Passwordless_Registration {
             || 'yes' === get_option('woocommerce_enable_signup_and_login_from_checkout');
     }
 
-    private static function throttle($email, $action, $seconds = 60) {
-        $key = self::rate_key($email, $action);
-        if (get_transient($key)) return false;
-        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::client_ip() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
-        $global_key = self::RATE_PREFIX . 'ip_' . sanitize_key($action) . '_' . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 32);
-        $state = get_transient($global_key);
-        if (!is_array($state) || empty($state['reset']) || (int) $state['reset'] <= time()) $state = ['count'=>0,'reset'=>time() + 10 * MINUTE_IN_SECONDS];
-        if ((int) $state['count'] >= 12) return false;
-        $state['count']++;
-        set_transient($global_key, $state, max(1, (int) $state['reset'] - time()));
-        set_transient($key, 1, $seconds);
-        return true;
+    /** Codes or links mailed to one address per hour, whatever the sender's address (IDN-12). */
+    const MAILBOX_HOURLY = 6;
+    /** Requests per 10 minutes from one address + browser, and from a whole shared address. */
+    const DEVICE_REQUESTS = 12;
+    const ADDRESS_REQUESTS = 120;
+
+    /**
+     * 6.17.5 (IDN-02, IDN-12): 0 when a code or link may be mailed now,
+     * otherwise the seconds to wait. The cooldown and the hourly cap belong
+     * to the mailbox (rotating addresses no longer floods it); the 10-minute
+     * cap counts this address + browser, with a looser ceiling for the
+     * shared address (Digicel/Natcom). Checked before the account lookup:
+     * the answer never reveals whether the address has an account.
+     */
+    private static function throttle_wait($email, $action, $seconds = 60) {
+        if (!class_exists('DIP_Lockout') || !method_exists('DIP_Lockout', 'counter_peek')) return 0;
+        $action = sanitize_key($action);
+        $mailbox = substr(hash_hmac('sha256', strtolower(trim((string) $email)), wp_salt('nonce')), 0, 32);
+        $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::throttle_ip() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
+        $device = class_exists('DIP_Devices') && method_exists('DIP_Devices', 'browser_key') ? (string) DIP_Devices::browser_key() : '';
+        if ($device === '') $device = self::client_key();
+        $buckets = [
+            ['key'=>self::RATE_PREFIX . 'cd_' . $action . '_' . $mailbox, 'window'=>max(30, absint($seconds)), 'limit'=>1],
+            ['key'=>self::RATE_PREFIX . 'mb_' . $action . '_' . $mailbox, 'window'=>HOUR_IN_SECONDS, 'limit'=>self::MAILBOX_HOURLY],
+            ['key'=>self::RATE_PREFIX . 'dev_' . $action . '_' . substr(hash_hmac('sha256', $ip . '|' . $device, wp_salt('nonce')), 0, 32), 'window'=>10 * MINUTE_IN_SECONDS, 'limit'=>self::DEVICE_REQUESTS],
+            ['key'=>self::RATE_PREFIX . 'ip_' . $action . '_' . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 32), 'window'=>10 * MINUTE_IN_SECONDS, 'limit'=>self::ADDRESS_REQUESTS],
+        ];
+        $wait = 0;
+        foreach ($buckets as $bucket) {
+            $peek = DIP_Lockout::counter_peek($bucket['key']);
+            if ((int) $peek['count'] >= $bucket['limit']) $wait = max($wait, (int) $peek['until'] - time());
+        }
+        if ($wait > 0) return max(1, $wait);
+        foreach ($buckets as $bucket) DIP_Lockout::counter_hit($bucket['key'], $bucket['window']);
+        return 0;
+    }
+
+    /** « Patientez X min… » shown when a code or link request is throttled. */
+    private static function wait_message($seconds, $what = 'link') {
+        $minutes = max(1, (int) ceil(absint($seconds) / MINUTE_IN_SECONDS));
+        return $what === 'code'
+            ? sprintf(_n('Patientez %d min avant de redemander un code.', 'Patientez %d min avant de redemander un code.', $minutes, 'delicat-google-login'), $minutes)
+            : sprintf(_n('Patientez %d min avant de redemander un lien.', 'Patientez %d min avant de redemander un lien.', $minutes, 'delicat-google-login'), $minutes);
     }
 
     private static function redirect($args = []) {
@@ -290,7 +352,8 @@ final class DIP_Passwordless_Registration {
         if ($s['otp_enabled'] !== 'yes') self::redirect(['dip_auth'=>'disabled']);
         $email = sanitize_email(self::posted('email'));
         if (!$email || !is_email($email)) self::redirect(['dip_auth'=>'invalid_email']);
-        if (!self::throttle($email, 'otp', 60)) self::redirect(['dip_auth'=>'wait']);
+        $wait = self::throttle_wait($email, 'otp', 60);
+        if ($wait > 0) self::redirect(['dip_auth'=>'wait_code', 'dip_wait'=>max(1, (int) ceil($wait / MINUTE_IN_SECONDS))]);
         // While wrong codes keep this address locked, no new code is mailed.
         if (self::otp_verify_blocked($email)) self::redirect(['dip_auth'=>'otp_locked']);
         if (wp_rand(1, 20) === 1) self::otp_collect_garbage();
@@ -337,20 +400,6 @@ final class DIP_Passwordless_Registration {
         if (!$user || !is_email($user->user_email) || !self::passwordless_allowed($user)) return false;
         $s = self::settings();
         return $s['otp_enabled'] === 'yes' || $s['magic_enabled'] === 'yes';
-    }
-
-    /**
-     * Proof of the mailbox does not hand over an unverified account that
-     * already carries a passkey, an authenticator app or a provider identity:
-     * a password reset would not end those (DIP_Account_Sync).
-     */
-    private static function refuse_unproven_with_credentials($user, $method, $from_link = false) {
-        if (!class_exists('DIP_Account_Sync') || !method_exists('DIP_Account_Sync', 'unproven_account_credentials')) return;
-        $found = DIP_Account_Sync::unproven_account_credentials($user->ID);
-        if (!$found) return;
-        if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user->ID, ['method'=>sanitize_key($method), 'credentials'=>implode(',', $found)]);
-        if ($from_link) { wp_safe_redirect(add_query_arg('dip_auth', 'unverified_account_conflict', home_url('/'))); exit; }
-        self::redirect(['dip_auth'=>'unverified_account_conflict']);
     }
 
     /** Verify-side guessing guard: only wrong codes count (a success never does). */
@@ -490,23 +539,23 @@ final class DIP_Passwordless_Registration {
                 $created = true;
                 update_user_meta($id, DIP_Identity::META_PASSWORD_MANAGED, 'yes');
                 if (class_exists('DIP_Native_Auth')) DIP_Native_Auth::record_registration();
-                if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email, 'otp'); else update_user_meta($id, 'dip_email_verified', 'yes');
+                DIP_Email_Proof::prove($id, $email, 'otp');
                 do_action('dip_user_created', $id, ['provider'=>'email_otp','email'=>$email]);
                 $user = get_user_by('id', $id);
             }
         }
         if (!$user) self::redirect(['dip_auth'=>'account_required']);
-        // A valid OTP proves mailbox ownership even for a pre-existing unverified
+        // A valid OTP proves mailbox ownership even for a pre-existing unproven
         // account; credentials set up before that proof are reset (pre-hijacking).
-        if (get_user_meta($user->ID, 'dip_email_verified', true) === 'no') {
-            self::refuse_unproven_with_credentials($user, 'email_otp');
-            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user->ID, $email, 'otp'); else update_user_meta($user->ID, 'dip_email_verified', 'yes');
+        if (DIP_Email_Proof::is_unproven($user->ID)) {
+            if (is_wp_error(DIP_Email_Proof::prove($user->ID, $email, 'otp'))) self::redirect(['dip_auth'=>'unverified_account_conflict']);
         }
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user->ID) : true;
         if (is_wp_error($guard)) self::redirect(['dip_auth'=>$guard->get_error_code()]);
-        self::login_user($user, 'email_otp');
+        $destination = self::after_proof_destination($user->ID, $s['redirect_after_login']);
+        self::login_user($user, 'email_otp', $destination);
         if (class_exists('DIP_Audit')) DIP_Audit::log('passwordless_otp_login', $user->ID, []);
-        wp_safe_redirect(self::safe_redirect($s['redirect_after_login'])); exit;
+        wp_safe_redirect($destination); exit;
     }
 
     private static function magic_reply($args) {
@@ -515,7 +564,9 @@ final class DIP_Passwordless_Registration {
         if ($status === 'confirmation_failed') wp_send_json_error(['code'=>'bad_nonce','message'=>'Votre session a expiré. Réessayez.'],403);
         if ($status === 'invalid_email') wp_send_json_error(['code'=>'invalid_email','message'=>'Saisissez une adresse e-mail valide.'],400);
         if ($status === 'disabled') wp_send_json_error(['code'=>'disabled','message'=>'La connexion par lien est indisponible.'],403);
-        // Same reply for unknown, blocked, privileged, throttled and undeliverable addresses.
+        // Throttled: say so (the same for every address, known or not), instead of a silent « vérifiez votre boîte ».
+        if ($status === 'wait_link') wp_send_json_error(['code'=>'rate_limited','message'=>self::wait_message(absint($args['dip_wait'] ?? 1) * MINUTE_IN_SECONDS, 'link'),'retry_after'=>absint($args['dip_wait'] ?? 1) * MINUTE_IN_SECONDS],429);
+        // Same reply for unknown, blocked, privileged and undeliverable addresses.
         wp_send_json_success(['message'=>'Si cette adresse correspond à un compte autorisé, vous recevrez un lien de connexion. Vérifiez aussi vos courriers indésirables.']);
     }
 
@@ -526,7 +577,8 @@ final class DIP_Passwordless_Registration {
         if ($s['magic_enabled'] !== 'yes') self::magic_reply(['dip_auth'=>'disabled']);
         $email = sanitize_email(self::posted('email'));
         if (!$email || !is_email($email)) self::magic_reply(['dip_auth'=>'invalid_email']);
-        if (!self::throttle($email, 'magic', 90)) self::magic_reply(['dip_auth'=>'wait']);
+        $wait = self::throttle_wait($email, 'magic', 90);
+        if ($wait > 0) self::magic_reply(['dip_auth'=>'wait_link', 'dip_wait'=>max(1, (int) ceil($wait / MINUTE_IN_SECONDS))]);
         $user = get_user_by('email', $email);
         if (!$user && ($s['allow_new_passwordless_users'] !== 'yes' || !self::new_accounts_allowed())) self::magic_reply(['dip_auth'=>'sent']);
         if ($user && class_exists('DIP_Account_Control') && DIP_Account_Control::ban_error($user->ID)) self::magic_reply(['dip_auth'=>'sent']);
@@ -639,7 +691,7 @@ final class DIP_Passwordless_Registration {
             if (!is_wp_error($id)) {
                 update_user_meta($id, DIP_Identity::META_PASSWORD_MANAGED, 'yes');
                 if (class_exists('DIP_Native_Auth')) DIP_Native_Auth::record_registration();
-                if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email, 'magic'); else update_user_meta($id, 'dip_email_verified', 'yes');
+                DIP_Email_Proof::prove($id, $email, 'magic');
                 do_action('dip_user_created', $id, ['provider'=>'magic_link','email'=>$email]);
                 $user = get_user_by('id', $id);
             }
@@ -649,15 +701,15 @@ final class DIP_Passwordless_Registration {
             if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_blocked', 'warning', $user->ID, ['method'=>'magic_link']);
             wp_safe_redirect(add_query_arg('dip_auth','privileged_passwordless_blocked',home_url('/'))); exit;
         }
-        if (get_user_meta($user->ID, 'dip_email_verified', true) === 'no') {
-            self::refuse_unproven_with_credentials($user, 'magic_link', true);
-            if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($user->ID, $email, 'magic'); else update_user_meta($user->ID, 'dip_email_verified', 'yes');
+        if (DIP_Email_Proof::is_unproven($user->ID)) {
+            if (is_wp_error(DIP_Email_Proof::prove($user->ID, $email, 'magic'))) { wp_safe_redirect(add_query_arg('dip_auth', 'unverified_account_conflict', home_url('/'))); exit; }
         }
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user->ID) : true;
         if (is_wp_error($guard)) { wp_safe_redirect(add_query_arg('dip_auth',$guard->get_error_code(),home_url('/'))); exit; }
-        self::login_user($user, 'magic_link');
+        $destination = self::after_proof_destination($user->ID, $s['redirect_after_login']);
+        self::login_user($user, 'magic_link', $destination);
         if (class_exists('DIP_Audit')) DIP_Audit::log('magic_link_login', $user->ID, []);
-        wp_safe_redirect(self::safe_redirect($s['redirect_after_login'])); exit;
+        wp_safe_redirect($destination); exit;
     }
 
     public static function register_customer() {
@@ -677,7 +729,12 @@ final class DIP_Passwordless_Registration {
         [$min, $max] = self::password_limits();
         $password_len = function_exists('mb_strlen') ? mb_strlen($password, 'UTF-8') : strlen($password);
         if (!is_email($email) || strlen($password) > 1024 || $password_len < $min || $password_len > $max || !preg_match('/\p{L}/u', $password) || !preg_match('/\p{N}/u', $password)) self::redirect(['dip_register'=>'invalid']);
-        if (email_exists($email)) self::redirect(['dip_register'=>'failed']);
+        if (email_exists($email)) {
+            if (!self::requires_email_verification()) self::redirect(['dip_register'=>'failed']);
+            // Same answer as a new sign-up (IDN-10); the owner gets an e-mail instead.
+            self::notify_existing_account_signup($email);
+            self::redirect(['dip_register'=>'verify_sent']);
+        }
         $fields = array_filter(explode(',', $s['registration_fields']));
         if (in_array('terms',$fields,true) && empty($_POST['terms'])) self::redirect(['dip_register'=>'terms']);
         $first = sanitize_text_field(wp_unslash($_POST['first_name'] ?? ''));
@@ -701,12 +758,14 @@ final class DIP_Passwordless_Registration {
                 wp_delete_user($id);
                 self::redirect(['dip_register'=>'email_failed']);
             }
+            // The browser that chose this password may confirm it and keep it (IDN-01).
+            DIP_Email_Proof::bind_registration_browser($id);
             if (class_exists('DIP_Audit')) DIP_Audit::record('custom_registration_pending_verification', 'notice', $id);
             self::redirect(['dip_register'=>'verify_sent']);
         }
         // Verification is switched off: the address is usable for sign-in but is
         // not proven, so it neither becomes proof nor claims guest orders.
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($id, $email, 'unproven');
+        DIP_Email_Proof::prove($id, $email, 'unproven');
         $user = get_user_by('id',$id);
         self::login_user($user, 'custom_registration');
         if (class_exists('DIP_Audit')) DIP_Audit::record('custom_registration', 'info', $id);
@@ -719,7 +778,8 @@ final class DIP_Passwordless_Registration {
         if (!$confirm && (empty($_GET['dip_verify_email']) || empty($_GET['uid']) || empty($_GET['token']))) return;
         nocache_headers();
         $uid = absint($confirm ? ($_POST['uid'] ?? 0) : ($_GET['uid'] ?? 0));
-        $token = sanitize_text_field(wp_unslash($confirm ? ($_POST['token'] ?? '') : ($_GET['token'] ?? '')));
+        $raw_token = $confirm ? ($_POST['token'] ?? '') : ($_GET['token'] ?? '');
+        $token = is_scalar($raw_token) ? sanitize_text_field(wp_unslash((string) $raw_token)) : '';
         $user = get_user_by('id', $uid);
         $stored = (string) get_user_meta($uid, '_dip_email_verify_hash', true);
         $stored_email = (string) get_user_meta($uid, '_dip_email_verify_email_hash', true);
@@ -730,13 +790,22 @@ final class DIP_Passwordless_Registration {
             wp_safe_redirect(add_query_arg('dip_register', 'verify_expired', home_url('/'))); exit;
         }
 
+        // IDN-01 (6.17.5): opened in the browser that registered, the link
+        // only confirms the address (the registrant chose the password).
+        // Opened anywhere else it is a proof by the mailbox owner, like an
+        // e-mail code: the sign-up password stops working, the owner is
+        // signed in by this link and then chooses a password.
+        $same_browser = DIP_Email_Proof::registration_browser_matches($uid);
+        $signs_in = !$same_browser && self::passwordless_allowed($user);
         $nonce_base = 'dip_email_verify_' . $uid . '_' . substr(hash_hmac('sha256', $token, wp_salt('nonce')), 0, 20);
         if (!$confirm) {
             $nonce = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::issue_browser_nonce($nonce_base) : '';
             if ($nonce === '') { wp_safe_redirect(add_query_arg('dip_register','confirmation_failed',home_url('/'))); exit; }
             self::confirmation_page(
                 __('Vérifier votre adresse e-mail', 'delicat-google-login'),
-                sprintf(__('Confirmez l’adresse %s pour activer votre compte.', 'delicat-google-login'), self::masked_email($user->user_email)),
+                $signs_in
+                    ? sprintf(__('Confirmez l’adresse %s : vous serez connecté à ce compte sur cet appareil.', 'delicat-google-login'), self::masked_email($user->user_email))
+                    : sprintf(__('Confirmez l’adresse %s pour activer votre compte.', 'delicat-google-login'), self::masked_email($user->user_email)),
                 __('Vérifier mon e-mail', 'delicat-google-login'),
                 ['dip_verify_email_confirm'=>'1','uid'=>$uid,'token'=>$token],
                 $nonce
@@ -745,30 +814,56 @@ final class DIP_Passwordless_Registration {
         if (!class_exists('DIP_Native_Auth') || !DIP_Native_Auth::verify_browser_nonce($nonce_base)) {
             wp_safe_redirect(add_query_arg('dip_register','confirmation_failed',home_url('/'))); exit;
         }
+        // Signing in must never replace another account's session in this
+        // browser: the link stays usable once that account signs out.
+        if ($signs_in && is_user_logged_in() && get_current_user_id() !== $uid) {
+            wp_safe_redirect(add_query_arg('dip_auth', 'already_logged_in', home_url('/'))); exit;
+        }
 
-        update_user_meta($uid, 'dip_email_verified', 'yes');
-        delete_user_meta($uid, '_dip_email_verify_hash');
-        delete_user_meta($uid, '_dip_email_verify_email_hash');
-        delete_user_meta($uid, '_dip_email_verify_expires');
-        if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_verified_registration($uid, $user->user_email, 'email_link');
+        $proven = DIP_Email_Proof::prove($uid, $user->user_email, $same_browser ? 'email_link' : 'email_link_foreign');
+        if (is_wp_error($proven)) { wp_safe_redirect(add_query_arg('dip_auth', 'unverified_account_conflict', home_url('/'))); exit; }
         // A provider identity kept pending at sign-up is bound only now, and
-        // only for the browser that started that sign-up (DIP_Identity checks).
-        $provider_linked = class_exists('DIP_Identity') && method_exists('DIP_Identity', 'promote_pending_provider_link')
-            ? (bool) DIP_Identity::promote_pending_provider_link($uid)
-            : false;
-        if (class_exists('DIP_Audit')) DIP_Audit::log('registration_email_verified', $uid, $provider_linked ? ['provider_link'=>'promoted'] : []);
+        // only for the browser that started that sign-up (DIP_Identity
+        // checks); a proof from another browser drops it.
+        $provider_linked = false;
+        if (class_exists('DIP_Identity') && method_exists('DIP_Identity', 'promote_pending_provider_link')) {
+            if ($same_browser) $provider_linked = (bool) DIP_Identity::promote_pending_provider_link($uid);
+            else DIP_Identity::clear_pending_provider_link($uid);
+        }
+        if (class_exists('DIP_Audit')) DIP_Audit::log('registration_email_verified', $uid, array_filter(['provider_link'=>$provider_linked ? 'promoted' : '', 'browser'=>$same_browser ? 'registration' : 'other']));
 
-        // Verification proves mailbox ownership but does not silently replace
-        // the visitor's current WordPress identity. The customer explicitly
-        // signs in afterwards, eliminating verification-link login CSRF.
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($uid) : true;
         if (is_wp_error($guard)) { wp_safe_redirect(add_query_arg('dip_auth', $guard->get_error_code(), home_url('/'))); exit; }
         $s = self::settings();
+        if ($signs_in) {
+            $user = get_user_by('id', $uid);
+            // The sign-up password was dropped (or the account never had one
+            // its owner knows): the customer chooses one right away.
+            $managed = get_user_meta($uid, DIP_Identity::META_PASSWORD_MANAGED, true) === 'yes';
+            $destination = DIP_Email_Proof::password_replaced($uid) || $managed ? self::choose_password_url() : self::safe_redirect($s['redirect_after_login']);
+            self::login_user($user, 'email_verification', $destination);
+            wp_safe_redirect($destination); exit;
+        }
+        // Same browser: the registrant explicitly signs in afterwards with the
+        // password they chose (no verification-link login CSRF).
         $destination = add_query_arg('dip_verified', '1', self::safe_redirect($s['redirect_after_register']));
         wp_safe_redirect($destination . '#delicat-login'); exit;
     }
 
-    private static function login_user($user, $method = 'passwordless') {
+    /** Account page where a customer whose sign-up password was dropped chooses one. */
+    private static function choose_password_url() {
+        $url = function_exists('wc_get_account_endpoint_url') && class_exists('DIP_Account_Control')
+            ? wc_get_account_endpoint_url(DIP_Account_Control::ENDPOINT)
+            : home_url('/my-account/');
+        return add_query_arg('dip_choose_password', '1', $url);
+    }
+
+    /** After an e-mail code or link sign-in: choose a password when the proof replaced the sign-up one. */
+    private static function after_proof_destination($user_id, $default) {
+        return DIP_Email_Proof::password_replaced($user_id) ? self::choose_password_url() : self::safe_redirect($default);
+    }
+
+    private static function login_user($user, $method = 'passwordless', $destination = '') {
         if (!($user instanceof WP_User)) return;
         // Every session this class opens is a customer one (OTP, magic link,
         // storefront registration); staff never get one from a mailbox alone.
@@ -778,7 +873,7 @@ final class DIP_Passwordless_Registration {
         }
         if (class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user->ID)) {
             $s = self::settings();
-            $destination = self::safe_redirect($s['redirect_after_login'] ?? '/my-account/');
+            $destination = $destination !== '' ? $destination : self::safe_redirect($s['redirect_after_login'] ?? '/my-account/');
             $challenge = DIP_Two_Factor::begin_web_challenge($user->ID, $destination, true, sanitize_key($method));
             if ($challenge !== '') {
                 wp_safe_redirect($challenge);
@@ -813,6 +908,9 @@ final class DIP_Passwordless_Registration {
         $code = sanitize_key($_GET['dip_auth'] ?? $_GET['dip_register'] ?? '');
         [$pass_min] = self::password_limits();
         $map = ['sent'=>'Si ce compte existe, un message a été envoyé.','wait'=>'Veuillez attendre avant de réessayer.','invalid_email'=>'Adresse email invalide.','invalid_code'=>'Code incorrect.','expired'=>'Le code ou lien a expiré.','account_required'=>'Créez d’abord un compte.','terms'=>'Vous devez accepter les conditions.','invalid'=>sprintf('Vérifiez les champs et utilisez un mot de passe d’au moins %d caractères avec une lettre et un chiffre.', $pass_min),'failed'=>'Inscription impossible.','verify_sent'=>'Compte créé. Vérifiez votre email pour l’activer.','verify_expired'=>'Le lien de vérification est invalide ou expiré.','email_failed'=>'L’e-mail n’a pas pu être envoyé. Vérifiez la configuration SMTP du site.','already_logged_in'=>'Vous êtes déjà connecté. Déconnectez-vous avant de créer un autre compte.','registration_rate_limited'=>'Limite d’inscriptions atteinte. Réessayez dans une heure.','registration_attempt_rate_limited'=>'Trop de demandes d’inscription. Réessayez dans quelques minutes.','account_pending_approval'=>'Votre compte attend l’approbation de l’administrateur.','dip_email_not_verified'=>'Vérifiez votre adresse e-mail avant de vous connecter.','confirmation_failed'=>'La confirmation sécurisée a expiré. Ouvrez de nouveau le lien.','two_factor_challenge_failed'=>'Impossible de démarrer la vérification en deux étapes. Réessayez.','disabled'=>'Cette méthode de connexion est désactivée.','otp_exhausted'=>'Trop d’essais pour ce code. Demandez un nouveau code.','otp_locked'=>'Trop de codes incorrects. Réessayez plus tard ou utilisez le lien de connexion par e-mail.','privileged_passwordless_blocked'=>'La connexion par code ou lien e-mail est réservée aux comptes clients. Connectez-vous avec votre mot de passe.','unverified_account_conflict'=>'Cette adresse attend sa confirmation sur un compte existant. Si ce compte est le vôtre, confirmez l’adresse avec le lien de vérification reçu par e-mail ; sinon, contactez le support.'];
+        if ($code === 'wait_code' || $code === 'wait_link') {
+            $map[$code] = self::wait_message(absint($_GET['dip_wait'] ?? 1) * MINUTE_IN_SECONDS, $code === 'wait_code' ? 'code' : 'link'); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presentation only.
+        }
         return isset($map[$code]) ? '<div class="dip-auth-notice">'.esc_html($map[$code]).'</div>' : '';
     }
 

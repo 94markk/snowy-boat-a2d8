@@ -85,12 +85,12 @@ final class DIP_Security_Center {
             'passkey' => [
                 'ok' => class_exists('DIP_Passkeys') && DIP_Passkeys::has_passkeys($user_id),
                 'label' => 'Passkey phishing-resistant enregistrée',
-                'points' => 20,
+                'points' => 25,
             ],
             'two_factor' => [
                 'ok' => class_exists('DIP_Two_Factor') && DIP_Two_Factor::is_enabled($user_id),
                 'label' => 'Authentification à deux facteurs active',
-                'points' => 20,
+                'points' => 25,
             ],
             'password' => [
                 'ok' => get_user_meta($user_id, DIP_Identity::META_PASSWORD_MANAGED, true) !== 'yes',
@@ -98,8 +98,9 @@ final class DIP_Security_Center {
                 'points' => 10,
             ],
             'provider' => ['ok'=>$has_provider,'label'=>$is_admin ? 'Google Secure Mode Administrateur approuvé' : 'Compte social connecté','points'=>10],
-            'trusted' => ['ok'=>count(array_filter($devices, function($d){ return !empty($d['trusted']); })) > 0,'label'=>'Au moins un appareil de confiance','points'=>15],
-            'email' => ['ok'=>$email_verified,'label'=>'Adresse e-mail vérifiée','points'=>15],
+            // 6.17.5 (IDN-15): « Appareil de confiance » no longer earns points:
+            // it is a label for the customer and changes nothing at sign-in.
+            'email' => ['ok'=>$email_verified,'label'=>'Adresse e-mail vérifiée','points'=>20],
             'https' => ['ok'=>is_ssl(),'label'=>'Session protégée par HTTPS','points'=>10],
         ];
         $score = 0;
@@ -108,7 +109,7 @@ final class DIP_Security_Center {
     }
 
     /** Customer-facing French label of a security event. */
-    private static function event_label($type) {
+    public static function event_label($type) {
         $type = sanitize_key((string) $type);
         $labels = [
             'login_success'=>'Connexion réussie','login_failed'=>'Échec de connexion','login_blocked'=>'Connexion bloquée',
@@ -433,7 +434,7 @@ final class DIP_Security_Center {
             <?php if (class_exists('DIP_Security_Recommendations')) echo DIP_Security_Recommendations::render_customer($user_id, $devices); ?>
 
             <div class="dip-security-card" id="dip-security-devices">
-              <div class="dip-security-card-title"><span class="dip-security-card-icon is-device" aria-hidden="true">▣</span><div><h3><?php esc_html_e('Appareils', 'delicat-google-login'); ?></h3><p><?php esc_html_e('Navigateurs qui se sont connectés à votre compte. Marquez vos appareils personnels comme appareils de confiance et supprimez ceux que vous ne reconnaissez pas.', 'delicat-google-login'); ?></p></div></div>
+              <div class="dip-security-card-title"><span class="dip-security-card-icon is-device" aria-hidden="true">▣</span><div><h3><?php esc_html_e('Appareils', 'delicat-google-login'); ?></h3><p><?php esc_html_e('Navigateurs qui se sont connectés à votre compte. Supprimez ceux que vous ne reconnaissez pas, puis déconnectez les autres sessions. « De confiance » est un repère pour vous : il ne change rien à la connexion et garde seulement l’appareil un an dans cette liste.', 'delicat-google-login'); ?></p></div></div>
               <?php if (!$devices): ?><p class="dip-security-empty"><?php esc_html_e('Aucun appareil enregistré.', 'delicat-google-login'); ?></p><?php endif; ?>
               <?php foreach (array_slice($devices, 0, $device_visible) as $device) echo self::render_device($device, $current_hash); // phpcs:ignore WordPress.Security.EscapeOutput -- escaped in render_device ?>
               <?php if (count($devices) > $device_visible): ?>
@@ -502,6 +503,8 @@ final class DIP_Security_Center {
         $user_id = get_current_user_id();
         if (class_exists('WP_Session_Tokens')) WP_Session_Tokens::get_instance($user_id)->destroy_others(wp_get_session_token());
         $mobile_revoked = class_exists('DIP_Mobile_API') ? DIP_Mobile_API::revoke_all_for_user($user_id, 'security_center_logout_others') : 0;
+        // IDN-07: what was added in the last 7 days goes too, except what opened this session.
+        DIP_Recent_Credentials::cleanup($user_id, 'logout_others', true);
         DIP_Audit::record('sessions_revoked','warning',$user_id,['mobile_revoked'=>(int)$mobile_revoked]);
         do_action('dip_customer_sessions_revoked',$user_id,'logout_others');
         self::redirect('sessions');
@@ -509,11 +512,7 @@ final class DIP_Security_Center {
 
     /** Is the account's current e-mail address proven (its verified fingerprint matches)? */
     private static function email_verified($user_id) {
-        $user = get_userdata($user_id);
-        if (!$user || !is_email($user->user_email)) return false;
-        $fingerprint = (string) get_user_meta($user_id, '_dip_verified_email_fingerprint', true);
-        return get_user_meta($user_id, 'dip_email_verified', true) === 'yes'
-            && $fingerprint !== '' && hash_equals($fingerprint, hash('sha256', strtolower(sanitize_email($user->user_email))));
+        return DIP_Email_Proof::is_proven($user_id);
     }
 
     /** Can this account ask for a verification link from the Security Center? */
@@ -547,6 +546,8 @@ final class DIP_Security_Center {
         $user = wp_get_current_user();
         $sent = (bool) DIP_Passwordless_Registration::send_email_verification($user_id, $user->user_email);
         if (!$sent) delete_transient($cooldown);
+        // Opened in this signed-in browser, the link keeps the account's password (IDN-01).
+        else DIP_Email_Proof::bind_registration_browser($user_id);
         DIP_Audit::record('email_verification_requested', 'notice', $user_id, ['sent'=>$sent ? 1 : 0]);
         self::redirect($sent ? 'email_sent' : 'email_failed');
     }

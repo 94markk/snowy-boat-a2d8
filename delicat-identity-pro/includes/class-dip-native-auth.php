@@ -67,6 +67,7 @@ final class DIP_Native_Auth {
         // modern themes an earlier insertion point; wp_footer is a guarded fallback.
         add_action('wp_body_open', [__CLASS__, 'render_modal'], 99);
         add_action('wp_footer', [__CLASS__, 'render_modal'], 5);
+        add_action('wp_head', [__CLASS__, 'print_trigger_fallback'], 2);
         add_action('admin_notices', [__CLASS__, 'legacy_snippet_notice']);
     }
 
@@ -153,16 +154,28 @@ final class DIP_Native_Auth {
     }
 
     /**
-     * REMOTE_ADDR is the trusted default. Cloudflare's visitor header is only
-     * honored when the site owner explicitly opts in, avoiding header spoofing
-     * on origins that are reachable directly.
+     * Does this request come straight from a Cloudflare edge? Only then are
+     * Cloudflare's visitor headers (CF-Connecting-IP, CF-IPCountry) believed.
+     * Define DIP_TRUST_CLOUDFLARE_HEADERS as false to never believe them.
+     */
+    public static function from_cloudflare_edge() {
+        if (defined('DIP_TRUST_CLOUDFLARE_HEADERS') && DIP_TRUST_CLOUDFLARE_HEADERS === false) return false;
+        $remote = self::normalize_ip(wp_unslash($_SERVER['REMOTE_ADDR'] ?? ''));
+        return $remote !== '' && self::is_cloudflare_edge($remote);
+    }
+
+    /**
+     * Visitor address. REMOTE_ADDR is the default. 6.17.5 (IDN-03): the
+     * Cloudflare visitor header is believed only when the connection itself
+     * comes from Cloudflare's published ranges, whether or not the
+     * DIP_TRUST_CLOUDFLARE_* constants are defined. Before, with a constant
+     * defined, anyone reaching the origin directly could send any
+     * CF-Connecting-IP and reset every per-address limit at will.
      */
     public static function client_ip() {
         $remote = self::normalize_ip(wp_unslash($_SERVER['REMOTE_ADDR'] ?? '')) ?: '0.0.0.0';
         $ip = $remote;
-        $trust_cf = (defined('DIP_TRUST_CLOUDFLARE_CONNECTING_IP') && DIP_TRUST_CLOUDFLARE_CONNECTING_IP)
-            || (defined('DIP_TRUST_CLOUDFLARE_HEADERS') && DIP_TRUST_CLOUDFLARE_HEADERS);
-        if ($trust_cf && !empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        if (!empty($_SERVER['HTTP_CF_CONNECTING_IP']) && self::from_cloudflare_edge()) {
             $cf = self::normalize_ip(wp_unslash($_SERVER['HTTP_CF_CONNECTING_IP']));
             if ($cf) $ip = $cf;
         }
@@ -172,31 +185,31 @@ final class DIP_Native_Auth {
     }
 
     /**
-     * Address that buckets the Google/OAuth, storefront and mobile throttles.
-     * Behind Cloudflare the connection address is a shared edge, so every
-     * customer routed through it shared one bucket and got "Trop de
-     * tentatives" or a 20-minute lockout. When the connection really comes
-     * from a Cloudflare edge, the visitor address from CF-Connecting-IP is
-     * used instead. IPv6 addresses are grouped by /64 (one subscriber), so
-     * rotating addresses inside a prefix does not create fresh buckets.
-     * The password lockout, registration caps and verification resend use it
-     * too (bucket_ip()). Policy and audit keep client_ip(), which trusts the
-     * header only on explicit opt-in. Define DIP_TRUST_CLOUDFLARE_HEADERS as
-     * false to disable.
+     * Address that buckets the Google/OAuth, storefront, mobile, password
+     * lockout, registration and verification-resend throttles: the visitor
+     * address of client_ip() (Cloudflare-aware), with IPv6 grouped by /64
+     * (one subscriber), so rotating addresses inside a prefix does not
+     * create fresh buckets.
      */
     public static function throttle_ip() {
         $ip = self::client_ip();
-        $remote = self::normalize_ip(wp_unslash($_SERVER['REMOTE_ADDR'] ?? '')) ?: '0.0.0.0';
-        $opted_out = defined('DIP_TRUST_CLOUDFLARE_HEADERS') && DIP_TRUST_CLOUDFLARE_HEADERS === false;
-        if ($ip === $remote && !$opted_out && !empty($_SERVER['HTTP_CF_CONNECTING_IP']) && self::is_cloudflare_edge($remote)) {
-            $cf = self::normalize_ip(wp_unslash($_SERVER['HTTP_CF_CONNECTING_IP']));
-            if ($cf) $ip = $cf;
-        }
         if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
             $packed = inet_pton($ip);
             if ($packed !== false) $ip = inet_ntop(substr($packed, 0, 8) . str_repeat("\0", 8));
         }
         return $ip;
+    }
+
+    /**
+     * Network of an address: the /24 for IPv4, the /64 for IPv6. App pairing
+     * compares the browser that asks with the phone that approves (IDN-05).
+     */
+    public static function network_prefix($ip) {
+        $ip = self::normalize_ip($ip);
+        $packed = $ip !== '' ? @inet_pton($ip) : false;
+        if ($packed === false) return '';
+        if (strlen($packed) === 4) return inet_ntop(substr($packed, 0, 3) . "\0") . '/24';
+        return inet_ntop(substr($packed, 0, 8) . str_repeat("\0", 8)) . '/64';
     }
 
     private static function account_identity($login) {
@@ -230,6 +243,29 @@ final class DIP_Native_Auth {
         return 'dip_native_' . $scope . '_' . substr(hash_hmac('sha256', $material, wp_salt('auth')), 0, 40);
     }
 
+    /**
+     * Opaque id of this browser: Identity's one-year device cookie, else
+     * the modal's browser cookie, else the User-Agent. Many customers share
+     * one Digicel/Natcom address; their phones do not share these cookies.
+     */
+    private static function device_material() {
+        if (class_exists('DIP_Devices') && method_exists('DIP_Devices', 'browser_key')) {
+            $device = (string) DIP_Devices::browser_key();
+            if ($device !== '') return 'device:' . $device;
+        }
+        $browser = self::browser_token(false);
+        if ($browser !== '') return 'browser:' . hash_hmac('sha256', $browser, wp_salt('nonce'));
+        return 'ua:' . substr(sanitize_text_field(wp_unslash($_SERVER['HTTP_USER_AGENT'] ?? '')), 0, 300);
+    }
+
+    /** Bucket of this address + this browser (+ this account when $login is given). */
+    private static function device_key($scope, $login = '') {
+        $scope = sanitize_key($scope);
+        $material = self::bucket_ip() . '|' . self::device_material();
+        if ($login !== '') $material .= '|' . self::account_identity($login);
+        return 'dip_native_' . $scope . '_dev_' . substr(hash_hmac('sha256', $material, wp_salt('auth')), 0, 40);
+    }
+
     private static function account_key($scope, $login) {
         $scope = sanitize_key($scope);
         $identity = self::account_identity($login);
@@ -257,41 +293,63 @@ final class DIP_Native_Auth {
         return min($mins, self::max_lock_minutes());
     }
 
+    /**
+     * 6.17.5 (IDN-02, IDN-11). Buckets of the password lockout:
+     * - device: this address + this browser, any account (20 failures/hour);
+     * - ip: the whole address, a looser backstop against scripts that drop
+     *   their cookies (60 failures/hour): one customer's typos no longer
+     *   lock a shared Digicel/Natcom address for everyone;
+     * - pair: this address + browser + account (the strict setting, 5);
+     * - account: the account from anywhere (20 failures/24 h) against
+     *   guessing spread over many addresses. It does not apply to a browser
+     *   that has already signed in to that account (device cookie), so a
+     *   stranger who knows a customer's e-mail cannot keep them out.
+     * Windows were 24 hours for every bucket.
+     */
     private static function scopes($login = '') {
         $pair_threshold = self::threshold();
-        // Keep the requested account-level threshold strict while giving shared
-        // carrier/NAT addresses room for legitimate users. The IP bucket still
-        // stops distributed credential stuffing across many account names.
-        $ip_threshold = min(100, max(20, $pair_threshold * 4));
         $keys = [[
+            'fails'=>self::device_key('fails_ip'), 'lock'=>self::device_key('lock_ip'),
+            'strikes'=>self::device_key('strikes_ip'), 'threshold'=>min(100, max(20, $pair_threshold * 4)), 'window'=>HOUR_IN_SECONDS, 'type'=>'device',
+        ], [
             'fails'=>self::key('fails_ip'), 'lock'=>self::key('lock_ip'),
-            'strikes'=>self::key('strikes_ip'), 'threshold'=>$ip_threshold, 'type'=>'ip'
+            'strikes'=>self::key('strikes_ip'), 'threshold'=>min(300, max(60, $pair_threshold * 12)), 'window'=>HOUR_IN_SECONDS, 'type'=>'ip',
         ]];
         if ($login !== '') {
             $keys[] = [
-                'fails'=>self::key('fails_pair', $login),
-                'lock'=>self::key('lock_pair', $login),
-                'strikes'=>self::key('strikes_pair', $login),
-                'threshold'=>$pair_threshold, 'type'=>'pair',
+                'fails'=>self::device_key('fails_pair', $login),
+                'lock'=>self::device_key('lock_pair', $login),
+                'strikes'=>self::device_key('strikes_pair', $login),
+                'threshold'=>$pair_threshold, 'window'=>HOUR_IN_SECONDS, 'type'=>'pair',
             ];
-            // Distributed credential stuffing can rotate source IPs. Keep an
-            // account-wide bucket as a backstop, with a higher threshold than
-            // the per-IP/account pair to reduce lockout-denial abuse.
             $keys[] = [
                 'fails'=>self::account_key('fails', $login),
                 'lock'=>self::account_key('lock', $login),
                 'strikes'=>self::account_key('strikes', $login),
-                'threshold'=>min(60, max(20, $pair_threshold * 4)), 'type'=>'account',
+                'threshold'=>min(60, max(20, $pair_threshold * 4)), 'window'=>DAY_IN_SECONDS, 'type'=>'account',
             ];
         }
         return $keys;
     }
 
+    /** The account-wide lock never applies to a browser that already signed in to this account (IDN-11). */
+    private static function known_browser_for($login) {
+        $identity = self::account_identity($login);
+        if (strpos($identity, 'uid:') !== 0 || !class_exists('DIP_Devices') || !method_exists('DIP_Devices', 'is_known_browser')) return false;
+        return DIP_Devices::is_known_browser((int) substr($identity, 4));
+    }
+
     public static function remaining_seconds($login = '') {
         $remaining = 0;
+        $known = null;
         foreach (self::scopes($login) as $scope) {
             $until = (int) get_transient($scope['lock']);
-            if ($until > time()) $remaining = max($remaining, $until - time());
+            if ($until <= time()) continue;
+            if ($scope['type'] === 'account') {
+                if ($known === null) $known = self::known_browser_for($login);
+                if ($known) continue;
+            }
+            $remaining = max($remaining, $until - time());
         }
         return $remaining;
     }
@@ -311,10 +369,10 @@ final class DIP_Native_Auth {
      * the transient read-then-write lost most of a burst of simultaneous
      * guesses, so the lock and its escalation never engaged.
      */
-    private static function count_failure($key) {
-        if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_hit')) return (int) DIP_Lockout::counter_hit($key, DAY_IN_SECONDS);
+    private static function count_failure($key, $window = DAY_IN_SECONDS) {
+        if (class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_hit')) return (int) DIP_Lockout::counter_hit($key, $window);
         $count = (int) get_transient($key) + 1;
-        set_transient($key, $count, DAY_IN_SECONDS);
+        set_transient($key, $count, $window);
         return $count;
     }
 
@@ -344,7 +402,7 @@ final class DIP_Native_Auth {
     public static function record_failure($login = '', $reason = 'password') {
         foreach (self::scopes($login) as $scope) {
             $threshold = max(3, absint($scope['threshold'] ?? self::threshold()));
-            if (self::count_failure($scope['fails']) >= $threshold) self::engage_lock($scope);
+            if (self::count_failure($scope['fails'], (int) ($scope['window'] ?? DAY_IN_SECONDS)) >= $threshold) self::engage_lock($scope);
         }
         if (class_exists('DIP_Audit')) {
             DIP_Audit::record('login_failed', 'warning', 0, ['method'=>'password','reason'=>sanitize_key($reason)]);
@@ -353,7 +411,7 @@ final class DIP_Native_Auth {
 
     public static function clear_failures($login = '', $include_ip = false) {
         foreach (self::scopes($login) as $scope) {
-            if (!$include_ip && ($scope['type'] ?? '') === 'ip') continue;
+            if (!$include_ip && in_array($scope['type'] ?? '', ['ip', 'device'], true)) continue;
             self::clear_count($scope['fails']);
             delete_transient($scope['lock']);
             delete_transient($scope['strikes']);
@@ -492,7 +550,39 @@ final class DIP_Native_Auth {
             'otp_verify' => wp_create_nonce(self::browser_nonce_action('dip_verify_otp', $token)),
             'magic_request' => wp_create_nonce(self::browser_nonce_action('dip_request_magic', $token)),
             'customer_register' => wp_create_nonce(self::browser_nonce_action('dip_register_customer', $token)),
-        ]);
+        ] + self::lazy_modal_payload());
+    }
+
+    /**
+     * 6.17.5 (IDN-09): the sign-in window (~31 KB) is no longer printed in
+     * every guest page. auth-shell.js asks for it here, with the page's
+     * nonces, on the first tap (or hover/focus) on a sign-in button.
+     */
+    private static function lazy_modal_payload() {
+        if (self::posted('with_modal') !== '1' || is_user_logged_in()) return [];
+        $s = self::settings();
+        if (($s['native_modal_enabled'] ?? 'yes') !== 'yes') return [];
+        return ['modal_html' => self::modal_markup(self::safe_fragment_redirect(self::posted('redirect')))];
+    }
+
+    /** Print the window in the page (pre-6.17.5 behaviour) only on request. */
+    private static function inline_modal() {
+        return isset($_GET['dip_identity_eager']) || (bool) apply_filters('dip_native_modal_inline', false); // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- presentation flag.
+    }
+
+    private static function account_page_url() {
+        $url = function_exists('wc_get_page_permalink') ? (string) wc_get_page_permalink('myaccount') : '';
+        return $url !== '' ? $url : wp_login_url();
+    }
+
+    /**
+     * A tap on a sign-in button before auth-shell.js has loaded (slow phone,
+     * slow network) opens the account page instead of doing nothing.
+     */
+    public static function print_trigger_fallback() {
+        if (is_admin() || is_user_logged_in() || !wp_script_is('dip-auth-shell', 'enqueued')) return;
+        $url = self::account_page_url();
+        echo '<script data-no-optimize="1" data-no-defer="1" data-cfasync="false">(function(){var u=' . wp_json_encode(esc_url_raw($url)) . ';document.addEventListener("click",function(e){if(window.DIPAuthShell)return;var t=e.target&&e.target.closest&&e.target.closest("[data-dip-auth-open],[data-dl-open],.dsb-account-login,a[href$=\"#delicat-login\"],a[href$=\"#dip-identity-modal\"],[aria-controls=\"dip-identity-modal\"]");if(!t)return;e.preventDefault();var r=u;try{var x=new URL(u,location.href);x.searchParams.set("redirect_to",location.href);r=x.href;}catch(_){}location.href=r;},true);})();</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput -- JSON-encoded URL.
     }
 
     public static function ajax_resend_verification() {
@@ -510,12 +600,18 @@ final class DIP_Native_Auth {
         $recent = ['message'=>__('Un e-mail a déjà été demandé récemment. Vérifiez votre boîte de réception et les indésirables.', 'delicat-google-login')];
         $cooldown_key = self::account_key('verify_resend_cooldown', $email);
         if (get_transient($cooldown_key)) wp_send_json_success($recent);
+        // Per address + browser (8 per 10 minutes), the shared address as a
+        // looser backstop (80): one carrier address serves many customers.
+        $device_key = self::device_key('verify_resend_ip');
         $global_key = self::key('verify_resend_ip');
-        $state = get_transient($global_key);
-        if (!is_array($state) || empty($state['reset']) || (int) $state['reset'] <= time()) $state = ['count'=>0,'reset'=>time() + 10 * MINUTE_IN_SECONDS];
-        if ((int) ($state['count'] ?? 0) >= 8) self::json_error(__('Trop de demandes. Réessayez plus tard.', 'delicat-google-login'), 'rate_limited');
-        $state['count'] = (int) ($state['count'] ?? 0) + 1;
-        set_transient($global_key, $state, max(1, (int)$state['reset'] - time()));
+        $device_state = self::window_state($device_key);
+        $global_state = self::window_state($global_key);
+        if ((int) $device_state['count'] >= 8 || (int) $global_state['count'] >= 80) {
+            $wait = max(1, (int) ceil((max((int) $device_state['reset'], (int) $global_state['reset']) - time()) / MINUTE_IN_SECONDS));
+            self::json_error(sprintf(__('Trop de demandes. Patientez %d min avant de redemander un e-mail.', 'delicat-google-login'), $wait), 'rate_limited');
+        }
+        self::window_add($device_key, 10 * MINUTE_IN_SECONDS);
+        self::window_add($global_key, 10 * MINUTE_IN_SECONDS);
         set_transient($cooldown_key, 1, 90);
         $hourly_key = self::account_key('verify_resend_hour', $email);
         $hourly = class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'counter_hit') ? (int) DIP_Lockout::counter_hit($hourly_key, HOUR_IN_SECONDS) : 0;
@@ -623,40 +719,54 @@ final class DIP_Native_Auth {
         return DIP_Account_Sync::storefront_registration_enabled();
     }
 
-    public static function registration_rate_limited() {
+    /**
+     * Successful sign-ups per hour. 6.17.5 (IDN-02): the setting applies to
+     * this address + browser; the whole address gets ten times as many
+     * (at least 30), so one carrier address no longer closes sign-up for
+     * everyone after three accounts.
+     */
+    private static function registration_limits() {
         $s = self::settings();
-        $max = min(20, max(1, absint($s['native_reg_max_per_hour'] ?? 3)));
-        $state = get_transient(self::key('registrations'));
-        if (!is_array($state) || empty($state['reset']) || (int) $state['reset'] <= time()) return false;
-        return (int) ($state['count'] ?? 0) >= $max;
+        $device = min(20, max(1, absint($s['native_reg_max_per_hour'] ?? 3)));
+        return [$device, max(30, $device * 10)];
+    }
+
+    private static function window_state($key) {
+        $state = get_transient($key);
+        return is_array($state) && !empty($state['reset']) && (int) $state['reset'] > time() ? $state : ['count'=>0, 'reset'=>0];
+    }
+
+    private static function window_add($key, $window) {
+        $state = self::window_state($key);
+        if (empty($state['reset'])) $state = ['count'=>0, 'reset'=>time() + $window];
+        $state['count'] = (int) ($state['count'] ?? 0) + 1;
+        set_transient($key, $state, max(1, (int) $state['reset'] - time()));
+        return $state;
+    }
+
+    public static function registration_rate_limited() {
+        [$device, $address] = self::registration_limits();
+        return (int) self::window_state(self::device_key('registrations'))['count'] >= $device
+            || (int) self::window_state(self::key('registrations'))['count'] >= $address;
     }
 
     public static function record_registration() {
-        $key = self::key('registrations');
-        $state = get_transient($key);
-        if (!is_array($state) || empty($state['reset']) || (int) $state['reset'] <= time()) {
-            $state = ['count'=>0, 'reset'=>time() + HOUR_IN_SECONDS];
-        }
-        $state['count'] = (int) ($state['count'] ?? 0) + 1;
-        set_transient($key, $state, max(1, (int) $state['reset'] - time()));
+        self::window_add(self::device_key('registrations'), HOUR_IN_SECONDS);
+        self::window_add(self::key('registrations'), HOUR_IN_SECONDS);
     }
 
-    /** Short-window abuse bucket for every public registration attempt. */
+    /** Short-window abuse bucket for every public registration attempt (address + browser, and the address). */
     public static function registration_attempt_allowed() {
-        $s = self::settings();
-        $success_limit = min(20, max(1, absint($s['native_reg_max_per_hour'] ?? 3)));
+        [$success_limit] = self::registration_limits();
         $limit = min(60, max(12, $success_limit * 4));
-        $key = self::key('registration_attempts');
-        $state = get_transient($key);
-        if (!is_array($state) || empty($state['reset']) || (int) $state['reset'] <= time()) {
-            $state = ['count'=>0, 'reset'=>time() + 10 * MINUTE_IN_SECONDS];
-        }
-        if ((int) ($state['count'] ?? 0) >= $limit) {
+        $device_key = self::device_key('registration_attempts');
+        $address_key = self::key('registration_attempts');
+        if ((int) self::window_state($device_key)['count'] >= $limit || (int) self::window_state($address_key)['count'] >= $limit * 10) {
             if (class_exists('DIP_Audit')) DIP_Audit::record('registration_attempt_rate_limited', 'warning', 0);
             return false;
         }
-        $state['count'] = (int) ($state['count'] ?? 0) + 1;
-        set_transient($key, $state, max(1, (int) $state['reset'] - time()));
+        self::window_add($device_key, 10 * MINUTE_IN_SECONDS);
+        self::window_add($address_key, 10 * MINUTE_IN_SECONDS);
         return true;
     }
 
@@ -688,12 +798,24 @@ final class DIP_Native_Auth {
 
         if ($name === '' || $name_len > 80) self::json_error(__('Veuillez entrer votre nom complet.', 'delicat-google-login'));
         if (!is_email($email)) self::json_error(__('Adresse email invalide.', 'delicat-google-login'));
-        if (email_exists($email)) self::json_error(__('Impossible de finaliser l’inscription. Si vous avez déjà un compte, utilisez Connexion ou Mot de passe oublié.', 'delicat-google-login'), 'registration_failed');
         $pass_len = function_exists('mb_strlen') ? mb_strlen($pass, 'UTF-8') : strlen($pass);
         if (strlen($pass) > 1024 || $pass_len < $min) self::json_error(sprintf(__('Le mot de passe doit contenir au moins %d caractères.', 'delicat-google-login'), $min));
         if ($pass_len > $max) self::json_error(__('Le mot de passe est trop long.', 'delicat-google-login'));
         if (!preg_match('/\p{L}/u', $pass) || !preg_match('/\p{N}/u', $pass)) {
             self::json_error(__('Le mot de passe doit contenir au moins une lettre et un chiffre.', 'delicat-google-login'));
+        }
+        // Checked after every field rule, so the answer never depends on whether the address exists.
+        if (email_exists($email)) {
+            $requires = class_exists('DIP_Passwordless_Registration') && DIP_Passwordless_Registration::requires_email_verification();
+            if (!$requires) self::json_error(__('Impossible de finaliser l’inscription. Si vous avez déjà un compte, utilisez Connexion ou Mot de passe oublié.', 'delicat-google-login'), 'registration_failed');
+            // IDN-10: the same answer as a new sign-up, whether the address has
+            // an account or not; its owner gets an e-mail explaining how to sign in.
+            DIP_Passwordless_Registration::notify_existing_account_signup($email);
+            self::record_registration();
+            wp_send_json_success([
+                'message' => __('Compte créé. Vérifiez maintenant votre e-mail pour activer la connexion.', 'delicat-google-login'),
+                'verificationRequired' => true,
+            ]);
         }
 
         $parts = explode('@', $email, 2);
@@ -729,6 +851,8 @@ final class DIP_Native_Auth {
                 wp_delete_user($user_id);
                 self::json_error(__('L’e-mail de vérification n’a pas pu être envoyé. Vérifiez la configuration SMTP puis réessayez.', 'delicat-google-login'), 'verification_email_failed');
             }
+            // The browser that chose this password may confirm it and keep it (IDN-01).
+            DIP_Email_Proof::bind_registration_browser($user_id);
             if (class_exists('DIP_Audit')) DIP_Audit::record('native_registration_pending_verification', 'notice', $user_id);
             wp_send_json_success([
                 'message' => __('Compte créé. Vérifiez maintenant votre e-mail pour activer la connexion.', 'delicat-google-login'),
@@ -738,7 +862,7 @@ final class DIP_Native_Auth {
 
         // Verification is switched off: the mailbox was never proven, so this
         // only allows the login (no proof marker, no guest-order linking).
-        DIP_Account_Sync::after_verified_registration($user_id, $email, 'unproven');
+        DIP_Email_Proof::prove($user_id, $email, 'unproven');
         wp_set_current_user($user_id);
         wp_set_auth_cookie($user_id, true, is_ssl());
         $user = get_user_by('id', $user_id);
@@ -801,10 +925,14 @@ final class DIP_Native_Auth {
         $s = self::settings();
         if (($s['native_modal_enabled'] ?? 'yes') !== 'yes') return;
 
-        // The isolated frame is prepared with the page, without AJAX markup loading.
-        DIP_Plugin::instance()->assets(true);
-        // Modal CSS travels inside its root, avoiding a separate blocking request.
-        wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, false);
+        // 6.17.5 (IDN-09): login.css only where Identity draws buttons in the
+        // page itself (account, checkout, cart, shortcodes force it when they
+        // render); the window carries its own CSS inside its frame.
+        DIP_Plugin::instance()->assets(false);
+        // The site theme probe is needed in the head only where the account
+        // area is painted; on catalogue pages it runs at the end of the page.
+        $account_area = class_exists('DIP_Performance') && DIP_Performance::should_load_front_assets();
+        wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, !$account_area);
         wp_enqueue_script('dip-auth-shell', DIP_URL . 'assets/auth-shell.js', ['dip-account-theme'], DIP_VERSION, true);
         wp_localize_script('dip-auth-shell', 'DIPIdentityModal', [
             'frameJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_URL . 'assets/auth-frame.js'),
@@ -820,6 +948,8 @@ final class DIP_Native_Auth {
                 'modalCssUrl' => add_query_arg('ver', DIP_VERSION, DIP_URL . 'assets/auth-frame.css'),
             'legacyDetected' => self::legacy_snippet_active() ? 1 : 0,
             'registrationEnabled' => self::registration_allowed() ? 1 : 0,
+            'lazyModal' => self::inline_modal() ? 0 : 1,
+            'accountUrl' => esc_url_raw(self::account_page_url()),
         ]);
     }
 
@@ -921,6 +1051,8 @@ final class DIP_Native_Auth {
         if (self::$modal_rendered || is_admin() || is_user_logged_in()) return;
         $s = self::settings();
         if (($s['native_modal_enabled'] ?? 'yes') !== 'yes') return;
+        // Loaded on demand (fresh_nonces with_modal=1) unless asked inline.
+        if (!self::inline_modal()) return;
         self::$modal_rendered = true;
         echo self::modal_markup(self::current_page_url()); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
     }

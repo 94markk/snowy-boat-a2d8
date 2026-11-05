@@ -53,6 +53,7 @@ final class DIP_Security_Architecture {
             ['#^/delicat-identity/v1/passkeys/login/verify$#', ['POST']],
             ['#^/delicat-identity/v1/mobile/google$#', ['POST']],
             ['#^/delicat-identity/v1/mobile/refresh$#', ['POST']],
+            ['#^/delicat-identity/v1/mobile/google/nonce$#', ['POST']],
             ['#^/delicat-identity/v1/mobile/capabilities$#', ['GET']],
             ['#^/delicat-identity/v1/headless/status$#', ['GET']],
             ['#^/delicat-identity/v1/mobile/biometric/challenge$#', ['POST']],
