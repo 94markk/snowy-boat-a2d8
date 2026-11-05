@@ -145,9 +145,6 @@ final class DIP_Recent_Credentials {
             $sub = (string) get_user_meta($user_id, $item['meta_sub'], true);
             $first = absint(get_user_meta($user_id, self::first_linked_key($provider), true));
             if ($sub === '' || $first <= $since) continue;
-            // The provider the account was created with (linked within two minutes of sign-up) is its own.
-            $registered = ($u = get_userdata($user_id)) ? strtotime($u->user_registered . ' UTC') : 0;
-            if ($registered && abs($first - $registered) <= 120) continue;
             // A provider sign-in refreshes meta_linked (its last use).
             if (self::opened_session('provider:' . $provider, absint(get_user_meta($user_id, $item['meta_linked'], true)), $session)) continue;
             if (class_exists('DIP_Identity')) DIP_Identity::remember_disconnected_subject($user_id, $provider, $sub);

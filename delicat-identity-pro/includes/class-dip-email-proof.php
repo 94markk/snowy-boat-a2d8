@@ -55,14 +55,23 @@ final class DIP_Email_Proof {
         return self::state($user_id) === 'unproven';
     }
 
+    /** Days during which an unproven account still counts as possibly pre-registered by someone else. */
+    const PRE_HIJACK_DAYS = 30;
+
     /**
-     * Still waiting for its own verification link (the account was created by someone who never proved the
-     * mailbox). Only these accounts have their pre-proof credentials reset by a code, a magic link, Google or
-     * the link opened in another browser. An older verified account without a fingerprint is not one of them:
-     * signing in with a code must never wipe a long-standing password or log every device out.
+     * Whether a proof of the mailbox (a code, a magic link, Google, the link opened in another browser) resets
+     * the credentials set up before it (account pre-hijacking). Always for an account still waiting for its
+     * verification link; for any other unproven account (created while verification was off, or never
+     * fingerprinted) only while it is young, the window in which a stranger could have registered the address
+     * first. A long-standing customer's password and devices are never wiped by signing in with a code.
      */
     public static function awaiting_verification($user_id) {
-        return 'no' === (string) get_user_meta(absint($user_id), 'dip_email_verified', true);
+        $user_id = absint($user_id);
+        if ('no' === (string) get_user_meta($user_id, 'dip_email_verified', true)) return true;
+        if (!self::is_unproven($user_id)) return false;
+        $user = get_userdata($user_id);
+        $registered = $user ? strtotime($user->user_registered . ' UTC') : 0;
+        return $registered > 0 && (time() - $registered) < self::PRE_HIJACK_DAYS * DAY_IN_SECONDS;
     }
 
     /**
