@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Identity Pro
  * Description: Unified secure identity, authentication, account lifecycle, and synchronized WordPress/WooCommerce transactional email studio.
- * Version:     6.17.4
+ * Version:     6.17.5
  * Author: Delicat Store
  * Text Domain: delicat-google-login
  * Requires at least: 6.2
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('DIP_VERSION', '6.17.4');
+define('DIP_VERSION', '6.17.5');
 define('DIP_FILE', __FILE__);
 define('DIP_DIR', plugin_dir_path(__FILE__));
 define('DIP_URL', plugin_dir_url(__FILE__));
@@ -103,4 +103,6 @@ add_action('plugins_loaded', ['DIP_Android_App', 'init'], 16);
 add_action('plugins_loaded', ['DIP_Session_Router', 'init'], 19);
 // 6.17.5: WordPress privacy export/erase tools cover Identity data (IDN-08).
 add_action('plugins_loaded', ['DIP_Privacy', 'init'], 20);
+// 6.17.5: the session records which passkey/provider opened it (IDN-07).
+add_action('plugins_loaded', ['DIP_Recent_Credentials', 'init'], 20);
 add_action('dip_flow_claim_cleanup', ['DIP_Flow_Store', 'cleanup_claim']);

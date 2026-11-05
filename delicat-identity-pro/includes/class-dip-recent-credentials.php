@@ -7,13 +7,66 @@ defined('ABSPATH') || exit;
  * intruder had added kept letting them back in. After those actions, the
  * passkeys and provider links added in the last 7 days are removed (older
  * ones stay), and the customer gets an e-mail listing what was removed with a
- * link to review the rest. The credential that opened the current session
- * (or confirmed it since) is never removed.
+ * link to review the rest. The exact credential that opened the current
+ * session (or re-confirmed it since) is never removed: it is recorded in the
+ * session itself at sign-in (passkey id, Google/Microsoft).
  */
 final class DIP_Recent_Credentials {
     const WINDOW = 7 * DAY_IN_SECONDS;
-    /** Seconds of tolerance between a sign-in and the session it opened. */
+    /** Seconds of tolerance between a sign-in and the session it opened (sessions without a record). */
     const SESSION_SLACK = 120;
+    const SESSION_FIELD = 'dip_credentials';
+
+    /** @var array<int,string> session tokens issued in this request */
+    private static $issued = [];
+    private static $pending_passkey = '';
+
+    public static function init() {
+        add_action('set_logged_in_cookie', [__CLASS__, 'capture_token'], 10, 6);
+        add_action('wp_login', [__CLASS__, 'stamp_signin'], 110, 2);
+    }
+
+    public static function capture_token($cookie = '', $expire = 0, $expiration = 0, $user_id = 0, $scheme = '', $token = '') {
+        $user_id = absint($user_id);
+        if ($user_id && is_string($token) && $token !== '') self::$issued[$user_id] = $token;
+    }
+
+    /** The passkey whose assertion is signing in now (before the session is created). */
+    public static function note_passkey_signin($credential_id) {
+        self::$pending_passkey = is_string($credential_id) ? $credential_id : '';
+    }
+
+    /** Record in the new session which credential opened it (passkey or provider sign-in). */
+    public static function stamp_signin($user_login, $user) {
+        if (!($user instanceof WP_User)) return;
+        $token = (string) (self::$issued[$user->ID] ?? '');
+        $method = class_exists('DIP_Account_Sync') && method_exists('DIP_Account_Sync', 'wp_login_context') ? (string) DIP_Account_Sync::wp_login_context() : '';
+        $credential = '';
+        if ($method === 'passkey' && self::$pending_passkey !== '') $credential = 'passkey:' . self::$pending_passkey;
+        elseif (preg_match('/^([a-z0-9]+)_social$/D', $method, $m)) $credential = 'provider:' . $m[1];
+        self::$pending_passkey = '';
+        if ($token !== '' && $credential !== '') self::add_to_session($user->ID, $token, $credential);
+    }
+
+    /** The current session was re-confirmed with this passkey (identity confirmation). */
+    public static function confirm_with_passkey($user_id, $credential_id) {
+        if (!function_exists('wp_get_session_token') || !is_string($credential_id) || $credential_id === '') return;
+        $token = (string) wp_get_session_token();
+        if ($token !== '') self::add_to_session(absint($user_id), $token, 'passkey:' . $credential_id);
+    }
+
+    private static function add_to_session($user_id, $token, $credential) {
+        if (!$user_id || !class_exists('WP_Session_Tokens')) return;
+        try {
+            $manager = WP_Session_Tokens::get_instance($user_id);
+            $session = $manager->get($token);
+            if (!is_array($session)) return;
+            $list = isset($session[self::SESSION_FIELD]) && is_array($session[self::SESSION_FIELD]) ? $session[self::SESSION_FIELD] : [];
+            $list[] = (string) $credential;
+            $session[self::SESSION_FIELD] = array_slice(array_values(array_unique($list)), -10);
+            $manager->update($token, $session);
+        } catch (Throwable $e) {}
+    }
 
     public static function first_linked_key($provider) {
         return '_dip_' . sanitize_key((string) $provider) . '_first_linked';
@@ -25,13 +78,27 @@ final class DIP_Recent_Credentials {
         if ($user_id) update_user_meta($user_id, self::first_linked_key($provider), time());
     }
 
-    /** When the current session was opened (0 when there is none). */
-    private static function session_login($user_id) {
-        if (!class_exists('WP_Session_Tokens') || !function_exists('wp_get_session_token') || get_current_user_id() !== absint($user_id)) return 0;
+    /** The current session record ([] when there is none). */
+    private static function current_session($user_id) {
+        if (!class_exists('WP_Session_Tokens') || !function_exists('wp_get_session_token') || get_current_user_id() !== absint($user_id)) return [];
         $token = (string) wp_get_session_token();
-        if ($token === '') return 0;
+        if ($token === '') return [];
         try { $session = WP_Session_Tokens::get_instance(absint($user_id))->get($token); } catch (Throwable $e) { $session = null; }
-        return is_array($session) ? (int) ($session['login'] ?? 0) : 0;
+        return is_array($session) ? $session : [];
+    }
+
+    /**
+     * Does this credential belong to the current session? Recorded: only the
+     * exact passkey/provider that opened or re-confirmed it. Not recorded
+     * (session older than 6.17.5): only a credential last used within
+     * SESSION_SLACK of the session's sign-in, never one used later.
+     */
+    private static function opened_session($credential, $last_used, array $session) {
+        if (!$session) return false;
+        $recorded = isset($session[self::SESSION_FIELD]) && is_array($session[self::SESSION_FIELD]) ? $session[self::SESSION_FIELD] : [];
+        if ($recorded) return in_array($credential, $recorded, true);
+        $login = (int) ($session['login'] ?? 0);
+        return $login > 0 && (int) $last_used > 0 && abs((int) $last_used - $login) <= self::SESSION_SLACK;
     }
 
     private static function providers() {
@@ -52,8 +119,7 @@ final class DIP_Recent_Credentials {
         $user_id = absint($user_id);
         if (!$user_id || !get_userdata($user_id)) return [];
         $since = time() - self::WINDOW;
-        $session_login = $keep_current ? self::session_login($user_id) : 0;
-        $protect_after = $session_login > 0 ? $session_login - self::SESSION_SLACK : PHP_INT_MAX;
+        $session = $keep_current ? self::current_session($user_id) : [];
         $removed = [];
 
         if (class_exists('DIP_Passkeys') && method_exists('DIP_Passkeys', 'credentials')) {
@@ -61,7 +127,7 @@ final class DIP_Recent_Credentials {
             $dropped = 0;
             foreach (DIP_Passkeys::credentials($user_id) as $entry) {
                 $recent = (int) $entry['created'] > $since;
-                $in_use = (int) $entry['last_used'] >= $protect_after;
+                $in_use = self::opened_session('passkey:' . $entry['id'], $entry['last_used'], $session);
                 if ($recent && !$in_use) {
                     $removed[] = sprintf(__('Passkey « %1$s » ajoutée le %2$s', 'delicat-google-login'), $entry['label'], wp_date('d/m/Y H:i', (int) $entry['created']));
                     $dropped++;
@@ -79,8 +145,8 @@ final class DIP_Recent_Credentials {
             $sub = (string) get_user_meta($user_id, $item['meta_sub'], true);
             $first = absint(get_user_meta($user_id, self::first_linked_key($provider), true));
             if ($sub === '' || $first <= $since) continue;
-            // A provider sign-in refreshes meta_linked: it opened (or confirmed) this session.
-            if (absint(get_user_meta($user_id, $item['meta_linked'], true)) >= $protect_after) continue;
+            // A provider sign-in refreshes meta_linked (its last use).
+            if (self::opened_session('provider:' . $provider, absint(get_user_meta($user_id, $item['meta_linked'], true)), $session)) continue;
             if (class_exists('DIP_Identity')) DIP_Identity::remember_disconnected_subject($user_id, $provider, $sub);
             delete_user_meta($user_id, $item['meta_sub']);
             delete_user_meta($user_id, $item['meta_linked']);

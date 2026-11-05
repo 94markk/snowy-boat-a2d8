@@ -2,10 +2,103 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.4
+Stable tag: 6.17.5
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.5 ==
+Corrections de l’audit du 5 novembre 2026 (sécurité d’abord). Références IDN-01 à IDN-15.
+
+(1) Clients — inscription et confirmation de l’adresse e-mail (IDN-01, IDN-13)
+* Une personne ne peut plus créer un compte avec l’adresse d’un client puis garder son mot de passe quand le vrai
+  propriétaire confirme l’adresse. Le lien de confirmation ouvert dans le navigateur qui a créé le compte garde le
+  mot de passe choisi (rien ne change pour le client). Ouvert sur un autre appareil ou navigateur, il confirme
+  l’adresse, l’ancien mot de passe ne fonctionne plus, et la page affiche « Adresse confirmée. Pour vous connecter,
+  recevez un lien de connexion par e-mail » : le client reçoit le lien dans sa boîte, se connecte, puis la page
+  « Mot de passe » lui demande d’en choisir un. Le lien de confirmation n’ouvre jamais de session à lui seul (un
+  escroc ne peut pas connecter quelqu’un à son propre compte). Exemple : inscription dans l’application, lien ouvert
+  dans Chrome → lien de connexion, nouveau mot de passe, utilisé ensuite partout.
+* Une seule règle « adresse prouvée » pour le code e-mail, le lien magique, le lien de confirmation et Google.
+
+(2) Clients — connexion depuis les réseaux Digicel / Natcom (IDN-02, IDN-11, IDN-12)
+* Les erreurs de mot de passe sont comptées par adresse Internet + téléphone : les fautes d’un client ne bloquent
+  plus tous les clients du même réseau. Fenêtres d’une heure au lieu de 24 heures. Un plafond plus large par
+  adresse reste en place contre les robots.
+* Quelqu’un qui connaît l’e-mail d’un client ne peut plus le bloquer : le téléphone habituel du client (déjà
+  connecté une fois) n’est pas concerné par le blocage du compte.
+* Lien de connexion ou code demandé trop tôt : message visible « Patientez X min avant de redemander un lien »
+  au lieu de « vérifiez votre boîte » sans e-mail.
+* Une même adresse e-mail reçoit au plus 6 codes ou liens par heure, quelle que soit la connexion qui les demande.
+  L’équipe reçoit un seul e-mail récapitulatif (toutes les 12 heures) au lieu d’un e-mail par demande refusée.
+
+(3) Clients — mot de passe oublié et déconnexion des autres appareils (IDN-07, IDN-10)
+* Après « Mot de passe oublié » ou « Déconnecter les autres sessions », les passkeys et les comptes Google ou
+  Microsoft ajoutés ces 7 derniers jours sont retirés (les plus anciens restent), et le client reçoit un e-mail qui
+  les liste avec un bouton « Vérifier mes accès ». Seule la passkey ou le compte Google/Microsoft qui a ouvert (ou
+  reconfirmé) la session en cours est gardé, même s’il est récent ; chaque session note désormais ce moyen.
+* « Mot de passe oublié » répond toujours « Si un compte existe, un e-mail a été envoyé », et une inscription avec
+  une adresse déjà utilisée reçoit la même réponse qu’une nouvelle inscription (le titulaire de l’adresse reçoit un
+  e-mail « Vous avez déjà un compte »). Le formulaire ne révèle plus qui a un compte.
+
+(4) Équipe — vérification en deux étapes (IDN-04)
+* La 2FA est obligatoire pour les administrateurs, les gestionnaires de boutique et tout compte qui peut modifier
+  des commandes ou créditer les portefeuilles TeraWallet. À la prochaine visite de l’administration, ces comptes
+  arrivent sur la page « Protection Identity » pour la configurer (aucun compte n’est bloqué hors de cette page).
+* Première activation de la 2FA (équipe et clients) : un code est d’abord envoyé à l’adresse e-mail du compte. La
+  clé Authenticator n’apparaît qu’après ce code, pour qu’un voleur de mot de passe ne puisse pas activer sa propre 2FA.
+* Attention : l’application Android du personnel de Delicat Assistant se connecte par mot de passe seul ; un compte
+  avec 2FA ne pourra plus s’y connecter tant que l’Assistant ne demande pas le code.
+
+(5) Application Delicat (IDN-05, IDN-14)
+* Connexion d’un navigateur par QR code : la session du navigateur dure 24 heures au lieu de 14 jours, l’application
+  reçoit un avertissement quand le navigateur n’est pas sur le même réseau que le téléphone, et le client reçoit un
+  e-mail avec un bouton « Ce n’est pas moi » qui déconnecte ce navigateur.
+* Un ancien jeton de session de l’application réutilisé (copié) ferme la session de l’application concernée.
+* Connexion Google de l’application : un « nonce » est vérifié quand l’application en envoie un (les versions
+  actuelles continuent de fonctionner sans).
+* Faire taper le code dans l’application (au lieu de comparer deux codes) demande une mise à jour de l’application.
+
+(6) Boutique séparée « delicat-store-ultra-fast » (IDN-06)
+* Plus aucune adresse n’est autorisée par défaut pour la connexion Google de la boutique séparée, et la protection
+  PKCE est obligatoire. Une notice d’administration indique l’adresse active ou que la connexion est désactivée.
+
+(7) Pages plus légères (IDN-09)
+* La fenêtre de connexion (environ 31 Ko) n’est plus incluse dans chaque page : elle se charge au premier toucher du
+  bouton Connexion. Accueil : 143,6 Ko → 112,3 Ko de HTML ; fiche produit : 166,9 Ko → 135,6 Ko. login.css n’est
+  plus chargé sur les pages catalogue et account-theme.js ne bloque plus l’affichage. Si le script n’est pas encore
+  chargé, un toucher sur Connexion ouvre la page Mon compte.
+
+(8) Confidentialité et Centre de sécurité (IDN-08, IDN-15)
+* Outils › Exporter les données personnelles : Delicat Identity exporte compte, déclaration d’âge, comptes reliés,
+  passkeys, appareils, sessions de l’application et historique de sécurité. Outils › Effacer : sessions de
+  l’application, connexion rapide (empreinte/visage), historique de sécurité, appareils et champs du profil
+  (déclaration d’âge incluse). Les moyens de connexion restent pour que le compte fonctionne.
+* « Appareil de confiance » ne rapporte plus de points au score de sécurité : c’est un repère qui ne change rien à
+  la connexion (le texte le dit). Les points vont à la Passkey, à la 2FA et à l’e-mail vérifié (toujours /100).
+
+(9) Technique
+* L’en-tête Cloudflare (CF-Connecting-IP, CF-IPCountry) n’est cru que si la connexion vient réellement de
+  Cloudflare, avec ou sans les constantes DIP_TRUST_CLOUDFLARE_* (IDN-03). DIP_TRUST_CLOUDFLARE_HEADERS = false
+  le désactive toujours ; le filtre dip_native_auth_client_ip reste prioritaire.
+* Nouvelles classes : DIP_Email_Proof, DIP_Recent_Credentials, DIP_Privacy. Nouvelle route publique
+  POST delicat-identity/v1/mobile/google/nonce. Filtres : dip_two_factor_required_capabilities,
+  dip_native_modal_inline.
+* Base de données : deux colonnes ajoutées à {préfixe}dip_mobile_tokens (previous_refresh_hash, rotated_at),
+  une seule fois, sans rien supprimer.
+
+(10) Réglages modifiés par la mise à jour
+* Connexion Google de la boutique séparée : désactivée tant que la page Réglages › Identity Providers n’a pas été
+  enregistrée. Pour la rétablir : cochez « Activer la connexion Google de la boutique », saisissez
+  https://delicat-store-ultra-fast.louismarkenricky.chatgpt.site dans « Origines autorisées », puis enregistrez.
+* « Inscriptions maximum par heure » (3 par défaut) s’applique désormais à chaque téléphone ; une même adresse
+  Internet est limitée à 10 fois ce nombre (au moins 30 par heure).
+* 2FA obligatoire étendue aux gestionnaires de boutique et aux comptes commandes / portefeuilles (filtre
+  dip_two_factor_required_capabilities pour ajuster la liste).
+
+(11) Installation
+* Extensions → Ajouter → Téléverser une extension → choisir delicat-identity-pro-6.17.5.zip → « Remplacer la
+  version actuelle ». Les données, comptes et réglages sont conservés.
 
 == Version 6.17.4 ==
 * Accueil du compte : « Programme Revendeur » apparaît dans « Mes services » avec une icône de boutique

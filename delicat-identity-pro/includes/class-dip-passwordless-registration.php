@@ -793,19 +793,19 @@ final class DIP_Passwordless_Registration {
         // IDN-01 (6.17.5): opened in the browser that registered, the link
         // only confirms the address (the registrant chose the password).
         // Opened anywhere else it is a proof by the mailbox owner, like an
-        // e-mail code: the sign-up password stops working, the owner is
-        // signed in by this link and then chooses a password.
+        // e-mail code: the sign-up password stops working. It never opens a
+        // session in a browser with no tie to the account (login CSRF): that
+        // browser signs in with a code or link from the mailbox, then
+        // chooses a password.
         $same_browser = DIP_Email_Proof::registration_browser_matches($uid);
-        $signs_in = !$same_browser && self::passwordless_allowed($user);
+        $customer = self::passwordless_allowed($user);
         $nonce_base = 'dip_email_verify_' . $uid . '_' . substr(hash_hmac('sha256', $token, wp_salt('nonce')), 0, 20);
         if (!$confirm) {
             $nonce = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::issue_browser_nonce($nonce_base) : '';
             if ($nonce === '') { wp_safe_redirect(add_query_arg('dip_register','confirmation_failed',home_url('/'))); exit; }
             self::confirmation_page(
                 __('Vérifier votre adresse e-mail', 'delicat-google-login'),
-                $signs_in
-                    ? sprintf(__('Confirmez l’adresse %s : vous serez connecté à ce compte sur cet appareil.', 'delicat-google-login'), self::masked_email($user->user_email))
-                    : sprintf(__('Confirmez l’adresse %s pour activer votre compte.', 'delicat-google-login'), self::masked_email($user->user_email)),
+                sprintf(__('Confirmez l’adresse %s pour activer votre compte.', 'delicat-google-login'), self::masked_email($user->user_email)),
                 __('Vérifier mon e-mail', 'delicat-google-login'),
                 ['dip_verify_email_confirm'=>'1','uid'=>$uid,'token'=>$token],
                 $nonce
@@ -814,12 +814,6 @@ final class DIP_Passwordless_Registration {
         if (!class_exists('DIP_Native_Auth') || !DIP_Native_Auth::verify_browser_nonce($nonce_base)) {
             wp_safe_redirect(add_query_arg('dip_register','confirmation_failed',home_url('/'))); exit;
         }
-        // Signing in must never replace another account's session in this
-        // browser: the link stays usable once that account signs out.
-        if ($signs_in && is_user_logged_in() && get_current_user_id() !== $uid) {
-            wp_safe_redirect(add_query_arg('dip_auth', 'already_logged_in', home_url('/'))); exit;
-        }
-
         $proven = DIP_Email_Proof::prove($uid, $user->user_email, $same_browser ? 'email_link' : 'email_link_foreign');
         if (is_wp_error($proven)) { wp_safe_redirect(add_query_arg('dip_auth', 'unverified_account_conflict', home_url('/'))); exit; }
         // A provider identity kept pending at sign-up is bound only now, and
@@ -835,14 +829,13 @@ final class DIP_Passwordless_Registration {
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($uid) : true;
         if (is_wp_error($guard)) { wp_safe_redirect(add_query_arg('dip_auth', $guard->get_error_code(), home_url('/'))); exit; }
         $s = self::settings();
-        if ($signs_in) {
-            $user = get_user_by('id', $uid);
+        if (!$same_browser && $customer) {
             // The sign-up password was dropped (or the account never had one
-            // its owner knows): the customer chooses one right away.
+            // its owner knows): after signing in with a code or link from the
+            // mailbox, the customer is asked to choose one.
             $managed = get_user_meta($uid, DIP_Identity::META_PASSWORD_MANAGED, true) === 'yes';
-            $destination = DIP_Email_Proof::password_replaced($uid) || $managed ? self::choose_password_url() : self::safe_redirect($s['redirect_after_login']);
-            self::login_user($user, 'email_verification', $destination);
-            wp_safe_redirect($destination); exit;
+            if (DIP_Email_Proof::password_replaced($uid) || $managed) update_user_meta($uid, self::CHOOSE_PASSWORD_META, time());
+            wp_safe_redirect(add_query_arg('dip_verified', '2', home_url('/')) . '#delicat-login'); exit;
         }
         // Same browser: the registrant explicitly signs in afterwards with the
         // password they chose (no verification-link login CSRF).
@@ -858,9 +851,15 @@ final class DIP_Passwordless_Registration {
         return add_query_arg('dip_choose_password', '1', $url);
     }
 
-    /** After an e-mail code or link sign-in: choose a password when the proof replaced the sign-up one. */
+    /** Set when a verification link opened in another browser dropped the sign-up password (7 days). */
+    const CHOOSE_PASSWORD_META = '_dip_choose_password_after_proof';
+
+    /** After an e-mail code or link sign-in: choose a password when a proof replaced the sign-up one. */
     private static function after_proof_destination($user_id, $default) {
-        return DIP_Email_Proof::password_replaced($user_id) ? self::choose_password_url() : self::safe_redirect($default);
+        $pending = absint(get_user_meta($user_id, self::CHOOSE_PASSWORD_META, true));
+        if ($pending) delete_user_meta($user_id, self::CHOOSE_PASSWORD_META);
+        $pending = $pending > time() - 7 * DAY_IN_SECONDS && get_user_meta($user_id, DIP_Identity::META_PASSWORD_MANAGED, true) === 'yes';
+        return DIP_Email_Proof::password_replaced($user_id) || $pending ? self::choose_password_url() : self::safe_redirect($default);
     }
 
     private static function login_user($user, $method = 'passwordless', $destination = '') {

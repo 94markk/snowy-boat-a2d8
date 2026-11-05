@@ -61,3 +61,10 @@ Static validation is not a replacement for integration testing. Before productio
 15. **Performance/UI**: iPhone Safari, Android Chrome, low-end phone, 320px width, landscape/short height, dark theme active in site, LiteSpeed cache and Cloudflare cache.
 
 Confirm SMTP/mail delivery before requiring email verification, OTP or magic links.
+
+## App contract changes in 6.17.5 (server side only)
+
+- `POST /delicat-identity/v1/mobile/google/nonce` (headers `X-Installation-ID`, `X-Device-ID`) returns a one-time `nonce` (10 minutes, bound to the installation). Send it as `nonce` with `POST /mobile/google` and pass the same value to Google Sign-In; the ID token must carry it. Requests without `nonce` keep working. `GET /mobile/capabilities` advertises `google_nonce: 1`.
+- `POST /mobile/refresh`: a refresh token that was already rotated and is replayed more than 60 seconds after the rotation ends that session (`refresh_replayed`); within 60 seconds it is only refused.
+- `POST /pairing/preview` adds `warning` (also prefixed to `message`) when the approving phone and the requesting browser are not on the same /24 (IPv4) or /64 (IPv6). A browser session opened by pairing lasts 24 hours, and the customer receives an e-mail with a « Ce n’est pas moi » link that ends it.
+- Not possible without an app update: making the customer type the browser's code into the app (instead of comparing two codes). The server keeps today's flow so current apps keep working.

@@ -1018,6 +1018,8 @@ final class DIP_Passkeys {
         wp_clear_auth_cookie();
         wp_set_current_user($uid);
         if (class_exists('DIP_Two_Factor')) DIP_Two_Factor::authorize_cookie_once($uid);
+        // IDN-07: the session records which passkey opened it.
+        if (class_exists('DIP_Recent_Credentials')) DIP_Recent_Credentials::note_passkey_signin((string) $result['credential']['id']);
         wp_set_auth_cookie($uid, $remember, is_ssl());
         DIP_Account_Sync::fire_wp_login($user,'passkey');
         if (class_exists('DIP_Account_Sync')) DIP_Account_Sync::after_login($uid);
@@ -1039,6 +1041,7 @@ final class DIP_Passkeys {
         $result=self::verify_assertion($body,$state);
         if(is_wp_error($result)){ DIP_Lockout::counter_hit($failures,self::LOGIN_ADDRESS_WINDOW); if(class_exists('DIP_Audit'))DIP_Audit::record('passkey_reauth_failed','warning',$uid); return $result; }
         if(class_exists('DIP_Reauth')) DIP_Reauth::mark_recent($uid);
+        if(class_exists('DIP_Recent_Credentials')) DIP_Recent_Credentials::confirm_with_passkey($uid,(string)($result['credential']['id']??''));
         if(class_exists('DIP_Audit')) DIP_Audit::record('passkey_reauth_success','info',$uid);
         return new WP_REST_Response(['success'=>true,'message'=>__('Identité confirmée avec votre Passkey.','delicat-google-login')],200);
     }

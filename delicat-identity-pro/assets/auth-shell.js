@@ -197,7 +197,7 @@
   function boot() {
     if (!cfg.lazyModal && !document.getElementById('dip-identity-modal')) return;
     var p=new URLSearchParams(location.search);
-    if (/^#(delicat-login|dip-identity-modal)$/.test(location.hash)||p.has('dip_auth_error')||p.get('dip_verified')==='1'||p.get('dip_identity_open')==='1') open('login');
+    if (/^#(delicat-login|dip-identity-modal)$/.test(location.hash)||p.has('dip_auth_error')||p.get('dip_verified')==='1'||p.get('dip_verified')==='2'||p.get('dip_identity_open')==='1') open('login');
     else intents.forEach(function (name) { document.addEventListener(name, prepare, {capture:true, passive:true}); });
     document.dispatchEvent(new CustomEvent('dip:identity-ready',{detail:{modalId:'dip-auth-shell'}}));
   }

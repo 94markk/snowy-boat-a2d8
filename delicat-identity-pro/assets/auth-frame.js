@@ -153,6 +153,11 @@
       var params=new URLSearchParams(window.parent.location.search),error=params.get('dip_auth_error');
       if(error)show(Object.prototype.hasOwnProperty.call(errorMessages,error)?errorMessages[error]:'La connexion Google a échoué. Réessayez.');
       else if(params.get('dip_verified')==='1')show('Adresse e-mail vérifiée. Vous pouvez vous connecter.',true);
+      else if(params.get('dip_verified')==='2'){
+        // Confirmed from another browser (6.17.5): sign in with a link from the mailbox, never by the confirmation itself.
+        show('Adresse confirmée. Pour vous connecter, recevez un lien de connexion par e-mail.',true);
+        var md=magic&&magic.querySelector('details');if(md){md.open=true;var mi=magic.querySelector('input[type=email]');if(mi)setTimeout(function(){try{mi.focus({preventScroll:true});}catch(e){}},50);}
+      }
     },
     close:function(){
       if(passkeyBusy()&&window.DIPPasskeyUI&&!window.DIPPasskeyUI.cancel()){show('Finalisation de la connexion…',true);return false;}
