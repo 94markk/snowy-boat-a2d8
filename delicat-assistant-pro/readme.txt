@@ -52,8 +52,8 @@ No. WhatsApp is shown only when it is enabled and a valid number has been saved.
   peuvent les ouvrir, et la position GPS ou le modèle du téléphone enregistrés dans la photo sont effacés à l'envoi.
   Les anciennes captures passent peu à peu dans le dossier privé (déplacées, jamais supprimées) et perdent elles
   aussi leurs données GPS ; une capture impossible à déplacer est sautée et signalée, les autres continuent.
-  L'adresse enregistrée de chaque capture est signée (aléatoire, valable 5 ans) pour que l'application Flutter
-  continue de l'afficher.
+  Chaque affichage (chat, boîte de réception, application du personnel, et toute application qui lit les messages
+  par Delicat Assistant) reçoit une adresse signée valable 12 heures ; l'adresse enregistrée seule ne suffit pas.
 * (3) Clients : « Suivre ma commande » sans être connecté demande le numéro de commande et l'e-mail ou le numéro de
   téléphone complet donnés à l'achat (avec ou sans +509), plus seulement la fin du numéro.
 * (4) Clients : les cartes « Souvent pris ensemble » et « Recommandé pour vous » montrent toujours les prix de la

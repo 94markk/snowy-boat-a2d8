@@ -1,8 +1,8 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-05T12:13:22.862Z",
+ "built": "2026-11-05T12:21:29.678Z",
  "version": "9.7.8",
- "bytes": 7017576,
+ "bytes": 7017828,
  "count": 301,
  "files": {
   "README.txt": {
@@ -391,7 +391,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9789,
-   "sha256": "b6542f19d8eb200d2b7b03e4f620c1c52c41f2f061cab90e30a0f7156ddcde56"
+   "sha256": "cb78f7a3a029822e04534749336e65bb7dfb46939c1efbb80585acff5af57865"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -1046,8 +1046,8 @@
    "sha256": "4810140cf63595dfafc4f7520734134f7cb9f1f9d03204ed6f00bb1ba44e0237"
   },
   "modules/product-fields/class-dmc-calculator.php": {
-   "bytes": 52076,
-   "sha256": "ac7ae922322ed81e45b44894cd4840cf850aa7812df6bbd10c1d45c27157e517"
+   "bytes": 52328,
+   "sha256": "bc1d23bd6617f8ff5854fe7abf0d1aaee96a36d45918541751c8ad96094d1e12"
   },
   "modules/product-fields/shim.php": {
    "bytes": 1745,

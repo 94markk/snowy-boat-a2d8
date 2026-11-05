@@ -882,15 +882,6 @@ class DSA2_Data {
         return substr( hash_hmac( 'sha256', absint( $conversation_id ) . '|' . (string) $file . '|' . absint( $expires ), wp_salt( 'auth' ) . '|dap-chat-file' ), 0, 40 );
     }
 
-    /**
-     * Address stored with a private image: signed for 5 years, so an app that shows the stored address
-     * without cookies (the Delicat App API bridge) can still load it. The file name is random and the
-     * folder cannot be listed; the chat, the inbox and the staff app re-sign it for 12 hours on output.
-     */
-    public static function stored_file_url( $conversation_id, $file ) {
-        return self::chat_file_url( $conversation_id, $file, time() + 5 * YEAR_IN_SECONDS );
-    }
-
     /** Address of a private chat image; with $expires, signed so an app can load it until then. */
     public static function chat_file_url( $conversation_id, $file, $expires = 0 ) {
         $args = array( 'action' => 'dsa2_chat_file', 'c' => absint( $conversation_id ), 'f' => basename( (string) $file ) );
@@ -1042,7 +1033,7 @@ class DSA2_Data {
             self::strip_image_metadata( $target, $ext_map[ strtolower( pathinfo( $target, PATHINFO_EXTENSION ) ) ] ?? 'image/jpeg' ); // old screenshots lose their GPS data too
             $meta['file']    = $rel;
             $meta['private'] = 1;
-            $meta['url']     = self::stored_file_url( (int) $row->conversation_id, $rel );
+            $meta['url']     = self::chat_file_url( (int) $row->conversation_id, $rel ); // unsigned: signed for 12 h on output (public_meta)
             if ( false === $wpdb->update( $table, array( 'meta' => wp_json_encode( $meta ) ), array( 'id' => (int) $row->id ), array( '%s' ), array( '%d' ) ) ) {
                 @rename( $target, $source ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename -- keep the old reference working
                 break;
@@ -1839,7 +1830,7 @@ Si ce n'est pas un pic normal, un robot écrit peut-être au chat. Réglage : De
         }
         $message_id = self::add_message( $conv->id, 'customer', 'image', 'image', array(
             'file' => $moved['file'],
-            'url' => self::stored_file_url( (int) $conv->id, $moved['file'] ),
+            'url' => self::chat_file_url( (int) $conv->id, $moved['file'] ),
             'private' => 1,
             'mime' => $moved['type'],
             'title' => self::t( $lang, 'Image envoyée', 'Image sent', 'Imaj voye' ),
