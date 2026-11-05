@@ -1,5 +1,6 @@
 // node reviews-980.cjs <base> <expected.json> — STAGING ONLY. Delicat Builder 9.8.0 (TR-01): review figures.
 // Run `php reviews-setup.php <site-dir> <expected.json>` first; it counts the reviews with plain WordPress calls.
+// Usage: node reviews-980.cjs <base> <expected.json> <site-dir>
 // Checks, at phone and desktop size, light and dark:
 //  1. the rating block shows the computed store average and count, never the hand-typed 4.8 / 219 « AVIS VÉRIFIÉS »;
 //  2. product reviews are stated apart (average, count, verified buyers) with a link to the review policy;
@@ -9,8 +10,14 @@
 //  6. pending, unrated, draft-product reviews never show; the summary can be hidden; nothing scrolls sideways;
 //  7. the summary text keeps WCAG AA contrast on its card;
 //  8. the policy page no longer carries « 4,8 sur 81 »;
-//  9. a customer with no paid order cannot post a review; a buyer can.
+//  9. a customer with no paid order is told so before writing (popup) and cannot post; a buyer can;
+// 10. the figures follow real changes on their own: a review approved / put back, a product unpublished / back.
+// Averages are shown rounded down (« sans arrondi favorable »); a review stored with duplicate rating/verified rows
+// counts once (fixture in reviews-setup.php).
 const fs = require('fs');
+const { execFileSync } = require('child_process');
+const site = process.argv[4] || '';
+const mutate = (action, id) => JSON.parse(execFileSync('php', ['-d', 'memory_limit=512M', __dirname + '/reviews-mutate.php', site, action, String(id || '')], { encoding: 'utf8' }).trim().split('\n').pop());
 const { chromium } = require('playwright');
 const base = process.argv[2] || 'https://localhost:8943';
 const want = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
@@ -59,6 +66,8 @@ async function login(browser, who) {
   return { ctx, p };
 }
 
+const prompt = (p) => p.evaluate(async (base) => (await (await fetch(base + '/wp-admin/admin-ajax.php?action=delicat_builder_v9_review_prompt', { credentials: 'same-origin' })).json()).data, base);
+
 const submit = (p, name) => p.evaluate(async ({ base, name }) => {
   const ajax = base + '/wp-admin/admin-ajax.php';
   const prompt = await (await fetch(ajax + '?action=delicat_builder_v9_review_prompt', { credentials: 'same-origin' })).json();
@@ -76,6 +85,9 @@ const submit = (p, name) => p.evaluate(async ({ base, name }) => {
       const page = await ctx.newPage();
       await page.goto(`${base}/reviews-home/`, { waitUntil: 'load' });
       await page.waitForTimeout(scheme === 'dark' ? 700 : 150);
+      // the dark-mode rules are keyed on the site's theme attribute: make sure it is really on
+      const theme = await page.evaluate(() => document.documentElement.getAttribute('data-delicat-theme') || '');
+      check(`${tag} site theme is ${scheme}`, scheme === 'dark' ? theme === 'dark' : theme !== 'dark', theme);
       const r = await page.evaluate(() => {
         const box = document.querySelector('.delicat-testimonials__rating');
         const stars = box && box.querySelector('.delicat-testimonials__rating-stars');
@@ -142,17 +154,41 @@ const submit = (p, name) => p.evaluate(async ({ base, name }) => {
   // 9. who may post
   {
     const { ctx, p } = await login(browser, want.users.nobuy);
+    const pr = await prompt(p);
+    check('customer without a paid order is not invited', pr.can_review === false && pr.due === false, JSON.stringify(pr));
+    await p.goto(want.product_url, { waitUntil: 'load' });
+    await p.click('.dnp-reviews-btn');
+    const said = await p.waitForSelector('.dlc-review-title', { timeout: 8000 }).then((h) => h.textContent()).catch(() => '');
+    const form = await p.$('.dlc-review-star');
+    check('the review button tells them first (no form to fill in)', /réservés aux clients/.test(said) && !form, said);
     const res = await submit(p, 'RV_NOBUY');
     check('customer without a paid order cannot post a review', res.status === 403 && /déjà passé une commande/.test(res.body.data.message), `${res.status} ${JSON.stringify(res.body)}`);
     await ctx.close();
   }
   {
     const { ctx, p } = await login(browser, want.users.buyer);
+    const pr = await prompt(p);
+    check('buyer may review', pr.can_review === true, JSON.stringify(pr));
     const res = await submit(p, 'RV_BUYER2');
     check('buyer can post a review (held for moderation)', res.status === 200 && res.body.success === true, `${res.status} ${JSON.stringify(res.body)}`);
     await ctx.close();
   }
   await browser.close();
+  // 10. the figures follow real changes (WordPress hooks only; no manual cache flush)
+  if (site) {
+    const base0 = mutate('stats');
+    check('figures before the changes match the independent count', base0.store.count === want.store.count && base0.products.count === want.products.count && base0.products.verified === want.products.verified, JSON.stringify(base0));
+    const up = mutate('publish', want.ids.pending);
+    check('approving a store review updates the count', up.store.count === want.store.count + 1, JSON.stringify(up.store));
+    const back = mutate('unpublish', want.ids.pending);
+    check('putting it back to pending updates it again', back.store.count === want.store.count, JSON.stringify(back.store));
+    const hidden = mutate('hide-product', want.ids.product);
+    check('unpublishing a reviewed product drops its reviews', hidden.products.count < want.products.count && hidden.products.verified < want.products.verified, JSON.stringify(hidden.products));
+    const shown = mutate('show-product', want.ids.product);
+    check('publishing it again brings them back', shown.products.count === want.products.count && shown.products.verified === want.products.verified, JSON.stringify(shown.products));
+  } else {
+    check('site directory given for the change checks (4th argument)', false);
+  }
   const passed = results.filter(Boolean).length;
   console.log(`\n${passed}/${results.length} passed`);
   process.exit(passed === results.length ? 0 : 1);

@@ -77,6 +77,7 @@ final class Delicat_Builder_V9_Reviews {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue' ), 32 );
 		if ( ! class_exists( 'Delicat_Builder_V9_Reviews_Kernel', false ) ) {
 			add_action( 'transition_post_status', array( __CLASS__, 'maybe_purge_on_approval' ), 10, 3 );
+			add_action( 'transition_post_status', array( __CLASS__, 'product_visibility_changed' ), 10, 3 );
 
 			/* RC51.30: keep the rail in sync with WooCommerce product reviews. */
 			add_action( 'transition_comment_status', array( __CLASS__, 'woo_review_status_changed' ), 10, 3 );
@@ -147,16 +148,19 @@ final class Delicat_Builder_V9_Reviews {
 			if ( ! $post instanceof WP_Post ) {
 				continue;
 			}
-			$quote = trim( wp_strip_all_tags( (string) $post->post_content ) );
-			$name  = trim( (string) $post->post_title );
-			if ( '' === $quote || '' === $name ) {
+			$quote  = trim( wp_strip_all_tags( (string) $post->post_content ) );
+			$name   = trim( (string) $post->post_title );
+			$rating = absint( get_post_meta( $post->ID, self::META_RATING, true ) );
+			/* 9.8.0 (TR-01): without a 1–5 rating (a review typed in wp-admin) it is
+			 * neither shown with an invented star nor counted in stats(). */
+			if ( '' === $quote || '' === $name || $rating < 1 || $rating > 5 ) {
 				continue;
 			}
 			$items[] = array(
-				'quote'   => sanitize_text_field( $quote ),
-				'name'    => sanitize_text_field( $name ),
-				'place'   => sanitize_text_field( (string) get_post_meta( $post->ID, self::META_CITY, true ) ),
-				'rating'   => max( 1, min( 5, absint( get_post_meta( $post->ID, self::META_RATING, true ) ) ) ),
+				'quote'    => sanitize_text_field( $quote ),
+				'name'     => sanitize_text_field( $name ),
+				'place'    => sanitize_text_field( (string) get_post_meta( $post->ID, self::META_CITY, true ) ),
+				'rating'   => $rating,
 				'product'  => '',
 				'url'      => '',
 				/* 9.8.0 (TR-01): the « achat vérifié » tick means the author has a paid order. */
@@ -301,37 +305,47 @@ final class Delicat_Builder_V9_Reviews {
 			return $cached;
 		}
 		global $wpdb;
+		/* One row per review: a rating or verified flag stored twice (an import, a
+		 * migration) must not count that review twice. */
 		$store = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT COUNT(*) AS n, AVG(CAST(m.meta_value AS UNSIGNED)) AS avg_rating
-				FROM {$wpdb->posts} p
-				INNER JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s
-				WHERE p.post_type = %s AND p.post_status = 'publish'
-				AND CAST(m.meta_value AS UNSIGNED) BETWEEN 1 AND 5",
+				"SELECT COUNT(*) AS n, AVG(t.rt) AS avg_rating FROM (
+					SELECT ( SELECT CAST(MIN(m.meta_value) AS UNSIGNED) FROM {$wpdb->postmeta} m WHERE m.post_id = p.ID AND m.meta_key = %s ) AS rt
+					FROM {$wpdb->posts} p
+					WHERE p.post_type = %s AND p.post_status = 'publish'
+				) t WHERE t.rt BETWEEN 1 AND 5",
 				self::META_RATING,
 				self::CPT
 			),
 			ARRAY_A
 		);
 		$products = $wpdb->get_row(
-			"SELECT COUNT(*) AS n, AVG(CAST(r.meta_value AS UNSIGNED)) AS avg_rating,
-				SUM(CASE WHEN v.meta_value = '1' THEN 1 ELSE 0 END) AS verified
-			FROM {$wpdb->comments} c
-			INNER JOIN {$wpdb->posts} p ON p.ID = c.comment_post_ID AND p.post_type = 'product' AND p.post_status = 'publish'
-			INNER JOIN {$wpdb->commentmeta} r ON r.comment_id = c.comment_ID AND r.meta_key = 'rating'
-			LEFT JOIN {$wpdb->commentmeta} v ON v.comment_id = c.comment_ID AND v.meta_key = 'verified'
-			WHERE c.comment_type = 'review' AND c.comment_approved = '1' AND c.comment_parent = 0
-			AND CAST(r.meta_value AS UNSIGNED) BETWEEN 1 AND 5",
+			"SELECT COUNT(*) AS n, AVG(t.rt) AS avg_rating, SUM(t.vf) AS verified FROM (
+				SELECT ( SELECT CAST(MIN(r.meta_value) AS UNSIGNED) FROM {$wpdb->commentmeta} r WHERE r.comment_id = c.comment_ID AND r.meta_key = 'rating' ) AS rt,
+					EXISTS( SELECT 1 FROM {$wpdb->commentmeta} v WHERE v.comment_id = c.comment_ID AND v.meta_key = 'verified' AND v.meta_value = '1' ) AS vf
+				FROM {$wpdb->comments} c
+				INNER JOIN {$wpdb->posts} p ON p.ID = c.comment_post_ID AND p.post_type = 'product' AND p.post_status = 'publish'
+				WHERE c.comment_type = 'review' AND c.comment_approved = '1' AND c.comment_parent = 0
+			) t WHERE t.rt BETWEEN 1 AND 5",
 			ARRAY_A
 		);
+		if ( ! is_array( $store ) || ! is_array( $products ) ) {
+			/* A failed query is not cached as « no reviews ». */
+			return array(
+				'store'    => array( 'count' => 0, 'average' => 0.0 ),
+				'products' => array( 'count' => 0, 'average' => 0.0, 'verified' => 0 ),
+			);
+		}
+		/* Averages stay unrounded here; the page rounds them once, downwards
+		 * (« sans arrondi favorable », Politique des avis clients, section 5). */
 		$stats = array(
 			'store'    => array(
 				'count'   => absint( $store['n'] ?? 0 ),
-				'average' => round( (float) ( $store['avg_rating'] ?? 0 ), 2 ),
+				'average' => (float) ( $store['avg_rating'] ?? 0 ),
 			),
 			'products' => array(
 				'count'    => absint( $products['n'] ?? 0 ),
-				'average'  => round( (float) ( $products['avg_rating'] ?? 0 ), 2 ),
+				'average'  => (float) ( $products['avg_rating'] ?? 0 ),
 				'verified' => absint( $products['verified'] ?? 0 ),
 			),
 		);
@@ -340,23 +354,64 @@ final class Delicat_Builder_V9_Reviews {
 	}
 
 	/**
+	 * 9.8.0 (TR-01): an average as the site shows it — one decimal, rounded down,
+	 * never up (4,79 reads 4,7).
+	 */
+	public static function display_average( float $average ): float {
+		return floor( $average * 10 + 1e-9 ) / 10;
+	}
+
+	/**
+	 * 9.8.0 (TR-01): a product with approved reviews that enters or leaves the
+	 * shop (published ↔ draft, private, trash) changes the product figures:
+	 * refresh them and the homepage that prints them.
+	 */
+	public static function product_visibility_changed( $new_status, $old_status, $post ): void {
+		if ( ! $post instanceof WP_Post || 'product' !== $post->post_type || ( 'publish' === $new_status ) === ( 'publish' === $old_status ) ) {
+			return;
+		}
+		$reviewed = get_comments(
+			array(
+				'post_id' => (int) $post->ID,
+				'type'    => 'review',
+				'status'  => 'approve',
+				'count'   => true,
+			)
+		);
+		if ( absint( $reviewed ) > 0 ) {
+			self::flush_rail_cache();
+			self::purge_front_page();
+		}
+	}
+
+	/**
 	 * 9.8.0 (TR-01): has this account at least one paid order (processing or
 	 * completed)? The review policy reserves reviews to clients who ordered, and
 	 * the « achat vérifié » tick on a store review rests on this.
 	 */
 	public static function customer_has_paid_order( int $user_id ): bool {
+		static $memo = array();
 		if ( $user_id <= 0 || ! function_exists( 'wc_get_orders' ) || ! function_exists( 'wc_get_is_paid_statuses' ) ) {
 			return false;
 		}
-		$ids = wc_get_orders(
-			array(
-				'customer_id' => $user_id,
-				'status'      => wc_get_is_paid_statuses(),
-				'limit'       => 1,
-				'return'      => 'ids',
-			)
+		if ( isset( $memo[ $user_id ] ) ) {
+			return $memo[ $user_id ];
+		}
+		$query = array(
+			'status' => wc_get_is_paid_statuses(),
+			'limit'  => 1,
+			'return' => 'ids',
 		);
-		return ! empty( $ids );
+		$found = ! empty( wc_get_orders( $query + array( 'customer_id' => $user_id ) ) );
+		if ( ! $found ) {
+			/* An order placed as a guest with the account's address counts too, as
+			 * in WooCommerce's own « verified owner » check. */
+			$user  = get_userdata( $user_id );
+			$email = $user instanceof WP_User ? sanitize_email( (string) $user->user_email ) : '';
+			$found = '' !== $email && ! empty( wc_get_orders( $query + array( 'billing_email' => $email, 'customer_id' => 0 ) ) );
+		}
+		$memo[ $user_id ] = $found;
+		return $found;
 	}
 
 	/** Woo review approved/unapproved or edited → refresh rail + purge homepage. */
@@ -568,13 +623,16 @@ final class Delicat_Builder_V9_Reviews {
 		/* RC51.30: nonce + name are always returned for logged-in users so the
 		 * "LAISSER UN AVIS" button can open the form on demand. */
 		$on_thanks = ! empty( $_GET['thanks'] ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$due       = self::prompt_is_due( $user_id, (bool) $on_thanks );
+		/* 9.8.0 (TR-01): reviews need a paid order (ajax_submit), so an account
+		 * without one is never invited, and the popup says why. */
+		$can_review = self::customer_has_paid_order( $user_id );
+		$due        = $can_review && self::prompt_is_due( $user_id, (bool) $on_thanks );
 
 		/* RC66: a completed order queued a product review invitation (user
 		 * meta, written at order completion — no query here). The popup opens
 		 * on that product, so the review lands where Google reads it. */
 		$due_product = null;
-		$due_pid     = absint( get_user_meta( $user_id, self::UMETA_DUE_PRODUCT, true ) );
+		$due_pid     = $can_review ? absint( get_user_meta( $user_id, self::UMETA_DUE_PRODUCT, true ) ) : 0;
 		if ( $due_pid > 0 ) {
 			$due_post = get_post( $due_pid );
 			if ( $due_post instanceof WP_Post && 'product' === $due_post->post_type && 'publish' === $due_post->post_status ) {
@@ -587,8 +645,9 @@ final class Delicat_Builder_V9_Reviews {
 
 		wp_send_json_success(
 			array(
-				'due'      => $due,
-				'done'     => '' !== (string) get_user_meta( $user_id, self::UMETA_DONE, true ),
+				'due'        => $due,
+				'can_review' => $can_review,
+				'done'       => '' !== (string) get_user_meta( $user_id, self::UMETA_DONE, true ),
 				'name'     => sanitize_text_field( $name ),
 				'nonce'    => wp_create_nonce( 'delicat_builder_v9_review' ),
 				'max'      => self::MAX_QUOTE_LEN,

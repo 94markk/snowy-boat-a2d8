@@ -112,7 +112,7 @@ return array(
  'assets/js/purchase-native.js' => '2424a991e69e',
  'assets/js/purchase.js' => 'a406b368e45e',
  'assets/js/pwa-runtime.js' => 'cde16abf9b9c',
- 'assets/js/reviews.js' => 'a8a666867e0e',
+ 'assets/js/reviews.js' => '45e74e739ecd',
  'assets/js/rum.js' => 'c69fa7f53c5a',
  'assets/js/session.js' => '19c34f6a0fbd',
  'assets/js/shell-admin.js' => 'b8d356336d5e',

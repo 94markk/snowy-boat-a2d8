@@ -24,9 +24,12 @@ function rv_user( string $login ): int {
 	$id = $u ? $u->ID : wp_insert_user( array( 'user_login' => $login, 'user_pass' => PASS, 'user_email' => $login . '@example.test', 'role' => 'customer', 'display_name' => strtoupper( $login ) ) );
 	wp_set_password( PASS, $id );
 	update_user_meta( $id, 'dip_email_verified', 'yes' ); // Delicat Identity refuses sign-in before the email is confirmed
+	update_user_meta( $id, 'dip_age_declaration', 'adult' ); // and asks the age once, in a dialog over the page
+	update_user_meta( $id, 'dip_age_declared_at', time() );
 	delete_user_meta( $id, Delicat_Builder_V9_Reviews::UMETA_DONE );
 	// clear the 12-hour submit slot and the 5-an-hour review limit so a re-run can post again
-	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", '%dlc_rev_rl_' . $id . '%' ) );
+	delete_transient( 'dlc_rev_rl_' . $id );
+	$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", '%' . $wpdb->esc_like( 'dlc_rev_rl_' . $id . '_' ) . '%' ) ); // this user's per-product slots only
 	delete_transient( 'dbv9rl_' . substr( hash_hmac( 'sha256', 'review_submit|u:' . $id, wp_salt( 'nonce' ) ), 0, 32 ) );
 	return (int) $id;
 }
@@ -65,6 +68,8 @@ rv_store( 'RV STORE BUYER FIVE', 5, $buyer, 'publish', 'Commande reçue, tout es
 rv_store( 'RV STORE NOBUY FOUR', 4, $nobuy, 'publish', 'Bon accueil sur WhatsApp, réponse rapide.' );
 rv_store( 'RV STORE BUYER TWO', 2, $buyer, 'publish', 'Livraison plus lente que prévu cette fois.' );
 rv_store( 'RV STORE PENDING ONE', 1, $nobuy, 'pending', 'En attente de modération : ne compte pas.' );
+rv_store( 'RV STORE NO RATING', 0, $buyer, 'publish', 'Avis tapé dans l’administration, sans note.' ); // neither shown nor counted
+$pending = get_posts( array( 'post_type' => Delicat_Builder_V9_Reviews::CPT, 'post_status' => 'pending', 'title' => 'RV STORE PENDING ONE', 'fields' => 'ids', 'numberposts' => 1 ) )[0];
 
 function rv_review( int $product, string $name, int $rating, int $verified, string $approved, int $parent = 0, int $user = 0 ): int {
 	$id = wp_insert_comment( array( 'comment_post_ID' => $product, 'comment_author' => $name, 'comment_author_email' => 'rv@example.test', 'comment_content' => 'Avis de test ' . $name . ', texte assez long.', 'comment_type' => 'review', 'comment_approved' => $approved, 'comment_parent' => $parent, 'user_id' => $user ) );
@@ -75,7 +80,9 @@ function rv_review( int $product, string $name, int $rating, int $verified, stri
 }
 $top = rv_review( $products[0], 'RV PRODUCT VERIFIED FIVE', 5, 1, '1', 0, $buyer );
 rv_review( $products[1], 'RV PRODUCT UNVERIFIED THREE', 3, 0, '1' );
-rv_review( $products[1], 'RV PRODUCT VERIFIED FOUR', 4, 1, '1' );
+$dup = rv_review( $products[1], 'RV PRODUCT VERIFIED FOUR', 4, 1, '1' );
+add_comment_meta( $dup, 'rating', 4 );   // the same values stored twice, as an import can leave them:
+add_comment_meta( $dup, 'verified', 1 ); // still one review, one verified buyer
 rv_review( $products[0], 'RV PRODUCT UNVERIFIED FOUR', 4, 0, '1' );
 rv_review( $products[0], 'RV PRODUCT HELD ONE', 1, 1, '0' );          // not approved
 rv_review( $products[1], 'RV PRODUCT UNRATED', 0, 0, '1' );           // no rating: not counted, not on the rail
@@ -99,7 +106,8 @@ foreach ( get_comments( array( 'type' => 'review', 'status' => 'approve', 'paren
 	$prod[]    = $r;
 	$verified += '1' === (string) get_comment_meta( $c->comment_ID, 'verified', true ) ? 1 : 0;
 }
-$avg = static fn( array $a ): float => $a ? array_sum( $a ) / count( $a ) : 0.0;
+$avg  = static fn( array $a ): float => $a ? array_sum( $a ) / count( $a ) : 0.0;
+$down = static fn( float $x ): string => number_format_i18n( floor( $x * 10 + 1e-9 ) / 10, 1 ); // shown rounded down, never up
 
 // pages: the old hand-typed figures and the shipped sample lines are still saved, as on the live site
 $samples = "Recharge Free Fire reçue en moins de 2 minutes. Service rapide et sérieux, je commande chaque semaine.|JEAN-MARC|PORT-AU-PRINCE|5\nMon abonnement a été livré très rapidement et le support m’a répondu sur WhatsApp.|MIKAËLL|CAP-HAÏTIEN|5\nService au top, je recommande à tous mes amis.|RV TYPED LINE|JACMEL|5";
@@ -128,8 +136,10 @@ file_put_contents(
 	$out,
 	wp_json_encode(
 		array(
-			'store'    => array( 'count' => count( $store ), 'average' => number_format_i18n( round( $avg( $store ), 2 ), 1 ), 'raw' => $avg( $store ) ),
-			'products' => array( 'count' => count( $prod ), 'average' => number_format_i18n( round( $avg( $prod ), 2 ), 1 ), 'raw' => $avg( $prod ), 'verified' => $verified ),
+			'store'    => array( 'count' => count( $store ), 'average' => $down( $avg( $store ) ), 'raw' => $avg( $store ) ),
+			'products' => array( 'count' => count( $prod ), 'average' => $down( $avg( $prod ) ), 'raw' => $avg( $prod ), 'verified' => $verified ),
+			'ids'      => array( 'pending' => (int) $pending, 'product' => (int) $products[1] ),
+			'product_url' => get_permalink( $products[1] ),
 			'policy'   => Delicat_Builder_V9_Legal::url( 'reviews' ),
 			'legal'    => $legal,
 			'users'    => array( 'buyer' => 'rv_buyer2', 'nobuy' => 'rv_nobuy', 'pass' => PASS ),

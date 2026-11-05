@@ -6,7 +6,7 @@
 	if (window.__dlcReviewBooted) { return; }
 	window.__dlcReviewBooted = true;
 
-	var state = { nonce: '', max: 280, rating: 5, overlay: null, lastFocus: null, sending: false, done: false, due: false, name: '', promise: null, products: [], reviewed: [], product: 0, productName: '', productsPromise: null, dueProduct: null };
+	var state = { nonce: '', max: 280, rating: 5, overlay: null, lastFocus: null, sending: false, done: false, due: false, canReview: true, name: '', promise: null, products: [], reviewed: [], product: 0, productName: '', productsPromise: null, dueProduct: null };
 	var reduced = false;
 	try { reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
 
@@ -264,6 +264,17 @@
 		window.setTimeout(function () { close(false); }, 2600);
 	}
 
+	/* 9.8.0 (TR-01): said before the customer writes anything, instead of refusing the review after. */
+	function noOrderStep(dialog) {
+		dialog.textContent = '';
+		dialog.appendChild(closeButton());
+		var wrap = el('div', 'dlc-review-thanks');
+		wrap.appendChild(icon('clock'));
+		wrap.appendChild(el('h2', 'dlc-review-title', 'Les avis sont réservés aux clients'));
+		wrap.appendChild(el('p', 'dlc-review-text', 'Tu pourras donner ton avis après ta première commande. Mèsi !'));
+		dialog.appendChild(wrap);
+	}
+
 	function loginStep(dialog) {
 		dialog.textContent = '';
 		dialog.appendChild(closeButton());
@@ -302,6 +313,8 @@
 					state.done = !!data.data.done;
 					state.name = String(data.data.name || '').trim();
 					state.due = !!data.data.due;
+					/* 9.8.0 (TR-01): reviews are for customers with a paid order; an older server sends no flag. */
+					state.canReview = data.data.can_review !== false;
 					/* RC66: a completed order queued a review for one product. */
 					state.dueProduct = data.data.product && parseInt(data.data.product.id, 10) ? { id: parseInt(data.data.product.id, 10), name: String(data.data.product.name || '') } : null;
 				}
@@ -358,6 +371,7 @@
 			(state.nonce ? Promise.resolve() : fetchPrompt()).then(function () {
 				if (!state.overlay) { return; }
 				if (!state.nonce) { loginStep(dialog); return; }
+				if (!state.canReview) { noOrderStep(dialog); return; }
 				return ensureProducts().then(function () {
 					if (!state.overlay) { return; }
 					if (alreadyDone()) { alreadyStep(dialog); } else { formStep(dialog, state.name); }

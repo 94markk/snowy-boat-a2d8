@@ -1214,7 +1214,7 @@ private static function testimonials_rating( array $content ): string {
 		$note  = '';
 		if ( $products['count'] > 0 ) {
 			/* translators: 1: average rating, 2: number of product reviews. */
-			$note = sprintf( __( 'Avis sur nos produits : %1$s/5 sur %2$s avis', 'delicat-builder-v9' ), number_format_i18n( $products['average'], 1 ), number_format_i18n( $products['count'] ) )
+			$note = sprintf( __( 'Avis sur nos produits : %1$s/5 sur %2$s avis', 'delicat-builder-v9' ), number_format_i18n( Delicat_Builder_V9_Reviews::display_average( (float) $products['average'] ), 1 ), number_format_i18n( $products['count'] ) )
 				. ( '' !== $verified ? ', ' . $verified : '' ) . '.';
 		}
 	} elseif ( $products['count'] > 0 ) {
@@ -1225,9 +1225,11 @@ private static function testimonials_rating( array $content ): string {
 	} else {
 		return '';
 	}
-	$shown  = number_format_i18n( $average, 1 );
-	$policy = class_exists( 'Delicat_Builder_V9_Legal', false ) && Delicat_Builder_V9_Legal::page_id( 'reviews' ) > 0 ? (string) Delicat_Builder_V9_Legal::url( 'reviews' ) : '';
-	$fill   = max( 0, min( 100, round( $average / 5 * 100, 1 ) ) );
+	/* One decimal, rounded down (« sans arrondi favorable »); the stars use the exact mean. */
+	$shown     = number_format_i18n( Delicat_Builder_V9_Reviews::display_average( (float) $average ), 1 );
+	$policy_id = class_exists( 'Delicat_Builder_V9_Legal', false ) ? Delicat_Builder_V9_Legal::page_id( 'reviews' ) : 0;
+	$policy    = $policy_id > 0 && 'publish' === get_post_status( $policy_id ) ? (string) Delicat_Builder_V9_Legal::url( 'reviews' ) : '';
+	$fill      = max( 0, min( 100, round( $average / 5 * 100, 1 ) ) );
 
 	$out  = '<div class="delicat-testimonials__rating">';
 	$out .= '<strong aria-hidden="true">' . esc_html( $shown ) . '</strong>';

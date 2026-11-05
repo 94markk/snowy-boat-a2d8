@@ -24,8 +24,16 @@ final class Delicat_Builder_V9_Reviews_Kernel {
 	}
 
 	public static function post_status( $new_status, $old_status, $post ): void {
-		if ( $post instanceof WP_Post && 'delicat_review' === (string) $post->post_type && self::load() ) {
+		if ( ! $post instanceof WP_Post ) {
+			return;
+		}
+		if ( 'delicat_review' === (string) $post->post_type && self::load() ) {
 			Delicat_Builder_V9_Reviews::maybe_purge_on_approval( $new_status, $old_status, $post );
+			return;
+		}
+		/* 9.8.0 (TR-01): the homepage counts only reviews of published products. */
+		if ( 'product' === (string) $post->post_type && ( 'publish' === $new_status ) !== ( 'publish' === $old_status ) && self::load() ) {
+			Delicat_Builder_V9_Reviews::product_visibility_changed( $new_status, $old_status, $post );
 		}
 	}
 

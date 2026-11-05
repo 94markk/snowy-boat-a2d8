@@ -4,7 +4,7 @@ import { a as f, c as L, e as se, f as a, m as ke, v as Ee } from "./shared-base
 function Me({ signal: O, config: z }) {
   let S = L.DelicatReviewsConfig || z.reviews;
   if (!S || !S.ajaxUrl || !L.fetch) return null;
-  let N = () => L.DelicatReviewsConfig || z.reviews || S, n = { nonce: "", max: 280, rating: 5, overlay: null, lastFocus: null, sending: false, done: false, due: false, name: "", promise: null, products: [], reviewed: [], product: 0, productName: "", productsPromise: null, dueProduct: null }, G = ke.reducedMotion, v = { nonce: "", logged: null, own: /* @__PURE__ */ new Set(), mine: {}, synced: /* @__PURE__ */ new WeakSet(), busy: /* @__PURE__ */ new Set() }, h = null, E = (e) => {
+  let N = () => L.DelicatReviewsConfig || z.reviews || S, n = { nonce: "", max: 280, rating: 5, overlay: null, lastFocus: null, sending: false, done: false, due: false, canReview: true, name: "", promise: null, products: [], reviewed: [], product: 0, productName: "", productsPromise: null, dueProduct: null }, G = ke.reducedMotion, v = { nonce: "", logged: null, own: /* @__PURE__ */ new Set(), mine: {}, synced: /* @__PURE__ */ new WeakSet(), busy: /* @__PURE__ */ new Set() }, h = null, E = (e) => {
     let t = { celebrate: '<path d="M8 3 6.5 7.5 2 9l4.5 1.5L8 15l1.5-4.5L14 9 9.5 7.5 8 3Z"/><path d="m17 13-1 3-3 1 3 1 1 3 1-3 3-1-3-1-1-3Z"/>', heart: '<path d="M12 20.5S4.5 15.9 2.7 11C1.6 7.6 3.6 4.5 6.9 4.5c1.9 0 3.4 1 4.3 2.4.9-1.4 2.4-2.4 4.3-2.4 3.3 0 5.3 3.1 4.2 6.5-1.8 4.9-9.3 9.5-9.3 9.5Z"/>', lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>' }, r = a("div", "dlc-review-emoji");
     return r.innerHTML = '<svg class="dlc-review-icon" viewBox="0 0 24 24" aria-hidden="true">' + (t[e] || t.celebrate) + "</svg>", r;
   }, R = (e, t) => Le(e, t, { url: S.ajaxUrl }).then((r) => ({ success: true, data: r })).catch((r) => ({ success: false, data: r && r.data }));
@@ -136,8 +136,14 @@ function Me({ signal: O, config: z }) {
     let t = a("div", "dlc-review-thanks");
     t.append(E("clock"), a("p", "dlc-review-text", "Un instant\u2026")), e.append(t);
   }
+  /* 9.8.0 (TR-01): reviews are for customers with a paid order; say so before they write anything. */
+  function noOrder(e) {
+    e.textContent = "", e.append(M());
+    let t = a("div", "dlc-review-thanks");
+    t.append(E("clock"), a("h2", "dlc-review-title", "Les avis sont r\xE9serv\xE9s aux clients"), a("p", "dlc-review-text", "Tu pourras donner ton avis apr\xE8s ta premi\xE8re commande. M\xE8si !")), e.append(t);
+  }
   function X() {
-    return n.promise || (n.promise = H(S.ajaxUrl + "?action=delicat_builder_v9_review_prompt" + (S.thanks ? "&thanks=1" : ""), {}, 8e3).then((e) => (e && e.success && e.data && e.data.nonce && (n.nonce = String(e.data.nonce || ""), n.max = parseInt(e.data.max, 10) || 280, n.done = !!e.data.done, n.name = String(e.data.name || "").trim(), n.due = !!e.data.due, n.dueProduct = e.data.product && parseInt(e.data.product.id, 10) ? { id: parseInt(e.data.product.id, 10), name: String(e.data.product.name || "") } : null), e))), n.promise;
+    return n.promise || (n.promise = H(S.ajaxUrl + "?action=delicat_builder_v9_review_prompt" + (S.thanks ? "&thanks=1" : ""), {}, 8e3).then((e) => (e && e.success && e.data && e.data.nonce && (n.nonce = String(e.data.nonce || ""), n.max = parseInt(e.data.max, 10) || 280, n.done = !!e.data.done, n.name = String(e.data.name || "").trim(), n.due = !!e.data.due, n.canReview = e.data.can_review !== false, n.dueProduct = e.data.product && parseInt(e.data.product.id, 10) ? { id: parseInt(e.data.product.id, 10), name: String(e.data.product.name || "") } : null), e))), n.promise;
   }
   function F(e, t) {
     if (n.overlay && !n.overlay.isConnected && (n.overlay = null, f.removeEventListener("keydown", U, true), f.body.classList.remove("dlc-review-modal-open"), W("reviews")), n.overlay) return;
@@ -162,6 +168,10 @@ function Me({ signal: O, config: z }) {
       if (n.overlay) {
         if (!n.nonce) {
           Z(e);
+          return;
+        }
+        if (!n.canReview) {
+          noOrder(e);
           return;
         }
         return B().then(() => {

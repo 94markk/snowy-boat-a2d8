@@ -4,15 +4,21 @@ des avis publiés, et ne peuvent plus être tapés à la main. Avant, la note (4
 nombre affiché additionnait un chiffre saisi à la main et le vrai nombre d’avis ; c’est pourquoi l’accueil pouvait
 annoncer « 300 avis vérifiés » quand la page « Politique des avis clients » parlait de 81.
 (2) Les avis sur la boutique (menu « Avis clients ») et les avis sur les produits (Produits → Avis) sont comptés à
-part, chacun avec sa propre moyenne, notes basses comprises. Les étoiles se remplissent selon la vraie moyenne
-(4,6 n’affiche plus cinq étoiles pleines). Un lien « Comment nous traitons les avis » mène à la politique des avis.
+part, chacun avec sa propre moyenne, notes basses comprises, affichée avec une décimale arrondie vers le bas (4,79
+s’affiche 4,7, jamais 4,8). Les étoiles se remplissent selon la vraie moyenne (4,6 n’affiche plus cinq étoiles
+pleines). Un lien « Comment nous traitons les avis » mène à la politique des avis. Un avis enregistré deux fois par
+une importation ne compte qu’une fois, et un produit dépublié sort des chiffres tout de suite.
 (3) La coche verte sur une carte d’avis veut dire « Achat vérifié » : elle n’apparaît plus que sur les avis d’un
 client qui a une commande payée (ou d’un acheteur du produit, pour un avis produit). Les phrases tapées dans le
 Builder s’affichent sans coche. Les deux exemples livrés avec l’extension (« Recharge Free Fire reçue en moins de
 2 minutes… » de JEAN-MARC, « Mon abonnement a été livré… » de MIKAËLL) n’étaient pas de vrais avis : ils ne
 s’affichent plus.
-(4) Comme l’annonce la politique des avis (section 1), seul un client qui a déjà une commande payée peut envoyer un
-avis depuis la fenêtre « Laisser un avis ». Un ancien avis produit sans note n’est plus montré avec cinq étoiles.
+(4) Comme l’annonce la politique des avis (section 1), seul un client qui a déjà une commande payée (y compris une
+commande passée sans compte avec la même adresse e-mail) peut envoyer un avis depuis la fenêtre « Laisser un avis ».
+Les autres ne reçoivent plus l’invitation et, s’ils touchent le bouton, la fenêtre leur dit tout de suite que les
+avis sont réservés aux clients, avant qu’ils écrivent. Un avis sans note n’est plus montré avec des étoiles
+inventées. Pour que la même règle vaille aussi pour le formulaire d’avis de WooCommerce : WooCommerce → Réglages →
+Produits → cocher l’option qui réserve les avis aux « propriétaires vérifiés ».
 (5) « Politique des avis clients » : les chiffres « 4,8 sur 81 avis » écrits dans le texte sont retirés (ils ne
 pouvaient que devenir faux) et la section 5 précise que boutique et produits sont comptés séparément. La page est
 mise à jour automatiquement si elle n’a pas été modifiée à la main ; si vous l’avez modifiée, elle reste telle quelle

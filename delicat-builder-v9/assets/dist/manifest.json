@@ -1,11 +1,11 @@
 {
  "version": 2,
- "builtAt": "2026-11-05T22:53:49.034Z",
+ "builtAt": "2026-11-05T23:10:16.494Z",
  "js": {
   "engine": {
-   "file": "engine.446e36877819.js",
+   "file": "engine.77f1984c3153.js",
    "bytes": 88338,
-   "sha256": "446e3687781935c5d8827e308f8322507c55e7a1f43ec6cf32e65584938d84ae",
+   "sha256": "77f1984c3153faaac1fb9524e74690e4966c95d981de61124ec89b08ebc59cd8",
    "imports": [
     "chunks/chunk.24e5a10064c2.js",
     "chunks/chunk.99ad77e49fbc.js",
@@ -41,9 +41,9 @@
    "sha256": "24e5a10064c2fea83dd4ed2bae3c0d01fadbfdc6c5bbf623ff5e16503bd5c287",
    "name": null
   },
-  "chunks/reviews.6a29c40a7cdc.js": {
-   "bytes": 20385,
-   "sha256": "6a29c40a7cdc1b2167e9290ceb83a3c1c2181eccbf0c5354e51b69728d078f83",
+  "chunks/reviews.6b28bbbd6611.js": {
+   "bytes": 20745,
+   "sha256": "6b28bbbd66111b3db49c46d91a75c883a6d07c1d456ba1765a11ad4d689d71ca",
    "name": "reviews"
   },
   "chunks/chunk.99ad77e49fbc.js": {
