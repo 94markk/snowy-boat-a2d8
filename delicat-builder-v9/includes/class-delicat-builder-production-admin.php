@@ -185,6 +185,10 @@ final class Delicat_Builder_V9_Production_Admin {
 			}
 		}
 
+		/* 9.7.7: an administrator's own switch is never held back by the update guard on this option. */
+		if ( $enable && ! defined( 'DELICAT_BUILDER_V9_MANUAL_SAFE_MODE' ) ) {
+			define( 'DELICAT_BUILDER_V9_MANUAL_SAFE_MODE', true );
+		}
 		update_option( Delicat_Builder_V9_Production::SAFE_MODE_OPTION, $enable ? 1 : 0, false );
 		if ( $enable ) {
 			/* RC51.59: stamp manual trips so version-based self-heal respects them

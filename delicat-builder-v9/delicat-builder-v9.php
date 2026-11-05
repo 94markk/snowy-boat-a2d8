@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
  * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.7.6
+ * Version: 9.7.7
 
  * Requires at least: 6.4
  * Requires PHP: 8.3
@@ -85,6 +85,147 @@ if (
 	return;
 }
 
+/*
+ * 9.7.7 UPDATE SAFETY
+ * -------------------
+ * WordPress replaces this folder file by file when the plugin is updated (it deletes the old copy, then puts the
+ * new one in place). A visitor whose request arrives in that window loads this file while a file it requires is
+ * already gone. Requiring a missing file is a fatal error, and a fatal in this file used to trip the circuit
+ * breaker below, which removed the Builder from the active plugins: after the 9.7.6 update the store stayed on the
+ * bare theme until the plugin was activated again. A copy that is being replaced says nothing about the code, so
+ * these requests now sit out quietly, and only a fault that repeats can switch the plugin off.
+ */
+
+/** Files the kernel loads on every request; one of them missing means the copy is incomplete. */
+function delicat_builder_v9_kernel_files(): array {
+	return array(
+		'includes/class-delicat-builder-transport.php',
+		'includes/class-delicat-builder-design-system.php',
+		'includes/class-delicat-builder-core.php',
+		'includes/class-delicat-builder-cache.php',
+		'includes/class-delicat-builder-security.php',
+		'includes/class-delicat-builder-runtime-router.php',
+	);
+}
+
+/**
+ * True while this copy is being replaced or has just been: the error names a file that could not be opened, a
+ * kernel file is missing, or this file, a kernel file or the one that failed was written less than two minutes ago. Errors seen
+ * then describe the copy, not the code, and trip neither Safe Mode nor the circuit breaker.
+ */
+function delicat_builder_v9_copy_in_flux( string $file = '', string $message = '' ): bool {
+	if ( '' !== $message && false !== stripos( $message, 'Failed opening required' ) ) {
+		return true;
+	}
+	clearstatcache();
+	$dir = __DIR__ . '/';
+	foreach ( delicat_builder_v9_kernel_files() as $relative ) {
+		if ( ! is_file( $dir . $relative ) ) {
+			return true;
+		}
+	}
+	/* The deletion can also be further along than the kernel: the manifest lists every file the release ships.
+	 * Read only on error paths. A site without the manifest skips this check rather than never tripping. */
+	$manifest = $dir . 'integrity-manifest.json';
+	if ( is_file( $manifest ) ) {
+		$listed = json_decode( (string) file_get_contents( $manifest ), true ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local file.
+		if ( is_array( $listed ) && is_array( $listed['files'] ?? null ) ) {
+			foreach ( array_keys( $listed['files'] ) as $relative ) {
+				if ( ! is_file( $dir . $relative ) ) {
+					return true;
+				}
+			}
+		}
+	}
+	$fresh = time() - 120;
+	$paths = array( __FILE__, $file );
+	foreach ( delicat_builder_v9_kernel_files() as $relative ) {
+		$paths[] = $dir . $relative;
+	}
+	foreach ( $paths as $path ) {
+		if ( '' !== $path && is_file( $path ) ) {
+			$mtime = (int) @filemtime( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- a file can vanish between the two calls.
+			if ( $mtime > $fresh ) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+/**
+ * A page printed while the Builder is incomplete, dormant or in Safe Mode shows the bare theme. It must never
+ * enter LiteSpeed's or Cloudflare's cache, where it outlived the fault by days.
+ */
+function delicat_builder_v9_no_store( string $reason ): void {
+	static $queued = false;
+	if ( $queued || ! function_exists( 'add_action' ) ) {
+		return;
+	}
+	$queued = true;
+	if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+		define( 'DONOTCACHEPAGE', true );
+	}
+	$apply = static function () use ( $reason ): void {
+		static $done = false;
+		if ( $done || is_admin() ) {
+			return;
+		}
+		$done = true;
+		do_action( 'litespeed_control_set_nocache', 'Delicat Builder: ' . $reason );
+		if ( ! headers_sent() ) {
+			nocache_headers();
+			header( 'CDN-Cache-Control: no-store' );
+		}
+	};
+	if ( function_exists( 'did_action' ) && did_action( 'wp' ) ) {
+		$apply();
+		return;
+	}
+	add_action( 'wp', $apply, 0 );
+}
+
+/** Ask for one full page-cache purge on the next normal request (LiteSpeed and the Cloudflare bridge attach later). */
+function delicat_builder_v9_queue_purge(): void {
+	if ( function_exists( 'update_option' ) ) {
+		update_option( 'delicat_builder_v9_purge_pending', time(), false );
+	}
+}
+
+/** Pages cached while the Builder was off or degraded show the bare theme: empty the caches once it is whole again. */
+function delicat_builder_v9_run_pending_purge(): void {
+	if ( wp_doing_ajax() || ! get_option( 'delicat_builder_v9_purge_pending', false ) ) {
+		return;
+	}
+	if ( defined( 'DELICAT_BUILDER_V9_DORMANT' ) || defined( 'DELICAT_BUILDER_V9_INCOMPLETE' ) ) {
+		return;
+	}
+	if ( class_exists( 'Delicat_Builder_V9_Core', false ) && is_callable( array( 'Delicat_Builder_V9_Core', 'is_safe_mode' ) ) && Delicat_Builder_V9_Core::is_safe_mode() ) {
+		return;
+	}
+	delete_option( 'delicat_builder_v9_purge_pending' );
+	if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'bump_version' ) ) ) {
+		Delicat_Builder_V9_Cache::bump_version();
+	}
+	do_action( 'litespeed_purge_all' );
+}
+
+/* Every automatic Safe Mode trip writes this one option, from a dozen guarded places; none of them may switch the
+ * storefront to Safe Mode because the copy is being replaced. */
+if ( function_exists( 'add_filter' ) ) {
+	add_filter(
+		'pre_update_option_delicat_builder_v9_safe_mode',
+		static function ( $value, $old_value ) {
+			if ( defined( 'DELICAT_BUILDER_V9_MANUAL_SAFE_MODE' ) ) {
+				return $value; // the administrator's own switch (Production screen)
+			}
+			return ( 1 === (int) $value && 1 !== (int) $old_value && delicat_builder_v9_copy_in_flux() ) ? $old_value : $value;
+		},
+		10,
+		2
+	);
+}
+
 register_shutdown_function(
 	static function () use ( $delicat_builder_v9_this_file, &$delicat_builder_v9_emergency_memory ) {
 		/* Release the reserve first so an out-of-memory fatal can still record
@@ -155,6 +296,11 @@ register_shutdown_function(
 			$kind = 'undefined_method';
 		}
 
+		$in_flux = ! $resource_fatal && delicat_builder_v9_copy_in_flux( $file, $message );
+		if ( $in_flux ) {
+			$kind = 'copy_in_flux';
+		}
+
 		$event = array(
 			'time'        => gmdate( 'c' ),
 			'time_unix'   => time(),
@@ -168,7 +314,7 @@ register_shutdown_function(
 			'message'     => sanitize_text_field( function_exists( 'mb_substr' ) ? mb_substr( $message, 0, 180 ) : substr( $message, 0, 180 ) ),
 		);
 		update_option( 'delicat_builder_v9_last_bootstrap_fatal', $event, false );
-		if ( $resource_fatal ) {
+		if ( $resource_fatal || $in_flux ) {
 			return;
 		}
 		update_option( 'delicat_builder_v9_safe_mode', 1, false );
@@ -200,6 +346,17 @@ register_shutdown_function(
 			return;
 		}
 
+		/* 9.7.7: switching the plugin off is for a fault that repeats, not for one request. The same fatal must
+		 * happen three times within ten minutes; until then Safe Mode (set above) carries the store. */
+		$streak = get_option( 'delicat_builder_v9_fatal_streak', array() );
+		$streak = is_array( $streak ) && ( $streak['hash'] ?? '' ) === $event['hash'] && ( time() - (int) ( $streak['first'] ?? 0 ) ) < 600
+			? array( 'hash' => $event['hash'], 'first' => (int) $streak['first'], 'count' => (int) ( $streak['count'] ?? 0 ) + 1 )
+			: array( 'hash' => $event['hash'], 'first' => time(), 'count' => 1 );
+		update_option( 'delicat_builder_v9_fatal_streak', $streak, false );
+		if ( $streak['count'] < 3 ) {
+			return;
+		}
+
 		$active = get_option( 'active_plugins', array() );
 		if ( ! is_array( $active ) ) {
 			return;
@@ -228,7 +385,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.7.6' );
+define( 'DELICAT_BUILDER_V9_VERSION', '9.7.7' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -236,6 +393,17 @@ if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
 }
 define( 'DELICAT_BUILDER_V9_FILE', __FILE__ );
 define( 'DELICAT_BUILDER_V9_DIR', plugin_dir_path( __FILE__ ) );
+/* 9.7.7: a request that arrives while an update is replacing this folder finds this file without the kernel it
+ * loads. Requiring a missing file is fatal; sit this one request out instead (no Builder, nothing recorded,
+ * nothing cached). The next request loads the finished copy. */
+foreach ( delicat_builder_v9_kernel_files() as $delicat_builder_v9_kernel_file ) {
+	if ( ! is_file( DELICAT_BUILDER_V9_DIR . $delicat_builder_v9_kernel_file ) ) {
+		define( 'DELICAT_BUILDER_V9_INCOMPLETE', true );
+		delicat_builder_v9_no_store( 'incomplete copy' );
+		return;
+	}
+}
+unset( $delicat_builder_v9_kernel_file );
 require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-transport.php';
 Delicat_Builder_V9_Transport::boot();
 /* 9.6.0: Delicat Design System 2.0 — the one source of design tokens for every front-end page. */
@@ -345,6 +513,8 @@ if ( function_exists( 'wp_prime_option_caches' ) && ! $delicat_builder_v9_prime_
 			'delicat_builder_v9_announcement',
 			'delicat_builder_v9_live_selling',
 			'delicat_builder_v9_cache_version',
+			/* 9.7.7 */
+			'delicat_builder_v9_purge_pending',
 			/* 9.4.3: read on every storefront request but missing from the list. */
 			'dsb_notification_privacy_migrated',
 			'delicat_builder_v9_speed',
@@ -429,6 +599,7 @@ if ( $delicat_builder_v9_boot_safe_mode ) {
 			),
 			false
 		);
+		delicat_builder_v9_queue_purge();
 	} elseif ( 'manual_admin' !== (string) ( $delicat_builder_v9_boot_safe_meta['context'] ?? '' ) ) {
 		/* RC51.61 parity: automatic trips are a 10-minute breaker here too. The
 		 * minimal kernel chosen from this raw option never calls
@@ -448,10 +619,16 @@ if ( $delicat_builder_v9_boot_safe_mode ) {
 				),
 				false
 			);
+			delicat_builder_v9_queue_purge();
 		}
 		unset( $delicat_builder_v9_boot_tripped );
 	}
 }
+/* 9.7.7: a degraded page is never cached; the caches are emptied once the Builder is whole again. */
+if ( $delicat_builder_v9_boot_safe_mode ) {
+	delicat_builder_v9_no_store( 'safe mode' );
+}
+add_action( 'init', 'delicat_builder_v9_run_pending_purge', 100 );
 
 /**
  * Lightweight public homepage-context check.
@@ -493,16 +670,19 @@ function delicat_builder_v9_safe_require( string $relative ): bool {
 		return true;
 	} catch ( Throwable $error ) {
 		if ( function_exists( 'update_option' ) ) {
-			update_option( 'delicat_builder_v9_safe_mode', 1, false );
-			update_option(
-				'delicat_builder_v9_safe_mode_meta',
-				array(
-					'version' => DELICAT_BUILDER_V9_VERSION,
-					'tripped' => gmdate( 'c' ),
-					'context' => 'safe_require',
-				),
-				false
-			);
+			/* 9.7.7: a module being copied in by an update can be half written; that is not a fault. */
+			if ( ! delicat_builder_v9_copy_in_flux( $path, (string) $error->getMessage() ) ) {
+				update_option( 'delicat_builder_v9_safe_mode', 1, false );
+				update_option(
+					'delicat_builder_v9_safe_mode_meta',
+					array(
+						'version' => DELICAT_BUILDER_V9_VERSION,
+						'tripped' => gmdate( 'c' ),
+						'context' => 'safe_require',
+					),
+					false
+				);
+			}
 			$events = get_option( 'delicat_builder_v9_module_load_failures', array() );
 			$events = is_array( $events ) ? $events : array();
 			$events[] = array(
@@ -1497,6 +1677,10 @@ if ( ! $delicat_builder_v9_activating && ! DELICAT_BUILDER_V9_FOREIGN_AJAX ) {
     foreach ( $delicat_builder_v9_critical as $delicat_builder_v9_dep ) if ( ! class_exists($delicat_builder_v9_dep, false) ) $delicat_builder_v9_missing_critical[] = $delicat_builder_v9_dep;
     if ( $delicat_builder_v9_missing_critical ) {
         define( 'DELICAT_BUILDER_V9_DORMANT', true );
+        delicat_builder_v9_no_store( 'dependency gate' );
+    }
+    /* 9.7.7: a class missing because its file is missing (an update in progress) is not a fault. */
+    if ( $delicat_builder_v9_missing_critical && ! delicat_builder_v9_copy_in_flux() ) {
         update_option( 'delicat_builder_v9_safe_mode', 1, false );
         /* Stamp a new trip like every other trip site, so the 10-minute breaker in the
          * bootstrap expires it instead of reading an older trip time (which cleared it
@@ -1512,7 +1696,7 @@ if ( ! $delicat_builder_v9_activating && ! DELICAT_BUILDER_V9_FOREIGN_AJAX ) {
         }
         unset( $delicat_builder_v9_gate_meta );
         update_option( 'delicat_builder_v9_dependency_gate', array('time'=>gmdate('c'),'missing'=>array_map('sanitize_text_field',$delicat_builder_v9_missing_critical),'context'=>is_admin()?(wp_doing_ajax()?'ajax':'admin'):'frontend'), false );
-    } elseif ( is_admin() && is_array( get_option('delicat_builder_v9_dependency_gate', false) ) ) {
+    } elseif ( ! $delicat_builder_v9_missing_critical && is_admin() && is_array( get_option('delicat_builder_v9_dependency_gate', false) ) ) {
         delete_option( 'delicat_builder_v9_dependency_gate' );
     }
 }
@@ -1679,6 +1863,11 @@ register_activation_hook(
 			);
 		}
 		update_option( 'delicat_builder_v9_activation_version', DELICAT_BUILDER_V9_VERSION, false );
+		/* 9.7.7: activating again is the merchant's answer to the circuit breaker; the bare-theme pages
+		 * cached while the plugin was off are emptied on the next request. */
+		delete_option( 'delicat_builder_v9_circuit_breaker_tripped' );
+		delete_option( 'delicat_builder_v9_fatal_streak' );
+		delicat_builder_v9_queue_purge();
 	}
 );
 

@@ -966,6 +966,8 @@ final class Delicat_Builder_V9_Carousel {
 			'loading'                 => $priority_image ? 'eager' : 'lazy',
 			'decoding'                => 'async',
 			'data-delicat-card-image' => '1',
+			/* 9.7.7: browser lazy-load only; LiteSpeed's left blurred stand-ins. */
+			'data-no-lazy'            => '1',
 			'sizes'                   => '(max-width:960px) 41vw, 252px',
 		);
 		if ( $priority_image ) {
@@ -1015,6 +1017,7 @@ final class Delicat_Builder_V9_Carousel {
 						array(
 							'class'   => 'delicat-product-card__image',
 							'loading' => 'lazy',
+							'data-no-lazy' => '1',
 						)
 					);
 				}

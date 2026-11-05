@@ -1,3 +1,27 @@
+9.7.7 — Mise à jour sans coupure de la boutique, images des cartes nettes
+(1) Mise à jour : le Builder ne se désactive plus tout seul pendant une mise à jour. WordPress remplace les fichiers
+un par un ; un visiteur arrivé à ce moment-là provoquait une erreur « fichier introuvable » et le Builder se retirait
+des extensions actives : la boutique restait sur le thème de base (en-tête et pied de page simples, page vide)
+jusqu’à ce qu’on le réactive. Désormais ces visites voient la page sans le Builder, sans rien enregistrer, et la
+visite suivante charge la nouvelle copie.
+(2) Coupure automatique : seule une erreur qui se répète (la même trois fois en dix minutes) peut encore désactiver
+le Builder ; une erreur isolée met seulement le mode sans échec pendant dix minutes, comme avant.
+(3) Cache : une page affichée sans le Builder (mise à jour en cours, mode sans échec) n’est plus gardée par LiteSpeed
+ni Cloudflare. Quand le Builder redevient complet (fin du mode sans échec, réactivation, nouvelle version), les
+caches sont vidés une fois, automatiquement.
+(4) Boutique, catégories et accueil : les images des cartes produit ne restent plus floues, sombres ou « zoomées ».
+Seule la première carte s’affichait nettement ; les autres gardaient l’image d’attente floue du chargement différé
+de LiteSpeed. Les cartes sont maintenant exclues de ce chargement différé (le navigateur charge déjà les images au
+bon moment). La correction de 9.7.6 n’avait aucun effet : LiteSpeed compare cette liste d’exclusion à l’adresse de
+l’image, pas à sa classe ; les classes sont maintenant dans la bonne liste.
+(5) Boutique et catégories : chaque image remplit exactement le carré de sa carte. Les images chargées au défilement
+(toutes sauf la première) étaient dessinées sur 1 500 px de haut dans un carré d’environ 180 px : on n’en voyait
+qu’une bande agrandie, d’où l’effet « zoom ». Une règle anti-décalage des images (hauteur automatique) l’emportait
+sur la règle de la carte ; la carte impose maintenant sa hauteur.
+(6) Installer cette version : dans Extensions, si « Delicat Builder V9 Pro » est actif, le désactiver d’abord
+(l’ancienne version n’a pas encore la protection du point 1) ; téléverser le zip, « Remplacer la version actuelle »,
+puis Activer. Purger ensuite LiteSpeed et Cloudflare.
+
 9.7.6 — Téléphone : panier toujours à jour, bandeau de l’application sous l’en-tête, images du catalogue
 (1) Panier de l’en-tête : il affiche maintenant les articles ajoutés sans recharger la page. À chaque ouverture (et
 après un ajout pendant qu’il est ouvert), il demande le panier du client à WooCommerce ; avant, il gardait le

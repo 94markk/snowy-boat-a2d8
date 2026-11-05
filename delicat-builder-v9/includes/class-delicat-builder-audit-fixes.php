@@ -6,7 +6,9 @@ final class Delicat_Builder_V9_Audit_Fixes {
   foreach ( array( 'script_loader_src', 'style_loader_src' ) as $hook ) { add_filter( $hook, array( __CLASS__, 'asset_url' ), PHP_INT_MAX ); }
   foreach ( array( 'litespeed_optm_js_defer_exc', 'litespeed_optimize_js_excludes', 'litespeed_optm_gm_js_exc' ) as $hook ) { add_filter( $hook, array( __CLASS__, 'script_exclusions' ), PHP_INT_MAX ); }
   add_filter( 'wp_inline_script_attributes', array( __CLASS__, 'inline_attributes' ), PHP_INT_MAX );
-  add_filter( 'litespeed_media_lazy_img_excludes', array( __CLASS__, 'image_exclusions' ), PHP_INT_MAX );
+  /* 9.7.7: LiteSpeed compares its « excludes » list with the image ADDRESS only; class names belong in the
+   * class list. The names below sat in the address list since PRO14 and never matched anything. */
+  add_filter( 'litespeed_media_lazy_img_cls_excludes', array( __CLASS__, 'image_exclusions' ), PHP_INT_MAX );
   add_filter( 'wp_get_attachment_image_attributes', array( __CLASS__, 'image_attributes' ), PHP_INT_MAX );
   add_action( 'wp_enqueue_scripts', array( __CLASS__, 'empty_cart_assets' ), PHP_INT_MAX );
   add_action( 'template_redirect', array( __CLASS__, 'buffer' ), -50 );
@@ -127,13 +129,16 @@ final class Delicat_Builder_V9_Audit_Fixes {
  }
  public static function image_exclusions( $list ): array {
   $list = is_array( $list ) ? $list : array();
-  return array_values( array_unique( array_merge( $list, array( 'dsb8-header__logo-image', 'dnp-image', 'fetchpriority="high"', 'data-no-lazy="1"', 'delicat-product-card__image' ) ) ) );
+  return array_values( array_unique( array_merge( $list, array( 'dsb8-header__logo-image', 'dnp-image', 'delicat-product-card__image' ) ) ) );
  }
  public static function image_attributes( $attrs ): array {
   if ( false !== strpos( $attrs['class'] ?? '', 'dsb8-header__logo-image' ) ) {
    $attrs['sizes'] = '(max-width: 640px) 160px, 220px';
   }
   if ( 'high' === ( $attrs['fetchpriority'] ?? '' ) || 'eager' === ( $attrs['loading'] ?? '' ) ) { $attrs['data-no-lazy'] = '1'; $attrs['loading'] = 'eager'; }
+  /* 9.7.7: product cards keep the browser's own lazy-load; LiteSpeed's swapped their pictures for a blurred
+   * stand-in that stayed on screen (shop and category pages, every card after the first). */
+  if ( false !== strpos( (string) ( $attrs['class'] ?? '' ), 'delicat-product-card__image' ) ) { $attrs['data-no-lazy'] = '1'; }
   return $attrs;
  }
  public static function empty_cart_assets(): void {

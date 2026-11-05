@@ -3,7 +3,8 @@
 //  2. the « Delicat en application » bar over the site header,
 //  3. the « Installer Delicat Store » sheet and 4. the cart panel inside the screen,
 //  5. the cart panel lists an item added without a page reload,
-//  6. catalogue pictures after in-app navigation when LiteSpeed lazy-load placeholders are in the HTML.
+//  6. catalogue pictures after in-app navigation when LiteSpeed lazy-load placeholders are in the HTML,
+//  7. (9.7.7) shop pictures on first load with LiteSpeed's lazy-load applied, each filling its square (not zoomed).
 // Guest, customer (client1) and administrator (admin bar shown), iPhone 13 (390 px).
 const fs = require('fs');
 const path = require('path');
@@ -128,20 +129,54 @@ const rect = (p, sel) => p.evaluate((s) => { const e = [...document.querySelecto
     await ctx.close();
   }
 
+  // 9.7.7: the page HTML as LiteSpeed's lazy-load rewrites it (litespeed-cache src/media.cls.php _parse_img): every
+  // <img> keeps its address only when it carries data-no-lazy / data-skip-lazy (or is already lazy) or the skip-lazy
+  // class; the others get a placeholder that only LiteSpeed's script swaps back. Staging never runs that script,
+  // like the phones that kept the blurred stand-ins. Class names registered through PHP filters cannot be seen here.
+  const litespeedize = (html) => html.replace(/<img\b([^>]*)>/g, (m, attrs) => {
+    const at = (n) => { const r = new RegExp(`\\s${n}=("([^"]*)"|'([^']*)')`).exec(attrs); return r ? (r[2] ?? r[3]) : null; };
+    const src = at('src');
+    if (!src || src.includes('base64') || src.startsWith('data:')) return m;
+    if (['data-no-lazy', 'data-skip-lazy', 'data-lazyloaded', 'data-src', 'data-srcset'].some((n) => at(n))) return m;
+    if ((at('class') || '').includes('skip-lazy')) return m;
+    let rest = attrs.replace(/\ssrc=("[^"]*"|'[^']*')/, '');
+    const srcset = at('srcset');
+    if (srcset) rest = rest.replace(/\ssrcset=("[^"]*"|'[^']*')/, ` data-srcset="${srcset}"`);
+    return `<img${rest} data-lazyloaded="1" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${src}">`;
+  });
+  const lazyRoute = (ctx) => ctx.route((u) => u.pathname === '/shop/' || u.pathname.startsWith('/product-category/'), async (route) => {
+    try {
+      const res = await route.fetch();
+      await route.fulfill({ response: res, body: litespeedize(await res.text()) });
+    } catch (e) { /* a prefetch still in flight when the step closes its browser context */ }
+  });
+  const cardPictures = (p) => p.evaluate(async () => {
+    for (const img of document.querySelectorAll('.delicat-archive-grid .delicat-product-card__image')) { img.scrollIntoView({ block: 'center' }); await new Promise((r) => setTimeout(r, 120)); }
+    await new Promise((r) => setTimeout(r, 1200));
+    // h/box: the height the picture is drawn at and the height of its square (9.7.7: lazy pictures were drawn 1500px tall).
+    return [...document.querySelectorAll('.delicat-archive-grid .delicat-product-card__image')].map((i) => ({ src: (i.currentSrc || i.src).slice(0, 40), nw: i.naturalWidth, h: Math.round(i.getBoundingClientRect().height), box: Math.round(i.closest('.delicat-product-card__media').getBoundingClientRect().height) }));
+  });
+
+  await step('shop pictures show on first load with LiteSpeed lazy-load in the HTML', async () => {
+    const ctx = await context(b, null);
+    const p = await ctx.newPage();
+    await lazyRoute(ctx);
+    await p.goto(base + '/shop/', { waitUntil: 'load' });
+    await p.waitForTimeout(600);
+    const imgs = await cardPictures(p);
+    await p.evaluate(() => window.scrollTo(0, 0));
+    if (out) await p.screenshot({ path: path.join(out, 'archive-firstload.png') });
+    const bad = imgs.filter((i) => i.src.startsWith('data:') || i.nw < 50);
+    ok(imgs.length > 0 && bad.length === 0, `${bad.length}/${imgs.length} pictures still LiteSpeed placeholders: ${JSON.stringify(bad.slice(0, 3))}`);
+    const zoomed = imgs.filter((i) => i.h > i.box + 2);
+    ok(zoomed.length === 0, `${zoomed.length}/${imgs.length} pictures drawn taller than their square (zoomed): ${JSON.stringify(zoomed.slice(0, 3))}`);
+    await ctx.close();
+  });
+
   await step('catalogue pictures load after in-app navigation even with LiteSpeed lazy placeholders in the HTML', async () => {
     const ctx = await context(b, null);
     const p = await ctx.newPage();
-    // Rewrite category documents the way LiteSpeed's lazy-load does for images it does not exclude.
-    await ctx.route((u) => u.pathname.startsWith('/product-category/'), async (route) => {
-      const res = await route.fetch();
-      let html = await res.text();
-      html = html.replace(/<img\b([^>]*?)\ssrc="([^"]+)"([^>]*)>/g, (m, a, src, z) => {
-        if (/data-no-lazy|fetchpriority="high"|loading="eager"/.test(a + z) || !/delicat-product-card__image/.test(a + z)) return m;
-        const rest = (a + z).replace(/\ssrcset="([^"]*)"/, ' data-srcset="$1"');
-        return `<img${rest} data-lazyloaded="1" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" data-src="${src}">`;
-      });
-      await route.fulfill({ response: res, body: html });
-    });
+    await lazyRoute(ctx);
     await p.goto(base + '/shop/', { waitUntil: 'load' });
     await p.waitForTimeout(800);
     const href = await p.evaluate(() => { const a = [...document.querySelectorAll('.delicat-native-category-chips a')].find((x) => !x.classList.contains('is-active') && x.href.indexOf('/product-category/') > 0); return a ? a.href : ''; });

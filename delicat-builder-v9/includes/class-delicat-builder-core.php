@@ -259,6 +259,7 @@ final class Delicat_Builder_V9_Core {
 			 * 10-minute windows instead of permanently.
 			 */
 			if ( 'manual_admin' === (string) ( $meta['context'] ?? '' ) ) {
+				self::degraded_no_store();
 				return true;
 			}
 			$tripped_at = strtotime( (string) ( $meta['tripped'] ?? '' ) );
@@ -274,8 +275,12 @@ final class Delicat_Builder_V9_Core {
 					),
 					false
 				);
+				if ( function_exists( 'delicat_builder_v9_queue_purge' ) ) {
+					delicat_builder_v9_queue_purge();
+				}
 				return false;
 			}
+			self::degraded_no_store();
 			return true;
 		}
 
@@ -295,7 +300,18 @@ final class Delicat_Builder_V9_Core {
 			Delicat_Builder_V9_Cache::bump_version();
 		}
 		do_action( 'litespeed_purge_all' );
+		/* 9.7.7: this can run before LiteSpeed has loaded; purge once more on the next request. */
+		if ( function_exists( 'delicat_builder_v9_queue_purge' ) ) {
+			delicat_builder_v9_queue_purge();
+		}
 		return false;
+	}
+
+	/** 9.7.7: a page printed in Safe Mode lacks the Builder and must not be cached. */
+	private static function degraded_no_store(): void {
+		if ( function_exists( 'delicat_builder_v9_no_store' ) ) {
+			delicat_builder_v9_no_store( 'safe mode' );
+		}
 	}
 
 	/** Single stamped writer used by every automatic Safe-Mode trip site. */

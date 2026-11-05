@@ -699,6 +699,8 @@ final class Delicat_Builder_V9_Archive_Builder {
 				'class'    => 'delicat-product-card__image',
 				'alt'      => (string) get_post_meta( $image_id, '_wp_attachment_image_alt', true ) ?: $title,
 				'decoding' => 'async',
+				/* 9.7.7: the browser lazy-loads these (loading=lazy); LiteSpeed's lazy-load left blurred stand-ins. */
+				'data-no-lazy' => '1',
 				'sizes'    => self::product_card_image_sizes( $config ),
 			);
 			if ( 0 === $index ) {
@@ -709,7 +711,7 @@ final class Delicat_Builder_V9_Archive_Builder {
 			}
 			echo wp_get_attachment_image( $image_id, 'woocommerce_thumbnail', false, $attrs ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		} else {
-			echo wc_placeholder_img( 'woocommerce_thumbnail', array( 'class' => 'delicat-product-card__image', 'loading' => 0 === $index ? 'eager' : 'lazy' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo wc_placeholder_img( 'woocommerce_thumbnail', array( 'class' => 'delicat-product-card__image', 'loading' => 0 === $index ? 'eager' : 'lazy', 'data-no-lazy' => '1' ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		}
 		if ( class_exists( 'Delicat_Builder_V9_Badges' ) ) {
 			echo Delicat_Builder_V9_Badges::render( $badges['status'], 'status' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside render()

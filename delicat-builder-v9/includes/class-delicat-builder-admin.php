@@ -111,6 +111,10 @@ final class Delicat_Builder_V9_Admin {
 			false
 		);
 		delete_option( 'delicat_builder_v9_dependency_gate' );
+		/* 9.7.7: pages cached while degraded are emptied on the next request. */
+		if ( function_exists( 'delicat_builder_v9_queue_purge' ) ) {
+			delicat_builder_v9_queue_purge();
+		}
 		wp_safe_redirect( admin_url( 'admin.php?page=delicat-builder-v9&recovery=1' ) );
 		exit;
 	}

@@ -1,6 +1,6 @@
 {
  "version": 2,
- "builtAt": "2026-11-05T00:49:31.681Z",
+ "builtAt": "2026-11-05T03:19:33.834Z",
  "js": {
   "engine": {
    "file": "engine.8c972cde8efd.js",
@@ -225,9 +225,9 @@
    ]
   },
   "shop": {
-   "file": "shop.b183be7ef88c.css",
-   "bytes": 41152,
-   "sha256": "b183be7ef88c29bf141fd586e178118a3183fbcfbe349b397bbdf5d1e643e990",
+   "file": "shop.0f2641b96690.css",
+   "bytes": 41162,
+   "sha256": "0f2641b96690dd5d7a5404f3de73b6f4be4e630a35cf6087ac4866802b63f0d6",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-archive.css",
@@ -236,9 +236,9 @@
    ]
   },
   "shop-design": {
-   "file": "shop-design.ccdf8b26d793.css",
-   "bytes": 58336,
-   "sha256": "ccdf8b26d79340e5540262f85d1395897986b02c0ab2ebbd322923f6defd223e",
+   "file": "shop-design.f900770cecea.css",
+   "bytes": 58346,
+   "sha256": "f900770ceceab275bccc652c7926312e6a8fb40802c6b27a881856dd4604059d",
    "sources": [
     "assets/css/reviews.css",
     "assets/css/native-archive.css",
