@@ -89,6 +89,7 @@ PHP
 
 	$cfg = delicat_ref_defaults();
 	$cfg['enabled'] = 1; $cfg['hold_days'] = 0; $cfg['daily_cap'] = 50; // the suite signs up 7 friends in minutes (referral-security tests the daily limit)
+	$cfg['reward_cap_pct'] = 0; $cfg['manual_from'] = 0; // 3.4.2: the suite tests claims and fraud signals, not the spend cap or the team's approval
 	$cfg['milestones'] = array(
 		array( 'points' => 1, 'diamonds' => 110, 'htg' => 140 ),
 		array( 'points' => 2, 'diamonds' => 341, 'htg' => 420 ),

@@ -471,13 +471,16 @@ class Delicat_Builder_V9_Product_Fields_Calculator {
 		$floor_ok = static function ( $t ) use ( $base ) {
 			return is_finite( $t ) && $t >= 0 && ! ( $t <= 0 && $base > 0 );
 		};
+		/* 9.7.8 (BLD-10): the floor is checked on the price that is charged, i.e. after rounding. 0.004 passed
+		 * the check, then rounded to a 0.00 line. */
+		$total = is_finite( $total ) ? round( $total, 2 ) : NAN;
 		if ( ! $floor_ok( $total ) ) {
-			$total = $base + $sum;
+			$total = round( $base + $sum, 2 );
 		}
 		if ( ! $floor_ok( $total ) ) {
-			$total = $base;
+			$total = round( $base, 2 );
 		}
-		return round( max( 0.0, $total ), 2 );
+		return max( 0.0, is_finite( $total ) ? $total : 0.0 );
 	}
 
 	protected function display_labels( $cfg, $values, $active ) {
@@ -861,6 +864,21 @@ class Delicat_Builder_V9_Product_Fields_Calculator {
 		}
 		if ( $this->secret_field_ids( $cfg, $result['values'] ) && ( ! function_exists( 'delicat_builder_v9_sensitive_crypto_available' ) || ! delicat_builder_v9_sensitive_crypto_available() ) ) {
 			wc_add_notice( __( 'Le champ sécurisé ne peut pas être traité sur ce serveur pour le moment. Réessayez après vérification de la configuration de sécurité.', 'deli-multi-currency' ), 'error' );
+			return false;
+		}
+		/* 9.7.8 (BLD-10): a calculator product whose price comes out at 0.00 (base price 0 and a formula that
+		 * adds nothing: a setup mistake) is refused instead of being sold for free. Digital goods are delivered
+		 * automatically, so a free line is an immediate loss. */
+		$variation_id  = isset( $_POST['variation_id'] ) ? absint( wp_unslash( $_POST['variation_id'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$price_product = $variation_id ? wc_get_product( $variation_id ) : wc_get_product( $product_id );
+		if ( ! $price_product instanceof WC_Product ) {
+			$price_product = wc_get_product( $product_id );
+		}
+		if ( $price_product instanceof WC_Product && $this->compute_total( $price_product, $cfg, $result['values'], $result['active'] ) <= 0 ) {
+			if ( function_exists( 'wc_get_logger' ) ) {
+				wc_get_logger()->error( sprintf( 'Calculator product %d priced at 0.00: add to cart refused. Check its base price and formula.', (int) $product_id ), array( 'source' => 'delicat-builder-v9-calculator' ) );
+			}
+			wc_add_notice( __( 'Ce produit n’a pas de prix valide pour le moment. Contactez-nous pour le commander.', 'deli-multi-currency' ), 'error' );
 			return false;
 		}
 		return $passed;

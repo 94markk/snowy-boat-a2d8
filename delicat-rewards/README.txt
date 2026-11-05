@@ -1,4 +1,63 @@
-DELICAT REWARDS — ADMIN EDITION 3.4.1
+DELICAT REWARDS — ADMIN EDITION 3.4.2
+
+NOUVEAUTÉS 3.4.2 — CORRECTIFS DE L'AUDIT DU 5 NOVEMBRE 2026 (RWD-01 À RWD-05)
+(1) Parrainage : les récompenses restent raisonnables (RWD-01).
+  - Plafond : ce qu'un parrain reçoit au total (crédit, ou diamants comptés à leur valeur en HTG) ne
+    dépasse pas 15 % de ce que ses amis confirmés ont vraiment acheté depuis leur invitation (achats
+    terminés, payés par MonCash, NatCash…, remboursements déduits ; pas le crédit boutique, pas les
+    recharges de portefeuille). Un palier atteint au-delà du plafond s'affiche « Palier atteint. Il se
+    débloque quand vos amis invités auront fait plus d'achats » ; il se débloque dès qu'ils achètent
+    davantage. Avant, 100 faux amis qui achetaient 100 G chacun rapportaient environ 9 260 G.
+  - Numéro de paiement : si l'achat d'un ami est payé avec le numéro du parrain, ou avec celui d'un autre
+    ami du même parrain (téléphone de facturation, ou numéro MonCash/NatCash du SMS de paiement reçu par
+    Delicat Recharge pour ce code de transaction), l'ami ne donne pas de point : l'invitation va dans
+    « À vérifier » (raison « Achat payé avec le numéro du parrain ou d'un autre de ses amis »). Vous
+    acceptez ou refusez, comme pour les autres vérifications (une famille partage parfois un téléphone).
+  - Validation par l'équipe : un palier de 35 points ou plus n'est payé qu'après votre accord. Le client
+    voit « En vérification par l'équipe » ; vous recevez un e-mail. Onglet Parrainage › « Récompenses à
+    valider » : « Valider et payer » (le client reçoit un e-mail) ou « Refuser » (le client est prévenu ;
+    « Libérer » lui permet de réclamer à nouveau).
+  - Les récompenses déjà données restent acquises ; elles comptent dans le plafond des suivantes.
+(2) Meilleur client : un remboursement après la fin de la semaine est vérifié (RWD-02).
+  - Quand une commande comptée dans une semaine terminée est remboursée ou annulée, le classement de cette
+    semaine est recalculé (une minute plus tard). Si le podium change, les prix concernés sont marqués
+    « à vérifier » dans Meilleur client › Historique et remises, et vous recevez un e-mail avec l'ancien
+    et le nouveau podium. Rien n'est repris automatiquement : aucun portefeuille débité, aucune commande
+    modifiée. Un prix pas encore livré attend votre décision (« Marquer vérifié » ou « Remise manuelle »).
+(3) Meilleur client : le classement n'est plus recalculé pendant la visite d'un client (RWD-03).
+  - Il est calculé en arrière-plan (actions planifiées de WooCommerce, sinon WP-Cron) environ 30 secondes
+    après chaque commande modifiée, et juste après le changement de semaine ; la page lit toujours le
+    classement enregistré. Même classement qu'avant ; une seule lecture rapide au lieu de recharger
+    jusqu'à 5 000 commandes. Juste après la mise à jour (ou le changement de semaine), le classement peut
+    rester vide environ une minute. Diagnostics affiche l'heure du dernier calcul.
+(4) Meilleur client : nouveau réglage « Montant minimum d'une commande pour le classement » (RWD-05).
+  - Une commande dont le montant éligible (après remboursement) est plus petit ne compte pas dans le
+    classement. 0 = toutes les commandes, comme avant (valeur à l'installation). Un changement s'applique
+    à partir de la semaine suivante, jamais à la semaine en cours : annoncez la règle aux clients avant.
+(5) Serveur de licences (RWD-04) : la boutique ne s'en sert pas (cette édition ne vérifie aucune licence).
+  Son adresse publique (/wp-json/delicat-license/v1/validate) et la page « Rewards Licences » n'existent
+  plus tant qu'aucune licence n'a été créée. Si vous avez déjà vendu des licences, rien ne change pour vos
+  clients. Pour en créer une nouvelle : ajoutez dans wp-config.php
+  define( 'DELICAT_REWARDS_LICENSE_SERVER', true );
+(6) Technique : l'onglet Diagnostics ne s'arrête plus avec une erreur quand un remboursement fait partie
+  des 100 dernières commandes. Table {préfixe}delicat_ref_claims : colonne « value » ajoutée (valeur en
+  HTG de chaque récompense, pour le plafond). Nouvelles actions planifiées : delicat_leaderboard_rebuild
+  et delicat_podium_recheck (groupe « delicat-rewards »). Option delicat_leaderboard_board (classement
+  enregistré). Filtre delicat_ref_order_payer_phones pour une extension de paiement qui connaît le numéro
+  du payeur.
+(7) Réglages modifiés à la mise à jour (vous pouvez revenir en arrière) :
+  - Parrainage › « Plafond des récompenses (% des achats des filleuls) » : 15 % (0 = sans plafond).
+  - Parrainage › « Validation par l'équipe » : à partir de 35 points (0 = jamais).
+  - Meilleur client › « Montant minimum d'une commande pour le classement » : 0 (règle inchangée).
+    Suggestion : 450 G (le prix du pack 341 diamants), à annoncer une semaine avant.
+  - Serveur de licences : désactivé s'il n'a jamais servi (voir (5)).
+(8) Installation : WordPress › Extensions › Ajouter › Téléverser : delicat-rewards-3.4.2.zip, remplacer
+  la version existante. Les données et les réglages sont conservés. Ensuite : ouvrez Delicat Rewards ›
+  Diagnostics et vérifiez, quelques minutes plus tard, l'heure du « Classement Meilleur client ». Si elle
+  n'avance pas alors que des commandes arrivent, les tâches planifiées ne tournent pas : demandez à
+  Hostinger une tâche cron sur wp-cron.php toutes les 5 minutes. Purgez LiteSpeed Cache et Cloudflare.
+
+DELICAT REWARDS — 3.4.1
 
 NOUVEAUTÉS 3.4.1
 - Parrainage : le premier achat d'un ami doit être un achat client. Un achat à prix revendeur (extension
@@ -555,7 +614,8 @@ WooCommerce > Delicat Rewards
 - Diagnostics: mappings, PIN composition and inventory checks.
 - Journal: configuration audit trail.
 - Participants: leaderboard/rewards exclusions.
-- Rewards Licences: Admin Edition license server.
+- Rewards Licences: Admin Edition license server (3.4.2: only while a licence exists, or with
+  define( 'DELICAT_REWARDS_LICENSE_SERVER', true ) in wp-config.php).
 
 UPDATE-SAFE INSTALLATION
 This ZIP keeps the original plugin folder and main file:

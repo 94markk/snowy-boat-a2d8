@@ -19,9 +19,20 @@ final class DSA2_Admin_Mobile_API {
         add_action( 'dsa2_message_created', array( __CLASS__, 'message_created' ), 10, 6 );
         add_action( self::PUSH_ACTION, array( __CLASS__, 'deliver_push' ), 10, 2 );
         add_action( 'admin_post_dap_revoke_admin_sessions', array( __CLASS__, 'revoke_from_dashboard' ) );
-        add_action( 'profile_update', array( __CLASS__, 'revoke_if_permission_removed' ), 10, 1 );
-        add_action( 'deleted_user', array( __CLASS__, 'revoke_user' ), 10, 1 );
-        add_action( 'after_password_reset', array( __CLASS__, 'revoke_after_password_reset' ), 10, 2 );
+        // 7.1.1: password, role and account-deletion sign-outs are registered in the main plugin
+        // file (dsa2_revoke_staff_app_sessions), so they run on every request, not only here.
+    }
+
+    /** 7.1.1: days a key stays valid after sign-in: the setting, never more than 7. */
+    public static function session_days() {
+        $settings = get_option( 'dap_settings', array() );
+        $days = isset( $settings['admin_session_days'] ) ? (int) $settings['admin_session_days'] : DSA2_STAFF_SESSION_MAX_DAYS;
+        return max( 1, min( DSA2_STAFF_SESSION_MAX_DAYS, $days ) );
+    }
+
+    /** 7.1.1: the oldest sign-in time (UTC, MySQL format) whose key is still valid. */
+    private static function oldest_valid_sign_in() {
+        return gmdate( 'Y-m-d H:i:s', time() - self::session_days() * DAY_IN_SECONDS );
     }
 
     public static function routes() {
@@ -79,8 +90,9 @@ final class DSA2_Admin_Mobile_API {
 
     public static function public_allowed() {
         $settings = get_option( 'dap_settings', array() );
-        if ( isset( $settings['admin_app_enabled'] ) && ! $settings['admin_app_enabled'] ) {
-            return new WP_Error( 'app_disabled', 'Application administrateur désactivée.', array( 'status' => 403 ) );
+        // 7.1.1: off unless the owner switched it on (it used to be on when the setting was missing).
+        if ( empty( $settings['admin_app_enabled'] ) ) {
+            return new WP_Error( 'app_disabled', 'Application administrateur désactivée. Un administrateur peut l’activer dans Delicat Assistant → Paramètres → Application Android administrateur.', array( 'status' => 403 ) );
         }
         $remote = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '';
         $local = defined( 'WP_DEBUG' ) && WP_DEBUG && in_array( $remote, array( '127.0.0.1', '::1' ), true );
@@ -114,11 +126,7 @@ final class DSA2_Admin_Mobile_API {
     }
 
     private static function support_user( $user ) {
-        return $user instanceof WP_User && (
-            user_can( $user, DSA2_Install::CAP_SUPPORT ) ||
-            user_can( $user, 'manage_woocommerce' ) ||
-            user_can( $user, 'manage_options' )
-        );
+        return dsa2_is_staff_user( $user );
     }
 
     private static function manager_user( $user ) {
@@ -149,9 +157,12 @@ final class DSA2_Admin_Mobile_API {
         if ( '' === $token ) return new WP_Error( 'missing_token', 'Session administrateur manquante.', array( 'status' => 401 ) );
         global $wpdb;
         $table = $wpdb->prefix . 'dap_admin_sessions';
+        // 7.1.1: also refused once the sign-in is older than the session length (7 days at most),
+        // whatever expiry an older version wrote.
         $session = $wpdb->get_row( $wpdb->prepare(
-            "SELECT * FROM $table WHERE token_hash=%s AND expires_at>UTC_TIMESTAMP() LIMIT 1",
-            self::hash_token( $token )
+            "SELECT * FROM $table WHERE token_hash=%s AND expires_at>UTC_TIMESTAMP() AND created_at>%s LIMIT 1",
+            self::hash_token( $token ),
+            self::oldest_valid_sign_in()
         ) );
         if ( ! $session ) return new WP_Error( 'invalid_token', 'Session expirée. Reconnectez-vous.', array( 'status' => 401 ) );
         $user = get_userdata( (int) $session->user_id );
@@ -184,21 +195,28 @@ final class DSA2_Admin_Mobile_API {
         $username = trim( sanitize_text_field( (string) $request->get_param( 'username' ) ) );
         $password = (string) $request->get_param( 'password' );
         $installation = sanitize_text_field( (string) $request->get_param( 'installation_id' ) );
-        $remote = isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '';
+        // 7.1.1: the visitor's address behind Cloudflare, and one bucket per account whether
+        // the e-mail or the login name is typed.
+        $remote = dsa2_client_ip();
         if ( '' === $username || strlen( $password ) > 4096 || ! preg_match( '/^[A-Za-z0-9_-]{16,100}$/', $installation ) ) {
             return new WP_Error( 'invalid_request', 'Informations de connexion invalides.', array( 'status' => 400 ) );
         }
+        $known = is_email( $username ) ? get_user_by( 'email', $username ) : get_user_by( 'login', $username );
+        $account = $known instanceof WP_User ? 'uid:' . (int) $known->ID : 'login:' . strtolower( $username );
         if ( self::limited( 'login_ip', $remote, 12, 15 * MINUTE_IN_SECONDS ) ||
-             self::limited( 'login_user', strtolower( $username ), 6, 15 * MINUTE_IN_SECONDS ) ) {
+             self::limited( 'login_user', $account, 6, 15 * MINUTE_IN_SECONDS ) ) {
             return new WP_Error( 'rate_limited', 'Trop de tentatives. Réessayez dans 15 minutes.', array( 'status' => 429 ) );
         }
-        $user = wp_authenticate( $username, $password );
-        if ( is_wp_error( $user ) || ! self::support_user( $user ) ) {
+        $code = self::factor_code( $request );
+        $user = self::authenticate( $username, $password, $code );
+        if ( is_wp_error( $user ) ) return $user;
+        if ( ! self::support_user( $user ) ) {
             return new WP_Error( 'invalid_credentials', 'Identifiants incorrects ou accès non autorisé.', array( 'status' => 401 ) );
         }
+        $second_factor = self::second_factor( $user, $code );
+        if ( is_wp_error( $second_factor ) ) return $second_factor;
         $token = self::random_token();
-        $settings = get_option( 'dap_settings', array() );
-        $days = max( 1, min( 90, (int) ( $settings['admin_session_days'] ?? 30 ) ) );
+        $days = self::session_days();
         $now = gmdate( 'Y-m-d H:i:s' );
         $expires = gmdate( 'Y-m-d H:i:s', time() + $days * DAY_IN_SECONDS );
         $label = DSA2_Compat::substr( sanitize_text_field( (string) $request->get_param( 'device_label' ) ), 0, 120 );
@@ -224,11 +242,83 @@ final class DSA2_Admin_Mobile_API {
         wp_set_current_user( (int) $user->ID );
         return self::response( array(
             'token' => $token,
-            'expires_at' => mysql2date( 'c', $expires, false ),
+            'expires_at' => gmdate( 'c', strtotime( $expires . ' UTC' ) ), // 7.1.1: real UTC time (was labelled with the site offset)
             'api_base' => untrailingslashit( rest_url( self::NS ) ),
             'user' => self::user_payload( $user ),
             'features' => self::features(),
         ) );
+    }
+
+    /**
+     * 7.1.1: the second-factor code, whatever name the app gives it (JSON or form field).
+     * Six digits from an Authenticator app, or a one-time recovery code.
+     */
+    private static function factor_code( $request ) {
+        foreach ( array( 'otp', 'code', 'totp', 'two_factor_code', 'dip_2fa_code' ) as $name ) {
+            $value = $request->get_param( $name );
+            if ( is_scalar( $value ) && '' !== trim( (string) $value ) ) {
+                return DSA2_Compat::substr( trim( sanitize_text_field( (string) $value ) ), 0, 32 );
+            }
+        }
+        return '';
+    }
+
+    /**
+     * Password check through WordPress, so Delicat Identity's lockouts and its sign-in 2FA gate
+     * apply as on the website. That gate reads the code from the dip_2fa_code form field, which
+     * a JSON body never fills: the code the app sent is handed to it for this one call.
+     */
+    private static function authenticate( $username, $password, $code ) {
+        $had_field = array_key_exists( 'dip_2fa_code', $_POST ); // phpcs:ignore WordPress.Security.NonceVerification.Missing
+        $previous  = $had_field ? $_POST['dip_2fa_code'] : null; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput
+        if ( '' !== $code ) $_POST['dip_2fa_code'] = $code;
+        try {
+            $user = wp_authenticate( $username, $password );
+        } finally {
+            if ( $had_field ) $_POST['dip_2fa_code'] = $previous;
+            else unset( $_POST['dip_2fa_code'] );
+        }
+        if ( ! is_wp_error( $user ) ) return $user;
+        // The 2FA answers come only after a correct password (Identity checks it first).
+        switch ( $user->get_error_code() ) {
+            case 'dip_2fa_required':
+                return self::code_required_error();
+            case 'dip_2fa_invalid':
+                return new WP_Error( 'two_factor_invalid', 'Code de vérification incorrect ou déjà utilisé. Saisissez le code à 6 chiffres affiché maintenant par votre application Authenticator, ou un code de récupération.', array( 'status' => 401 ) );
+            case 'dip_2fa_rate_limited':
+                return new WP_Error( 'two_factor_rate_limited', wp_strip_all_tags( $user->get_error_message() ), array( 'status' => 429 ) );
+            case 'dip_2fa_https_required':
+                return new WP_Error( 'https_required', 'Une connexion HTTPS est obligatoire.', array( 'status' => 403 ) );
+        }
+        return new WP_Error( 'invalid_credentials', 'Identifiants incorrects ou accès non autorisé.', array( 'status' => 401 ) );
+    }
+
+    private static function code_required_error() {
+        return new WP_Error( 'two_factor_required', 'Vérification en deux étapes : saisissez le code à 6 chiffres de votre application Authenticator (ou un code de récupération) avec votre mot de passe. Si l’application ne propose pas ce champ, installez sa dernière version.', array( 'status' => 401, 'two_factor' => true ) );
+    }
+
+    /**
+     * 7.1.1: an account with Delicat Identity 2FA never signs in with the password alone (checked
+     * here too, in case Identity's own gate did not run for this request). With « Exiger la 2FA
+     * pour l’application » (default), an account without 2FA cannot use the app at all.
+     */
+    private static function second_factor( $user, $code ) {
+        $available = class_exists( 'DIP_Two_Factor' ) && is_callable( array( 'DIP_Two_Factor', 'is_enabled' ) ) && is_callable( array( 'DIP_Two_Factor', 'verify_factor' ) );
+        if ( $available && DIP_Two_Factor::is_enabled( (int) $user->ID ) ) {
+            if ( is_callable( array( 'DIP_Two_Factor', 'password_gate_verified' ) ) && DIP_Two_Factor::password_gate_verified( (int) $user->ID ) ) return true;
+            if ( '' === $code ) return self::code_required_error();
+            if ( ! DIP_Two_Factor::verify_factor( (int) $user->ID, $code, true ) ) {
+                return new WP_Error( 'two_factor_invalid', 'Code de vérification incorrect ou déjà utilisé. Saisissez le code à 6 chiffres affiché maintenant par votre application Authenticator, ou un code de récupération.', array( 'status' => 401 ) );
+            }
+            return true;
+        }
+        $settings = get_option( 'dap_settings', array() );
+        $required = ! isset( $settings['admin_app_require_2fa'] ) || ! empty( $settings['admin_app_require_2fa'] );
+        if ( ! $required ) return true;
+        if ( ! $available ) {
+            return new WP_Error( 'two_factor_unavailable', 'La vérification en deux étapes est exigée pour l’application, mais Delicat Identity n’est pas actif sur le site. Un administrateur peut décocher « Exiger la 2FA pour l’application » dans Delicat Assistant → Paramètres.', array( 'status' => 403 ) );
+        }
+        return new WP_Error( 'two_factor_enrollment_required', 'Activez d’abord la vérification en deux étapes sur votre compte (Mon compte → Sécurité sur le site), puis reconnectez-vous dans l’application avec le code.', array( 'status' => 403 ) );
     }
 
     private static function user_payload( $user ) {
@@ -802,10 +892,12 @@ final class DSA2_Admin_Mobile_API {
 
     public static function refresh( $request ) {
         $session = $request->get_param( '_dap_admin_session' );
-        $settings = get_option( 'dap_settings', array() );
-        $days = max( 1, min( 90, (int) ( $settings['admin_session_days'] ?? 30 ) ) );
+        // 7.1.1: a refresh changes the key but never extends the session past 7 days (the
+        // setting) after the sign-in; after that the person signs in again, with 2FA.
+        $signed_in = strtotime( (string) $session->created_at . ' UTC' );
+        $limit = ( $signed_in ? $signed_in : time() ) + self::session_days() * DAY_IN_SECONDS;
         $token = self::random_token();
-        $expires = gmdate( 'Y-m-d H:i:s', time() + $days * DAY_IN_SECONDS );
+        $expires = gmdate( 'Y-m-d H:i:s', min( $limit, strtotime( (string) $session->expires_at . ' UTC' ) ?: $limit ) );
         global $wpdb;
         $updated = $wpdb->update(
             $wpdb->prefix . 'dap_admin_sessions',
@@ -815,7 +907,7 @@ final class DSA2_Admin_Mobile_API {
             array( '%d', '%s' )
         );
         if ( 1 !== $updated ) return new WP_Error( 'session_changed', 'La session a été modifiée. Reconnectez-vous.', array( 'status' => 409 ) );
-        return self::response( array( 'token' => $token, 'expires_at' => mysql2date( 'c', $expires, false ) ) );
+        return self::response( array( 'token' => $token, 'expires_at' => gmdate( 'c', strtotime( $expires . ' UTC' ) ) ) );
     }
 
     public static function logout( $request ) {
@@ -889,7 +981,7 @@ final class DSA2_Admin_Mobile_API {
         ) );
         if ( ! $conversation || ! $message ) return;
         $sessions = (array) $wpdb->get_results(
-            "SELECT * FROM {$wpdb->prefix}dap_admin_sessions WHERE fcm_token<>'' AND expires_at>UTC_TIMESTAMP() ORDER BY last_seen_at DESC LIMIT 100"
+            $wpdb->prepare( "SELECT * FROM {$wpdb->prefix}dap_admin_sessions WHERE fcm_token<>'' AND expires_at>UTC_TIMESTAMP() AND created_at>%s ORDER BY last_seen_at DESC LIMIT 100", self::oldest_valid_sign_in() )
         ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         foreach ( $sessions as $session ) {
             $agent = get_userdata( (int) $session->user_id );

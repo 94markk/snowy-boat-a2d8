@@ -51,6 +51,8 @@ class Delicat_SMS_Guard {
 	const OPT_HOUR       = 'delicat_smsg_hour';          // rolling credit counter
 	const OPT_SMSC_SEEN  = 'delicat_smsg_smsc_seen';     // learned SMSC values
 	const ANCHOR_PREFIX  = 'delicat_smsg_anchor_';       // + provider
+	/** 6.6.4 (RCH-01): one-time switch of OPT_MC_BAL to '1' has run. */
+	const OPT_MC_BAL_MIGRATED = 'delicat_smsg_mc_need_bal_664';
 
 	/** Flags that are EVIDENCE of a forged SMS (trigger lockdown + urgent alert). */
 	const SPOOF_FLAGS = [ 'tc_format', 'tc_date', 'time', 'balance_chain', 'balance_missing', 'smsc' ];
@@ -66,6 +68,22 @@ class Delicat_SMS_Guard {
 		add_action( 'admin_post_delicat_smsg_unlock', [ __CLASS__, 'handle_unlock' ] );
 		add_action( 'admin_post_delicat_smsg_anchor', [ __CLASS__, 'handle_anchor' ] );
 		add_action( 'rest_api_init',        [ __CLASS__, 'routes' ] );
+		add_action( 'init',                 [ __CLASS__, 'maybe_migrate' ], 2 );
+	}
+
+	/**
+	 * 6.6.4 (RCH-01): a MonCash SMS without « new balance is » used to be trusted,
+	 * because the box was unticked by default and most sites saved the page with
+	 * the default. Real MonCash receipts always carry the balance; a fake one can
+	 * leave it out. Tick it once on every site, even where '0' was saved. Runs
+	 * once (flag); the admin can untick it afterwards and it stays unticked.
+	 */
+	public static function maybe_migrate(): void {
+		if ( get_option( self::OPT_MC_BAL_MIGRATED ) ) {
+			return;
+		}
+		update_option( self::OPT_MC_BAL, '1' );
+		update_option( self::OPT_MC_BAL_MIGRATED, current_time( 'mysql' ) );
 	}
 
 	public static function defaults(): array {
@@ -79,7 +97,7 @@ class Delicat_SMS_Guard {
 			self::OPT_HOUR_MAX  => 100000,
 			self::OPT_LOCK_MIN  => 30,
 			self::OPT_SMSC      => '',
-			self::OPT_MC_BAL    => '0',
+			self::OPT_MC_BAL    => '1', // 6.6.4: required by default (RCH-01)
 		];
 	}
 
@@ -218,10 +236,13 @@ class Delicat_SMS_Guard {
 		$flags = self::stateless_flags( $provider, $parsed, $raw, $receipt_ts, ( $ctx['path'] ?? 'forward' ) !== 'app' );
 
 		// ── Balance chain ─────────────────────────────────────────────────
+		// Natcash: always required. MonCash: required unless the admin unticked
+		// it (ticked by default since 6.6.4). The provider is the one the SMS is
+		// processed as; a forwarder label can never switch this check off (RCH-13).
 		$need_bal = ( $provider === 'natcash' ) || self::opt( self::OPT_MC_BAL ) === '1';
 		if ( $meta['balance'] === null ) {
 			if ( $need_bal ) {
-				$flags['balance_missing'] = 'Aucun solde ("Balans ou" / "Votre solde") dans le SMS — un vrai reçu en contient toujours un.';
+				$flags['balance_missing'] = ( $provider === 'moncash' ? 'Aucun solde (« new balance is ») dans le SMS MonCash' : 'Aucun solde ("Balans ou" / "Votre solde") dans le SMS' ) . ' — un vrai reçu en contient toujours un.';
 			}
 		} else {
 			$anchor = self::anchor( $provider );
@@ -275,6 +296,9 @@ class Delicat_SMS_Guard {
 		$provider = $is_mc ? 'moncash' : 'natcash';
 		$parsed   = $is_mc ? Delicat_Natcash_Auto::parse_moncash( $raw ) : Delicat_Natcash_Auto::parse_natcash_code( $raw );
 		if ( ! $parsed ) return false;
+		// 6.6.4 (RCH-01): same rule as evaluate() — no balance line, no proof.
+		$need_bal = ! $is_mc || self::opt( self::OPT_MC_BAL ) === '1';
+		if ( $need_bal && self::parse_meta( $provider, $raw )['balance'] === null ) return false;
 		$ts = null;
 		if ( ! empty( $e['time'] ) ) {
 			try { $ts = ( new DateTime( (string) $e['time'], wp_timezone() ) )->getTimestamp(); } catch ( Exception $ex ) { $ts = null; }
@@ -567,7 +591,8 @@ class Delicat_SMS_Guard {
 					<input type="number" step="0.1" min="0" name="<?php echo self::OPT_BAL_PCT; ?>" value="<?php echo $o( self::OPT_BAL_PCT ); ?>" class="small-text"> % du montant (le plus grand des deux)
 					<p class="description">Le solde du SMS doit valoir <em>dernier solde vérifié + montant</em>. Marge pour d'éventuels frais/arrondis.</p></td></tr>
 			<tr><th>MonCash : exiger le solde</th>
-				<td><input type="hidden" name="<?php echo self::OPT_MC_BAL; ?>" value="0"><label><input type="checkbox" name="<?php echo self::OPT_MC_BAL; ?>" value="1" <?php checked( self::opt( self::OPT_MC_BAL ), '1' ); ?>> Retenir un SMS MonCash sans « new balance is »</label></td></tr>
+				<td><input type="hidden" name="<?php echo self::OPT_MC_BAL; ?>" value="0"><label><input type="checkbox" name="<?php echo self::OPT_MC_BAL; ?>" value="1" <?php checked( self::opt( self::OPT_MC_BAL ), '1' ); ?>> Retenir un SMS MonCash sans « new balance is »</label>
+					<p class="description">Recommandé (coché par défaut depuis la 6.6.4) : un vrai reçu MonCash indique toujours le nouveau solde, un faux SMS peut l'omettre. Décochez seulement si vos vrais SMS MonCash n'ont jamais cette ligne.</p></td></tr>
 			<tr><th>Plafond crédit auto / SMS</th>
 				<td><input type="number" min="0" name="<?php echo self::OPT_AUTO_MAX; ?>" value="<?php echo $o( self::OPT_AUTO_MAX ); ?>" class="regular-text" style="max-width:160px;"> HTG
 					<p class="description">Au-dessus : approbation manuelle. 0 = illimité.</p></td></tr>
@@ -651,7 +676,7 @@ class Delicat_SMS_Guard {
 		} elseif ( $trust === 'legacy' ) {
 			echo '<div class="dlc-details" style="color:#7b8794;">Reçu avant la Garde SMS — non utilisable comme preuve tant qu\'il n\'est pas confirmé.</div>';
 		}
-		if ( empty( $e['uid'] ) || ! empty( $e['resolved'] ) ) return;
+		if ( empty( $e['uid'] ) || ! empty( $e['resolved'] ) || '' === (string) ( $e['sms'] ?? '' ) ) return; // 6.6.4: no text left to confirm
 		$url = wp_nonce_url( admin_url( 'admin-post.php?action=delicat_smsg_trust&uid=' . rawurlencode( (string) $e['uid'] ) ), 'delicat_smsg_trust_' . $e['uid'] );
 		echo '<p style="margin:6px 0 0;"><a class="button button-small button-primary" href="' . esc_url( $url ) . '" onclick="return confirm(\'Confirmez UNIQUEMENT si ce SMS existe vraiment dans votre app Natcash/MonCash (montant + TransCode + solde). Le solde du SMS deviendra la nouvelle référence.\');">Authentique → créditer &amp; re-sync solde</a></p>';
 	}

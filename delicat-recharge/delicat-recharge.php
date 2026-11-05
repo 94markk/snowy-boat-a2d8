@@ -3,7 +3,7 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.6.3
+ * Version:     6.6.4
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
@@ -20,12 +20,13 @@ define( 'DELICAT_RECHARGE_LOADED', true );
 
 if ( ! defined( 'DELICAT_VERSION' ) ) {
     // 6.5.2: schema change (indexed TransCode column + date indexes).
-    define( 'DELICAT_VERSION',  '6.5.2' );
+    // 6.6.4: schema change (bonus_done column on the recharges table).
+    define( 'DELICAT_VERSION',  '6.6.4' );
 }
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.6.3' );
+    define( 'DELICAT_ASSET_VERSION', '6.6.4' );
 }
 if ( ! function_exists( 'delicat_recharge_icon' ) ) {
     /**
@@ -77,7 +78,8 @@ if ( ! defined( 'DELICAT_API_SYNC_VERSION' ) ) {
 }
 if ( ! defined( 'DELICAT_SMS_GUARD_VERSION' ) ) {
     // SMS Guard (anti-spoofing) version. No database migration.
-    define( 'DELICAT_SMS_GUARD_VERSION', '6.3.0' );
+    // 6.6.4: MonCash balance line required by default (one-time option switch).
+    define( 'DELICAT_SMS_GUARD_VERSION', '6.6.4' );
 }
 if ( ! defined( 'DELICAT_PATH' ) ) {
     define( 'DELICAT_PATH', plugin_dir_path( __FILE__ ) );
@@ -91,8 +93,8 @@ foreach ( [
     'class-database',
     'class-files',
     'class-terawallet',
-    'class-moncash',
-    'class-natcash',
+    // 6.6.4: class-moncash (MonCash Business API check) and class-natcash (Natcash
+    // API placeholder) were removed: nothing called them (RCH-10).
     'class-email',
     'class-webhook',
     'class-ajax-handler',
@@ -115,6 +117,7 @@ foreach ( [
     'class-growth',
     'class-api-sync',
     'class-code-lookup',
+    'class-maintenance',
 ] as $file ) {
     require_once DELICAT_PATH . "includes/{$file}.php";
 }
@@ -163,12 +166,16 @@ add_action( 'plugins_loaded', function () {
     new Delicat_Growth();
     Delicat_Recharge_Api_Sync::init();
     Delicat_Code_Lookup::init(); // 6.5.0: read-only TransCode search (admin)
+    Delicat_Maintenance::init(); // 6.6.4: SMS retention + bonus-marker clean-up (daily)
 } );
 
 // Clear scheduled cron jobs when the plugin is deactivated.
 register_deactivation_hook( __FILE__, function () {
     if ( class_exists( 'Delicat_Alerts' ) ) {
         Delicat_Alerts::clear_schedules();
+    }
+    if ( class_exists( 'Delicat_Maintenance' ) ) {
+        Delicat_Maintenance::clear_schedules();
     }
 } );
 

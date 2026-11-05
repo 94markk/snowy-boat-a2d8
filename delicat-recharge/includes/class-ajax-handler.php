@@ -188,9 +188,7 @@ class Delicat_Ajax_Handler {
                 $this->process_moncash( $user_id, $user_email, $montant, $trans_code, $methode, $preuve_url );
                 break;
 
-            case 'natcash':
-                $this->process_natcash( $user_id, $user_email, $montant, $trans_code, $methode, $preuve_url );
-                break;
+            // 'natcash' (retired PIN flow) is refused above; its handlers were removed in 6.6.4.
 
             case 'manuel':
                 $this->process_manuel( $user_id, $user_email, $montant, $trans_code, $methode, $preuve_url );
@@ -271,87 +269,6 @@ class Delicat_Ajax_Handler {
             'message'       => 'Demande enregistrée. Dès réception du SMS Natcash correspondant (TransCode + montant exact), votre wallet sera crédité automatiquement.',
             'auto_approved' => false,
         ] );
-    }
-
-    /* ====================================================================
-     * TAB: Natcash — save pending (no API yet) → admin reviews
-     * ==================================================================== */
-
-    private function process_natcash(
-        int $user_id, string $user_email,
-        float $montant, string $trans_code,
-        string $methode, string $preuve_url
-    ): void {
-        // Auto-verify (SMS) flow: generate a PIN, save pending with sender number,
-        // and tell the client to put the PIN in the Natcash "contenu" field.
-        // ── UNREACHABLE: retired Natcash PIN flow ───────────────────────────
-        // Submissions with tab='natcash' are rejected earlier in handle_submit,
-        // so this branch no longer runs. Kept only so historical records and
-        // the nc_pin column remain understandable. Do not re-enable without
-        // restoring the SMS-side PIN matcher, which was removed.
-        $nc_sender = isset( $_POST['nc_sender'] )
-            ? preg_replace( '/\D/', '', sanitize_text_field( wp_unslash( $_POST['nc_sender'] ) ) )
-            : '';
-        $pin = class_exists( 'Delicat_Natcash_Auto' ) ? Delicat_Natcash_Auto::generate_pin() : '';
-
-        $id = $this->save_request( $user_id, $user_email, 'natcash', $methode ?: 'natcash',
-            $montant, $trans_code, $preuve_url, 'en_attente' );
-
-        if ( ! is_wp_error( $id ) ) {
-            // Store PIN + sender on the row for the SMS matcher.
-            Delicat_Database::update( (int) $id, [ 'nc_pin' => $pin, 'nc_sender' => $nc_sender ] );
-            $record = Delicat_Database::get( $id );
-            $this->defer_submission( $record, 'NATCASH — en attente de confirmation SMS' );
-        }
-
-        wp_send_json_success( [
-            'message' => sprintf(
-                'Demande enregistrée. <strong>Important :</strong> lors de votre transfert Natcash, mettez le code <strong style="font-size:1.4em;color:#0d1b4d;letter-spacing:2px;">%s</strong> dans le champ « contenu ». Ce code expire dans <strong>8 minutes</strong> et ne peut être utilisé qu\'une seule fois. Votre recharge sera validée automatiquement dès réception du paiement.',
-                esc_html( $pin )
-            ),
-            'auto_approved' => false,
-            'nc_pin'        => $pin,
-        ] );
-    }
-
-    private function process_natcash_legacy(
-        int $user_id, string $user_email,
-        float $montant, string $trans_code,
-        string $methode, string $preuve_url
-    ): void {
-        $verify = Delicat_Natcash::verify_transaction( $trans_code, $montant );
-
-        if ( ! empty( $verify['success'] ) ) {
-            // Future: if Natcash API is added and verifies successfully
-            $id = $this->save_request( $user_id, $user_email, 'natcash', $methode ?: 'natcash',
-                $montant, $trans_code, $preuve_url, 'approuve' );
-            if ( ! is_wp_error( $id ) ) {
-                $this->credit_wallet( $user_id, $montant, $id );
-                $record = Delicat_Database::get( $id );
-                Delicat_Email::send_user_auto_approved( $record, true );
-                Delicat_Email::send_admin_notification( $record, 'AUTO-APPROUVÉ (Natcash)' );
-                $this->fire_webhook( $record );
-            }
-            wp_send_json_success( array_merge( [
-                'message'       => sprintf( 'Paiement Natcash vérifié ! <strong>%.2f HTG</strong> ajoutés à votre wallet.', $montant ),
-                'auto_approved' => true,
-            ], $this->wallet_balance_payload( $user_id ) ) );
-        } else {
-            // Current state: pending manual
-            $id = $this->save_request( $user_id, $user_email, 'natcash', $methode ?: 'natcash',
-                $montant, $trans_code, $preuve_url, 'en_attente',
-                $verify['message'] ?? '' );
-
-            if ( ! is_wp_error( $id ) ) {
-                $record = Delicat_Database::get( $id );
-                $this->defer_submission( $record, 'NATCASH — révision manuelle requise' );
-            }
-
-            wp_send_json_success( [
-                'message'       => 'Demande Natcash enregistrée. Notre équipe vérifiera votre TransCode et rechargera votre wallet dans les plus brefs délais.',
-                'auto_approved' => false,
-            ] );
-        }
     }
 
     /* ====================================================================
@@ -550,12 +467,19 @@ class Delicat_Ajax_Handler {
             $mode = 'credit';
         }
 
+        if ( $mode === 'credit' && ! $user_id ) {
+            wp_send_json_error( [ 'message' => "Pour créditer, entrez l'email d'un client existant. Utilisateur introuvable." ] );
+        }
+        // 6.6.4 (RCH-02): burn the code in the one-time ledger too, like every
+        // other approval path, so no later path can credit it again.
+        if ( ! Delicat_Database::claim_code( $trans_code, 0, $montant, 'console_mentry_' . $mode ) ) {
+            wp_send_json_error( [ 'message' => 'Ce code est déjà enregistré (il est donc déjà bloqué pour le site).' ] );
+        }
+
         if ( $mode === 'credit' ) {
-            if ( ! $user_id ) {
-                wp_send_json_error( [ 'message' => "Pour créditer, entrez l'email d'un client existant. Utilisateur introuvable." ] );
-            }
             $id = $this->save_request( $user_id, $email, $tab, $tab, $montant, $trans_code, '', 'approuve' );
             if ( is_wp_error( $id ) ) {
+                Delicat_Database::release_code( $trans_code ); // nothing recorded → free it
                 wp_send_json_error( [ 'message' => 'Erreur base de données : ' . $id->get_error_message() ] );
             }
             $credited = $this->credit_wallet( $user_id, $montant, $id );
@@ -582,6 +506,7 @@ class Delicat_Ajax_Handler {
         // mode = block (default): record + burn the code, no wallet credit.
         $id = $this->save_request( $user_id, $email, $tab, $tab, $montant, $trans_code, '', 'approuve' );
         if ( is_wp_error( $id ) ) {
+            Delicat_Database::release_code( $trans_code ); // nothing recorded → free it
             wp_send_json_error( [ 'message' => 'Erreur base de données : ' . $id->get_error_message() ] );
         }
         // Mark as handled so nobody credits it later by accident. The

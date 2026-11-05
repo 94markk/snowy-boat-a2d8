@@ -2,29 +2,39 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 /**
- * NATCASH AUTO-VERIFY (no API — uses SMS confirmation).
+ * NATCASH / MONCASH AUTO-VERIFY (no API — uses the payment SMS).
  *
  * Flow:
- *  1. Client enters their sending number + amount; on submit we generate a
- *     unique 4-digit PIN they put in the Natcash "contenu" field.
- *  2. Natcash sends a confirmation SMS to the admin phone.
- *  3. The Delicat Notification app reads that SMS, parses it, and POSTs the
- *     parsed fields here (HMAC-signed with a device).
- *  4. We match amount + PIN + sender number against a pending request.
- *     All three must match → auto-approve + credit wallet.
+ *  1. The client pays, then submits the amount + the TransCode / Txn ID.
+ *  2. Natcash / MonCash sends the receipt SMS to the shop phone.
+ *  3. The SMS forwarder (secret key) or the staff app (device auth) POSTs the
+ *     raw SMS here; the SMS Guard checks it is genuine (balance chain, ...).
+ *  4. A pending request with the exact TransCode + exact amount is credited.
  *
  * Security:
- *  - PIN is single-use and expires (default 30 min).
- *  - Endpoint requires a valid device (same auth as the app dashboard).
- *  - Strict triple match (amount + pin + sender) prevents guessing.
- *  - Idempotent: a TransCode can only auto-credit once.
+ *  - One TransCode = one credit (UNIQUE ledger + named lock + atomic claim).
+ *  - Forwarder: secret key, preferably in a header (6.6.4), per-IP throttle
+ *    and lockout keyed on the Cloudflare-aware visitor address.
+ *  - The retired Natcash PIN ("kontni") flow was removed in 6.6.4.
  */
 class Delicat_Natcash_Auto {
 
-    const PIN_TTL = 480; // 8 minutes
-
     /** Number of SMS kept in the diagnostic log (raised from 15 so a burst of fakes cannot push real receipts out). */
     const LOG_MAX = 40;
+
+    /** 6.6.4 (RCH-04): how the forwarder sent its key last time ('header' | 'query' | 'body'). */
+    const OPT_FWD_AUTH = 'delicat_forward_auth_last';
+
+    /** Header the forwarder should use for its key (Authorization: Bearer <key> also works). */
+    const FWD_HEADER = 'X-Delicat-Key';
+
+    /** Cloudflare edge ranges: CF-Connecting-IP is believed only from these (same list as the Builder). */
+    const CLOUDFLARE_RANGES = [
+        '173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
+        '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
+        '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22',
+        '2400:cb00::/32', '2606:4700::/32', '2803:f800::/32', '2405:b500::/32', '2405:8100::/32', '2a06:98c0::/29', '2c0f:f248::/32',
+    ];
 
     /** @var self|null */
     private static $instance = null;
@@ -42,6 +52,31 @@ class Delicat_Natcash_Auto {
         // entry from the diagnostic log so the page reflects reality.
         add_action( 'delicat_recharge_approved', [ $this, 'on_recharge_approved' ], 20, 1 );
         add_action( 'admin_post_delicat_clear_natcash_log', [ $this, 'handle_clear_log' ] );
+        // 6.6.4 (RCH-04): the key is never printed in the page; it is fetched on a click.
+        add_action( 'wp_ajax_delicat_forward_secret', [ $this, 'ajax_forward_secret' ] );
+        add_action( 'admin_post_delicat_forward_rotate', [ $this, 'handle_rotate_secret' ] );
+    }
+
+    /** Admin only: hand the forwarder key (or the old-style full URL) to the copy button. */
+    public function ajax_forward_secret(): void {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => 'Accès refusé.' ], 403 );
+        }
+        check_ajax_referer( 'delicat_forward_secret', 'nonce' );
+        nocache_headers();
+        $what = isset( $_POST['what'] ) ? sanitize_key( wp_unslash( $_POST['what'] ) ) : 'key';
+        $key  = self::forward_secret();
+        wp_send_json_success( [ 'value' => 'url' === $what ? rest_url( 'delicat/v1/natcash/forward' ) . '?key=' . rawurlencode( $key ) : $key ] );
+    }
+
+    /** Admin only: replace the forwarder key (the old one stops working at once). */
+    public function handle_rotate_secret(): void {
+        if ( ! current_user_can( 'manage_options' ) ) wp_die( 'Accès refusé.' );
+        check_admin_referer( 'delicat_forward_rotate' );
+        update_option( 'delicat_natcash_secret', wp_generate_password( 24, false, false ), false );
+        delete_option( self::OPT_FWD_AUTH );
+        wp_safe_redirect( add_query_arg( 'smsg_msg', rawurlencode( 'Nouvelle clé du transmetteur créée. Collez-la maintenant dans votre application de transfert SMS : l\'ancienne clé ne fonctionne plus.' ), admin_url( 'admin.php?page=delicat-natcash-log' ) ) );
+        exit;
     }
 
     /** Clear the diagnostic log (admin only). Useful after fixing a batch. */
@@ -107,13 +142,23 @@ class Delicat_Natcash_Auto {
              WHERE statut = 'en_attente' AND tab IN ('natcash_tc','moncash')
              ORDER BY created_at DESC LIMIT 10" );
 
-        $forward_url = rest_url( 'delicat/v1/natcash/forward' ) . '?key=' . Delicat_Natcash_Auto::forward_secret();
+        // 6.6.4 (RCH-04): the key is never printed in full; see render_forwarder_setup().
+        $fwd_auth = get_option( self::OPT_FWD_AUTH, [] );
+        $fwd_auth = is_array( $fwd_auth ) ? $fwd_auth : [];
         ?>
         <div class="wrap dlc-diag">
             <h1 style="display:flex;align-items:center;gap:10px;">
                 <span>Natcash Auto</span>
                 <span style="font-size:13px;font-weight:400;color:#666;">Diagnostic en temps réel</span>
             </h1>
+
+            <?php if ( 'query' === ( $fwd_auth['method'] ?? '' ) ) : ?>
+                <div class="notice notice-warning inline" style="margin:12px 0;padding:10px 14px;">
+                    <p style="margin:0 0 6px;"><strong>Votre transmetteur utilise encore la clé dans l'URL : passez à l'en-tête.</strong>
+                        Une clé dans l'adresse peut finir dans l'historique du navigateur et les journaux du serveur.</p>
+                    <p style="margin:0;">Voir les étapes simples dans « Adresse du forwarder » en bas de cette page. Rien ne casse en attendant : l'ancienne méthode marche toujours.</p>
+                </div>
+            <?php endif; ?>
 
             <!-- Stat cards -->
             <div class="dlc-cards">
@@ -214,7 +259,11 @@ class Delicat_Natcash_Auto {
                                     <span class="dlc-result"><?php echo esc_html( $res ); ?></span>
                                     <span class="dlc-time"><?php echo esc_html( $e['time'] ?? '' ); ?></span>
                                 </div>
-                                <code class="dlc-sms"><?php echo esc_html( $e['sms'] ?? '' ); ?></code>
+                                <?php if ( '' === (string) ( $e['sms'] ?? '' ) && ! empty( $e['sms_purged'] ) ) : ?>
+                                    <code class="dlc-sms" style="color:#7b8794;">Texte du SMS effacé le <?php echo esc_html( (string) $e['sms_purged'] ); ?> (conservation limitée, Paramètres).</code>
+                                <?php else : ?>
+                                    <code class="dlc-sms"><?php echo esc_html( $e['sms'] ?? '' ); ?></code>
+                                <?php endif; ?>
                                 <?php
                                 $details = [];
                                 if ( $resolved ) {
@@ -223,7 +272,7 @@ class Delicat_Natcash_Auto {
                                         . ( ! empty( $e['resolved_at'] ) ? ' — ' . esc_html( (string) $e['resolved_at'] ) : '' )
                                         . '</div>';
                                 }
-                                foreach ( [ 'sms_code','sms_montant','amount','pin','sender','trans_code','attendu','recu','en_attente','from','smsc','balance','sms_time','payer','path' ] as $k ) {
+                                foreach ( [ 'sms_code','sms_montant','amount','pin','sender','trans_code','attendu','recu','en_attente','from','smsc','balance','sms_time','payer','path','label' ] as $k ) {
                                     if ( isset( $e[ $k ] ) && $e[ $k ] !== '' && $e[ $k ] !== null ) {
                                         $details[] = '<b>' . esc_html( $k ) . '</b>: ' . esc_html( (string) $e[ $k ] );
                                     }
@@ -237,13 +286,7 @@ class Delicat_Natcash_Auto {
                 <?php endif; ?>
             </div>
 
-            <!-- Setup -->
-            <details class="dlc-panel dlc-setup">
-                <summary><strong>Adresse du forwarder</strong></summary>
-                <p class="dlc-hint" style="margin:10px 0;">Configurez l'app SMS Forwarder pour envoyer les SMS en POST à cette adresse. Gardez-la secrète.</p>
-                <code class="dlc-url" id="dlc-url"><?php echo esc_html( $forward_url ); ?></code>
-                <button type="button" class="button" id="dlc-copy" style="margin-top:8px;">Copier l'adresse</button>
-            </details>
+            <?php $this->render_forwarder_setup( $fwd_auth ); ?>
         </div>
 
         <style>
@@ -292,33 +335,83 @@ class Delicat_Natcash_Auto {
             function arm(){ if(t) clearTimeout(t); t=setTimeout(function(){ location.reload(); },20000); }
             var cb=document.getElementById('dlc-auto');
             if(cb){ cb.addEventListener('change',function(){ if(cb.checked){arm();} else if(t){clearTimeout(t);} }); if(cb.checked) arm(); }
-            var btn=document.getElementById('dlc-copy');
-            if(btn){ btn.addEventListener('click',function(){
-                var u=document.getElementById('dlc-url');
-                if(!u) return;
-                navigator.clipboard.writeText(u.textContent.trim()).then(function(){
-                    btn.textContent='Copié'; setTimeout(function(){ btn.textContent="Copier l'adresse"; },1800);
+            /* 6.6.4: copy buttons. The key is not in the page: it is fetched on the click,
+               copied, and shown (once) only when the browser cannot copy by itself. */
+            function done(b,label){ b.textContent='Copié'; setTimeout(function(){ b.textContent=label; },1800); }
+            function copyText(text,b,label){
+                if(navigator.clipboard && window.isSecureContext){
+                    navigator.clipboard.writeText(text).then(function(){ done(b,label); },function(){ window.prompt('Copiez :',text); });
+                } else { window.prompt('Copiez :',text); }
+            }
+            var btns=document.querySelectorAll('[data-dlc-copy]');
+            Array.prototype.forEach.call(btns,function(b){
+                var label=b.textContent;
+                b.addEventListener('click',function(){
+                    var what=b.getAttribute('data-dlc-copy');
+                    if(what==='endpoint'){ copyText(b.getAttribute('data-value')||'',b,label); return; }
+                    if(t){ clearTimeout(t); }
+                    var fd=new FormData();
+                    fd.append('action','delicat_forward_secret');
+                    fd.append('nonce',b.getAttribute('data-nonce')||'');
+                    fd.append('what',what);
+                    fetch(window.ajaxurl||'<?php echo esc_js( admin_url( 'admin-ajax.php' ) ); ?>',{method:'POST',body:fd,credentials:'same-origin',cache:'no-store'})
+                        .then(function(r){ return r.json(); })
+                        .then(function(j){ if(j && j.success && j.data){ copyText(String(j.data.value),b,label); } else { b.textContent='Erreur'; } })
+                        .catch(function(){ b.textContent='Erreur'; });
                 });
-            }); }
+            });
         })();
         </script>
         <?php
     }
 
-    /** Generate a unique 4-digit PIN not currently used by a pending request. */
-    public static function generate_pin(): string {
-        global $wpdb;
-        $table = $wpdb->prefix . 'delicat_recharges';
-        for ( $i = 0; $i < 20; $i++ ) {
-            $pin = str_pad( (string) wp_rand( 0, 999999 ), 6, '0', STR_PAD_LEFT );
-            $exists = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$table}
-                 WHERE nc_pin = %s AND statut = 'en_attente'
-                 AND created_at > (NOW() - INTERVAL 8 MINUTE)", $pin
-            ) );
-            if ( ! $exists ) return $pin;
-        }
-        return str_pad( (string) wp_rand( 0, 999999 ), 6, '0', STR_PAD_LEFT );
+    /**
+     * 6.6.4 (RCH-04): forwarder set-up box. Shows the address without the key, the key
+     * masked, how the forwarder sent it last time, the steps to move it into a header,
+     * and copy buttons that fetch the key only when clicked.
+     */
+    private function render_forwarder_setup( array $fwd_auth ): void {
+        $endpoint = rest_url( 'delicat/v1/natcash/forward' );
+        $key      = self::forward_secret();
+        $masked   = substr( $key, 0, 3 ) . str_repeat( '•', 8 ) . substr( $key, -2 );
+        $nonce    = wp_create_nonce( 'delicat_forward_secret' );
+        $method   = (string) ( $fwd_auth['method'] ?? '' );
+        $labels   = [
+            'header' => 'clé envoyée dans un en-tête (recommandé)',
+            'query'  => 'clé dans l\'adresse (?key=…) — ancienne méthode, à changer',
+            'body'   => 'clé dans le corps du message (accepté ; l\'en-tête est préférable)',
+        ];
+        $rotate = wp_nonce_url( admin_url( 'admin-post.php?action=delicat_forward_rotate' ), 'delicat_forward_rotate' );
+        ?>
+        <details class="dlc-panel dlc-setup"<?php echo 'query' === $method ? ' open' : ''; ?>>
+            <summary><strong>Adresse du forwarder</strong></summary>
+            <table class="dlc-table" style="margin-top:10px;">
+                <tr><th>Adresse (POST)</th><td><code class="dlc-url"><?php echo esc_html( $endpoint ); ?></code></td></tr>
+                <tr><th>Clé secrète</th><td><code><?php echo esc_html( $masked ); ?></code> <span class="dlc-hint">(masquée)</span></td></tr>
+                <tr><th>Dernier SMS reçu</th><td><?php
+                    if ( isset( $labels[ $method ] ) ) {
+                        echo esc_html( $labels[ $method ] ) . ( ! empty( $fwd_auth['at'] ) ? ' <span class="dlc-hint">— ' . esc_html( wp_date( 'd/m/Y H:i', (int) $fwd_auth['at'] ) ) . '</span>' : '' );
+                    } else {
+                        echo '<span class="dlc-hint">pas encore connu (mis à jour au prochain SMS transmis)</span>';
+                    }
+                ?></td></tr>
+            </table>
+            <p style="margin:12px 0 6px;"><strong>Méthode recommandée : la clé dans un en-tête</strong></p>
+            <ol style="margin:0 0 10px 18px;">
+                <li>Dans votre application de transfert SMS, mettez l'adresse ci-dessus <strong>sans</strong> « ?key=… » à la fin.</li>
+                <li>Ajoutez un en-tête (« Header ») : nom <code><?php echo esc_html( self::FWD_HEADER ); ?></code>, valeur : la clé (bouton « Copier la clé »). Si l'application propose seulement « Authorization », mettez <code>Bearer</code>, un espace, puis la clé.</li>
+                <li>Enregistrez et envoyez-vous un SMS de test : la ligne « Dernier SMS reçu » ci-dessus doit indiquer « en-tête ».</li>
+            </ol>
+            <p style="display:flex;gap:8px;flex-wrap:wrap;margin:0;">
+                <button type="button" class="button" data-dlc-copy="endpoint" data-value="<?php echo esc_attr( $endpoint ); ?>">Copier l'adresse</button>
+                <button type="button" class="button button-primary" data-dlc-copy="key" data-nonce="<?php echo esc_attr( $nonce ); ?>">Copier la clé</button>
+                <button type="button" class="button" data-dlc-copy="url" data-nonce="<?php echo esc_attr( $nonce ); ?>">Copier l'adresse avec la clé (ancienne méthode)</button>
+            </p>
+            <p class="dlc-hint" style="margin:8px 0 0;">L'ancienne méthode (clé dans l'adresse) reste acceptée pour ne rien casser ; utilisez-la seulement si votre application ne permet pas d'en-tête. Gardez la clé secrète.</p>
+            <p style="margin:10px 0 0;"><a class="button button-small" href="<?php echo esc_url( $rotate ); ?>" onclick="return confirm('Créer une nouvelle clé ? L\'ancienne cessera de fonctionner TOUT DE SUITE : la validation automatique s\'arrête jusqu\'à ce que vous colliez la nouvelle clé dans l\'application de transfert SMS.');">Créer une nouvelle clé</a>
+                <span class="dlc-hint">À faire une fois l'en-tête en place, si l'ancienne adresse a pu être vue par d'autres.</span></p>
+        </details>
+        <?php
     }
 
     public function routes(): void {
@@ -328,9 +421,10 @@ class Delicat_Natcash_Auto {
             'permission_callback' => [ $this, 'auth' ],
         ] );
 
-        // Forwarder endpoint: for generic SMS-forwarding apps that can't send
-        // custom auth headers. Auth is a secret token in the URL query/body.
-        // Accepts flexible field names (msg/message/text/sms, from/sender/number).
+        // Forwarder endpoint for generic SMS-forwarding apps. Auth is a secret
+        // key, preferably in a header (X-Delicat-Key or Authorization: Bearer);
+        // ?key= in the URL / body is still accepted for forwarders set up that
+        // way. Accepts flexible field names (msg/message/text/sms, from/sender/number).
         register_rest_route( 'delicat/v1', '/natcash/forward', [
             'methods'             => 'POST',
             'callback'            => [ $this, 'handle_forward' ],
@@ -354,20 +448,55 @@ class Delicat_Natcash_Auto {
         return $s;
     }
 
-    /** Real client IP, Cloudflare/proxy aware (REMOTE_ADDR is the CDN behind CF). */
+    /**
+     * Visitor address for the forwarder throttle and lockout.
+     *
+     * 6.6.4: CF-Connecting-IP / True-Client-IP / X-Real-IP / X-Forwarded-For were
+     * believed from anyone, so a caller could pick a new address per request and
+     * never be throttled or locked out. Now CF-Connecting-IP counts only when the
+     * socket peer (REMOTE_ADDR) is a Cloudflare edge; every other header is ignored.
+     * The Builder has the same rule (and the App API's trusted-proxy rule) in
+     * Delicat_Builder_V9_Security::client_ip(): used when present, so all limits
+     * on the site agree on who the visitor is.
+     */
     private static function client_ip(): string {
-        foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_TRUE_CLIENT_IP', 'HTTP_X_REAL_IP' ] as $h ) {
-            if ( ! empty( $_SERVER[ $h ] ) ) {
-                $ip = trim( (string) $_SERVER[ $h ] );
+        if ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( [ 'Delicat_Builder_V9_Security', 'client_ip' ] ) ) {
+            try {
+                $ip = (string) Delicat_Builder_V9_Security::client_ip();
                 if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) return $ip;
+            } catch ( Throwable $e ) {
+                unset( $e ); // fall back to the local rule below
             }
         }
-        if ( ! empty( $_SERVER['HTTP_X_FORWARDED_FOR'] ) ) {
-            $parts = explode( ',', (string) $_SERVER['HTTP_X_FORWARDED_FOR'] );
-            $ip    = trim( $parts[0] );
-            if ( filter_var( $ip, FILTER_VALIDATE_IP ) ) return $ip;
+        return self::local_client_ip();
+    }
+
+    /** Same rule as the Builder, for sites without it: CF-Connecting-IP only from a Cloudflare edge. */
+    private static function local_client_ip(): string {
+        $remote = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+        $peer   = filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '';
+        $cf     = isset( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ? trim( (string) wp_unslash( $_SERVER['HTTP_CF_CONNECTING_IP'] ) ) : '';
+        if ( $peer !== '' && $cf !== '' && filter_var( $cf, FILTER_VALIDATE_IP ) ) {
+            foreach ( (array) apply_filters( 'delicat_recharge_trusted_proxy_ranges', self::CLOUDFLARE_RANGES ) as $cidr ) {
+                if ( self::ip_in_cidr( $peer, (string) $cidr ) ) return $cf;
+            }
         }
-        return isset( $_SERVER['REMOTE_ADDR'] ) ? (string) $_SERVER['REMOTE_ADDR'] : '0';
+        return $peer !== '' ? $peer : '0';
+    }
+
+    private static function ip_in_cidr( string $ip, string $cidr ): bool {
+        if ( strpos( $cidr, '/' ) === false ) return $ip === $cidr;
+        list( $subnet, $bits ) = explode( '/', $cidr, 2 );
+        $ip_bin     = @inet_pton( $ip );     // malformed input is a "no", not a warning
+        $subnet_bin = @inet_pton( $subnet );
+        if ( $ip_bin === false || $subnet_bin === false || strlen( $ip_bin ) !== strlen( $subnet_bin ) ) return false;
+        $bits  = max( 0, min( strlen( $ip_bin ) * 8, (int) $bits ) );
+        $bytes = intdiv( $bits, 8 );
+        $rest  = $bits % 8;
+        if ( $bytes > 0 && substr( $ip_bin, 0, $bytes ) !== substr( $subnet_bin, 0, $bytes ) ) return false;
+        if ( $rest === 0 ) return true;
+        $mask = ( 0xFF << ( 8 - $rest ) ) & 0xFF;
+        return ( ord( $ip_bin[ $bytes ] ) & $mask ) === ( ord( $subnet_bin[ $bytes ] ) & $mask );
     }
 
     /** Simple per-IP rate limit for the public forward endpoint. */
@@ -397,6 +526,45 @@ class Delicat_Natcash_Auto {
     }
 
     /**
+     * 6.6.4 (RCH-04): the forwarder key and where it came from. Header first
+     * (X-Delicat-Key, X-Delicat-Forward-Key, Authorization: Bearer), then the
+     * old ?key= in the URL, then a key field in the body. The first candidate
+     * that matches wins, so a forwarder that sends both keeps working.
+     *
+     * @return array{0:string,1:string} [ key, 'header'|'query'|'body' ] or [ '', '' ]
+     */
+    private static function forward_key_from( WP_REST_Request $req ): array {
+        $cands = [];
+        foreach ( [ 'x_delicat_key', 'x_delicat_forward_key' ] as $h ) {
+            $v = trim( (string) $req->get_header( $h ) );
+            if ( $v !== '' ) $cands[] = [ $v, 'header' ];
+        }
+        $auth = trim( (string) $req->get_header( 'authorization' ) );
+        if ( preg_match( '/^Bearer\s+(\S+)$/i', $auth, $m ) ) $cands[] = [ $m[1], 'header' ];
+        $query = $req->get_query_params();
+        if ( isset( $query['key'] ) && is_scalar( $query['key'] ) && (string) $query['key'] !== '' ) $cands[] = [ (string) $query['key'], 'query' ];
+        $body = $req->get_body_params();
+        $json = $req->get_json_params();
+        foreach ( [ $body, is_array( $json ) ? $json : [] ] as $src ) {
+            if ( isset( $src['key'] ) && is_scalar( $src['key'] ) && (string) $src['key'] !== '' ) $cands[] = [ (string) $src['key'], 'body' ];
+        }
+        if ( ! $cands ) return [ '', '' ];
+        $secret = self::forward_secret();
+        foreach ( $cands as $c ) {
+            if ( hash_equals( $secret, $c[0] ) ) return $c;
+        }
+        return $cands[0];
+    }
+
+    /** Remember how the key was sent (never the key itself), for the admin page. */
+    private static function remember_auth_method( string $method ): void {
+        $prev = get_option( self::OPT_FWD_AUTH, [] );
+        $prev = is_array( $prev ) ? $prev : [];
+        if ( ( $prev['method'] ?? '' ) === $method && time() - (int) ( $prev['at'] ?? 0 ) < 10 * MINUTE_IN_SECONDS ) return;
+        update_option( self::OPT_FWD_AUTH, [ 'method' => $method, 'at' => time() ], false );
+    }
+
+    /**
      * Handle a forwarded SMS from a generic SMS-forwarder app.
      * Accepts many field names so it works with whatever app you choose.
      */
@@ -410,15 +578,17 @@ class Delicat_Natcash_Auto {
             return new WP_Error( 'locked', 'Trop de tentatives. Réessayez plus tard.', [ 'status' => 429 ] );
         }
 
-        // Secret: prefer a request HEADER (X-Delicat-Forward-Key) so the token
-        // does NOT leak in URLs, server logs, referrers or browser history.
-        // Fall back to ?key= / body for forwarders that can only send URLs.
-        $key = (string) $req->get_header( 'x-delicat-forward-key' );
-        if ( $key === '' ) $key = (string) $req->get_param( 'key' );
-        if ( ! hash_equals( self::forward_secret(), (string) $key ) ) {
+        // Secret: preferably a request HEADER, so the key does NOT leak in URLs,
+        // server logs, referrers or browser history (6.6.4: X-Delicat-Key or
+        // Authorization: Bearer <key>; X-Delicat-Forward-Key still works).
+        // ?key= / body stays accepted: forwarders already set up that way keep
+        // working, and the admin page asks to move the key into a header.
+        list( $key, $method ) = self::forward_key_from( $req );
+        if ( $key === '' || ! hash_equals( self::forward_secret(), $key ) ) {
             self::forward_bad_key();
             return new WP_Error( 'forbidden', 'Clé invalide.', [ 'status' => 403 ] );
         }
+        self::remember_auth_method( $method );
 
         // HEARTBEAT: the forwarder authenticated, so it is alive right now.
         // If this stops updating, auto-validation has silently died (phone off,
@@ -482,6 +652,7 @@ class Delicat_Natcash_Auto {
         // Provider from the forwarder ('MonCash' or 'Natcash'). If MonCash, use
         // the MonCash TransCode matcher; otherwise the Natcash flow.
         $provider = (string) $req->get_param( 'provider' );
+        $ctx['label'] = substr( sanitize_text_field( $provider ), 0, 20 );
         if ( stripos( $provider, 'moncash' ) !== false || stripos( $sms, 'moncash' ) !== false ) {
             return $this->process_moncash_sms( $sms, $from, $ctx );
         }
@@ -489,6 +660,12 @@ class Delicat_Natcash_Auto {
         // If the forwarder positively identified this as Natcash (it checks the
         // real sender before sending), treat the sender as trusted-Natcash even
         // when the raw sender field is a numeric shortcode.
+        // 6.6.4 (RCH-13): honoured because it cannot weaken anything. It only
+        // replaces the sender-NAME check (a name a spoofer can copy anyway);
+        // the SMS is still parsed as a Natcash receipt and the SMS Guard still
+        // requires the balance line + balance chain, the TransCode date, the
+        // time and the SMSC rules, whatever the label says. The label is kept
+        // in the log ('label') so a mislabelled SMS stays visible.
         if ( stripos( $provider, 'natcash' ) !== false && stripos( $from, 'natcash' ) === false ) {
             $from = trim( $from . ' natcash' ); // tag so the strict check passes
         }
@@ -687,7 +864,7 @@ class Delicat_Natcash_Auto {
         $tbl = $wpdb->prefix . 'delicat_recharges';
         $attended = ! empty( $ctx['attended'] );
 
-        $base = [ 'provider' => 'MonCash', 'from' => $sms_from, 'smsc' => (string) ( $ctx['smsc'] ?? '' ), 'path' => (string) ( $ctx['path'] ?? 'forward' ) ];
+        $base = [ 'provider' => 'MonCash', 'from' => $sms_from, 'smsc' => (string) ( $ctx['smsc'] ?? '' ), 'path' => (string) ( $ctx['path'] ?? 'forward' ), 'label' => (string) ( $ctx['label'] ?? '' ) ];
         $log  = function ( $result, $extra = [] ) use ( $raw, $base ) {
             self::log_entry( $raw, $result, array_merge( $base, $extra ) );
         };
@@ -868,7 +1045,7 @@ class Delicat_Natcash_Auto {
         }
         // Diagnostic log helper (shared writer): keeps the last LOG_MAX attempts
         // so we can see what was received and why it did/didn't match.
-        $base = [ 'provider' => 'Natcash', 'from' => $sms_from, 'smsc' => (string) ( $ctx['smsc'] ?? '' ), 'path' => (string) ( $ctx['path'] ?? 'forward' ) ];
+        $base = [ 'provider' => 'Natcash', 'from' => $sms_from, 'smsc' => (string) ( $ctx['smsc'] ?? '' ), 'path' => (string) ( $ctx['path'] ?? 'forward' ), 'label' => (string) ( $ctx['label'] ?? '' ) ];
         $log  = function ( $result, $extra = [] ) use ( $raw, $base ) {
             self::log_entry( $raw, $result, array_merge( $base, $extra ) );
         };
@@ -963,9 +1140,10 @@ class Delicat_Natcash_Auto {
     }
 
     /* ===================== RETIRED: Natcash PIN matcher =====================
-       Natcash validation is TransCode-only. The PIN ("kontni") matcher and its
-       TTL logic were removed deliberately — do not reintroduce them without
-       also restoring the nc_pin matching rules.
+       Natcash validation is TransCode-only. The PIN ("kontni") matcher, its
+       TTL, the PIN generator and the PIN parser were removed (the last two in
+       6.6.4, nothing called them) — do not reintroduce them without also
+       restoring the nc_pin matching rules. The nc_pin column keeps old rows.
        ====================================================================== */
 
     /**
@@ -990,42 +1168,6 @@ class Delicat_Natcash_Auto {
             $out['trans_code'] = $m[1];
         }
         if ( $out['amount'] <= 0 || $out['trans_code'] === '' ) return null;
-        return $out;
-    }
-
-    public static function parse_natcash( string $s ): ?array {
-        $out = [ 'amount' => 0.0, 'sender' => '', 'pin' => '', 'trans_code' => '' ];
-
-        // Amount: Creole "resevwa 25 HTG" OR French "reçu/recu 170 HTG".
-        if ( preg_match( '/(?:resevwa|re\S*u|(?:te\s+)?ajoute)\s+([\d,\.]+)\s*HTG/iu', $s, $m ) ) {
-            $out['amount'] = (float) str_replace( ',', '', $m[1] );
-        }
-
-        // Sender number — handles BOTH formats:
-        //   Creole: "nan NOM NUMERO nan 22:08"
-        //   French: "de NOM NUMERO a 10:28"
-        // Match a 6+ digit run followed by (nan|a) then a HH:MM time.
-        if ( preg_match( '/(?:nan|de)\s+.*?(\d{6,})\s+(?:nan|a)\s+\d{1,2}:\d{2}/iu', $s, $m ) ) {
-            $out['sender'] = $m[1];
-        } else {
-            // Fallback: first 6–10 digit run (the TransCode is longer, 12+).
-            if ( preg_match( '/\b(\d{6,10})\b/', $s, $m ) ) {
-                $out['sender'] = $m[1];
-            }
-        }
-
-        // PIN / contenu: "kontni: 686737" or "contenu: 123".
-        if ( preg_match( '/(?:kontni|contenu)\s*:\s*(\d{6,8})/iu', $s, $m ) ) {
-            $out['pin'] = $m[1];
-        }
-
-        // TransCode: "Transcode:" or "TransCode:" (any case).
-        if ( preg_match( '/Trans\s*code\s*:\s*([A-Za-z0-9]+)/iu', $s, $m ) ) {
-            $out['trans_code'] = $m[1];
-        }
-
-        // Need amount + pin at minimum.
-        if ( $out['amount'] <= 0 || $out['pin'] === '' ) return null;
         return $out;
     }
 

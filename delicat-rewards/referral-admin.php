@@ -10,7 +10,7 @@ function delicat_ref_reason_label( $code ) {
 		'same_network' => 'Même réseau que le parrain', 'same_browser' => 'Même navigateur que le parrain', 'vpn' => 'VPN ou proxy',
 		'refunded' => 'Achat remboursé ou annulé', 'refunded_after' => 'Remboursé après validation', 'order_changed' => 'Commande modifiée',
 		'too_late' => 'Pas d’achat dans le délai', 'admin' => 'Refusé par l’équipe', 'admin_ok' => 'Accepté par l’équipe',
-		'velocity' => 'Beaucoup d’invitations en 24 h',
+		'velocity' => 'Beaucoup d’invitations en 24 h', 'same_payer' => 'Achat payé avec le numéro du parrain ou d’un autre de ses amis',
 	);
 	$out = array();
 	foreach ( array_filter( explode( ',', (string) $code ) ) as $c ) $out[] = $labels[ $c ] ?? $c;
@@ -52,6 +52,8 @@ function delicat_tab_referral() {
 	echo '<tr><th>Lien et code</th><td>un clic sur un lien est retenu <input type="number" min="1" max="90" name="attribution_days" value="' . (int) $c['attribution_days'] . '" style="width:80px"> jours ; un nouveau compte peut taper un code pendant <input type="number" min="0" max="30" name="code_days" value="' . (int) $c['code_days'] . '" style="width:80px"> jours, avant son premier achat.</td></tr>';
 	echo '<tr><th>Invitations par jour</th><td>au-delà de <input type="number" min="0" max="100" name="daily_cap" value="' . (int) $c['daily_cap'] . '" style="width:80px"> nouveaux amis en 24 h pour un même parrain, les suivants sont mis « À vérifier » (0 = sans limite). Freine les faux comptes créés en série.</td></tr>';
 	echo '<tr><th>Points maximum</th><td><input type="number" min="1" max="' . (int) DELICAT_REF_MAX_POINTS . '" name="max_points" value="' . (int) $c['max_points'] . '" style="width:80px"> par client</td></tr>';
+	echo '<tr><th>Plafond des récompenses (% des achats des filleuls)</th><td><input type="number" min="0" max="100" name="reward_cap_pct" value="' . (int) $c['reward_cap_pct'] . '" style="width:80px"> % <p class="description">Ce qu’un parrain reçoit au total (crédit, ou diamants comptés à leur valeur en HTG) ne dépasse pas ce pourcentage de ce que ses amis confirmés ont vraiment acheté depuis leur invitation (achats terminés, payés par MonCash, NatCash…, remboursements déduits). Un palier atteint au-delà attend que les amis achètent davantage. 0 = sans plafond. Les récompenses déjà données restent acquises.</p></td></tr>';
+	echo '<tr><th>Validation par l’équipe</th><td>à partir de <input type="number" min="0" max="' . (int) DELICAT_REF_MAX_POINTS . '" name="manual_from" value="' . (int) $c['manual_from'] . '" style="width:80px"> points, un palier réclamé attend votre accord avant d’être payé (le client voit « En vérification »). 0 = jamais.</td></tr>';
 	echo '<tr><th>Paliers</th><td><table class="widefat" style="max-width:640px"><thead><tr><th>Points</th><th>Diamants Free Fire (PIN)</th><th>ou crédit boutique (HTG)</th></tr></thead><tbody>';
 	$rows = array_values( delicat_ref_milestones() );
 	for ( $i = 0; $i < 8; $i++ ) {
@@ -71,6 +73,33 @@ function delicat_tab_referral() {
 	echo '<tr><th>Page des invitations</th><td>' . wp_dropdown_pages( array( 'name' => 'page_id', 'echo' => 0, 'selected' => (int) $c['page_id'], 'post_status' => 'publish', 'show_option_none' => 'Automatique : la page qui contient [delicat_bonus_free_fire]', 'option_none_value' => '0' ) ) . '<p class="description">' . ( $auto ? 'Les liens ouvrent : ' . esc_html( (string) get_permalink( $auto ) ) : '<strong>Aucune page publique avec [delicat_bonus_free_fire] : les clients n’ont pas encore de lien.</strong>' ) . '</p></td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- core dropdown, escaped
 	echo '<tr><th>Message de partage</th><td><textarea name="share_text" rows="3" maxlength="300" class="large-text">' . esc_textarea( (string) $c['share_text'] ) . '</textarea><p class="description">Envoyé par WhatsApp, Facebook, SMS… <code>{lien}</code> = lien personnel du client, <code>{code}</code> = son code. 300 caractères au plus.</p></td></tr>';
 	echo '</tbody></table><p><button class="button button-primary">Enregistrer</button></p></form></div>';
+
+	/* ---- milestones waiting for the team (3.4.2) */
+	$waiting = $wpdb->get_results( 'SELECT * FROM ' . delicat_ref_table( 'claims' ) . " WHERE status='review' ORDER BY id LIMIT 100" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	echo '<div class="box"><h3>Récompenses à valider (' . count( (array) $waiting ) . ')</h3>';
+	if ( ! $waiting ) echo '<p>Aucune récompense en attente.</p>';
+	else {
+		echo '<p>Ces paliers ne sont pas encore payés. Regardez les invitations du client (ci-dessous) : des amis qui paient avec le même numéro, s’inscrivent le même jour ou n’achètent qu’une fois sont des signes de faux comptes.</p><table class="widefat striped"><thead><tr><th>Client</th><th>Palier</th><th>Récompense</th><th>Points / amis</th><th>Plafond</th><th>Date</th><th>Décision</th></tr></thead><tbody>';
+		foreach ( $waiting as $cl ) {
+			$cap  = delicat_ref_cap( (int) $cl->user_id );
+			$capt = null === $cap['room'] ? 'sans plafond' : sprintf( '%s HTG achetés par les amis · %s HTG déjà accordés (celui-ci compris) · limite %s HTG', delicat_num( $cap['spend'] ), delicat_num( $cap['earned'] ), delicat_num( floor( $cap['spend'] * $cap['pct'] / 100 ) ) );
+			echo '<tr><td>' . esc_html( delicat_ref_user_label( $cl->user_id ) ) . '</td><td>' . (int) $cl->milestone . ' points</td><td>' . ( 'htg' === $cl->choice ? esc_html( delicat_num( (int) $cl->amount ) ) . ' HTG' : esc_html( delicat_num( (int) $cl->amount ) ) . ' diamants' ) . '</td><td>' . (int) delicat_ref_points( (int) $cl->user_id ) . ' points</td><td>' . esc_html( $capt ) . '</td><td>' . esc_html( $cl->created_at ) . '</td><td>';
+			$form( 'delicat_ref_review' );
+			echo '<input type="hidden" name="id" value="' . (int) $cl->id . '"><button class="button button-primary" name="do" value="pay">Valider et payer</button> <button class="button" name="do" value="refuse">Refuser</button></form></td></tr>';
+		}
+		echo '</tbody></table>';
+	}
+	$refused = $wpdb->get_results( 'SELECT * FROM ' . delicat_ref_table( 'claims' ) . " WHERE status='refused' ORDER BY id DESC LIMIT 20" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( $refused ) {
+		echo '<p><strong>Refusées récemment</strong> — « Libérer » permet au client de réclamer ce palier à nouveau (il repasse par votre validation).</p><ul>';
+		foreach ( $refused as $cl ) {
+			echo '<li>' . esc_html( delicat_ref_user_label( $cl->user_id ) . ' — palier ' . (int) $cl->milestone . ' points — ' . $cl->created_at ) . ' ';
+			$form( 'delicat_ref_release' );
+			echo '<input type="hidden" name="id" value="' . (int) $cl->id . '"><button class="button button-small" name="do" value="release">Libérer</button></form></li>';
+		}
+		echo '</ul>';
+	}
+	echo '</div>';
 
 	/* ---- review queue */
 	$review = $wpdb->get_results( "SELECT * FROM $t WHERE status='review' ORDER BY id DESC LIMIT 100" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -149,6 +178,8 @@ add_action( 'admin_post_delicat_ref_save', function () {
 	$c['code_days']        = $num( 'code_days', 0, 30, 7 );
 	$c['max_points']       = $num( 'max_points', 1, DELICAT_REF_MAX_POINTS, DELICAT_REF_MAX_POINTS );
 	$c['daily_cap']        = $num( 'daily_cap', 0, 100, 5 );
+	$c['reward_cap_pct']   = $num( 'reward_cap_pct', 0, 100, 15 );
+	$c['manual_from']      = $num( 'manual_from', 0, DELICAT_REF_MAX_POINTS, 35 );
 	foreach ( array( 'same_device' => array( 'block', 'review' ), 'same_ip' => array( 'review', 'block', 'off' ), 'vpn' => array( 'block', 'review', 'off' ) ) as $k => $allowed ) {
 		$v = isset( $_POST[ $k ] ) ? sanitize_key( wp_unslash( $_POST[ $k ] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 		if ( in_array( $v, $allowed, true ) ) $c[ $k ] = $v;
@@ -172,7 +203,7 @@ add_action( 'admin_post_delicat_ref_save', function () {
 	ksort( $miles );
 	$c['milestones'] = array_values( $miles );
 	update_option( 'delicat_ref_config', $c, false );
-	if ( function_exists( 'delicat_audit_add' ) ) delicat_audit_add( 'Parrainage : réglages enregistrés (' . ( $c['enabled'] ? 'activé' : 'désactivé' ) . ')' );
+	if ( function_exists( 'delicat_audit_add' ) ) delicat_audit_add( 'Parrainage : réglages enregistrés (' . ( $c['enabled'] ? 'activé' : 'désactivé' ) . ', plafond ' . (int) $c['reward_cap_pct'] . ' %, validation dès ' . (int) $c['manual_from'] . ' points)' );
 	delicat_back( 'parrainage', $errors, array( 'Réglages du parrainage enregistrés.' ) );
 } );
 
@@ -219,10 +250,10 @@ add_action( 'admin_post_delicat_ref_release', function () {
 	$id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 	$do = isset( $_POST['do'] ) ? sanitize_key( wp_unslash( $_POST['do'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
 	$t  = delicat_ref_table( 'claims' );
-	$cl = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id=%d AND status='pending'", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	if ( ! $cl ) delicat_back( 'parrainage', array( 'Réclamation introuvable ou déjà traitée.' ) );
+	$cl = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id=%d AND status IN ('pending','refused')", $id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $cl || ( 'refused' === $cl->status && 'release' !== $do ) ) delicat_back( 'parrainage', array( 'Réclamation introuvable ou déjà traitée.' ) );
 	if ( 'release' === $do ) {
-		$wpdb->delete( $t, array( 'id' => $id, 'status' => 'pending' ) );
+		$wpdb->delete( $t, array( 'id' => $id, 'status' => $cl->status ) );
 		$note = 'Palier libéré : le client peut le réclamer à nouveau.';
 	} else {
 		$wpdb->update( $t, array( 'status' => 'done' ), array( 'id' => $id, 'status' => 'pending' ) );
@@ -230,4 +261,15 @@ add_action( 'admin_post_delicat_ref_release', function () {
 	}
 	if ( function_exists( 'delicat_audit_add' ) ) delicat_audit_add( sprintf( 'Parrainage : réclamation #%d (client #%d, palier %d) %s', $id, (int) $cl->user_id, (int) $cl->milestone, 'release' === $do ? 'libérée' : 'marquée donnée' ) );
 	delicat_back( 'parrainage', array(), array( $note ) );
+} );
+
+/* 3.4.2: a milestone that waited for the team is paid or refused. */
+add_action( 'admin_post_delicat_ref_review', function () {
+	delicat_guard( 'delicat_ref_review' );
+	$id = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing -- delicat_guard checked it
+	$do = isset( $_POST['do'] ) ? sanitize_key( wp_unslash( $_POST['do'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Missing
+	$r  = 'pay' === $do ? delicat_ref_review_pay( $id ) : ( 'refuse' === $do ? delicat_ref_review_refuse( $id ) : new WP_Error( 'do', 'Action inconnue.' ) );
+	if ( is_wp_error( $r ) ) delicat_back( 'parrainage', array( $r->get_error_message() ) );
+	if ( function_exists( 'delicat_audit_add' ) ) delicat_audit_add( 'Parrainage : ' . $r );
+	delicat_back( 'parrainage', array(), array( $r ) );
 } );

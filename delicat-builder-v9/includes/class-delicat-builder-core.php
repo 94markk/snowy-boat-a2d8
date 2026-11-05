@@ -276,7 +276,7 @@ final class Delicat_Builder_V9_Core {
 					false
 				);
 				if ( function_exists( 'delicat_builder_v9_queue_purge' ) ) {
-					delicat_builder_v9_queue_purge();
+					delicat_builder_v9_queue_purge( true );
 				}
 				return false;
 			}

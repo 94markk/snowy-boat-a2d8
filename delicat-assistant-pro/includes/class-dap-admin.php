@@ -21,6 +21,30 @@ class DSA2_Admin {
         add_action( 'wp_ajax_dsa2_admin_note', array( __CLASS__, 'ajax_note' ) );
         add_action( 'wp_ajax_dsa2_admin_find_customer', array( __CLASS__, 'ajax_find_customer' ) );
         add_action( 'wp_ajax_dsa2_admin_direct_message', array( __CLASS__, 'ajax_direct_message' ) );
+        add_action( 'admin_notices', array( __CLASS__, 'update_notice' ) );
+        add_action( 'admin_post_dap_dismiss_711_notice', array( __CLASS__, 'dismiss_update_notice' ) );
+    }
+
+    /** 7.1.1: tells the owner, once, what the security update changed in the settings. */
+    public static function update_notice() {
+        $state = (string) get_option( 'dap_711_app_notice', '' );
+        if ( '' === $state || ! self::can_manage() ) return;
+        $settings_url = admin_url( 'admin.php?page=delicat-assistant-settings' );
+        $dismiss_url  = wp_nonce_url( admin_url( 'admin-post.php?action=dap_dismiss_711_notice' ), 'dap_dismiss_711_notice' );
+        $app = 'kept' === $state
+            ? 'L’application Android du personnel reste activée (vous l’aviez activée). Désormais : sessions de 7 jours au plus, déconnexion à chaque changement de mot de passe ou de rôle, et vérification en deux étapes exigée (case « Exiger la 2FA pour l’application »). Les membres de l’équipe sans 2FA doivent l’activer sur leur compte, et l’application doit envoyer le code ; sinon, décochez cette case.'
+            : 'L’application Android du personnel est maintenant désactivée par défaut (sécurité). Si votre équipe l’utilise, activez-la dans Paramètres → « Application Android administrateur ». Elle exige la vérification en deux étapes et des sessions de 7 jours au plus.';
+        echo '<div class="notice notice-warning"><p><strong>Delicat Assistant 7.1.1 — sécurité.</strong> ' . esc_html( $app ) . '</p>';
+        echo '<p>' . esc_html( 'Alertes e-mail de l’équipe : un e-mail au plus toutes les 2 minutes par conversation, 30 par heure au maximum, puis un récapitulatif. Un visiteur non connecté doit laisser son nom et un numéro ou un e-mail avant d’écrire à l’équipe.' ) . '</p>';
+        echo '<p><a class="button button-primary" href="' . esc_url( $settings_url ) . '">Ouvrir les paramètres</a> <a class="button" href="' . esc_url( $dismiss_url ) . '">J’ai compris</a></p></div>';
+    }
+
+    public static function dismiss_update_notice() {
+        self::require_manager();
+        check_admin_referer( 'dap_dismiss_711_notice' );
+        delete_option( 'dap_711_app_notice' );
+        wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url( 'admin.php?page=delicat-assistant-settings' ) );
+        exit;
     }
 
     public static function menu() {
@@ -85,9 +109,9 @@ class DSA2_Admin {
             'launcher_label_enabled'=>1,'launcher_kicker'=>'Besoin d’aide ?','launcher_message'=>'Discutez avec nous !',
             'launcher_popup_delay'=>10,'launcher_popup_interval'=>75,'launcher_popup_visible'=>6,'launcher_popup_max'=>3,'launcher_suppress_checkout'=>1,
             'faq_text'=>'','products_enabled'=>1,'recommend_enabled'=>1,'product_context_enabled'=>1,'order_support_enabled'=>1,'runtime_load'=>'demand','launcher_side'=>'right','launcher_bottom'=>16,'guide_images'=>'','training_enabled'=>1,'smalltalk_enabled'=>1,'quick_replies_enabled'=>1,'quick_groups_off'=>'',
-            'notify_enabled'=>1,'notify_email'=>get_option('admin_email'),'notify_every_message'=>1,'notify_staff'=>1,'notify_throttle'=>0,'order_updates_in_chat'=>0,'agent_eta_online'=>'5–15 min','agent_eta_away'=>'30–60 min','moncash_number'=>'','natcash_number'=>'','min_recharge'=>'','delivery_time'=>'','guides_text'=>'',
+            'notify_enabled'=>1,'notify_email'=>get_option('admin_email'),'notify_every_message'=>1,'notify_staff'=>1,'notify_throttle'=>120,'notify_hourly_cap'=>30,'order_updates_in_chat'=>0,'agent_eta_online'=>'5–15 min','agent_eta_away'=>'30–60 min','moncash_number'=>'','natcash_number'=>'','min_recharge'=>'','delivery_time'=>'','guides_text'=>'',
             'webhook_url'=>'','webhook_secret'=>'','firebase_v1_webhook_url'=>'','firebase_v1_webhook_secret'=>'','retention_days'=>90,'open_hour'=>8,'close_hour'=>20,'url_wallet'=>'','url_redeem'=>'','url_rewards'=>'','url_shop'=>'','canned_replies'=>'','font_scale'=>100,'force_reduced_motion'=>0,
-            'admin_app_enabled'=>1,'admin_push_enabled'=>1,'admin_push_preview'=>0,'admin_session_days'=>30,
+            'admin_app_enabled'=>0,'admin_app_require_2fa'=>1,'admin_push_enabled'=>1,'admin_push_preview'=>0,'admin_session_days'=>7,'image_retention_days'=>0,
         );
     }
 
@@ -102,7 +126,6 @@ class DSA2_Admin {
         $secret = sanitize_text_field( wp_unslash( $_POST['webhook_secret'] ?? '' ) );
 
         $new = array(
-            'customer_api_enabled'=>!empty($_POST['customer_api_enabled'])?1:0, // 6.6.1
             'enabled'=>!empty($_POST['enabled'])?1:0,
             'auto_open'=>!empty($_POST['auto_open'])?1:0,
             'show_whatsapp'=>!empty($_POST['show_whatsapp'])?1:0,
@@ -139,7 +162,8 @@ class DSA2_Admin {
             'notify_email'=>sanitize_email(wp_unslash($_POST['notify_email']??'')),
             'notify_every_message'=>!empty($_POST['notify_every_message'])?1:0,
             'notify_staff'=>!empty($_POST['notify_staff'])?1:0,
-            'notify_throttle'=>max(0,min(900,absint($_POST['notify_throttle']??0))),
+            'notify_throttle'=>max(0,min(900,absint($_POST['notify_throttle']??120))),
+            'notify_hourly_cap'=>max(5,min(500,absint($_POST['notify_hourly_cap']??30))), // 7.1.1
             'order_updates_in_chat'=>!empty($_POST['order_updates_in_chat'])?1:0,
             'agent_eta_online'=>sanitize_text_field(wp_unslash($_POST['agent_eta_online']??'5–15 min')),
             'agent_eta_away'=>sanitize_text_field(wp_unslash($_POST['agent_eta_away']??'30–60 min')),
@@ -152,9 +176,11 @@ class DSA2_Admin {
             'webhook_url'=>esc_url_raw(wp_unslash($_POST['webhook_url']??'')),
             'firebase_v1_webhook_url'=>esc_url_raw(wp_unslash($_POST['firebase_v1_webhook_url']??'')),
             'admin_app_enabled'=>!empty($_POST['admin_app_enabled'])?1:0,
+            'admin_app_require_2fa'=>!empty($_POST['admin_app_require_2fa'])?1:0, // 7.1.1
             'admin_push_enabled'=>!empty($_POST['admin_push_enabled'])?1:0,
             'admin_push_preview'=>!empty($_POST['admin_push_preview'])?1:0,
-            'admin_session_days'=>max(1,min(90,absint($_POST['admin_session_days']??30))),
+            'admin_session_days'=>max(1,min(DSA2_STAFF_SESSION_MAX_DAYS,absint($_POST['admin_session_days']??DSA2_STAFF_SESSION_MAX_DAYS))), // 7.1.1: 7 days at most (was 90)
+            'image_retention_days'=>max(0,min(3650,absint($_POST['image_retention_days']??0))), // 7.1.1
             'retention_days'=>max(0,min(3650,(int)($_POST['retention_days']??90))),
             'open_hour'=>min(23,max(0,(int)($_POST['open_hour']??8))),
             'close_hour'=>min(24,max(0,(int)($_POST['close_hour']??20))),
@@ -170,9 +196,6 @@ class DSA2_Admin {
         elseif ( '' !== $firebase_secret ) $new['firebase_v1_webhook_secret'] = $firebase_secret;
 
         update_option( 'dap_settings', array_merge( $existing, $new ) );
-        if ( ( empty( $existing['customer_api_enabled'] ) ? 0 : 1 ) !== $new['customer_api_enabled'] && class_exists( 'DSA2_Production', false ) ) {
-            DSA2_Production::audit( $new['customer_api_enabled'] ? 'customer_api_enabled' : 'customer_api_disabled' );
-        }
         DSA2_Products::flush();
         DSA2_Install::purge_caches();
         wp_safe_redirect( admin_url( 'admin.php?page=delicat-assistant-settings&saved=1' ) );
@@ -351,6 +374,7 @@ class DSA2_Admin {
         if ( ! $message ) return array();
         $meta = $message->meta ? json_decode( $message->meta, true ) : array();
         if ( ! is_array( $meta ) ) $meta = array();
+        $meta = DSA2_Data::public_meta( $meta, isset( $message->conversation_id ) ? (int) $message->conversation_id : 0 ); // 7.1.1: private images
         $sender_name = '';
         if ( 'agent' === $message->sender && ! empty( $message->sender_id ) ) {
             $agent = get_userdata( (int) $message->sender_id );
@@ -923,7 +947,8 @@ class DSA2_Admin {
                     <label><span>E-mail d’alerte</span><input type="email" name="notify_email" value="<?php echo esc_attr($settings['notify_email']); ?>"></label>
                     <label class="dap-toggle-row"><input type="checkbox" name="notify_every_message" <?php checked($settings['notify_every_message']); ?>><span><b>Alerte à chaque message</b><small>Envoyer un e-mail immédiatement dès qu’un client écrit à l’équipe, pas seulement à la première demande.</small></span></label>
                     <label class="dap-toggle-row"><input type="checkbox" name="notify_staff" <?php checked($settings['notify_staff']); ?>><span><b>Prévenir toute l’équipe</b><small>Envoyer aussi aux agents support Delicat, en plus de l’e-mail d’alerte.</small></span></label>
-                    <label><span>Anti-spam des alertes (secondes)</span><input type="number" name="notify_throttle" min="0" max="900" value="<?php echo esc_attr($settings['notify_throttle']); ?>"><small>0 = un e-mail par message. Augmentez si un client envoie beaucoup de messages d’affilée.</small></label>
+                    <label><span>Anti-spam des alertes (secondes)</span><input type="number" name="notify_throttle" min="0" max="900" value="<?php echo esc_attr($settings['notify_throttle']); ?>"><small>Un e-mail au plus par conversation pendant ce délai. Recommandé : 120. 0 = un e-mail par message (déconseillé : un robot peut épuiser le quota d’e-mails de l’hébergeur).</small></label>
+                    <label><span>Alertes e-mail par heure (maximum)</span><input type="number" name="notify_hourly_cap" min="5" max="500" value="<?php echo esc_attr($settings['notify_hourly_cap']); ?>"><small>Au-delà, un seul e-mail récapitulatif part à la fin de l’heure. Les messages restent tous dans la boîte de réception.</small></label>
                     <label><span>Délai estimé — en ligne</span><input name="agent_eta_online" value="<?php echo esc_attr($settings['agent_eta_online']); ?>" placeholder="5–15 min"></label>
                     <label><span>Délai estimé — occupé</span><input name="agent_eta_away" value="<?php echo esc_attr($settings['agent_eta_away']); ?>" placeholder="30–60 min"></label>
                 </div></section>
@@ -985,20 +1010,20 @@ class DSA2_Admin {
                 </div></section>
 
                 <section class="dap-settings-card"><header><span>05</span><div><h2>Application Android administrateur</h2><p>Gérez toutes les conversations et recevez les nouveaux messages sur votre téléphone.</p></div></header><div class="dap-settings-grid">
-                    <label class="dap-toggle-row"><input type="checkbox" name="admin_app_enabled" <?php checked($settings['admin_app_enabled']); ?>><span><b>Activer l’application Android</b><small>Connexion réservée aux administrateurs, responsables WooCommerce et agents support Delicat.</small></span></label>
+                    <label class="dap-toggle-row"><input type="checkbox" name="admin_app_enabled" <?php checked($settings['admin_app_enabled']); ?>><span><b>Activer l’application Android</b><small>Désactivée par défaut. Laissez-la désactivée si votre équipe n’utilise pas l’application. Connexion réservée aux administrateurs, responsables WooCommerce et agents support Delicat.</small></span></label>
                     <label class="dap-toggle-row"><input type="checkbox" name="admin_push_enabled" <?php checked($settings['admin_push_enabled']); ?>><span><b>Notifications push administrateur</b><small>Recevoir immédiatement les messages clients adressés à l’équipe.</small></span></label>
                     <label class="dap-toggle-row"><input type="checkbox" name="admin_push_preview" <?php checked($settings['admin_push_preview']); ?>><span><b>Aperçu du message sur le téléphone</b><small>Désactivé par défaut pour protéger la confidentialité sur l’écran verrouillé.</small></span></label>
-                    <label><span>Durée des sessions Android</span><input type="number" min="1" max="90" name="admin_session_days" value="<?php echo esc_attr($settings['admin_session_days']); ?>"><small>Entre 1 et 90 jours. Une déconnexion supprime immédiatement le jeton push.</small></label>
+                    <label class="dap-toggle-row"><input type="checkbox" name="admin_app_require_2fa" <?php checked($settings['admin_app_require_2fa']); ?>><span><b>Exiger la 2FA pour l’application</b><small>Recommandé. Seuls les comptes avec la vérification en deux étapes (Delicat Identity) peuvent se connecter, avec leur code à chaque connexion. Un compte qui a activé la 2FA doit toujours donner son code, même si cette case est décochée.</small></span></label>
+                    <label><span>Durée des sessions Android</span><input type="number" min="1" max="<?php echo (int) DSA2_STAFF_SESSION_MAX_DAYS; ?>" name="admin_session_days" value="<?php echo esc_attr(min((int)$settings['admin_session_days'], DSA2_STAFF_SESSION_MAX_DAYS)); ?>"><small>Entre 1 et 7 jours après la connexion, puis il faut se reconnecter. Changer de mot de passe ou de rôle déconnecte aussi le téléphone. Une déconnexion supprime immédiatement le jeton push.</small></label>
                     <div class="dap-readonly-note dap-span-2"><strong>Adresse de connexion</strong><p><code><?php echo esc_html(home_url('/')); ?></code> — utilisez un compte administrateur WordPress, WooCommerce ou Agent support Delicat.</p></div>
                     <div class="dap-readonly-note dap-span-2"><strong>API Android sécurisée</strong><p><code><?php echo esc_html(rest_url(DSA2_Admin_Mobile_API::NS)); ?></code></p></div>
-                    <?php global $wpdb; $active_admin_devices=(int)$wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}dap_admin_sessions WHERE expires_at>UTC_TIMESTAMP()"); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared ?>
+                    <?php global $wpdb; $active_admin_devices=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}dap_admin_sessions WHERE expires_at>UTC_TIMESTAMP() AND created_at>%s", gmdate('Y-m-d H:i:s', time()-DSA2_Admin_Mobile_API::session_days()*DAY_IN_SECONDS))); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared ?>
                     <div class="dap-readonly-note dap-span-2"><strong><?php echo (int)$active_admin_devices; ?> appareil(s) administrateur connecté(s)</strong><p><a href="<?php echo esc_url(wp_nonce_url(admin_url('admin-post.php?action=dap_revoke_admin_sessions'),'dap_revoke_admin_sessions')); ?>" data-dap-confirm-revoke>Déconnecter tous les appareils Android →</a></p></div>
                 </div></section>
 
                 <section class="dap-settings-card"><header><span>06</span><div><h2>Confidentialité et maintenance</h2><p>Conservez seulement les données nécessaires au support.</p></div></header><div class="dap-settings-grid">
                     <label><span>Conservation des conversations invitées</span><input type="number" min="0" max="3650" name="retention_days" value="<?php echo esc_attr($settings['retention_days']); ?>"><small>Jours. 0 désactive la suppression automatique.</small></label>
-                    <?php $legacy_sessions = class_exists( 'DSA2_Install', false ) && method_exists( 'DSA2_Install', 'recent_customer_api_sessions' ) ? max( 0, DSA2_Install::recent_customer_api_sessions() ) : 0; ?>
-                    <label class="dap-toggle-row"><input type="checkbox" name="customer_api_enabled" <?php checked( ! empty( $settings['customer_api_enabled'] ) ); ?>><span><b>API mobile Delicat Assistance (client)</b><small>Ancienne API client (liaison de compte par code e-mail, commandes, portefeuille). L’application Délicat Store ne l’utilise pas. Sessions actives ces 30 jours : <?php echo (int) $legacy_sessions; ?>.</small></span></label>
+                    <label><span>Conservation des captures de paiement</span><input type="number" min="0" max="3650" name="image_retention_days" value="<?php echo esc_attr($settings['image_retention_days']); ?>"><small>Jours. 0 = garder (par défaut). Les images envoyées dans le chat sont privées : seuls le client et l’équipe peuvent les ouvrir. Au-delà de ce délai, l’image est supprimée et remplacée par « Image supprimée ».</small></label>
                     <div class="dap-readonly-note"><strong>Rôle Agent support Delicat</strong><p>Les agents accèdent uniquement aux conversations et tickets, sans droits WooCommerce globaux.</p></div>
                     <div class="dap-readonly-note dap-span-2"><strong>Shortcode</strong><p><code>[delicat_assistant]</code> affiche une version intégrée sur une page dédiée.</p></div>
                     <div class="dap-readonly-note dap-span-2"><strong>Centre de diagnostic</strong><p><a href="<?php echo esc_url(admin_url('admin.php?page=delicat-assistant-diagnostics')); ?>">Vérifier WordPress, WooCommerce, Firebase, Android, les tables et les tâches planifiées →</a></p></div>

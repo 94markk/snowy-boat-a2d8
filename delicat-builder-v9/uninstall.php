@@ -3,6 +3,16 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
+/* 9.7.8: the must-use guard installed by the plugin goes with it (only our own file, recognised by its header). */
+if ( defined( 'WPMU_PLUGIN_DIR' ) && is_file( WPMU_PLUGIN_DIR . '/delicat-guard.php' ) ) {
+	$delicat_builder_v9_guard = (string) file_get_contents( WPMU_PLUGIN_DIR . '/delicat-guard.php' ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local file.
+	if ( false !== strpos( $delicat_builder_v9_guard, 'Plugin Name: Delicat Guard' ) && false !== strpos( $delicat_builder_v9_guard, 'Installé par Delicat Builder V9' ) ) {
+		wp_delete_file( WPMU_PLUGIN_DIR . '/delicat-guard.php' );
+	}
+	delete_option( 'delicat_builder_v9_guard_version' );
+	unset( $delicat_builder_v9_guard );
+}
+
 /*
  * Beta 1 intentionally preserves settings on uninstall to support rollback/reinstall.
  * To remove data manually, delete:

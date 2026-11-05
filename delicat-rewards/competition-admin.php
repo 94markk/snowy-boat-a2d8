@@ -83,6 +83,14 @@ add_action( 'admin_post_delicat_competition', function () {
             delicat_weekly_state_save( $all );
             delicat_audit_add( 'Récompense Meilleur client remise manuellement : période ' . $key . ', place ' . $rank . ', client #' . $p['uid'] . ', administrateur #' . get_current_user_id() );
             $notes[] = 'Remise enregistrée. Aucune nouvelle commande ni recharge créée.';
+        } elseif ( 'verified' === $op ) { // 3.4.2: the team has checked a podium changed by a refund
+            $key = (int) ( $in['period'] ?? 0 );
+            if ( empty( $all[ $key ]['recheck'] ) ) throw new Exception( 'Rien à vérifier pour cette période.' );
+            foreach ( (array) ( $all[ $key ]['placements'] ?? array() ) as $r => $placement ) unset( $all[ $key ]['placements'][ $r ]['verify'] );
+            $all[ $key ]['recheck']['checked'] = current_time( 'mysql' ) . ' — admin #' . get_current_user_id();
+            delicat_weekly_state_save( $all );
+            delicat_audit_add( 'Meilleur client : podium recalculé de la période ' . $key . ' marqué vérifié, administrateur #' . get_current_user_id() );
+            $notes[] = 'Période marquée vérifiée. Un prix encore à livrer reprend la livraison automatique (au gagnant d’origine) ; utilisez « Remise manuelle » si vous l’avez remis autrement.';
         } elseif ( 'history' === $op ) {
             update_option( 'delicat_winners_visible', empty( $in['visible'] ) ? '0' : '1', false );
             delicat_audit_add( 'Visibilité de l’historique Meilleur client modifiée.' );
@@ -118,9 +126,16 @@ function delicat_tab_competition() {
     $page = max( 1, (int) ( $_GET['history_page'] ?? 1 ) ); $total = count( $all );
     foreach ( array_slice( $all, ( $page - 1 ) * 20, 20, true ) as $key => $week ) {
         if ( empty( $week['placements'] ) ) echo '<tr><td>' . esc_html( wp_date( 'd/m/Y H:i', (int) $key ) ) . '</td><td colspan="3">Période sans gagnant</td></tr>';
+        if ( ! empty( $week['recheck']['new'] ) && empty( $week['recheck']['checked'] ) ) { // 3.4.2 (RWD-02)
+            $names = array();
+            foreach ( (array) $week['recheck']['new'] as $r => $uid ) $names[] = '#' . (int) $r . ' ' . ( $uid ? delicat_display_name( (int) $uid ) . ' · client #' . (int) $uid : '—' );
+            echo '<tr style="background:#fff8e5"><td>' . esc_html( wp_date( 'd/m/Y H:i', (int) $key ) ) . '</td><td colspan="3"><b>⚠️ À vérifier :</b> ' . esc_html( 'après un remboursement' . ( ! empty( $week['recheck']['orders'] ) ? ' (commande #' . implode( ', #', array_map( 'intval', (array) $week['recheck']['orders'] ) ) . ')' : '' ) . ', le podium recalculé le ' . $week['recheck']['at'] . ' est : ' . implode( ' ; ', $names ) . '. Aucun prix n’a été repris automatiquement.' );
+            delicat_competition_form( 'verified' );
+            echo '<input type="hidden" name="period" value="' . (int) $key . '"> <button class="button">Marquer vérifié</button></form></td></tr>';
+        }
         foreach ( $week['placements'] ?? array() as $rank => $p ) {
             $labels = array( 'manual' => 'Remise manuelle confirmée', 'delivered' => 'Livraison automatique enregistrée', 'pending_manual' => 'À remettre', 'failed_retryable' => 'Échec automatique — à vérifier', 'disabled' => 'Prix désactivé', 'no_participant' => 'Aucun participant' );
-            echo '<tr><td>' . esc_html( wp_date( 'd/m/Y H:i', (int) $key ) ) . '</td><td>#' . (int) $rank . ' — ' . esc_html( empty( $p['uid'] ) ? '—' : delicat_display_name( $p['uid'] ) . ' · client #' . (int) $p['uid'] ) . '</td><td>' . (int) ( $p['prize'] ?? 0 ) . ' 💎</td><td>' . esc_html( $labels[ $p['status'] ?? '' ] ?? 'À vérifier' );
+            echo '<tr><td>' . esc_html( wp_date( 'd/m/Y H:i', (int) $key ) ) . '</td><td>#' . (int) $rank . ' — ' . esc_html( empty( $p['uid'] ) ? '—' : delicat_display_name( $p['uid'] ) . ' · client #' . (int) $p['uid'] ) . '</td><td>' . (int) ( $p['prize'] ?? 0 ) . ' 💎</td><td>' . esc_html( $labels[ $p['status'] ?? '' ] ?? 'À vérifier' ) . ( ! empty( $p['verify'] ) ? ' — <b style="color:#b32d2e">à vérifier (podium changé par un remboursement)</b>' : '' );
             if ( ! empty( $p['reference'] ) ) echo '<p>' . esc_html( $p['reference'] . ' — ' . $p['delivered_at'] . ' — admin #' . $p['admin_id'] ) . '</p>';
             if ( in_array( $p['status'] ?? '', array( 'pending_manual', 'failed_retryable' ), true ) ) {
                 delicat_competition_form( 'manual' );

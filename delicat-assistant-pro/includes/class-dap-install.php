@@ -51,38 +51,58 @@ class DSA2_Install {
         wp_clear_scheduled_hook( 'dap_enterprise_push_retry' );
         wp_clear_scheduled_hook( 'dsa2_mobile_push' );
         wp_clear_scheduled_hook( 'dsa2_admin_mobile_push' );
+        wp_clear_scheduled_hook( 'dsa2_private_files_batch' );
+        wp_clear_scheduled_hook( 'dsa2_send_alert_summary' );
+    }
+
+    /**
+     * 7.1.1 -- one-time security change of stored settings (each one is in the release notes
+     * so the owner can put it back in Settings):
+     *  - staff phone app: off unless the owner saved the settings page with it on (a value only
+     *    written by the defaults no longer counts); keys last 7 days at most, 2FA required;
+     *  - team alert e-mails: a stored 0 (one e-mail per message) becomes 120 seconds, and at
+     *    most 30 alerts an hour, then one summary.
+     * Runs once (option flag), whatever the update path.
+     */
+    public static function migrate_711() {
+        if ( get_option( 'dap_711_migrated' ) ) return;
+        $raw      = get_option( 'dap_settings', null );
+        $upgrade  = is_array( $raw ) && $raw;
+        $settings = is_array( $raw ) ? $raw : array();
+        // Only the settings form writes this key (since 6.6.1): its presence means the owner saved
+        // the page, so the app switch they saw is their own choice. Otherwise the 1 came from the
+        // defaults that earlier versions wrote on install.
+        $owner_saved = array_key_exists( 'training_corpus_enabled', $settings );
+        $app_on      = $owner_saved && ! empty( $settings['admin_app_enabled'] );
+        $settings['admin_app_enabled'] = $app_on ? 1 : 0;
+        if ( ! array_key_exists( 'admin_app_require_2fa', $settings ) ) $settings['admin_app_require_2fa'] = 1;
+        $days = isset( $settings['admin_session_days'] ) ? (int) $settings['admin_session_days'] : 7;
+        $settings['admin_session_days'] = max( 1, min( DSA2_STAFF_SESSION_MAX_DAYS, $days > 0 ? $days : DSA2_STAFF_SESSION_MAX_DAYS ) );
+        if ( ! isset( $settings['notify_throttle'] ) || (int) $settings['notify_throttle'] < 1 ) $settings['notify_throttle'] = 120;
+        if ( ! isset( $settings['notify_hourly_cap'] ) ) $settings['notify_hourly_cap'] = 30;
+        if ( ! isset( $settings['image_retention_days'] ) ) $settings['image_retention_days'] = 0;
+        update_option( 'dap_settings', $settings );
+
+        global $wpdb;
+        $sessions = $wpdb->prefix . 'dap_admin_sessions';
+        if ( $app_on ) {
+            // Keys issued before this version: valid 7 days after sign-in at most.
+            $wpdb->query( $wpdb->prepare( "UPDATE $sessions SET expires_at=LEAST(expires_at, DATE_ADD(created_at, INTERVAL %d DAY))", DSA2_STAFF_SESSION_MAX_DAYS ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        } else {
+            // The app is off: sign every phone out, so switching it back on later needs a new sign-in (with 2FA).
+            $wpdb->query( "DELETE FROM $sessions" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        }
+        // "Souvent pris ensemble" lists cached with the first viewer's prices (RSL-01): drop them.
+        $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE '\\_transient\\_dap\\_reco\\_503\\_%' OR option_name LIKE '\\_transient\\_timeout\\_dap\\_reco\\_503\\_%'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        // The old customer API's push retry queue has nothing left to send (AST-06).
+        wp_clear_scheduled_hook( 'dap_enterprise_push_retry' );
+        if ( $upgrade ) update_option( 'dap_711_app_notice', $app_on ? 'kept' : 'off', false );
+        update_option( 'dap_711_migrated', gmdate( 'c' ), false );
+        // Payment screenshots already in the public uploads folder move to the private folder in batches.
+        if ( ! wp_next_scheduled( 'dsa2_private_files_batch' ) ) wp_schedule_single_event( time() + 60, 'dsa2_private_files_batch' );
     }
 
     /** Prunes old resolved guest conversations so the tables stay small on shared hosting. */
-    /**
-     * 6.6.1 (ported from 6.2.2): first read after the update decides the customer API once --
-     * on only when a separate Delicat Assistance client opened or renewed a session in the
-     * last 30 days, so that client keeps working until the owner decides in the settings.
-     */
-    public static function migrate_customer_api_setting() {
-        $settings = get_option( 'dap_settings', array() );
-        if ( ! is_array( $settings ) ) $settings = array();
-        if ( array_key_exists( 'customer_api_enabled', $settings ) ) return ! empty( $settings['customer_api_enabled'] );
-        $recent = self::recent_customer_api_sessions();
-        if ( $recent < 0 ) return false;
-        $settings['customer_api_enabled'] = $recent > 0 ? 1 : 0;
-        update_option( 'dap_settings', $settings );
-        return 1 === $settings['customer_api_enabled'];
-    }
-
-    public static function recent_customer_api_sessions( $days = 30 ) {
-        global $wpdb;
-        $table = $wpdb->prefix . 'dap_mobile_sessions';
-        if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table ) ) !== $table ) {
-            return '' === (string) $wpdb->last_error ? 0 : -1;
-        }
-        $count = $wpdb->get_var( $wpdb->prepare(
-            "SELECT COUNT(*) FROM $table WHERE expires_at>UTC_TIMESTAMP() AND created_at>=%s", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-            gmdate( 'Y-m-d H:i:s', time() - max( 1, (int) $days ) * DAY_IN_SECONDS )
-        ) );
-        return null === $count ? -1 : (int) $count;
-    }
-
     public static function cleanup() {
         $s = get_option( 'dap_settings', array() );
         $days = isset( $s['retention_days'] ) ? (int) $s['retention_days'] : 90;
@@ -99,6 +119,14 @@ class DSA2_Install {
         $wpdb->query( "DELETE FROM $admin_sessions WHERE expires_at<=UTC_TIMESTAMP()" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         $wpdb->query( "DELETE d FROM $devices d LEFT JOIN $sessions s ON s.installation_id=d.installation_id WHERE d.installation_id<>'' AND s.installation_id IS NULL" ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
         if ( class_exists( 'DSA2_Groups', false ) ) DSA2_Groups::cleanup();
+        // 7.1.1: payment screenshots. Old public files move to the private folder (a batch a day
+        // even if the one-off batches were missed); the retention setting (0 = keep, the default)
+        // removes the private files older than that many days.
+        if ( class_exists( 'DSA2_Data', false ) ) {
+            DSA2_Data::migrate_public_images( 50 );
+            $image_days = isset( $s['image_retention_days'] ) ? (int) $s['image_retention_days'] : 0;
+            if ( $image_days > 0 ) DSA2_Data::expire_private_images( $image_days );
+        }
         if ( $days < 1 ) return; // 0 disables conversation pruning, as stated in Settings.
         // last_message_at is written with current_time('mysql'), so the cutoff must be site
         // time too — gmdate() shifted the window by the timezone offset (5 h in Haiti).
@@ -309,17 +337,18 @@ class DSA2_Install {
             'enabled'=>1,'auto_open'=>0,'whatsapp'=>'','show_whatsapp'=>1,'agent_status'=>'online','brand_name'=>'Delicat Assistant',
             'primary_color'=>'#ff5a2b','business_hours'=>'Lun–Sam, 8:00–20:00',
             'launcher_label_enabled'=>1,'launcher_kicker'=>'Besoin d’aide ?','launcher_message'=>'Discutez avec nous !','launcher_popup_delay'=>10,'launcher_popup_interval'=>75,'launcher_popup_visible'=>6,'launcher_popup_max'=>3,'launcher_suppress_checkout'=>1,
-            'products_enabled'=>1,'recommend_enabled'=>1,'product_context_enabled'=>1,'order_support_enabled'=>1,'runtime_load'=>'demand','launcher_side'=>'right','launcher_bottom'=>16,'guide_images'=>'','training_enabled'=>1,'smalltalk_enabled'=>1,'quick_replies_enabled'=>1,'quick_groups_off'=>'','notify_enabled'=>1,'notify_email'=>get_option('admin_email'),'notify_every_message'=>1,'notify_staff'=>1,'notify_throttle'=>0,'order_updates_in_chat'=>0,'agent_eta_online'=>'5–15 min','agent_eta_away'=>'30–60 min',
+            'products_enabled'=>1,'recommend_enabled'=>1,'product_context_enabled'=>1,'order_support_enabled'=>1,'runtime_load'=>'demand','launcher_side'=>'right','launcher_bottom'=>16,'guide_images'=>'','training_enabled'=>1,'smalltalk_enabled'=>1,'quick_replies_enabled'=>1,'quick_groups_off'=>'','notify_enabled'=>1,'notify_email'=>get_option('admin_email'),'notify_every_message'=>1,'notify_staff'=>1,'notify_throttle'=>120,'notify_hourly_cap'=>30,'order_updates_in_chat'=>0,'agent_eta_online'=>'5–15 min','agent_eta_away'=>'30–60 min',
             'moncash_number'=>'','natcash_number'=>'','min_recharge'=>'','delivery_time'=>'','guides_text'=>'',
             'webhook_url'=>'','webhook_secret'=>'','firebase_project_id'=>'','firebase_legacy_server_key'=>'','firebase_v1_webhook_url'=>'','firebase_v1_webhook_secret'=>'','retention_days'=>90,'open_hour'=>8,'close_hour'=>20,
             'url_wallet'=>'','url_redeem'=>'','url_rewards'=>'','url_shop'=>'','canned_replies'=>'','font_scale'=>100,'force_reduced_motion'=>0,
-            'admin_app_enabled'=>1,'admin_push_enabled'=>1,'admin_push_preview'=>0,'admin_session_days'=>30,
+            'admin_app_enabled'=>0,'admin_app_require_2fa'=>1,'admin_push_enabled'=>1,'admin_push_preview'=>0,'admin_session_days'=>7,'image_retention_days'=>0,
             'groups_enabled'=>1,'groups_images'=>0,'groups_links'=>0,'groups_slow_mode'=>5,'groups_max_length'=>700,
             'groups_history'=>60,'groups_report_hide'=>3,'groups_retention_days'=>120,'groups_blocklist'=>'',
             'groups_rules'=>"Aucun numéro MonCash / NatCash dans le groupe.\nAucun code PIN ni code cadeau.\nL’équipe Delicat ne demande jamais un paiement en message privé.\nRespect obligatoire : pas d’insultes, pas de spam.",
             'faq_text'=>"prix|tarif=Consultez nos produits pour voir les prix à jour.\ndelai|combien de temps=La plupart des produits numériques sont livrés rapidement après validation du paiement."
         );
         if ( class_exists( 'DSA2_Groups', false ) && $schema_ready ) DSA2_Groups::seed_default_group();
+        if ( $schema_ready ) self::migrate_711();
         $current = get_option('dap_settings', array());
         if ( version_compare( $previous_db_version ?: '0', '5.3.0', '<' ) && ( ! isset($current['runtime_load']) || 'auto' === $current['runtime_load'] ) ) {
             $current['runtime_load'] = 'demand';

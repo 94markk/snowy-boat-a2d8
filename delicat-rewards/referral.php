@@ -18,7 +18,7 @@
  */
 defined( 'ABSPATH' ) || exit;
 
-const DELICAT_REF_DB         = 1;
+const DELICAT_REF_DB         = 2; // 2 (3.4.2): claims.value, the reward's worth in HTG (rewards cap)
 const DELICAT_REF_MAX_POINTS = 100;
 const DELICAT_REF_VPN_ANON_PER_HOUR = 300; // provider lookups from link visits (no account), per hour
 const DELICAT_REF_SIGNALS_PER_KIND = 100; // rows kept per account and kind (device, ip, fp, email, phone)
@@ -64,6 +64,7 @@ function delicat_ref_install() {
   milestone smallint(5) unsigned NOT NULL,
   choice varchar(10) NOT NULL,
   amount int(10) unsigned NOT NULL,
+  value int(10) unsigned NOT NULL DEFAULT 0,
   ref_id bigint(20) unsigned NOT NULL DEFAULT 0,
   status varchar(10) NOT NULL DEFAULT 'pending',
   created_at datetime NOT NULL,
@@ -110,6 +111,8 @@ function delicat_ref_defaults() {
 		'same_ip'          => 'review', // review | block | off (mobile networks share addresses: review by default)
 		'vpn'              => 'block',  // block | review | off
 		'daily_cap'        => 5,        // more new friends than this in 24 h: the next ones go to review
+		'reward_cap_pct'   => 15,       // 3.4.2: rewards earned stay within this % of what the confirmed friends spent (0 = no cap)
+		'manual_from'      => 35,       // 3.4.2: milestones of this many points or more are paid after the team's approval (0 = never)
 		'page_id'          => 0,        // the Bonus Free Fire page; 0 = found automatically
 		'share_text'       => 'Rejoins-moi sur Delicat Store pour tes diamants Free Fire ! Crée ton compte avec mon lien et fais ton premier achat : {lien} (code {code})',
 	);
@@ -289,7 +292,7 @@ function delicat_ref_capture( $user_id, $fp = '', $create_device = false ) {
 }
 function delicat_ref_hashes( $user_id ) {
 	global $wpdb;
-	$out = array( 'device' => array(), 'ip' => array(), 'fp' => array(), 'email' => array(), 'phone' => array() );
+	$out = array( 'device' => array(), 'ip' => array(), 'fp' => array(), 'email' => array(), 'phone' => array(), 'payer' => array() );
 	// Network addresses only while recent: mobile carriers hand the same public addresses to thousands of
 	// customers, so two accounts that each used an address weeks apart prove nothing.
 	$since = gmdate( 'Y-m-d H:i:s', time() - DELICAT_REF_IP_WINDOW );
@@ -315,6 +318,118 @@ function delicat_ref_phone_users( $phone8, $exclude_user ) {
 	global $wpdb;
 	if ( ! preg_match( '/^\d{8}$/', (string) $phone8 ) ) return array();
 	return array_map( 'intval', $wpdb->get_col( $wpdb->prepare( "SELECT DISTINCT user_id FROM {$wpdb->usermeta} WHERE meta_key='billing_phone' AND REPLACE(REPLACE(REPLACE(meta_value,' ',''),'-',''),'+','') LIKE %s AND user_id<>%d LIMIT 20", '%' . $wpdb->esc_like( $phone8 ), (int) $exclude_user ) ) );
+}
+
+/* ============================================================== payer numbers (3.4.2) */
+
+/**
+ * Delicat Recharge's MonCash/NatCash SMS journal (read only): the last receipts the shop's phone
+ * forwarded, each with the payer's number ('payer' or 'sender') and the transaction code.
+ */
+function delicat_ref_sms_journal() {
+	static $log = null;
+	if ( null === $log ) {
+		$log = get_option( 'delicat_natcash_log', array() );
+		$log = is_array( $log ) ? $log : array();
+	}
+	return $log;
+}
+/** The 8 local digits of the payers named by one journal line. */
+function delicat_ref_sms_payers( $entry ) {
+	$out = array();
+	foreach ( array( 'payer', 'sender' ) as $k ) {
+		$n = is_array( $entry ) && isset( $entry[ $k ] ) && is_scalar( $entry[ $k ] ) ? delicat_ref_norm_phone( $entry[ $k ] ) : '';
+		if ( '' !== $n ) $out[] = $n;
+	}
+	return $out;
+}
+/**
+ * The phone numbers that paid one order (8 local digits): the billing phone typed at checkout, the
+ * MonCash/NatCash payer of the SMS receipt whose transaction code is the order's (Delicat Recharge's
+ * journal), and what a payment extension reports through the delicat_ref_order_payer_phones filter.
+ */
+function delicat_ref_order_payers( $order ) {
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) return array();
+	$out = array();
+	$billing = delicat_ref_norm_phone( $order->get_billing_phone() );
+	if ( '' !== $billing ) $out[] = $billing;
+	$txn = preg_replace( '/\s+/', '', (string) $order->get_transaction_id() );
+	if ( strlen( $txn ) >= 6 ) {
+		foreach ( delicat_ref_sms_journal() as $e ) {
+			if ( is_array( $e ) && isset( $e['trans_code'] ) && 0 === strcasecmp( preg_replace( '/\s+/', '', (string) $e['trans_code'] ), $txn ) ) $out = array_merge( $out, delicat_ref_sms_payers( $e ) );
+		}
+	}
+	foreach ( (array) apply_filters( 'delicat_ref_order_payer_phones', array(), $order ) as $p ) {
+		$n = is_scalar( $p ) ? delicat_ref_norm_phone( $p ) : '';
+		if ( '' !== $n ) $out[] = $n;
+	}
+	return array_values( array_unique( $out ) );
+}
+/**
+ * The numbers that paid this customer's wallet top-ups through Delicat Recharge (read only): the sender
+ * saved on the recharge, and the payer of the SMS receipt that approved it (« APPROUVÉ … #id »).
+ */
+function delicat_ref_recharge_payers( $user_id ) {
+	global $wpdb;
+	static $has = null;
+	$t = $wpdb->prefix . 'delicat_recharges';
+	if ( null === $has ) $has = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $t ) ) === $t;
+	if ( ! $has || (int) $user_id < 1 ) return array();
+	$out = array(); $ids = array();
+	foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT * FROM $t WHERE user_id=%d AND statut='approuve' ORDER BY id DESC LIMIT 50", (int) $user_id ) ) as $r ) { // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$ids[ (int) $r->id ] = true;
+		$n = isset( $r->nc_sender ) ? delicat_ref_norm_phone( $r->nc_sender ) : '';
+		if ( '' !== $n ) $out[] = $n;
+	}
+	if ( $ids ) {
+		foreach ( delicat_ref_sms_journal() as $e ) {
+			$res = is_array( $e ) && isset( $e['result'] ) ? (string) $e['result'] : '';
+			if ( 0 === strpos( $res, 'APPROUV' ) && preg_match( '/#(\d+)/', $res, $m ) && isset( $ids[ (int) $m[1] ] ) ) $out = array_merge( $out, delicat_ref_sms_payers( $e ) );
+		}
+	}
+	return array_values( array_unique( $out ) );
+}
+/** Keeps the numbers that paid this order as the customer's 'payer' signals (keyed hashes only). */
+function delicat_ref_record_payers( $user_id, $order ) {
+	foreach ( delicat_ref_order_payers( $order ) as $n ) delicat_ref_signal( $user_id, 'payer', delicat_ref_hash( 'phone', $n ) );
+}
+/**
+ * Every payer number known for an account, as hashes: its recorded payer and phone signals, its saved
+ * billing phone, the payers of its 20 latest paid orders and of its wallet top-ups (covers the history
+ * from before 3.4.2, when payers were not recorded).
+ */
+function delicat_ref_payer_hashes_of( $user_id ) {
+	global $wpdb;
+	static $memo = array();
+	$user_id = (int) $user_id;
+	if ( isset( $memo[ $user_id ] ) ) return $memo[ $user_id ];
+	$nums = array();
+	$saved = delicat_ref_norm_phone( get_user_meta( $user_id, 'billing_phone', true ) );
+	if ( '' !== $saved ) $nums[] = $saved;
+	if ( function_exists( 'wc_get_orders' ) ) {
+		foreach ( wc_get_orders( array( 'type' => 'shop_order', 'customer_id' => $user_id, 'status' => array( 'completed', 'processing', 'on-hold', 'refunded' ), 'limit' => 20, 'orderby' => 'date', 'order' => 'DESC' ) ) as $o ) {
+			if ( ! $o->get_meta( '_delicat_reward' ) ) $nums = array_merge( $nums, delicat_ref_order_payers( $o ) );
+		}
+	}
+	$nums = array_merge( $nums, delicat_ref_recharge_payers( $user_id ) );
+	$hashes = array();
+	foreach ( array_unique( $nums ) as $n ) $hashes[] = delicat_ref_hash( 'phone', $n );
+	$hashes = array_merge( $hashes, (array) $wpdb->get_col( $wpdb->prepare( 'SELECT hash FROM ' . delicat_ref_table( 'signals' ) . " WHERE user_id=%d AND kind IN ('payer','phone') LIMIT 400", $user_id ) ) );
+	return $memo[ $user_id ] = array_values( array_unique( $hashes ) );
+}
+/**
+ * The friend's purchase was paid from the inviter's number, or from the number of another friend of the
+ * same inviter: one person behind several accounts. Compared on the friend's 'payer' signals, recorded
+ * from the qualifying order.
+ */
+function delicat_ref_same_payer( $referrer_id, $referred_id ) {
+	global $wpdb;
+	$mine = (array) $wpdb->get_col( $wpdb->prepare( 'SELECT hash FROM ' . delicat_ref_table( 'signals' ) . " WHERE user_id=%d AND kind='payer' LIMIT 100", (int) $referred_id ) );
+	if ( ! $mine ) return false;
+	if ( array_intersect( $mine, delicat_ref_payer_hashes_of( $referrer_id ) ) ) return true;
+	$in = implode( ',', array_fill( 0, count( $mine ), '%s' ) );
+	$sql = 'SELECT COUNT(*) FROM ' . delicat_ref_table( 'signals' ) . ' s INNER JOIN ' . delicat_ref_table( 'referrals' ) . " r ON r.referred_id=s.user_id WHERE r.referrer_id=%d AND r.referred_id<>%d AND s.kind IN ('payer','phone') AND s.hash IN ($in)";
+	return (int) $wpdb->get_var( $wpdb->prepare( $sql, array_merge( array( (int) $referrer_id, (int) $referred_id ), $mine ) ) ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 }
 
 /* ============================================================== VPN / proxy */
@@ -414,6 +529,9 @@ function delicat_ref_risk( $referrer_id, $referred_id ) {
 	$phone = delicat_ref_norm_phone( get_user_meta( $referred_id, 'billing_phone', true ) );
 	if ( '' !== $phone && ( delicat_ref_phone_users( $phone, $referred_id ) || delicat_ref_other_users( 'phone', array( delicat_ref_hash( 'phone', $phone ) ), $referred_id ) ) ) $raise( 'reject', 'phone_shared' );
 	if ( delicat_ref_other_users( 'email', $mine['email'], $referred_id ) ) $raise( 'reject', 'email_alias' );
+	// 3.4.2: the purchase was paid from the inviter's number (MonCash/NatCash payer or billing phone), or from
+	// the number of another friend of the same inviter. Family members do share a phone: the team decides.
+	if ( $mine['payer'] && delicat_ref_same_payer( $referrer_id, $referred_id ) ) $raise( 'review', 'same_payer' );
 	// Same network as the inviter in the last days: a hint for the team, never proof. Friends invite each
 	// other at home on one Wi-Fi, and phones of one model report the same browser summary.
 	$same_ip = (bool) array_intersect( $mine['ip'], $theirs['ip'] );
@@ -446,6 +564,10 @@ function delicat_ref_apply( $row_id, $referrer_id, $referred_id, $ok_status, $fr
 		delicat_ref_alert_admin( $referrer_id, $referred_id, $v['reasons'] );
 	}
 	return $status;
+}
+function delicat_ref_alert_admin_review( $user_id, $points, $choice, $amount ) {
+	wp_mail( get_option( 'admin_email' ), 'Delicat — Parrainage : récompense à valider',
+		sprintf( "Le client #%d demande le palier %d points (%s). Ce palier est payé après votre vérification.\nVérifiez ses invitations puis « Valider et payer » ou « Refuser » dans WooCommerce › Delicat Rewards › Parrainage.", (int) $user_id, (int) $points, 'htg' === $choice ? delicat_num( (int) $amount ) . ' HTG' : delicat_num( (int) $amount ) . ' diamants' ) );
 }
 function delicat_ref_alert_admin_claim( $user_id, $points ) {
 	wp_mail( get_option( 'admin_email' ), 'Delicat — Parrainage : réclamation à vérifier',
@@ -548,14 +670,17 @@ function delicat_ref_row_for( $referred_id ) {
 	global $wpdb;
 	return $wpdb->get_row( $wpdb->prepare( 'SELECT * FROM ' . delicat_ref_table( 'referrals' ) . ' WHERE referred_id=%d', (int) $referred_id ) );
 }
-/** Is this order a real first purchase that can qualify an invitation? */
-function delicat_ref_order_counts( $order ) {
+/**
+ * Is this order a real first purchase that can qualify an invitation? $min: the smallest amount left
+ * after refunds (HTG); null = the « premier achat » minimum of the settings.
+ */
+function delicat_ref_order_counts( $order, $min = null ) {
 	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) return false;
 	if ( $order->get_meta( '_delicat_reward' ) ) return false;                         // a free reward order
 	if ( function_exists( 'delicat_order_is_retail' ) && ! delicat_order_is_retail( $order ) ) return false; // reseller and staff orders (3.4.1)
 	if ( ! $order->is_paid() || ! $order->has_status( 'completed' ) ) return false;
 	// 100 % coupons, tiny orders, and what is left after a partial refund
-	if ( (float) $order->get_total() - (float) $order->get_total_refunded() < max( 1, (float) delicat_ref_cfg( 'min_order' ) ) ) return false;
+	if ( (float) $order->get_total() - (float) $order->get_total_refunded() < ( null === $min ? max( 1, (float) delicat_ref_cfg( 'min_order' ) ) : max( 0.01, (float) $min ) ) ) return false;
 	// A wallet top-up is money kept by the friend (and transferable): not a purchase.
 	if ( function_exists( 'is_wallet_rechargeable_order' ) && is_wallet_rechargeable_order( $order ) ) return false;
 	if ( (int) delicat_ref_cfg( 'exclude_wallet' ) && in_array( $order->get_payment_method(), array( 'wallet', 'woo_wallet', 'delicat_wallet' ), true ) ) return false;
@@ -568,6 +693,8 @@ add_action( 'woocommerce_order_status_completed', function ( $order_id ) {
 	if ( ! $order || ! is_a( $order, 'WC_Order' ) ) return;
 	$uid = (int) $order->get_customer_id();
 	if ( $uid < 1 ) return;
+	// 3.4.2: an inviter's own payer numbers are kept, for the same-payer check of their friends.
+	if ( '' !== (string) get_user_meta( $uid, '_delicat_ref_code', true ) && ! $order->get_meta( '_delicat_reward' ) ) delicat_ref_record_payers( $uid, $order );
 	$row = delicat_ref_row_for( $uid );
 	if ( ! $row || ! in_array( $row->status, array( 'signed_up', 'review' ), true ) || (int) $row->order_id ) return;
 	$joined = strtotime( $row->created_at . ' UTC' );
@@ -581,6 +708,7 @@ add_action( 'woocommerce_order_status_completed', function ( $order_id ) {
 	if ( ! delicat_ref_order_counts( $order ) ) return; // a later, real order can still qualify within the window
 	$phone = delicat_ref_norm_phone( $order->get_billing_phone() );
 	if ( '' !== $phone ) delicat_ref_signal( $uid, 'phone', delicat_ref_hash( 'phone', $phone ) );
+	delicat_ref_record_payers( $uid, $order ); // 3.4.2: who paid (MonCash/NatCash payer, billing phone), judged just below
 	$now = time();
 	$wpdb->update( delicat_ref_table( 'referrals' ), array(
 		'order_id' => (int) $order->get_id(), 'qualified_at' => gmdate( 'Y-m-d H:i:s', $now ),
@@ -637,6 +765,92 @@ function delicat_ref_points( $user_id ) {
 	return min( min( DELICAT_REF_MAX_POINTS, max( 1, (int) delicat_ref_cfg( 'max_points' ) ) ), $n );
 }
 
+/* ============================================================== rewards cap (3.4.2) */
+
+/**
+ * What the inviter's confirmed friends really spent since their invitation: completed purchases that
+ * follow the programme's rules (paid by a real payment method, retail, not a wallet top-up nor a reward),
+ * net of refunds. Kept 10 minutes; a friend's order change clears it.
+ */
+function delicat_ref_friends_spend( $referrer_id, $fresh = false ) {
+	global $wpdb;
+	$key = 'delicat_ref_spend_' . (int) $referrer_id;
+	if ( ! $fresh ) {
+		$known = get_transient( $key );
+		if ( false !== $known ) return (float) $known;
+	}
+	$since = array();
+	foreach ( (array) $wpdb->get_results( $wpdb->prepare( 'SELECT referred_id,created_at FROM ' . delicat_ref_table( 'referrals' ) . " WHERE referrer_id=%d AND status='confirmed' ORDER BY id LIMIT 500", (int) $referrer_id ) ) as $r ) {
+		$since[ (int) $r->referred_id ] = (int) strtotime( $r->created_at . ' UTC' );
+	}
+	$total = 0.0;
+	if ( $since && function_exists( 'wc_get_orders' ) ) {
+		foreach ( array_chunk( array_keys( $since ), 50 ) as $ids ) {
+			$first = min( array_intersect_key( $since, array_flip( $ids ) ) );
+			foreach ( wc_get_orders( array( 'type' => 'shop_order', 'customer' => $ids, 'status' => array( 'completed' ), 'date_created' => '>=' . max( 1, $first ), 'limit' => 2000 ) ) as $o ) {
+				$uid = (int) $o->get_customer_id(); $placed = $o->get_date_created();
+				if ( ! isset( $since[ $uid ] ) || ! $placed || $placed->getTimestamp() < $since[ $uid ] || ! delicat_ref_order_counts( $o, 0.01 ) ) continue;
+				$total += max( 0.0, (float) $o->get_total() - (float) $o->get_total_refunded() );
+			}
+		}
+	}
+	set_transient( $key, $total, 10 * MINUTE_IN_SECONDS );
+	return $total;
+}
+/* A friend's order changes: the inviter's spend is counted again on the next look. */
+function delicat_ref_spend_changed( $order_id ) {
+	if ( ! delicat_ref_on() ) return;
+	$order = $order_id ? wc_get_order( $order_id ) : null;
+	$uid   = $order && is_a( $order, 'WC_Order' ) ? (int) $order->get_customer_id() : 0;
+	$row   = $uid > 0 ? delicat_ref_row_for( $uid ) : null;
+	if ( $row ) delete_transient( 'delicat_ref_spend_' . (int) $row->referrer_id );
+}
+add_action( 'woocommerce_order_status_changed', 'delicat_ref_spend_changed', 30, 1 );
+add_action( 'woocommerce_order_refunded', 'delicat_ref_spend_changed', 30, 1 );
+
+/** A reward's worth in HTG: the credit itself, or for diamonds the milestone's HTG choice (else the PIN prices). */
+function delicat_ref_reward_value( $points, $choice, $amount ) {
+	if ( 'htg' === $choice ) return max( 0, (int) $amount );
+	foreach ( delicat_ref_milestones() as $m ) {
+		if ( (int) $m['points'] === (int) $points && (int) $m['diamonds'] === (int) $amount && $m['htg'] > 0 ) return (int) $m['htg'];
+	}
+	$value = 0.0;
+	foreach ( (array) delicat_reward_plan( (int) $amount, false ) as $line ) {
+		$p = function_exists( 'delicat_pid_by_diamonds' ) ? wc_get_product( delicat_pid_by_diamonds( $line['denom'] ) ) : null;
+		$value += $p ? (float) $p->get_regular_price( 'edit' ) * (int) $line['qty'] : 0;
+	}
+	return (int) round( $value );
+}
+/** What the customer already received or has reserved (claims taken, paid or awaiting the team), in HTG. */
+function delicat_ref_earned( $user_id ) {
+	global $wpdb;
+	$sum = 0;
+	foreach ( (array) $wpdb->get_results( $wpdb->prepare( 'SELECT milestone,choice,amount,value FROM ' . delicat_ref_table( 'claims' ) . " WHERE user_id=%d AND status IN ('pending','review','done')", (int) $user_id ) ) as $c ) {
+		$sum += (int) $c->value > 0 ? (int) $c->value : delicat_ref_reward_value( (int) $c->milestone, (string) $c->choice, (int) $c->amount ); // claims from before 3.4.2
+	}
+	return $sum;
+}
+/**
+ * The cap: array( 'pct', 'spend', 'earned', 'room' ) where room is what may still be given (HTG), or
+ * null for 'room' without a cap.
+ */
+function delicat_ref_cap( $user_id, $fresh = false ) {
+	$pct = max( 0, min( 100, (int) delicat_ref_cfg( 'reward_cap_pct' ) ) );
+	if ( $pct < 1 ) return array( 'pct' => 0, 'spend' => 0.0, 'earned' => 0, 'room' => null );
+	$spend  = delicat_ref_friends_spend( $user_id, $fresh );
+	$earned = delicat_ref_earned( $user_id );
+	return array( 'pct' => $pct, 'spend' => $spend, 'earned' => $earned, 'room' => (int) floor( $spend * $pct / 100 ) - $earned );
+}
+/** HTG the friends still have to spend before a reward worth $value fits under the cap (0 = it fits). */
+function delicat_ref_cap_missing( array $cap, $value ) {
+	if ( null === $cap['room'] || (int) $value <= $cap['room'] ) return 0;
+	return max( 1, (int) ceil( ( (int) $value - $cap['room'] ) * 100 / max( 1, $cap['pct'] ) ) );
+}
+function delicat_ref_needs_team( $points ) {
+	$from = (int) delicat_ref_cfg( 'manual_from' );
+	return $from > 0 && (int) $points >= $from;
+}
+
 /* ============================================================== state, code entry, claims */
 
 function delicat_ref_can_enter_code( $user_id ) {
@@ -658,13 +872,23 @@ function delicat_ref_state( $user_id ) {
 	$claims  = array();
 	foreach ( (array) $wpdb->get_results( $wpdb->prepare( 'SELECT milestone,choice,amount,status,ref_id FROM ' . delicat_ref_table( 'claims' ) . ' WHERE user_id=%d', $user_id ) ) as $c ) $claims[ (int) $c->milestone ] = $c;
 	$blocked = delicat_ref_blocked( $user_id );
-	$miles = array();
+	$miles = array(); $cap = null;
+	$claim_status = array( 'done' => 'claimed', 'review' => 'review', 'refused' => 'refused' ); // else 'pending'
 	foreach ( delicat_ref_milestones() as $m ) {
 		$c = $claims[ $m['points'] ] ?? null;
+		$status = $c ? ( $claim_status[ $c->status ] ?? 'pending' ) : ( $points >= $m['points'] && ! $blocked ? 'claimable' : 'locked' );
+		if ( 'claimable' === $status ) { // 3.4.2: within the cap for at least one of its choices?
+			if ( null === $cap ) $cap = delicat_ref_cap( $user_id );
+			$values = array();
+			if ( $m['diamonds'] > 0 ) $values[] = delicat_ref_reward_value( $m['points'], 'diamonds', $m['diamonds'] );
+			if ( $m['htg'] > 0 && function_exists( 'woo_wallet' ) ) $values[] = (int) $m['htg'];
+			if ( $values && delicat_ref_cap_missing( $cap, min( $values ) ) ) $status = 'capped';
+		}
 		$miles[] = array(
 			'points'   => $m['points'], 'diamonds' => $m['diamonds'], 'htg' => $m['htg'],
-			'status'   => $c ? ( 'done' === $c->status ? 'claimed' : 'pending' ) : ( $points >= $m['points'] && ! $blocked ? 'claimable' : 'locked' ),
-			'claimed'  => $c ? array( 'choice' => (string) $c->choice, 'amount' => (int) $c->amount, 'order' => 'diamonds' === $c->choice ? (int) $c->ref_id : 0 ) : null, // own reward order: « Voir mon PIN »
+			'status'   => $status, // claimable | locked | capped (cap) | pending | review (the team checks) | claimed | refused
+			'manual'   => delicat_ref_needs_team( $m['points'] ), // paid after the team's check
+			'claimed'  => $c ? array( 'choice' => (string) $c->choice, 'amount' => (int) $c->amount, 'order' => 'diamonds' === $c->choice && 'done' === $c->status ? (int) $c->ref_id : 0 ) : null, // own reward order: « Voir mon PIN »
 		);
 	}
 	$labels = array( 'signed_up' => 'Inscrit — attend son premier achat', 'qualified' => 'Achat validé — point en attente', 'review' => 'En vérification', 'confirmed' => 'Point gagné', 'rejected' => 'Non retenu' );
@@ -694,7 +918,7 @@ function delicat_ref_state( $user_id ) {
 		'counts'       => $counts,
 		'invitedBy'    => $mine ? array( 'name' => delicat_display_name( (int) $mine->referrer_id, true ), 'status' => $mine->status ) : null,
 		'canEnterCode' => delicat_ref_can_enter_code( $user_id ),
-		'rules'        => array( 'minOrder' => (int) delicat_ref_cfg( 'min_order' ), 'holdDays' => (int) delicat_ref_cfg( 'hold_days' ), 'orderDays' => (int) delicat_ref_cfg( 'order_days' ), 'walletExcluded' => (bool) delicat_ref_cfg( 'exclude_wallet' ) ),
+		'rules'        => array( 'minOrder' => (int) delicat_ref_cfg( 'min_order' ), 'holdDays' => (int) delicat_ref_cfg( 'hold_days' ), 'orderDays' => (int) delicat_ref_cfg( 'order_days' ), 'walletExcluded' => (bool) delicat_ref_cfg( 'exclude_wallet' ), 'capPct' => max( 0, min( 100, (int) delicat_ref_cfg( 'reward_cap_pct' ) ) ) ),
 		'wallet'       => function_exists( 'woo_wallet' ),
 		'shareText'    => $code && delicat_ref_link( $code ) ? delicat_ref_share_text( $code ) : '',
 	);
@@ -741,45 +965,106 @@ function delicat_ref_claim( $user_id, $points, $choice ) {
 		delicat_ref_confirm_due( $user_id, 20 );
 		if ( delicat_ref_blocked( $user_id ) ) return new WP_Error( 'blocked', 'Votre accès au parrainage est suspendu. Contactez le support.', array( 'status' => 403 ) ); // the judgement just above may have blocked it
 		if ( delicat_ref_points( $user_id ) < $points ) return new WP_Error( 'not_ready', 'Pas encore assez de points pour ce palier.', array( 'status' => 400 ) );
+		// 3.4.2: everything given stays within the cap, a share of what the confirmed friends really spent.
+		$value = delicat_ref_reward_value( $points, $choice, $amount );
+		$cap   = delicat_ref_cap( $user_id, true );
+		if ( delicat_ref_cap_missing( $cap, $value ) ) return new WP_Error( 'capped', sprintf( 'Ce palier se débloque quand vos amis invités auront fait plus d’achats : les récompenses du parrainage restent dans la limite de %d %% de leurs achats.', (int) $cap['pct'] ), array( 'status' => 409 ) );
+		$review = delicat_ref_needs_team( $points );
 		// One claim per milestone, enforced by the database (unique user + milestone).
 		$t = delicat_ref_table( 'claims' );
-		$ok = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $t (user_id,milestone,choice,amount,status,created_at) VALUES (%d,%d,%s,%d,'pending',%s)", $user_id, $points, $choice, $amount, current_time( 'mysql', 1 ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$ok = $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO $t (user_id,milestone,choice,amount,value,status,created_at) VALUES (%d,%d,%s,%d,%d,%s,%s)", $user_id, $points, $choice, $amount, $value, $review ? 'review' : 'pending', current_time( 'mysql', 1 ) ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		if ( 1 !== (int) $ok ) return new WP_Error( 'claimed', 'Ce palier a déjà été réclamé.', array( 'status' => 409 ) );
 		$claim_id = (int) $wpdb->insert_id;
-		$ref = 0; $delivery = null; $broken = false; $note = sprintf( 'Parrainage Delicat — palier %d points', $points );
-		try {
-			if ( 'diamonds' === $choice ) {
-				$plan = delicat_reward_plan( $amount, true );
-				if ( $plan ) $ref = (int) delicat_create_reward_order( $user_id, $plan, $note . ' — ' . $amount . ' diamants offerts.', 'referral_' . $points, array(
-					'delicat_reward_kind' => 'referral', 'delicat_reward_amount' => $amount, 'delicat_referral_milestone' => $points,
-				) );
-			} else {
-				$ref = (int) woo_wallet()->wallet->credit( $user_id, $amount, $note );
-			}
-		} catch ( \Throwable $e ) {
-			$broken = true; // the reward may have been given before the error: the milestone stays reserved
-			delicat_log( 'error', 'Referral reward interrupted; check the customer before releasing the milestone.', array( 'user_id' => $user_id, 'milestone' => $points, 'choice' => $choice ) );
+		if ( $review ) { // 3.4.2: a big milestone waits for the team; nothing is given yet
+			delicat_ref_alert_admin_review( $user_id, $points, $choice, $amount );
+			do_action( 'delicat_referral_review', $user_id, $points, $choice, $amount, $claim_id );
+			$state = delicat_ref_state( $user_id );
+			$state['claimed'] = array( 'points' => $points, 'choice' => $choice, 'amount' => $amount, 'delivery' => null, 'review' => true );
+			return $state;
 		}
-		if ( ! $ref && $broken ) {
-			delicat_ref_alert_admin_claim( $user_id, $points );
-			return new WP_Error( 'issue_check', 'Votre récompense est en vérification par l’équipe. Elle vous sera confirmée rapidement.', array( 'status' => 503 ) );
-		}
-		if ( ! $ref ) {
-			$wpdb->delete( $t, array( 'id' => $claim_id, 'status' => 'pending' ) ); // nothing delivered: the milestone stays claimable
-			return new WP_Error( 'issue_failed', 'diamonds' === $choice ? 'Stock de PIN indisponible pour le moment. Réessayez plus tard ou choisissez le crédit boutique.' : 'Le crédit boutique n’a pas pu être ajouté. Réessayez plus tard.', array( 'status' => 503 ) );
-		}
-		$wpdb->update( $t, array( 'status' => 'done', 'ref_id' => $ref ), array( 'id' => $claim_id ) );
-		if ( 'diamonds' === $choice && function_exists( 'delicat_reward_delivery' ) ) {
-			$d = delicat_reward_delivery( $ref, $user_id );
-			$delivery = is_wp_error( $d ) ? null : $d;
-		}
-		do_action( 'delicat_referral_claimed', $user_id, $points, $choice, $amount, $ref );
+		$given = delicat_ref_deliver( $user_id, $points, $choice, $amount, $claim_id, false );
+		if ( is_wp_error( $given ) ) return $given;
 		$state = delicat_ref_state( $user_id );
-		$state['claimed'] = array( 'points' => $points, 'choice' => $choice, 'amount' => $amount, 'delivery' => $delivery );
+		$state['claimed'] = array( 'points' => $points, 'choice' => $choice, 'amount' => $amount, 'delivery' => $given['delivery'] );
 		return $state;
 	} finally {
 		delicat_unlock( $lock );
 	}
+}
+
+/**
+ * Gives a reserved milestone (claim row in 'pending'): a PIN reward order or store credit. Caller holds
+ * the customer's claim lock. Returns array( 'ref', 'delivery' ) or a WP_Error. Nothing given: the row
+ * is removed (the milestone can be claimed again) or, after the team's approval, goes back to the team.
+ * An error after the reward may have been given keeps it reserved, for the team to check.
+ */
+function delicat_ref_deliver( $user_id, $points, $choice, $amount, $claim_id, $approved = false ) {
+	global $wpdb;
+	$t = delicat_ref_table( 'claims' );
+	$ref = 0; $delivery = null; $broken = false; $note = sprintf( 'Parrainage Delicat — palier %d points', $points );
+	try {
+		if ( 'diamonds' === $choice ) {
+			$plan = delicat_reward_plan( $amount, true );
+			if ( $plan ) $ref = (int) delicat_create_reward_order( $user_id, $plan, $note . ' — ' . $amount . ' diamants offerts.', 'referral_' . $points, array(
+				'delicat_reward_kind' => 'referral', 'delicat_reward_amount' => $amount, 'delicat_referral_milestone' => $points,
+			) );
+		} elseif ( function_exists( 'woo_wallet' ) ) {
+			$ref = (int) woo_wallet()->wallet->credit( $user_id, $amount, $note );
+		}
+	} catch ( \Throwable $e ) {
+		$broken = true; // the reward may have been given before the error: the milestone stays reserved
+		delicat_log( 'error', 'Referral reward interrupted; check the customer before releasing the milestone.', array( 'user_id' => $user_id, 'milestone' => $points, 'choice' => $choice ) );
+	}
+	if ( ! $ref && $broken ) {
+		delicat_ref_alert_admin_claim( $user_id, $points );
+		return new WP_Error( 'issue_check', 'Votre récompense est en vérification par l’équipe. Elle vous sera confirmée rapidement.', array( 'status' => 503 ) );
+	}
+	if ( ! $ref ) {
+		if ( $approved ) $wpdb->update( $t, array( 'status' => 'review' ), array( 'id' => (int) $claim_id, 'status' => 'pending' ) ); // back to the team's list
+		else $wpdb->delete( $t, array( 'id' => (int) $claim_id, 'status' => 'pending' ) ); // nothing delivered: the milestone stays claimable
+		return new WP_Error( 'issue_failed', 'diamonds' === $choice ? 'Stock de PIN indisponible pour le moment. Réessayez plus tard ou choisissez le crédit boutique.' : 'Le crédit boutique n’a pas pu être ajouté. Réessayez plus tard.', array( 'status' => 503 ) );
+	}
+	$wpdb->update( $t, array( 'status' => 'done', 'ref_id' => $ref ), array( 'id' => (int) $claim_id ) );
+	if ( 'diamonds' === $choice && function_exists( 'delicat_reward_delivery' ) ) {
+		$d = delicat_reward_delivery( $ref, $user_id );
+		$delivery = is_wp_error( $d ) ? null : $d;
+	}
+	do_action( 'delicat_referral_claimed', $user_id, $points, $choice, $amount, $ref );
+	return array( 'ref' => $ref, 'delivery' => $delivery );
+}
+
+/**
+ * The team pays a milestone that waited for its approval (3.4.2). Returns a note for the team or a WP_Error.
+ */
+function delicat_ref_review_pay( $claim_id ) {
+	global $wpdb;
+	$t  = delicat_ref_table( 'claims' );
+	$cl = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id=%d AND status='review'", (int) $claim_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $cl ) return new WP_Error( 'state', 'Réclamation introuvable ou déjà traitée.' );
+	$uid  = (int) $cl->user_id;
+	$lock = 'delicat_ref_claim_' . $uid;
+	if ( ! delicat_lock( $lock, 5 ) ) return new WP_Error( 'busy', 'Une réclamation de ce client est en cours. Réessayez.' );
+	try {
+		delicat_ref_confirm_due( $uid, 20 );
+		if ( delicat_ref_points( $uid ) < (int) $cl->milestone ) return new WP_Error( 'points', 'Le client n’a plus assez de points pour ce palier (invitation retirée ou achat remboursé) : rien n’a été payé.' );
+		if ( 1 !== (int) $wpdb->query( $wpdb->prepare( "UPDATE $t SET status='pending' WHERE id=%d AND status='review'", (int) $cl->id ) ) ) return new WP_Error( 'state', 'Réclamation déjà traitée.' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$given = delicat_ref_deliver( $uid, (int) $cl->milestone, (string) $cl->choice, (int) $cl->amount, (int) $cl->id, true );
+		if ( is_wp_error( $given ) ) return new WP_Error( 'deliver', 'Paiement impossible : ' . $given->get_error_message() );
+	} finally {
+		delicat_unlock( $lock );
+	}
+	$what = 'htg' === $cl->choice ? delicat_num( (int) $cl->amount ) . ' HTG' : delicat_num( (int) $cl->amount ) . ' diamants';
+	if ( function_exists( 'delicat_mail_user' ) ) delicat_mail_user( $uid, 'Delicat Store — votre récompense de parrainage est validée', sprintf( "Bonjour,\n\nL’équipe a validé votre palier de parrainage de %d points : %s.\n%s\n\nMerci d’inviter vos amis sur Delicat Store.", (int) $cl->milestone, $what, 'htg' === $cl->choice ? 'Le montant est ajouté à votre portefeuille Delicat.' : 'Votre PIN est dans vos commandes (page Bonus Free Fire, onglet Parrainage : « Voir mon PIN »).' ) );
+	return sprintf( 'Palier %d points payé au client #%d (%s).', (int) $cl->milestone, $uid, $what );
+}
+/** The team refuses a milestone that waited for its approval: nothing is given, the customer is told. */
+function delicat_ref_review_refuse( $claim_id ) {
+	global $wpdb;
+	$t  = delicat_ref_table( 'claims' );
+	$cl = $wpdb->get_row( $wpdb->prepare( "SELECT * FROM $t WHERE id=%d AND status='review'", (int) $claim_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $cl || 1 !== (int) $wpdb->update( $t, array( 'status' => 'refused' ), array( 'id' => (int) $cl->id, 'status' => 'review' ) ) ) return new WP_Error( 'state', 'Réclamation introuvable ou déjà traitée.' );
+	if ( function_exists( 'delicat_mail_user' ) ) delicat_mail_user( (int) $cl->user_id, 'Delicat Store — votre récompense de parrainage', sprintf( "Bonjour,\n\nAprès vérification, votre palier de parrainage de %d points n’a pas été accordé : les invitations doivent venir de personnes différentes, qui paient elles-mêmes leurs achats.\n\nContactez le support si vous pensez qu’il s’agit d’une erreur.", (int) $cl->milestone ) );
+	return sprintf( 'Palier %d points du client #%d refusé.', (int) $cl->milestone, (int) $cl->user_id );
 }
 
 /* ============================================================== REST + AJAX */

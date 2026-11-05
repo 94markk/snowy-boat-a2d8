@@ -526,6 +526,20 @@ final class Delicat_Builder_V9_Notifications {
 		}
 		$devices = self::devices();
 		$id = hash( 'sha256', $token );
+		/* 9.7.8 (BLD-08): the app key travels inside the APK, so anyone can call this route. Up to ten NEW
+		 * phones an hour per visitor address may register; a known phone may always refresh itself and
+		 * moves to the recent end, so a flood of fake tokens can no longer push the real phones out of the
+		 * 200-device list. Administrators are not limited. */
+		if ( ! isset( $devices[ $id ] ) && ! current_user_can( 'manage_woocommerce' ) ) {
+			$ip     = class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ? Delicat_Builder_V9_Security::client_ip() : (string) ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			$bucket = 'dbv9_devreg_' . substr( hash_hmac( 'sha256', $ip, wp_salt( 'nonce' ) ), 0, 24 );
+			$count  = (int) get_transient( $bucket );
+			if ( $count >= 10 ) {
+				return new WP_Error( 'too_many_devices', 'Trop d’appareils enregistrés depuis cette connexion. Réessayez plus tard.', array( 'status' => 429 ) );
+			}
+			set_transient( $bucket, $count + 1, HOUR_IN_SECONDS );
+		}
+		unset( $devices[ $id ] );
 		$devices[ $id ] = array(
 			'token' => $token,
 			'name' => substr( sanitize_text_field( (string) $request->get_param( 'device_name' ) ), 0, 100 ),

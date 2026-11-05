@@ -239,22 +239,23 @@ class Delicat_Send_Money {
 
 		$wallet = woo_wallet()->wallet;
 
-		$debit = $wallet->debit( $sender, $total, [
-			'description' => sprintf( 'Envoi de %s HTG (frais %s)', $amount, $fee ),
-		] );
+		// 6.6.4 (RCH-05): TeraWallet's debit()/credit() take the ledger text as
+		// their 3rd argument, a STRING ($details). An array was passed here, so
+		// every transfer line was stored with an empty description.
+		$fmt   = function ( float $n ): string { return number_format( $n, 2, '.', ',' ); };
+		$debit = $wallet->debit( $sender, $total,
+			sprintf( 'Envoyé à %s : %s HTG (frais %s HTG)', self::user_code( $recipient ), $fmt( $amount ), $fmt( $fee ) ) );
 		if ( ! $debit ) {
 			$wpdb->update( $table, [ 'status' => 'failed', 'note' => 'debit_failed' ], [ 'id' => $row_id ] );
 			return 'Débit impossible. Aucun montant n’a été prélevé.';
 		}
 
-		$credit = $wallet->credit( $recipient, $amount, [
-			'description' => sprintf( 'Reçu de %s', self::user_code( $sender ) ),
-		] );
+		$credit = $wallet->credit( $recipient, $amount,
+			sprintf( 'Reçu de %s : %s HTG', self::user_code( $sender ), $fmt( $amount ) ) );
 		if ( ! $credit ) {
 			// Put the sender's money back.
-			$refund = $wallet->credit( $sender, $total, [
-				'description' => 'Remboursement — envoi échoué',
-			] );
+			$refund = $wallet->credit( $sender, $total,
+				sprintf( 'Remboursement — envoi à %s échoué', self::user_code( $recipient ) ) );
 			$wpdb->update( $table, [
 				'status' => 'failed',
 				'note'   => $refund ? 'credit_failed_refunded' : 'credit_failed_REFUND_FAILED',

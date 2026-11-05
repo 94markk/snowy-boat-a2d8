@@ -4,6 +4,7 @@
 $site = $argv[1] ?? '';
 if ( '' === $site || ! is_file( $site . '/wp-load.php' ) ) { fwrite( STDERR, "usage: php rewards-security.php <site-dir>\n" ); exit( 2 ); }
 define( 'DOING_AJAX', true );
+define( 'DELICAT_REWARDS_LICENSE_SERVER', true ); // 3.4.2: the licence route (F4) exists only on a licence server
 $_SERVER['HTTP_HOST'] = 'localhost:8980'; $_SERVER['REQUEST_URI'] = '/wp-admin/admin-ajax.php'; $_SERVER['SERVER_NAME'] = 'localhost'; $_SERVER['REMOTE_ADDR'] = '198.51.100.88';
 require $site . '/wp-load.php';
 global $wpdb;

@@ -2,9 +2,24 @@
 /**
  * Plugin Name: Delicat Rewards — Admin Edition
  * Description: Complete Delicat Rewards system with branding controls and secure license server for Client editions.
- * Version:     3.4.1
+ * Version:     3.4.2
  * Author:      Delicat Store Haiti
  * Requires PHP: 7.4
+ *
+ * NEW IN 3.4.2 — Audit fixes (RWD-01…RWD-05).
+ *   • Referral: rewards capped at « Plafond des récompenses » % (15 by default) of what the confirmed friends
+ *     really spent (claims.value keeps each reward's HTG worth); a friend whose purchase is paid from the
+ *     inviter's number or another friend's (billing phone, MonCash/NatCash payer from Delicat Recharge's SMS
+ *     journal by transaction code, delicat_ref_order_payer_phones filter) goes to the review list
+ *     (same_payer); milestones from « Validation par l’équipe » (35 points by default) wait for the team
+ *     (claim status 'review', « Valider et payer » / « Refuser »). Rewards already given are kept.
+ *   • Meilleur Client: the board is a stored snapshot rebuilt in the background (Action Scheduler, else
+ *     WP-Cron), never during a customer's visit; a refund or cancellation of a purchase counted in a
+ *     closed week recomputes that week and, if the podium changed, marks the prizes « à vérifier » and
+ *     e-mails the old and new podium (nothing taken back automatically); « Montant minimum d'une commande
+ *     pour le classement » (0 = unchanged), applied from the next weekly reset only.
+ *   • The licence server's public route and page exist only while a licence was issued or
+ *     DELICAT_REWARDS_LICENSE_SERVER is defined. Diagnostics no longer stops on a refund in recent orders.
  *
  * NEW IN 3.4.1 — A friend's first order must be a retail order (delicat_order_is_retail): purchases at
  *   reseller price (Delicat Resellers) and staff orders do not earn referral points.
@@ -209,7 +224,7 @@ define( 'DELICAT_BOARD_SPEND_WEIGHT', 0.70 ); // Meilleur Client: money is prima
 define( 'DELICAT_BOARD_ORDER_WEIGHT', 0.30 ); // distinct WooCommerce orders
 define( 'DELICAT_LEDGER_DEBT_KEY',    '#debt' ); // reserved signed-ledger key: purchases still owed (sanitize_key can never produce it)
 define( 'DELICAT_DEBT_MONTHS',        13 );    // how many past months a refund after a claim is carried forward from
-if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.4.1' ); // keep in step with the header
+if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '3.4.2' ); // keep in step with the header
 
 /** Capability required for every Delicat admin screen and action. */
 require_once __DIR__ . '/reward-delivery.php';
@@ -1813,6 +1828,37 @@ function delicat_rank_leaderboard_rows( array $rows ) {
 }
 
 /**
+ * 3.4.2 (RWD-05): « Montant minimum d'une commande pour le classement ». A change applies from the next
+ * weekly reset, never to the week in progress: option delicat_board_min_rules keeps each value with the
+ * period start it applies from, so a closed week is always recomputed with its own rule.
+ */
+function delicat_board_min_rules() {
+	$r = get_option( 'delicat_board_min_rules', array() );
+	return is_array( $r ) ? $r : array();
+}
+/** The minimum (HTG, eligible amount of one order) for a period that starts at $start. */
+function delicat_board_min_order( $start ) {
+	$min = 0.0; $from = -1;
+	foreach ( delicat_board_min_rules() as $rule ) {
+		$at = (int) ( $rule['from'] ?? 0 );
+		if ( $at <= (int) $start && $at > $from ) { $from = $at; $min = max( 0.0, (float) ( $rule['min'] ?? 0 ) ); }
+	}
+	return $min;
+}
+/** Plans $min from the next weekly reset (the week in progress keeps its rule). Returns that reset's timestamp. */
+function delicat_board_min_plan( $min ) {
+	$from  = delicat_next_week_start();
+	$rules = array();
+	foreach ( delicat_board_min_rules() as $rule ) {
+		if ( (int) ( $rule['from'] ?? 0 ) < $from ) $rules[] = array( 'from' => (int) $rule['from'], 'min' => (float) $rule['min'] );
+	}
+	if ( abs( delicat_board_min_order( $from - 1 ) - (float) $min ) > 0.001 || $rules !== delicat_board_min_rules() ) $rules[] = array( 'from' => $from, 'min' => max( 0.0, (float) $min ) );
+	usort( $rules, function ( $a, $b ) { return $a['from'] <=> $b['from']; } );
+	update_option( 'delicat_board_min_rules', array_slice( $rules, -60 ), false );
+	return $from;
+}
+
+/**
  * Build weekly rows from the only trusted source: real WooCommerce orders.
  * Each qualifying order increments the frequency exactly once. Only eligible
  * line-item net spend is added, so unrelated products and refunded value do not
@@ -1822,8 +1868,9 @@ function delicat_collect_leaderboard_rows( $start, $end = null, $include_exclude
 	$rows = array();
 	if ( ! function_exists( 'wc_get_orders' ) ) return $rows;
 
+	$min  = delicat_board_min_order( (int) $start ); // 3.4.2: the minimum in force for this period (0 = every order)
 	$args = array_merge( array( 'status' => delicat_counting_statuses(), 'orderby' => 'date', 'order' => 'ASC' ), delicat_order_window_query( (int) $start ) );
-	delicat_orders_each( $args, function ( $order ) use ( &$rows, $start, $end, $include_excluded ) {
+	delicat_orders_each( $args, function ( $order ) use ( &$rows, $start, $end, $include_excluded, $min ) {
 		if ( ! delicat_order_in_window( $order, $start, $end ) || ! delicat_order_ok( $order ) ) return;
 		$uid = (int) $order->get_customer_id();
 		if ( ! $uid || ( ! $include_excluded && delicat_is_excluded( $uid ) ) ) return;
@@ -1831,6 +1878,8 @@ function delicat_collect_leaderboard_rows( $start, $end = null, $include_exclude
 		$units = delicat_order_units( $order, array() );
 		/* A free/fully-refunded eligible line is not a money-spending order. */
 		if ( $units['qty'] < 1 || $units['spend'] <= 0 ) return;
+		/* Below the period's minimum (eligible amount after refunds): the order is left out of the ranking. */
+		if ( $min > 0 && $units['spend'] + 1e-9 < $min ) return;
 		if ( ! isset( $rows[ $uid ] ) ) {
 			$rows[ $uid ] = array( 'orders' => 0, 'spend' => 0.0, 'last_order_at' => 0 );
 		}
@@ -1846,44 +1895,82 @@ function delicat_collect_leaderboard_rows( $start, $end = null, $include_exclude
 	return delicat_rank_leaderboard_rows( $rows );
 }
 
-/** Any order change marks the board stale; it is rebuilt at most once a minute. */
+/**
+ * 3.4.2: the board customers see is a stored snapshot (option delicat_leaderboard_board), rebuilt in the
+ * background — Action Scheduler (WooCommerce) when present, else WP-Cron — never while a customer waits.
+ * Up to 3.4.1 the page view that found the board stale rebuilt it from up to 5,000 orders, as often as
+ * once a minute. Any order change marks the board stale and asks for one rebuild ~30 s later (several
+ * changes share it); the page meanwhile shows the last board of the same period.
+ */
+const DELICAT_BOARD_GROUP = 'delicat-rewards';
 function delicat_leaderboard_touch() {
 	set_transient( 'delicat_leaderboard_dirty', time(), DAY_IN_SECONDS );
+	delicat_leaderboard_schedule( 30 );
 }
+/* Settings, exclusions, period changes… cleared the 3.4.1 cache: they now ask for a rebuild. */
+add_action( 'delete_transient_delicat_leaderboard', 'delicat_leaderboard_touch' );
 
+function delicat_board_queue() {
+	return function_exists( 'as_schedule_single_action' ) && function_exists( 'as_get_scheduled_actions' ) && class_exists( 'ActionScheduler_Store' ) && did_action( 'action_scheduler_init' );
+}
+/**
+ * Runs $hook once in the background at $when, unless the same run is already waiting (Action Scheduler
+ * when WooCommerce has it, else WP-Cron). Only a waiting run counts: one in progress may have read the
+ * orders before the change that asks again.
+ */
+function delicat_bg_once( $hook, array $args, $when ) {
+	if ( delicat_board_queue() ) {
+		$waiting = as_get_scheduled_actions( array( 'hook' => $hook, 'args' => $args, 'group' => DELICAT_BOARD_GROUP, 'status' => ActionScheduler_Store::STATUS_PENDING, 'per_page' => 1 ), 'ids' );
+		if ( ! $waiting ) as_schedule_single_action( (int) $when, $hook, $args, DELICAT_BOARD_GROUP );
+		return;
+	}
+	if ( ! wp_next_scheduled( $hook, $args ) ) wp_schedule_single_event( (int) $when, $hook, $args );
+}
+/**
+ * One rebuild $delay seconds from now (or at $at). $tag 'reset': the one planned right after the weekly
+ * reset, kept apart from the rebuilds asked for by order changes.
+ */
+function delicat_leaderboard_schedule( $delay = 30, $at = 0, $tag = '' ) {
+	delicat_bg_once( 'delicat_leaderboard_rebuild', '' === $tag ? array() : array( $tag ), $at > 0 ? (int) $at : time() + max( 0, (int) $delay ) );
+}
+/** The background rebuild: the same scoring engine as before, stored for every reader. */
+function delicat_leaderboard_rebuild() {
+	if ( ! function_exists( 'wc_get_orders' ) ) return;
+	if ( ! delicat_lock( 'delicat_leaderboard_build', 0 ) ) { delicat_leaderboard_schedule( 60 ); return; } // one build at a time
+	$began = time();
+	try {
+		$start = delicat_competition_start();
+		$rows  = delicat_collect_leaderboard_rows( $start );
+		update_option( 'delicat_leaderboard_board', array( 'built' => $began, 'start' => $start, 'rows' => $rows ), false );
+	} finally {
+		delicat_unlock( 'delicat_leaderboard_build' );
+	}
+	if ( (int) get_transient( 'delicat_leaderboard_dirty' ) >= $began ) delicat_leaderboard_schedule( 30 ); // orders changed during the build
+	delicat_leaderboard_schedule( 0, delicat_next_week_start() + 5, 'reset' ); // the new week's board right after the reset
+}
+add_action( 'delicat_leaderboard_rebuild', 'delicat_leaderboard_rebuild' );
+register_deactivation_hook( __FILE__, function () {
+	wp_unschedule_hook( 'delicat_leaderboard_rebuild' );
+	wp_unschedule_hook( 'delicat_podium_recheck' );
+	if ( function_exists( 'as_unschedule_all_actions' ) ) as_unschedule_all_actions( '', array(), DELICAT_BOARD_GROUP ); // this plugin's group only
+} );
+
+/**
+ * The board of the current period, read from the stored snapshot only. A snapshot of another period
+ * (the week was reset or closed) is never shown: an empty board until the rebuild that is asked for now.
+ */
 function delicat_leaderboard() {
 	$start = delicat_competition_start();
-	$fresh = function () use ( $start ) {
-		$cached = get_transient( 'delicat_leaderboard' );
-		if ( ! is_array( $cached ) || ! isset( $cached['rows'], $cached['built'] ) || (int) ( $cached['start'] ?? -1 ) !== $start ) return null;
-		$dirty = (int) get_transient( 'delicat_leaderboard_dirty' );
-		return ( $dirty < (int) $cached['built'] || time() - (int) $cached['built'] < MINUTE_IN_SECONDS ) ? $cached['rows'] : null;
-	};
-	$rows = $fresh();
-	if ( null !== $rows ) return $rows;
-	/* One rebuild at a time: meanwhile other visitors see the last board of the same period.
-	   3.3.0: a request that waited for the lock reads the board the other one built, and none
-	   rebuilds without the lock (up to 3.2.4 every waiting request rebuilt the whole board right
-	   after the weekly reset). Only the page and the app read this; the weekly award and the
-	   admin pages compute their own rows. */
-	$locked = delicat_lock( 'delicat_leaderboard_build', 0 );
-	if ( ! $locked ) {
-		$stale = get_transient( 'delicat_leaderboard_stale' );
-		if ( is_array( $stale ) && isset( $stale['rows'] ) && (int) ( $stale['start'] ?? -1 ) === $start ) return $stale['rows'];
-		$locked = delicat_lock( 'delicat_leaderboard_build', 5 );
-		if ( ! $locked ) return array(); // still being built: an empty board for this view, never a parallel build
-	}
-	try {
-		$rows = $fresh();
-		if ( null !== $rows ) return $rows;
-		$entry = array( 'built' => time(), 'start' => $start, 'rows' => array() );
-		$entry['rows'] = delicat_collect_leaderboard_rows( $start );
-		set_transient( 'delicat_leaderboard', $entry, 5 * MINUTE_IN_SECONDS );
-		set_transient( 'delicat_leaderboard_stale', $entry, DAY_IN_SECONDS );
-		return $entry['rows'];
-	} finally {
-		if ( $locked ) delicat_unlock( 'delicat_leaderboard_build' );
-	}
+	$board = get_option( 'delicat_leaderboard_board' );
+	$same  = is_array( $board ) && isset( $board['rows'], $board['built'] ) && is_array( $board['rows'] ) && (int) ( $board['start'] ?? -1 ) === $start;
+	if ( ! $same ) delicat_leaderboard_schedule( 0 );
+	elseif ( (int) get_transient( 'delicat_leaderboard_dirty' ) >= (int) $board['built'] ) delicat_leaderboard_schedule( 30 ); // stale: already asked for when the order changed; asked again if it was lost
+	return $same ? $board['rows'] : array();
+}
+/** When the stored board was built (0 = never), for the Diagnostics tab. */
+function delicat_leaderboard_built() {
+	$board = get_option( 'delicat_leaderboard_board' );
+	return is_array( $board ) ? (int) ( $board['built'] ?? 0 ) : 0;
 }
 
 /* =========================================================================
@@ -2035,6 +2122,7 @@ function delicat_award_weekly_winner( $start, $end, $boundary = 0 ) {
 	foreach ( array( 1, 2, 3 ) as $rank ) {
 		$prev = $week['placements'][ $rank ] ?? array();
 		if ( in_array( $prev['status'] ?? '', array( 'manual', 'delivered' ), true ) ) continue;
+		if ( ! empty( $prev['verify'] ) ) { $complete = false; continue; } // 3.4.2: podium changed by a refund — the team decides, nothing automatic
 		$prize = isset( $prev['prize'] ) ? (int) $prev['prize'] : ( isset( $prizes[ $rank ] ) ? (int) $prizes[ $rank ] : 0 );
 		if ( $prize < 1 ) { $week['placements'][ $rank ] = array( 'status' => 'disabled', 'prize' => 0 ); continue; }
 		if ( empty( $ranked[ $rank ] ) ) { $week['placements'][ $rank ] = array( 'status' => 'no_participant', 'prize' => $prize ); continue; }
@@ -2106,6 +2194,90 @@ function delicat_podium_alert( array $results ) {
 	}
 	wp_mail( get_option( 'admin_email' ), 'Delicat — Meilleur Client (podium)', implode( "\n", $lines ) );
 }
+
+/* =========================================================================
+   3.4.2 (RWD-02) — A REFUND AFTER THE WEEK CLOSED
+   A purchase counted in a closed week is refunded or cancelled: that week's ranking is computed again
+   (in the background, a minute later, several refunds together). If the podium is no longer the same,
+   the prizes concerned are marked « à vérifier » and the team gets the old and the new podium by e-mail.
+   Nothing is taken back automatically (no wallet debit, no order change), and a prize still waiting for
+   its automatic delivery is held until the team has checked.
+   ========================================================================= */
+function delicat_podium_recheck_order( $order_id ) {
+	$order = function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : null;
+	if ( ! $order || ! is_a( $order, 'WC_Order' ) || $order->get_meta( '_delicat_reward' ) || ! (int) $order->get_customer_id() ) return;
+	$at = delicat_order_counted_at( $order );
+	if ( $at < 1 || $at >= delicat_competition_start() ) return; // the week in progress: its board is rebuilt anyway
+	$eligible = false;
+	foreach ( $order->get_items() as $item ) { if ( delicat_item_is_ff( $item ) ) { $eligible = true; break; } } // only a purchase the board counts
+	if ( ! $eligible ) return;
+	foreach ( delicat_weekly_state_get() as $key => $week ) {
+		if ( ! is_array( $week ) || empty( $week['ranking'] ) ) continue;
+		$start = isset( $week['start'] ) && is_numeric( $week['start'] ) ? (int) $week['start'] : delicat_closed_period_start( (int) $key );
+		if ( $at < $start || $at >= (int) $key ) continue;
+		$why = get_option( 'delicat_podium_recheck_orders', array() );
+		$why = is_array( $why ) ? $why : array();
+		$why[ (int) $key ] = array_slice( array_values( array_unique( array_merge( (array) ( $why[ (int) $key ] ?? array() ), array( (int) $order->get_id() ) ) ) ), -20 );
+		update_option( 'delicat_podium_recheck_orders', $why, false );
+		delicat_bg_once( 'delicat_podium_recheck', array( (int) $key ), time() + MINUTE_IN_SECONDS );
+	}
+}
+add_action( 'woocommerce_order_status_changed', function ( $order_id, $from, $to ) {
+	if ( in_array( $from, delicat_counting_statuses(), true ) && ! in_array( $to, delicat_counting_statuses(), true ) ) delicat_podium_recheck_order( $order_id );
+}, 25, 3 );
+add_action( 'woocommerce_order_partially_refunded', 'delicat_podium_recheck_order', 25, 1 );
+add_action( 'woocommerce_order_refunded', 'delicat_podium_recheck_order', 25, 1 );
+
+/** The top 3 of rows: rank => customer id. */
+function delicat_podium_of( array $rows ) {
+	$out = array(); $rank = 0;
+	foreach ( $rows as $uid => $r ) { if ( ++$rank > 3 ) break; $out[ $rank ] = (int) $uid; }
+	return $out;
+}
+function delicat_podium_recheck( $key ) {
+	$key = (int) $key;
+	if ( ! delicat_lock( 'delicat_competition_control', 2 ) ) { delicat_bg_once( 'delicat_podium_recheck', array( $key ), time() + 2 * MINUTE_IN_SECONDS ); return; }
+	try {
+		$all  = delicat_weekly_state_get();
+		$week = $all[ $key ] ?? null;
+		if ( ! is_array( $week ) || empty( $week['ranking'] ) || ! is_array( $week['ranking'] ) ) return;
+		$start = isset( $week['start'] ) && is_numeric( $week['start'] ) ? (int) $week['start'] : delicat_closed_period_start( $key );
+		$old   = array(); foreach ( $week['ranking'] as $r => $uid ) $old[ (int) $r ] = (int) $uid;
+		$new   = delicat_podium_of( delicat_collect_leaderboard_rows( $start, $key - 1 ) );
+		$moved = array();
+		foreach ( array( 1, 2, 3 ) as $r ) {
+			$p = $week['placements'][ $r ] ?? array();
+			if ( ( $old[ $r ] ?? 0 ) === ( $new[ $r ] ?? 0 ) || 'disabled' === ( $p['status'] ?? '' ) || (int) ( $p['prize'] ?? 0 ) < 1 ) continue; // same customer, or no prize at this place
+			$moved[] = $r;
+		}
+		$orders = get_option( 'delicat_podium_recheck_orders', array() );
+		$orders = is_array( $orders ) ? $orders : array();
+		$ids    = array_map( 'intval', (array) ( $orders[ $key ] ?? array() ) );
+		unset( $orders[ $key ] );
+		update_option( 'delicat_podium_recheck_orders', $orders, false );
+		$fp = md5( wp_json_encode( $new ) );
+		if ( ! $moved || ( $week['recheck']['fp'] ?? '' ) === $fp ) return; // podium unchanged, or this change already reported
+		$week['recheck'] = array( 'new' => $new, 'old' => $old, 'at' => current_time( 'mysql' ), 'fp' => $fp, 'orders' => $ids );
+		foreach ( $moved as $r ) $week['placements'][ $r ]['verify'] = 1;
+		$all[ $key ] = $week;
+		delicat_weekly_state_save( $all );
+	} finally {
+		delicat_unlock( 'delicat_competition_control' );
+	}
+	delicat_audit_add( sprintf( 'Meilleur client : podium de la période terminée le %s changé après un remboursement — à vérifier', wp_date( 'd/m/Y H:i', $key ) ) );
+	$line = function ( $r, $uid, $p ) {
+		if ( ! $uid ) return '#' . $r . ' — personne';
+		$u = get_userdata( $uid );
+		return '#' . $r . ' — ' . ( $u ? $u->display_name : 'compte supprimé' ) . ' (client #' . (int) $uid . ')' . ( $p ? ' — prix ' . (int) ( $p['prize'] ?? 0 ) . ' 💎, ' . ( in_array( $p['status'] ?? '', array( 'delivered', 'manual' ), true ) ? 'déjà remis' : 'pas encore remis' ) : '' );
+	};
+	$body = array( 'Une commande comptée dans la semaine terminée le ' . wp_date( 'd/m/Y H:i', $key ) . ' a été remboursée ou annulée' . ( $ids ? ' (commande ' . implode( ', ', array_map( function ( $id ) { return '#' . $id; }, $ids ) ) . ')' : '' ) . '. Le classement de cette semaine a été recalculé et le podium a changé.', '', 'Ancien podium (celui des prix) :' );
+	foreach ( array( 1, 2, 3 ) as $r ) $body[] = $line( $r, $old[ $r ] ?? 0, $week['placements'][ $r ] ?? array() );
+	$body[] = ''; $body[] = 'Nouveau podium :';
+	foreach ( array( 1, 2, 3 ) as $r ) $body[] = $line( $r, $new[ $r ] ?? 0, null );
+	$body[] = ''; $body[] = 'Rien n’a été repris ni redonné automatiquement : aucun portefeuille débité, aucune commande modifiée. Les prix concernés sont marqués « à vérifier » dans WooCommerce › Delicat Rewards › Meilleur client › Historique et remises. Un prix pas encore livré attend votre décision.';
+	wp_mail( get_option( 'admin_email' ), 'Delicat — Meilleur Client : podium à vérifier après un remboursement', implode( "\n", $body ) );
+}
+add_action( 'delicat_podium_recheck', 'delicat_podium_recheck' );
 
 function delicat_award_alert( $winner, $order_id ) {
 	$u   = get_userdata( $winner );
@@ -3013,6 +3185,14 @@ add_action( 'admin_post_delicat_save_general', function () {
 	$cfg['reset_day']  = max( 0, min( 6,  (int) ( $in['reset_day'] ?? 0 ) ) );
 	$cfg['reset_hour'] = max( 0, min( 23, (int) ( $in['reset_hour'] ?? 20 ) ) );
 	$cfg['board_size'] = max( 1, min( 50, (int) ( $in['board_size'] ?? 10 ) ) );
+	if ( 'board' === $scope ) { // 3.4.2 (RWD-05): from the next weekly reset only
+		$min_order = max( 0, min( 100000, (int) ( $in['board_min_order'] ?? 0 ) ) );
+		if ( abs( delicat_board_min_order( delicat_next_week_start() ) - $min_order ) > 0.001 ) {
+			$from = delicat_board_min_plan( $min_order );
+			$diff[] = sprintf( 'minimum classement %d dès le %s', $min_order, wp_date( 'd/m/Y H:i', $from ) );
+			$errs[] = sprintf( 'Montant minimum pour le classement : %s à partir du %s. La semaine en cours garde sa règle.', $min_order > 0 ? $min_order . ' ' . $cfg['currency'] : 'aucun', wp_date( 'd/m/Y H:i', $from ) );
+		}
+	}
 	$cfg['mask_names'] = $pub ? 1 : ( empty( $in['mask_names'] ) ? 0 : 1 );
 
 	$wa = esc_url_raw( trim( (string) ( $in['wa'] ?? '' ) ), array( 'http', 'https' ) );
@@ -3464,6 +3644,12 @@ function delicat_tab_settings( $board = false ) {
 	echo '<tr><td><b>Calcul Meilleur Client</b></td><td><b>70 % montant net dépensé + 30 % nombre de commandes distinctes</b>'
 		. '<div class="hint">Une commande payée et terminée compte une seule fois, même si elle contient plusieurs produits. Les montants remboursés sont retirés. En cas d’égalité : score, montant, commandes, puis résultat atteint le plus tôt.</div></td></tr>';
 
+	$min_now  = delicat_board_min_order( delicat_competition_start() );
+	$min_next = delicat_board_min_order( delicat_next_week_start() );
+	echo '<tr><td><b>Montant minimum d\'une commande pour le classement</b></td><td><input type="number" min="0" max="100000" step="1" name="board_min_order" value="' . esc_attr( (string) (int) round( $min_next ) ) . '"> ' . esc_html( (string) delicat_cfg( 'currency' ) )
+		. '<div class="hint">Une commande dont le montant éligible (après remboursement) est plus petit ne compte pas dans le classement, ni en montant ni en nombre de commandes : beaucoup de petites commandes ne battent plus un client qui dépense plus. 0 = toutes les commandes (règle d’origine). Un changement s’applique à partir de la semaine suivante ('
+		. esc_html( wp_date( 'd/m/Y H:i', delicat_next_week_start() ) ) . '), jamais à la semaine en cours. Cette semaine : ' . ( $min_now > 0 ? esc_html( delicat_num( $min_now ) . ' ' . delicat_cfg( 'currency' ) ) : 'aucun minimum' ) . '. Annoncez la règle aux clients avant qu’elle commence.</div></td></tr>';
+
 	echo '<tr><td><b>Prix Meilleur Client</b></td><td><input type="number" min="1" max="' . DELICAT_MAX_REWARD . '" name="prize" value="' . (int) $cfg['prize'] . '"> 💎';
 	$plan = delicat_reward_plan( (int) $cfg['prize'] );
 	echo ' <span class="hint">' . ( $plan ? esc_html( implode( ' + ', array_map( function ( $l ) { return $l['qty'] . '× PIN ' . $l['denom']; }, $plan ) ) ) : '<b style="color:#b32d2e">⛔ non composable</b>' ) . '</span></td></tr>';
@@ -3847,6 +4033,11 @@ function delicat_tab_diagnostics() {
 			. 'Les compteurs de bonus sont signés (HMAC-SHA256) et les boutons « Réclamer » portent un jeton signé de 30 minutes.</p></div>';
 	}
 
+	/* 3.4.2: the board is rebuilt in the background (WP-Cron / Action Scheduler). */
+	$built = delicat_leaderboard_built();
+	echo '<div class="box"><h3>Classement Meilleur client</h3><p>' . ( $built ? 'Calculé en arrière-plan, dernière fois le <b>' . esc_html( wp_date( 'd/m/Y H:i:s', $built ) ) . '</b>.' : 'Pas encore calculé : il le sera à la prochaine tâche planifiée.' )
+		. ' <span class="hint">La page des clients lit toujours ce classement enregistré ; il est recalculé environ 30 secondes après chaque commande modifiée, par les tâches planifiées de WordPress' . ( delicat_board_queue() ? ' (WooCommerce › État › Actions planifiées, groupe « delicat-rewards »)' : '' ) . '. S’il a plus d’une heure alors que des commandes arrivent, vérifiez que WP-Cron fonctionne (ou ajoutez une tâche cron serveur sur wp-cron.php).</span></p></div>';
+
 	/* Signing key: tell a salt change from fraud and offer the recovery. */
 	$reseal_month = wp_date( 'Y-m', delicat_month_start(), wp_timezone() );
 	echo '<div class="box"><h3>Clé de signature des bonus</h3>';
@@ -3873,7 +4064,7 @@ function delicat_tab_diagnostics() {
 
 	/* Reality check: would the "paid" rule silently exclude your real orders? */
 	if ( function_exists( 'wc_get_orders' ) ) {
-		$recent  = wc_get_orders( array( 'status' => delicat_counting_statuses(), 'limit' => 100, 'orderby' => 'date', 'order' => 'DESC' ) );
+		$recent  = wc_get_orders( array( 'type' => 'shop_order', 'status' => delicat_counting_statuses(), 'limit' => 100, 'orderby' => 'date', 'order' => 'DESC' ) ); // 3.4.2: without 'type' a refund came back too and stopped this tab
 		$unpaid  = 0; $guest = 0; $total = 0;
 		foreach ( $recent as $o ) {
 			if ( $o->get_meta( '_delicat_reward' ) ) continue;
@@ -4343,7 +4534,18 @@ function delicat_license_normalize_domain( $domain ) {
 function delicat_license_signature( array $payload, $key ) {
 	ksort( $payload ); return hash_hmac( 'sha256', wp_json_encode( $payload ), (string) $key );
 }
+/**
+ * 3.4.2 (RWD-04): the licence server sells « Client » copies of this plugin to other sites; the shop
+ * itself never asks it anything (this edition checks no licence). Its public route and its admin page
+ * now exist only when the server is in use: a licence was already issued (client sites keep working),
+ * or wp-config.php has define( 'DELICAT_REWARDS_LICENSE_SERVER', true ) to issue the first one.
+ */
+function delicat_license_server_on() {
+	if ( defined( 'DELICAT_REWARDS_LICENSE_SERVER' ) ) return (bool) DELICAT_REWARDS_LICENSE_SERVER;
+	return (bool) delicat_license_records();
+}
 add_action( 'rest_api_init', function () {
+	if ( ! delicat_license_server_on() ) return;
 	register_rest_route( 'delicat-license/v1', '/validate', array(
 		'methods' => 'POST', 'permission_callback' => '__return_true',
 		'callback' => function( WP_REST_Request $req ) {
@@ -4375,9 +4577,10 @@ add_action( 'rest_api_init', function () {
 		}
 	) );
 } );
-add_action( 'admin_menu', function(){ add_submenu_page('woocommerce','Rewards Licences','Rewards Licences',delicat_cap(),'delicat-rewards-licenses','delicat_license_admin_page'); }, 40 );
+add_action( 'admin_menu', function(){ if ( delicat_license_server_on() ) add_submenu_page('woocommerce','Rewards Licences','Rewards Licences',delicat_cap(),'delicat-rewards-licenses','delicat_license_admin_page'); }, 40 );
 add_action( 'admin_post_delicat_license_create', function(){
 	delicat_guard('delicat_license_create');
+	if ( ! delicat_license_server_on() ) wp_die( 'Serveur de licences désactivé.', 'Delicat Rewards', array( 'response' => 403 ) );
 	if ( ! delicat_license_lock( 5 ) ) wp_die( 'Le registre des licences est occupé. Réessayez.', 'Delicat Rewards', array( 'response' => 503 ) );
 	try {
 		$raw=strtoupper(wp_generate_password(32,false,false)); $key='DLR-'.substr($raw,0,8).'-'.substr($raw,8,8).'-'.substr($raw,16,8).'-'.substr($raw,24,8); $h=hash('sha256',$key);

@@ -1,79 +1,18 @@
 <?php
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-/** Production hardening: session controls, audit trail, diagnostics and release safety. */
+/**
+ * Production hardening: audit trail and push relay settings.
+ * 7.1.1 (AST-06): the old customer API's session, unlink and diagnostics routes are removed.
+ */
 class DSA2_Production {
-    const NS = 'delicat-assistant/v2';
-
     public static function init() {
-        add_action( 'rest_api_init', array( __CLASS__, 'routes' ) );
         add_action( 'admin_menu', array( __CLASS__, 'admin_menu' ), 40 );
         add_action( 'admin_post_dap_clear_audit_log', array( __CLASS__, 'clear_audit_log' ) );
         add_action( 'admin_post_dap_save_production_settings', array( __CLASS__, 'save_settings' ) );
         add_action( 'dsa2_mobile_customer_message', function($conversation_id,$message_id){ self::audit('customer_message', array('conversation_id'=>(int)$conversation_id,'message_id'=>(int)$message_id)); }, 10, 2 );
         add_action( 'dsa2_mobile_ticket_created', function($ticket_id,$conversation_id,$subject,$priority){ self::audit('ticket_created', array('ticket_id'=>(int)$ticket_id,'conversation_id'=>(int)$conversation_id,'priority'=>sanitize_key($priority))); }, 10, 4 );
         add_action( 'dsa2_mobile_ticket_rated', function($ticket_id,$rating,$comment,$conversation_id){ self::audit('ticket_rated', array('ticket_id'=>(int)$ticket_id,'conversation_id'=>(int)$conversation_id,'rating'=>(int)$rating)); }, 10, 4 );
-    }
-
-    public static function routes() {
-        if ( ! class_exists( 'DSA2_Mobile_API', false ) || ! DSA2_Mobile_API::customer_api_enabled() ) return; // 6.6.1
-        register_rest_route(self::NS, '/sessions', array('methods'=>'GET','callback'=>array(__CLASS__,'sessions'),'permission_callback'=>array('DSA2_Mobile_API','allow')));
-        register_rest_route(self::NS, '/sessions/revoke', array('methods'=>'POST','callback'=>array(__CLASS__,'revoke_session'),'permission_callback'=>array('DSA2_Mobile_API','allow')));
-        register_rest_route(self::NS, '/account/unlink', array('methods'=>'POST','callback'=>array(__CLASS__,'unlink_account'),'permission_callback'=>array('DSA2_Mobile_API','allow')));
-        register_rest_route(self::NS, '/diagnostics', array('methods'=>'GET','callback'=>array(__CLASS__,'diagnostics'),'permission_callback'=>array('DSA2_Mobile_API','allow')));
-    }
-
-    private static function session($request){ return $request->get_param('_mobile_session'); }
-
-    public static function sessions($request) {
-        $s=self::session($request); global $wpdb;
-        $rows=$wpdb->get_results($wpdb->prepare("SELECT installation_id,language,expires_at,created_at FROM {$wpdb->prefix}dap_mobile_sessions WHERE conversation_id=%d ORDER BY created_at DESC",(int)$s->conversation_id));
-        $devices=$wpdb->get_results($wpdb->prepare("SELECT platform,updated_at FROM {$wpdb->prefix}dap_mobile_devices WHERE conversation_id=%d ORDER BY updated_at DESC",(int)$s->conversation_id));
-        $out=array();
-        foreach((array)$rows as $row){$out[]=array('installation_id'=>(string)$row->installation_id,'language'=>(string)$row->language,'expires_at'=>(string)$row->expires_at,'created_at'=>(string)$row->created_at,'current'=>hash_equals((string)$s->installation_id,(string)$row->installation_id));}
-        return rest_ensure_response(array('sessions'=>$out,'devices'=>array_map(function($d){return array('platform'=>(string)$d->platform,'updated_at'=>(string)$d->updated_at);},(array)$devices)));
-    }
-
-    public static function revoke_session($request) {
-        $s=self::session($request); $installation=sanitize_text_field((string)$request->get_param('installation_id')); global $wpdb;
-        if(!$installation) return new WP_Error('bad_installation','Installation is required',array('status'=>400));
-        $target=$wpdb->get_row($wpdb->prepare("SELECT installation_id,conversation_id FROM {$wpdb->prefix}dap_mobile_sessions WHERE installation_id=%s",$installation));
-        if(!$target || (int)$target->conversation_id !== (int)$s->conversation_id) return new WP_Error('not_found','Session not found',array('status'=>404));
-        $wpdb->delete($wpdb->prefix.'dap_mobile_sessions',array('installation_id'=>$installation),array('%s'));
-        $wpdb->delete($wpdb->prefix.'dap_mobile_devices',array('installation_id'=>$installation),array('%s'));
-        delete_option('dap_mobile_prefs_'.$installation);
-        self::audit('session_revoked',array('conversation_id'=>(int)$s->conversation_id,'installation_id'=>substr($installation,0,12).'…'));
-        return rest_ensure_response(array('success'=>true,'current'=>hash_equals((string)$s->installation_id,$installation)));
-    }
-
-    public static function unlink_account($request) {
-        $s=self::session($request);
-        // Clearing user_id alone left the device sitting on the account's whole thread —
-        // order history, agent replies and all — which on a shared phone handed the next
-        // person the previous customer's conversation.
-        $new_id=DSA2_Data::unlink_conversation((int)$s->conversation_id,(string)$s->installation_id,(string)$s->language);
-        if(!$new_id) return new WP_Error('unlink_failed','Could not create a private signed-out session',array('status'=>500));
-        self::audit('account_unlinked',array('conversation_id'=>(int)$s->conversation_id));
-        return rest_ensure_response(array('success'=>true,'conversation_id'=>$new_id));
-    }
-
-    public static function diagnostics($request) {
-        $s=self::session($request); global $wpdb; $settings=get_option('dap_settings',array());
-        $push_mode=!empty($settings['firebase_v1_webhook_url'])?'webhook':'not_configured';
-        $pending=(array)get_option('dap_push_retry_queue',array());
-        return rest_ensure_response(array(
-            'plugin_version'=>DSA2_VERSION,
-            'api_version'=>'2.2',
-            'conversation_id'=>(int)$s->conversation_id,
-            'session_expires_at'=>(string)$s->expires_at,
-            'push_mode'=>$push_mode,
-            'push_queue'=>count($pending),
-            'woocommerce'=>defined('WC_VERSION')?WC_VERSION:null,
-            'wallet'=>function_exists('woo_wallet'),
-            'server_time'=>gmdate('c'),
-            'https'=>is_ssl(),
-            'database_ok'=>(bool)$wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s',$wpdb->prefix.'dap_mobile_sessions'))
-        ));
     }
 
     public static function audit($event,$context=array()) {

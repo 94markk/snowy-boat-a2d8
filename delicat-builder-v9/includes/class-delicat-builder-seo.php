@@ -47,6 +47,9 @@ final class Delicat_Builder_V9_SEO {
 			'same_as'          => '',
 			'phone'            => '',
 			'email'            => '',
+			/* 9.7.8 (FE-11): what Google's product listings ask for. Empty = nothing is declared. */
+			'return_days'      => '',
+			'delivery_hours'   => '',
 		);
 	}
 
@@ -118,6 +121,72 @@ final class Delicat_Builder_V9_SEO {
 		add_action( 'wp_footer', array( __CLASS__, 'structured_data' ), 5 );
 		/* The OnlineStore graph below replaces the Pages module's Organization block. */
 		add_filter( 'delicat_builder_v9_organization_structured_data', '__return_false' );
+		add_filter( 'woocommerce_structured_data_product', array( __CLASS__, 'product_markup' ), 20, 2 );
+	}
+
+	/**
+	 * 9.7.8 (FE-11): WooCommerce's Product data lacks what Google's product listings ask for. Adds the brand
+	 * (WooCommerce brand or a "brand"/"marque" attribute, never guessed), the store as seller, and the delivery
+	 * and return terms only when the owner has filled them in on the Delicat SEO screen.
+	 */
+	public static function product_markup( $markup, $product ) {
+		if ( ! is_array( $markup ) || ! $product instanceof WC_Product ) {
+			return $markup;
+		}
+		$s    = self::settings();
+		$home = home_url( '/' );
+		if ( empty( $markup['brand'] ) ) {
+			$brand = '';
+			if ( taxonomy_exists( 'product_brand' ) ) {
+				$terms = get_the_terms( $product->get_id(), 'product_brand' );
+				if ( is_array( $terms ) && ! empty( $terms ) ) {
+					$brand = (string) $terms[0]->name;
+				}
+			}
+			foreach ( array( 'pa_brand', 'pa_marque', 'brand', 'marque' ) as $attribute ) {
+				if ( '' === $brand ) {
+					$brand = trim( (string) $product->get_attribute( $attribute ) );
+				}
+			}
+			if ( '' !== $brand ) {
+				$markup['brand'] = array( '@type' => 'Brand', 'name' => html_entity_decode( wp_strip_all_tags( $brand ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
+			}
+		}
+		if ( empty( $markup['offers'] ) || ! is_array( $markup['offers'] ) ) {
+			return $markup;
+		}
+		$currency = function_exists( 'get_woocommerce_currency' ) ? (string) get_woocommerce_currency() : 'HTG';
+		foreach ( $markup['offers'] as $i => $offer ) {
+			if ( ! is_array( $offer ) ) {
+				continue;
+			}
+			$offer['seller'] = array( '@type' => 'Organization', '@id' => $home . '#organization', 'name' => self::site_name() );
+			if ( '' !== $s['delivery_hours'] && empty( $offer['shippingDetails'] ) ) {
+				$offer['shippingDetails'] = array(
+					'@type'               => 'OfferShippingDetails',
+					'shippingRate'        => array( '@type' => 'MonetaryAmount', 'value' => 0, 'currency' => $currency ),
+					'shippingDestination' => array( '@type' => 'DefinedRegion', 'addressCountry' => 'HT' ),
+					'deliveryTime'        => array(
+						'@type'        => 'ShippingDeliveryTime',
+						'handlingTime' => array( '@type' => 'QuantitativeValue', 'minValue' => 0, 'maxValue' => 0, 'unitCode' => 'DAY' ),
+						'transitTime'  => array( '@type' => 'QuantitativeValue', 'minValue' => 0, 'maxValue' => (int) $s['delivery_hours'], 'unitCode' => 'HUR' ),
+					),
+				);
+			}
+			if ( '' !== $s['return_days'] && empty( $offer['hasMerchantReturnPolicy'] ) ) {
+				$days   = (int) $s['return_days'];
+				$policy = array( '@type' => 'MerchantReturnPolicy', 'applicableCountry' => 'HT' );
+				if ( $days > 0 ) {
+					$policy['returnPolicyCategory'] = 'https://schema.org/MerchantReturnFiniteReturnWindow';
+					$policy['merchantReturnDays']   = $days;
+				} else {
+					$policy['returnPolicyCategory'] = 'https://schema.org/MerchantReturnNotPermitted';
+				}
+				$offer['hasMerchantReturnPolicy'] = $policy;
+			}
+			$markup['offers'][ $i ] = $offer;
+		}
+		return $markup;
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -314,7 +383,9 @@ final class Delicat_Builder_V9_SEO {
 				} else {
 					$ctx['type'] = 'post' === $post->post_type ? 'article' : 'website';
 					$text        = '' !== $custom ? $custom : ( has_excerpt( $post ) ? (string) $post->post_excerpt : (string) $post->post_content );
-					$ctx['description'] = self::clean( $text );
+					/* 9.7.8 (FE-20): cart, checkout and account pages are not indexed; their block text
+					 * ("You may be interested in…") is no description. */
+					$ctx['description'] = self::private_page() && '' === $custom ? '' : self::clean( $text );
 				}
 			}
 		} elseif ( self::is_product_archive_term() ) {
@@ -322,7 +393,8 @@ final class Delicat_Builder_V9_SEO {
 			if ( $term instanceof WP_Term ) {
 				$ctx['description'] = self::clean( (string) $term->description );
 				if ( '' === $ctx['description'] ) {
-					$ctx['description'] = self::clean( sprintf( '%1$s sur %2$s : recharges et produits numériques livrés rapidement en Haïti. Commande en quelques clics et suis ta livraison depuis ton compte.', $term->name, $name ) );
+					/* 9.7.8 (FE-20): short enough for Google to show it whole. */
+					$ctx['description'] = self::clean( sprintf( '%1$s sur %2$s : livraison rapide en Haïti, paiement MonCash, NatCash ou wallet.', html_entity_decode( $term->name, ENT_QUOTES | ENT_HTML5, 'UTF-8' ), $name ) );
 				}
 				$link = get_term_link( $term );
 				$ctx['url']       = is_wp_error( $link ) ? '' : self::paged_url( (string) $link );
@@ -337,7 +409,20 @@ final class Delicat_Builder_V9_SEO {
 			$link               = $shop_id > 0 ? (string) get_permalink( $shop_id ) : '';
 			$ctx['url']         = '' !== $link ? self::paged_url( $link ) : '';
 			$ctx['canonical']   = self::catalogue_query_args() || is_search() ? '' : $ctx['url'];
-			$ctx['crumbs']      = array( array( 'Accueil', home_url( '/' ) ), array( $shop_id > 0 ? get_the_title( $shop_id ) : 'Boutique', $link ) );
+			$shop_title         = $shop_id > 0 ? trim( (string) get_the_title( $shop_id ) ) : '';
+			/* 9.7.8 (FE-10): WooCommerce creates the page as "Shop" while the storefront heading reads "Boutique". */
+			$ctx['crumbs']      = array( array( 'Accueil', home_url( '/' ) ), array( ( '' === $shop_title || 'shop' === strtolower( $shop_title ) ) ? 'Boutique' : $shop_title, $link ) );
+		}
+		if ( empty( $ctx['image'] ) && ( self::is_product_archive_term() || ( function_exists( 'is_shop' ) && is_shop() ) ) ) {
+			/* 9.7.8 (FE-20): a catalogue page without its own picture is shared with its first product's. */
+			global $wp_query;
+			foreach ( array_slice( (array) ( $wp_query->posts ?? array() ), 0, 6 ) as $first ) {
+				$thumb = $first instanceof WP_Post ? (int) get_post_thumbnail_id( $first ) : 0;
+				if ( $thumb > 0 ) {
+					$ctx['image'] = self::image_from_attachment( $thumb );
+					break;
+				}
+			}
 		}
 		if ( empty( $ctx['image'] ) ) {
 			$ctx['image'] = self::fallback_image();
@@ -482,7 +567,7 @@ final class Delicat_Builder_V9_SEO {
 				$item = array(
 					'@type'    => 'ListItem',
 					'position' => $i + 1,
-					'name'     => wp_strip_all_tags( (string) $crumb[0] ),
+					'name'     => trim( html_entity_decode( wp_strip_all_tags( (string) $crumb[0] ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ),
 				);
 				if ( '' !== (string) $crumb[1] ) {
 					$item['item'] = (string) $crumb[1];
@@ -636,6 +721,8 @@ final class Delicat_Builder_V9_SEO {
 			'same_as'          => implode( "\n", array_slice( array_unique( $same ), 0, 12 ) ),
 			'phone'            => sanitize_text_field( (string) ( $input['phone'] ?? '' ) ),
 			'email'            => sanitize_email( (string) ( $input['email'] ?? '' ) ),
+			'return_days'      => '' === trim( (string) ( $input['return_days'] ?? '' ) ) ? '' : (string) min( 365, absint( $input['return_days'] ) ),
+			'delivery_hours'   => '' === trim( (string) ( $input['delivery_hours'] ?? '' ) ) ? '' : (string) max( 1, min( 720, absint( $input['delivery_hours'] ) ) ),
 		);
 	}
 
@@ -666,6 +753,8 @@ final class Delicat_Builder_V9_SEO {
 		$field( 'Profils officiels', '<textarea class="large-text" rows="4" name="' . esc_attr( $opt ) . '[same_as]" placeholder="https://www.facebook.com/…&#10;https://www.instagram.com/…&#10;https://www.tiktok.com/@…">' . esc_textarea( $s['same_as'] ) . '</textarea>', 'Une adresse par ligne (Facebook, Instagram, TikTok, fiche Google Business…). Aide Google à relier la marque à ses profils.' );
 		$field( 'Téléphone / WhatsApp du support', '<input type="text" name="' . esc_attr( $opt ) . '[phone]" value="' . esc_attr( $s['phone'] ) . '" placeholder="+509 …">' );
 		$field( 'E-mail du support', '<input type="email" name="' . esc_attr( $opt ) . '[email]" value="' . esc_attr( $s['email'] ) . '">' );
+		$field( 'Retours (fiches produits Google)', '<input type="number" min="0" max="365" step="1" class="small-text" name="' . esc_attr( $opt ) . '[return_days]" value="' . esc_attr( $s['return_days'] ) . '"> jours', 'Indiquez seulement ce que disent vos conditions de vente. Vide : rien n’est déclaré à Google. 0 : pas de retour possible (produits numériques livrés). 7 : retour possible sous 7 jours.' );
+		$field( 'Délai de livraison maximal', '<input type="number" min="1" max="720" step="1" class="small-text" name="' . esc_attr( $opt ) . '[delivery_hours]" value="' . esc_attr( $s['delivery_hours'] ) . '"> heures', 'Livraison numérique en Haïti, sans frais d’envoi. Vide : rien n’est déclaré. Mettez le délai que vous tenez vraiment (ex. 1 pour « en moins d’une heure »).' );
 		echo '</table>';
 		submit_button();
 		echo '</form></div>';

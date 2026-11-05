@@ -7,6 +7,72 @@ class Delicat_Admin {
         add_action( 'admin_menu', [ $this, 'menu' ] );
         add_action( 'admin_init', [ $this, 'settings' ] );
         add_action( 'admin_footer', [ $this, 'ownership_footer' ] );
+        add_action( 'admin_notices', [ __CLASS__, 'webhook_notice' ] );
+    }
+
+    /** True on the Delicat console screens (same test as the ownership footer). */
+    private static function on_delicat_screen(): bool {
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        return $screen && strpos( (string) $screen->id, 'delicat' ) !== false;
+    }
+
+    /**
+     * 6.6.4 (RCH-09): the webhook carries the customer's e-mail, the TransCode and
+     * the proof file name. Without a secret nothing proves to the receiver that the
+     * site sent it, so say so on every Delicat screen until a secret is set.
+     */
+    public static function webhook_notice(): void {
+        if ( ! current_user_can( 'manage_options' ) || ! self::on_delicat_screen() ) return;
+        if ( '' === trim( (string) get_option( 'delicat_webhook_url', '' ) ) || '' !== (string) get_option( 'delicat_webhook_secret', '' ) ) return;
+        echo '<div class="notice notice-warning"><p><strong>Webhook actif sans secret.</strong> Les envois vers votre webhook (e-mail du client, TransCode, preuve) ne sont pas signés : le destinataire ne peut pas vérifier qu\'ils viennent de votre site. '
+            . 'Allez dans <a href="' . esc_url( admin_url( 'admin.php?page=delicat-settings' ) ) . '">Paramètres → Webhook</a>, choisissez « Générer un nouveau secret », enregistrez, puis collez ce secret dans Make / Zapier / n8n pour vérifier l\'en-tête <code>X-Delicat-Signature</code>.</p></div>';
+    }
+
+    /**
+     * 6.6.4 (RCH-11): the stored webhook secret is never written into the page.
+     * Empty field = keep it; a typed value replaces it; « generate » / « remove ».
+     */
+    public static function sanitize_webhook_secret( $val ): string {
+        static $generated = null;
+        $old    = (string) get_option( 'delicat_webhook_secret', '' );
+        $action = '';
+        if ( isset( $_POST['option_page'], $_POST['delicat_webhook_secret_action'] ) && 'delicat_settings_group' === $_POST['option_page'] ) {
+            $action = sanitize_key( wp_unslash( $_POST['delicat_webhook_secret_action'] ) );
+        }
+        if ( 'remove' === $action ) return '';
+        if ( 'generate' === $action ) {
+            if ( null === $generated ) { // update_option may sanitize twice: one secret per save
+                $generated = wp_generate_password( 40, false, false );
+                set_transient( 'delicat_webhook_secret_new_' . get_current_user_id(), $generated, 5 * MINUTE_IN_SECONDS );
+            }
+            return $generated;
+        }
+        $val = trim( sanitize_text_field( (string) $val ) );
+        return '' === $val ? $old : $val;
+    }
+
+    /** The webhook secret row: status, empty password field, replace actions. */
+    private static function webhook_secret_field(): void {
+        $has  = '' !== (string) get_option( 'delicat_webhook_secret', '' );
+        $tkey = 'delicat_webhook_secret_new_' . get_current_user_id();
+        $new  = get_transient( $tkey );
+        if ( $new ) delete_transient( $tkey );
+        if ( $new ) : ?>
+            <p style="color:#1b5e20;font-weight:700;margin-top:0;">Nouveau secret créé. Copiez-le maintenant dans Make / Zapier / n8n : il ne sera plus affiché.</p>
+            <p><input type="text" readonly class="large-text" style="font-family:monospace;" value="<?php echo esc_attr( (string) $new ); ?>" onclick="this.select();"></p>
+        <?php endif; ?>
+        <p style="margin-top:0;"><?php echo $has
+            ? delicat_recharge_status_mark( true, 'Un secret est enregistré (masqué).', '' ) // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside.
+            : delicat_recharge_status_mark( false, '', 'Aucun secret : les envois ne sont pas signés.' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped inside. ?></p>
+        <input type="password" name="delicat_webhook_secret" class="regular-text" value="" autocomplete="new-password"
+               placeholder="<?php echo esc_attr( $has ? 'Laisser vide pour garder le secret actuel' : 'Collez un secret, ou générez-en un ci-dessous' ); ?>">
+        <p style="margin:8px 0 0;">
+            <label><input type="radio" name="delicat_webhook_secret_action" value="" checked> <?php echo $has ? 'Garder le secret actuel (ou le remplacer par celui saisi ci-dessus)' : 'Utiliser le secret saisi ci-dessus'; ?></label><br>
+            <label><input type="radio" name="delicat_webhook_secret_action" value="generate"> Générer un nouveau secret (affiché une seule fois après l'enregistrement)</label>
+            <?php if ( $has ) : ?><br><label><input type="radio" name="delicat_webhook_secret_action" value="remove"> Retirer le secret (les envois ne seront plus signés)</label><?php endif; ?>
+        </p>
+        <p class="description">Signe chaque envoi avec l'en-tête <code>X-Delicat-Signature: sha256=…</code> (HMAC-SHA256 du corps JSON). Après un changement, mettez le même secret chez le destinataire.</p>
+        <?php
     }
 
     /**
@@ -59,21 +125,24 @@ class Delicat_Admin {
     /* ---- Settings ----------------------------------------------------- */
 
     public function settings(): void {
+        // 6.6.4 (RCH-10): the MonCash Business API fields (client id, secret,
+        // sandbox) are gone with the code that never used them; saved values stay.
         $fields = [
             'delicat_admin_email',
-            'delicat_moncash_client_id',
-            'delicat_moncash_secret',
-            'delicat_moncash_sandbox',
             'delicat_moncash_numero',
             'delicat_moncash_nom',
             'delicat_natcash_numero',
             'delicat_natcash_nom',
             'delicat_webhook_url',
-            'delicat_webhook_secret',
         ];
         foreach ( $fields as $f ) {
             register_setting( 'delicat_settings_group', $f, 'sanitize_text_field' );
         }
+        // 6.6.4 (RCH-11): the webhook secret is never sent back to the browser.
+        // Empty field = keep the current secret; « Générer » / « Retirer » replace it.
+        register_setting( 'delicat_settings_group', 'delicat_webhook_secret', [
+            'sanitize_callback' => [ __CLASS__, 'sanitize_webhook_secret' ],
+        ] );
         // Device token(s) — multi-line for multiple phones.
         register_setting( 'delicat_settings_group', 'delicat_fcm_device_token', [
             'sanitize_callback' => function ( $val ) {
@@ -159,26 +228,9 @@ class Delicat_Admin {
                                    value="<?php echo $opt('delicat_admin_email', get_option('admin_email')); ?>"></td></tr>
                 </table>
 
-                <h2>MonCash API (pour vérification automatique)</h2>
-                <p class="description">Obtenez vos credentials sur
-                    <a href="https://moncashbutton.digicelgroup.com/Moncash-business/merchant/login" target="_blank">
-                    MonCash Business Portal</a>.</p>
+                <h2>MonCash</h2>
+                <p class="description">Les recharges MonCash sont validées par le SMS de paiement (page Natcash SMS).</p>
                 <table class="form-table">
-                    <tr><th>Client ID</th>
-                        <td><input type="text" name="delicat_moncash_client_id" class="regular-text"
-                                   value="<?php echo $opt('delicat_moncash_client_id'); ?>"></td></tr>
-                    <tr><th>Secret</th>
-                        <td><input type="password" name="delicat_moncash_secret" class="regular-text"
-                                   value="<?php echo $opt('delicat_moncash_secret'); ?>"></td></tr>
-                    <tr><th>Environnement</th>
-                        <td>
-                            <label><input type="radio" name="delicat_moncash_sandbox" value="1"
-                                <?php checked( $opt('delicat_moncash_sandbox','1'), '1' ); ?>> Sandbox (test)</label>
-                            &nbsp;&nbsp;
-                            <label><input type="radio" name="delicat_moncash_sandbox" value="0"
-                                <?php checked( $opt('delicat_moncash_sandbox','1'), '0' ); ?>> Production (live)</label>
-                            <p class="description">Utilisez Sandbox d'abord, puis passez en Production quand tout est OK.</p>
-                        </td></tr>
                     <tr><th>Numéro MonCash (affiché au client)</th>
                         <td><input type="text" name="delicat_moncash_numero" class="regular-text"
                                    value="<?php echo $opt('delicat_moncash_numero','39421885'); ?>"></td></tr>
@@ -204,9 +256,7 @@ class Delicat_Admin {
                                    value="<?php echo $opt('delicat_webhook_url'); ?>">
                             <p class="description">Recevra un POST JSON à chaque création ou mise à jour.</p></td></tr>
                     <tr><th>Webhook Secret</th>
-                        <td><input type="text" name="delicat_webhook_secret" class="regular-text"
-                                   value="<?php echo $opt('delicat_webhook_secret'); ?>">
-                            <p class="description">Signe les requêtes via <code>X-Delicat-Signature</code>.</p></td></tr>
+                        <td><?php self::webhook_secret_field(); ?></td></tr>
                 </table>
 
                 <?php if ( defined( 'DELICAT_IS_CLIENT' ) && DELICAT_IS_CLIENT ) : ?>

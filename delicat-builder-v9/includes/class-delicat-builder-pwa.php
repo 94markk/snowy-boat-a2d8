@@ -282,14 +282,26 @@ final class Delicat_Builder_V9_PWA {
 
 	private static function service_worker_response(): void {
 		$s = self::settings();
-		nocache_headers();
 		$scope = wp_parse_url( home_url( '/' ), PHP_URL_PATH );
 		$scope = is_string( $scope ) && '' !== $scope ? trailingslashit( $scope ) : '/';
 		header( 'Content-Type: application/javascript; charset=utf-8' );
 		header( 'Service-Worker-Allowed: ' . $scope );
-		header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		/* 9.7.8 (FE-17): the browser checks this script on every page load of the installed app, and with
+		 * no-store each check started WordPress. Nothing in it depends on the visitor (settings, version,
+		 * maintenance state only), so Cloudflare may answer those checks for five minutes; the browser itself
+		 * still revalidates every time (max-age=0). */
+		if ( class_exists( 'Delicat_Builder_V9_Maintenance', false ) && Delicat_Builder_V9_Maintenance::is_enabled() ) {
+			nocache_headers(); // while the store is closed the app must learn it at once
+			header( 'Cache-Control: no-cache, no-store, must-revalidate' );
+		} else {
+			header( 'Cache-Control: public, max-age=0, s-maxage=300, stale-while-revalidate=60' );
+			do_action( 'litespeed_control_set_ttl', 300 );
+		}
 		header( 'X-Content-Type-Options: nosniff' );
 		$cache_name = 'delicat-v9-static-' . preg_replace( '/[^A-Za-z0-9_.-]/', '-', DELICAT_BUILDER_V9_VERSION );
+		/* 9.7.8 (FE-06): the app shell has a cache of its own that is never trimmed. It shared the 64-entry
+		 * runtime cache with product pictures, where the oldest entries (the shell) went first. */
+		$shell_cache = 'delicat-v9-shell-' . preg_replace( '/[^A-Za-z0-9_.-]/', '-', DELICAT_BUILDER_V9_VERSION );
 		$max = min( 120, max( 20, absint( $s['max_entries'] ?? 64 ) ) );
 		$cache_enabled = empty( $s['static_cache'] ) ? 'false' : 'true';
 		$doc_enabled   = empty( $s['document_cache'] ) ? 'false' : 'true';
@@ -359,6 +371,7 @@ final class Delicat_Builder_V9_PWA {
 		?>
 'use strict';
 const DBV9_CACHE=<?php echo wp_json_encode( $cache_name ); ?>;
+const DBV9_SHELL=<?php echo wp_json_encode( $shell_cache ); ?>;
 const DBV9_DOCS=<?php echo wp_json_encode( $doc_cache ); ?>;
 const DBV9_MAX=<?php echo (int) $max; ?>;
 const DBV9_STATIC_CACHE=<?php echo $cache_enabled; ?>;
@@ -369,8 +382,10 @@ const DBV9_OFFLINE='<!doctype html><html lang="fr"><head><meta charset="utf-8"><
 const DBV9_PRIVATE=/(?:\/wp-admin(?:\/|$)|\/wp-login\.php(?:\/|$)|\/cart(?:\/|$)|\/panier(?:\/|$)|\/checkout(?:\/|$)|\/commande(?:\/|$)|\/my-account(?:\/|$)|\/mon-compte(?:\/|$)|\/my-wallet(?:\/|$)|\/wp-json(?:\/|$)|admin-ajax\.php)/i;
 const DBV9_SENSITIVE_Q=/(?:^|&)(?:delicat_product|delicat_product_fragment|wc-ajax|add-to-cart|remove_item|undo_item|_wpnonce|nonce|action|dip_action|logout|customer-logout)=/i;
 async function dbv9Trim(){const c=await caches.open(DBV9_CACHE);const keys=await c.keys();if(keys.length>DBV9_MAX){await Promise.all(keys.slice(0,keys.length-DBV9_MAX).map(k=>c.delete(k)));}}
-self.addEventListener('install',e=>e.waitUntil((async()=>{try{if(DBV9_STATIC_CACHE&&DBV9_PRECACHE.length){const c=await caches.open(DBV9_CACHE);await Promise.all(DBV9_PRECACHE.map(u=>c.add(new Request(u,{cache:'reload'})).catch(()=>{})));}}catch(_){}await self.skipWaiting();})()));
-self.addEventListener('activate',e=>e.waitUntil((async()=>{try{if(self.registration.navigationPreload)await self.registration.navigationPreload.enable();}catch(_){}const keys=await caches.keys();await Promise.all(keys.filter(k=>(k.startsWith('delicat-v9-static-')&&k!==DBV9_CACHE)||(k.startsWith('delicat-v9-docs-')&&k!==DBV9_DOCS)).map(k=>caches.delete(k)));await self.clients.claim();})()));
+/* 9.7.8 (FE-04): the shell is copied through the browser's normal HTTP cache. Every file in it has its content hash or ?ver
+   in the URL, so the copy the page already downloaded is the right one; forcing a reload downloaded all of it again. */
+self.addEventListener('install',e=>e.waitUntil((async()=>{try{if(DBV9_STATIC_CACHE&&DBV9_PRECACHE.length){const c=await caches.open(DBV9_SHELL);await Promise.all(DBV9_PRECACHE.map(u=>c.add(u).catch(()=>{})));}}catch(_){}await self.skipWaiting();})()));
+self.addEventListener('activate',e=>e.waitUntil((async()=>{try{if(self.registration.navigationPreload)await self.registration.navigationPreload.enable();}catch(_){}const keys=await caches.keys();await Promise.all(keys.filter(k=>(k.startsWith('delicat-v9-static-')&&k!==DBV9_CACHE)||(k.startsWith('delicat-v9-shell-')&&k!==DBV9_SHELL)||(k.startsWith('delicat-v9-docs-')&&k!==DBV9_DOCS)).map(k=>caches.delete(k)));await self.clients.claim();})()));
 self.addEventListener('message',e=>{const d=e.data||{};if(d.type==='dbv9-clear-docs'){e.waitUntil(caches.delete(DBV9_DOCS));}});
 self.addEventListener('push',e=>{
   let d={};try{d=e.data?e.data.json():{};}catch(_){try{d={body:e.data?e.data.text():''};}catch(__){d={};}}
@@ -408,6 +423,9 @@ function dbv9DocFetch(e,r,c,key,keyUrl){
   p.then(()=>dbv9DocInflight.delete(keyUrl),()=>dbv9DocInflight.delete(keyUrl));
   return p;
 }
+/* 9.7.8 (FE-05): a storefront page opened without a connection shows the store's own offline page (Réessayer)
+   instead of the browser's error screen. Nothing is stored; private pages are never intercepted. */
+async function dbv9Network(e,r){try{return (e.preloadResponse&&await e.preloadResponse)||await fetch(r);}catch(_){return new Response(DBV9_OFFLINE,{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});}}
 async function dbv9Currency(){try{if(self.cookieStore&&self.cookieStore.get){const c=await self.cookieStore.get('dmc_currency');return c&&c.value?String(c.value).replace(/[^A-Z]/g,'').slice(0,3):'';}}catch(_){}return '';}
 async function dbv9Document(e,r,u){
   const c=await caches.open(DBV9_DOCS);
@@ -428,7 +446,7 @@ self.addEventListener('fetch',e=>{
   let u;try{u=new URL(r.url);}catch(_){return;}
   if(u.origin!==self.location.origin||DBV9_PRIVATE.test(u.pathname)||DBV9_SENSITIVE_Q.test(u.search.replace(/^\?/,'')))return;
   const isDoc=r.mode==='navigate'||r.headers.get('X-Delicat-Shell')==='1';
-  if(isDoc){if(DBV9_DOC_CACHE&&!/\.(?:xml|txt|json)$/i.test(u.pathname)&&!/[?&](?:s|preview|delicat_builder_preview)=/i.test(u.search))e.respondWith(dbv9Document(e,r,u));return;}
+  if(isDoc){if(DBV9_DOC_CACHE&&!/\.(?:xml|txt|json)$/i.test(u.pathname)&&!/[?&](?:s|preview|delicat_builder_preview)=/i.test(u.search))e.respondWith(dbv9Document(e,r,u));else if(r.mode==='navigate')e.respondWith(dbv9Network(e,r));return;}
   if(!DBV9_STATIC_CACHE)return;
   const d=r.destination||'';
   const isStatic=['style','script','image','font'].includes(d)||/\.(?:css|js|png|jpe?g|gif|webp|avif|svg|woff2?)(?:$|\?)/i.test(u.pathname);
@@ -445,7 +463,7 @@ self.addEventListener('fetch',e=>{
      gets a different name — so treat it exactly like a ?ver stamp. */
   const versioned=/[?&]ver=/.test(u.search)||/\.[0-9a-f]{12}\.(?:css|js)$/i.test(u.pathname);
   const upload=/\/wp-content\/uploads\//.test(u.pathname);
-  e.respondWith(caches.open(DBV9_CACHE).then(async c=>{
+  e.respondWith(caches.open(DBV9_SHELL).then(s=>s.match(r)).catch(()=>null).then(shell=>shell||caches.open(DBV9_CACHE).then(async c=>{
     const hit=await c.match(r);
     if(hit&&versioned)return hit;
     if(hit&&upload){const at=Number(hit.headers.get('x-dbv9-cached-at'))||0;if(at&&(Date.now()-at)<21600000)return hit;}
@@ -455,7 +473,7 @@ self.addEventListener('fetch',e=>{
       return resp;
     }).catch(()=>hit);
     return hit||net;
-  }));
+  })));
 });
 		<?php
 		exit;

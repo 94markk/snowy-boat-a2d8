@@ -46,6 +46,7 @@ const STR = {
     hide: 'Masquer', restore: 'Rétablir', del: 'Supprimer', pin: 'Épingler ou désépingler', mute: 'Sourdine 1 h', ban: 'Bannir du groupe', banAll: 'Bannir de tous les groupes', markAnswered: 'Marquer comme répondue', reopen: 'Rouvrir la question', lock: 'Verrouiller ou déverrouiller le groupe',
     removed: 'Message retiré par la modération.', earlier: 'Messages précédents', slow: 'Mode lent : attendez %s s.', filtered: 'Certaines informations ont été masquées pour votre sécurité.',
     safety: 'L’équipe Delicat ne demande jamais de paiement en message privé.', pinned: 'Épinglé', pending: '%s en attente', cancel: 'Annuler', confirm: 'Confirmer', done: 'C’est fait.', image: 'Image', locked: 'Groupe en lecture seule',
+    cTitle: 'Avant d’écrire à l’équipe', cIntro: 'Indiquez votre nom et un numéro WhatsApp ou un e-mail : l’équipe vous répond ici et peut vous recontacter.', cName: 'Votre nom', cReach: 'Numéro WhatsApp ou e-mail', cBtn: 'Continuer vers l’équipe', cPrivacy: 'Utilisées uniquement pour vous répondre.', cFirst: 'Vos coordonnées d’abord',
   },
   en: {
     close: 'Close', back: 'Back', home: 'Home', bot: 'Assistant', team: 'Team', community: 'Community', more: 'More options',
@@ -75,6 +76,7 @@ const STR = {
     hide: 'Hide', restore: 'Restore', del: 'Delete', pin: 'Pin or unpin', mute: 'Mute for 1 h', ban: 'Ban from the group', banAll: 'Ban from all groups', markAnswered: 'Mark as answered', reopen: 'Reopen question', lock: 'Lock or unlock the group',
     removed: 'Message removed by moderation.', earlier: 'Earlier messages', slow: 'Slow mode: wait %s s.', filtered: 'Some details were masked for your safety.',
     safety: 'The Delicat team never asks for a payment in a private message.', pinned: 'Pinned', pending: '%s waiting', cancel: 'Cancel', confirm: 'Confirm', done: 'Done.', image: 'Image', locked: 'Read-only group',
+    cTitle: 'Before writing to the team', cIntro: 'Leave your name and a WhatsApp number or an e-mail: the team replies here and can get back to you.', cName: 'Your name', cReach: 'WhatsApp number or e-mail', cBtn: 'Continue to the team', cPrivacy: 'Used only to reply to you.', cFirst: 'Your details first',
   },
   ht: {
     close: 'Fèmen', back: 'Retounen', home: 'Akèy', bot: 'Asistan', team: 'Ekip', community: 'Kominote', more: 'Plis opsyon',
@@ -104,6 +106,7 @@ const STR = {
     hide: 'Kache', restore: 'Remete', del: 'Efase', pin: 'Kloure oswa dekloure', mute: 'Fè l pe pandan 1 è', ban: 'Mete l deyò gwoup la', banAll: 'Mete l deyò tout gwoup yo', markAnswered: 'Make l reponn', reopen: 'Relouvri kesyon an', lock: 'Fèmen oswa louvri gwoup la',
     removed: 'Moderasyon retire mesaj sa a.', earlier: 'Mesaj anvan yo', slow: 'Mòd dousman: tann %s s.', filtered: 'Nou kache kèk enfòmasyon pou sekirite ou.',
     safety: 'Ekip Delicat pa janm mande peman nan mesaj prive.', pinned: 'Kloure', pending: '%s ap tann', cancel: 'Anile', confirm: 'Konfime', done: 'Fini.', image: 'Imaj', locked: 'Gwoup la fèmen pou ekri',
+    cTitle: 'Anvan ou ekri ekip la', cIntro: 'Bay non w ak yon nimewo WhatsApp oswa yon imel: ekip la reponn ou isit la epi li ka kontakte w.', cName: 'Non ou', cReach: 'Nimewo WhatsApp oswa imel', cBtn: 'Kontinye al jwenn ekip la', cPrivacy: 'Nou itilize yo sèlman pou reponn ou.', cFirst: 'Enfòmasyon ou anvan',
   },
 };
 const LOCALE = { fr: 'fr-FR', en: 'en-US', ht: 'fr-FR' };
@@ -422,7 +425,7 @@ function mount(el) {
 /* The boot answer refreshes what depends on it without rebuilding a view the visitor may be typing in. */
 function afterBoot() {
   if (S.view === 'home') renderHome();
-  else if (S.view === 'agent') setHeader(t('teamTitle'), ...teamStatusLine());
+  else if (S.view === 'agent') { setHeader(t('teamTitle'), ...teamStatusLine()); paintChat(false); contactGate(); }
   else if (S.view === 'community' && !G.room) renderCommunity();
   if ((S.view === 'bot' || S.view === 'agent') && !chat.loaded && (chat.thread || boot.thread)) loadChat();
   schedule(1500);
@@ -529,7 +532,7 @@ function renderChat(kind) {
   const composer = h('div', { class: 'composer' }, chips, h('div', { class: 'row' }, attach, input, send));
   const view = h('div', { class: 'view' }, h('div', { class: 'body', style: 'flex:1;min-height:0' }, scroll, jump), composer, file);
   bodyEl.replaceChildren(view);
-  Object.assign(V, { kind, log, scroll, input, send, jump });
+  Object.assign(V, { kind, log, scroll, input, send, jump, attach });
 
   const resize = () => { input.style.height = 'auto'; input.style.height = Math.min(132, input.scrollHeight) + 'px'; };
   input.addEventListener('input', () => { resize(); send.disabled = !input.value.trim(); if (kind === 'agent') typingPing(); });
@@ -541,7 +544,63 @@ function renderChat(kind) {
   log.addEventListener('click', onCardClick);
 
   paintChat(true);
+  contactGate();
   if (!chat.loaded && (chat.thread || (boot && boot.thread))) loadChat();
+}
+/* 7.1.1: a visitor (not signed in) writes to the team only after leaving a name and a WhatsApp number or an
+ * e-mail. Until then the team tab shows that form and the composer is locked; the server refuses anyway. */
+function needContact() { return !!(boot && boot.user && !boot.user.loggedIn && !boot.contact); }
+function contactGate() {
+  if (!V.input || V.kind !== 'agent') return;
+  const locked = needContact();
+  V.input.disabled = locked;
+  V.input.placeholder = locked ? t('cFirst') : t('inTeam');
+  if (V.attach) V.attach.disabled = locked;
+  V.send.disabled = locked || !V.input.value.trim();
+}
+let contactEl = null; // one form for the whole visit: a repaint (polling) must not wipe what is being typed
+function contactCard() {
+  if (contactEl) return contactEl;
+  const name = h('input', { class: 'field', type: 'text', maxlength: '100', autocomplete: 'name', placeholder: t('cName'), 'aria-label': t('cName') });
+  const reach = h('input', { class: 'field', type: 'text', maxlength: '190', autocomplete: 'tel', placeholder: t('cReach'), 'aria-label': t('cReach') });
+  const go = h('button', { class: 'btn pri', type: 'button' }, t('cBtn'));
+  const el = h('div', { class: 'card', data: { type: 'contact_card' } }, h('h4', null, icon('person'), t('cTitle')), h('p', null, t('cIntro')),
+    h('div', { class: 'form' }, name, reach, go), h('p', { class: 'note' }, icon('lock', 's'), t('cPrivacy')));
+  go.addEventListener('click', () => submitContact(el, name, reach, go));
+  reach.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitContact(el, name, reach, go); } });
+  contactEl = el;
+  return el;
+}
+async function submitContact(el, name, reach, go) {
+  const n = name.value.trim();
+  const r = reach.value.trim();
+  const digits = r.replace(/\D+/g, '').length;
+  if (n.length < 2 || !(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r) || (digits >= 8 && digits <= 15))) { shake(el); return; }
+  go.disabled = true;
+  try {
+    await ensureBoot();
+    const d = await call('dsa2_set_contact', { name: n, email: r, after_id: chat.last }, { nonce: 'chat' });
+    if (boot) boot.contact = 1;
+    contactEl = null;
+    ingest(d.messages);
+    paintChat(false);
+    contactGate();
+    toBottom(true);
+    if (V.input) V.input.focus({ preventScroll: true });
+    schedule(2500);
+  } catch (e) {
+    go.disabled = false;
+    toast(e.message);
+  }
+}
+/* The server said contact details are missing (stale boot data): back to the form, the text is kept. */
+function contactRefused(e, text) {
+  if (boot) boot.contact = 0;
+  ingest((e.data && e.data.messages) || []);
+  paintChat(false);
+  contactGate();
+  if (text && V.input && V.kind === 'agent') V.input.value = text;
+  toBottom(true);
 }
 /* Two workspaces over one thread: automated answers (channel bot) and the human conversation (channel
  * agent). System-channel rows are bookkeeping and stay hidden, as in every earlier version. */
@@ -554,8 +613,11 @@ function paintChat(scroll) {
   const kind = V.kind;
   let items = chat.items.filter((m) => visibleIn(kind, m));
   if (kind === 'bot' && items.length > 30) items = items.slice(-30); // years of automated history are not useful here
+  // 7.1.1: the server's contact cards are replaced by the one form below (or are done with).
+  if (kind === 'agent') items = items.filter((m) => m.type !== 'contact_card');
+  const ask = kind === 'agent' && needContact();
   const frag = D.createDocumentFragment();
-  if (!items.length && !chat.pending.size) {
+  if (!items.length && !chat.pending.size && !ask) {
     if (kind === 'bot') frag.append(botBubble({ sender: 'assistant', type: 'text', body: t('welcome') }));
     else frag.append(h('div', { class: 'empty' }, h('div', { class: 'ico' }, icon('support_agent', 'l')), h('b', null, t('emptyTeam')), t('emptyTeamSub')));
   }
@@ -566,6 +628,7 @@ function paintChat(scroll) {
     prevAgent = agentName;
   }
   for (const p of chat.pending.values()) if (p.kind === kind) frag.append(p.el);
+  if (ask) frag.append(contactCard());
   if (kind === 'agent' && chat.typing) frag.append(h('div', { class: 'msg' }, h('div', { class: 'bub typing', 'aria-label': t('typing') }, h('i'), h('i'), h('i'))));
   V.log.replaceChildren(frag);
   if (scroll) toBottom(false);
@@ -642,6 +705,7 @@ function setDelivery(meta, state, onRetry) {
 }
 async function sendChat(kind, text, clientId) {
   S.lastActivity = Date.now();
+  if (kind === 'agent' && needContact()) { contactRefused({}, text); return; }
   const id = clientId || uid();
   const old = chat.pending.get(id);
   if (old && old.err) old.err.remove();
@@ -660,6 +724,7 @@ async function sendChat(kind, text, clientId) {
     toBottom(true);
     schedule(2500);
   } catch (e) {
+    if (e.code === 'contact_required') { chat.pending.delete(id); el.remove(); contactRefused(e, text); return; }
     setDelivery(el.querySelector('.meta'), 'failed', () => sendChat(kind, text, id));
     const err = errorBox(e.message);
     const p = chat.pending.get(id);
@@ -713,6 +778,7 @@ async function shrinkImage(file, maxBytes) {
   } catch (e) { return file; }
 }
 async function uploadChat(original) {
+  if (needContact()) { toast(t('cFirst')); return; }
   if (!/^image\//.test(original.type)) { toast(t('onlyImages')); return; }
   const file = await shrinkImage(original, 1.5 * 1024 * 1024);
   if (file.size > 5 * 1024 * 1024) { toast(t('tooBig', 5)); return; }
@@ -736,6 +802,7 @@ async function uploadChat(original) {
   } catch (e) {
     chat.pending.delete(id);
     el.remove();
+    if (e.code === 'contact_required') contactRefused(e, '');
     toast(e.message);
   }
 }

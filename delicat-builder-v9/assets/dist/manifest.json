@@ -1,13 +1,13 @@
 {
  "version": 2,
- "builtAt": "2026-11-05T03:19:33.834Z",
+ "builtAt": "2026-11-05T11:54:49.250Z",
  "js": {
   "engine": {
-   "file": "engine.8c972cde8efd.js",
-   "bytes": 88219,
-   "sha256": "8c972cde8efd719bf93c6145356282eff4f451fdc374c32c88a8e28e561c3051",
+   "file": "engine.f99e2aafd223.js",
+   "bytes": 88338,
+   "sha256": "f99e2aafd2231d989821d596b823cd14e3a9fe5c8fb31a11d2a9976dbb282725",
    "imports": [
-    "chunks/chunk.2cc3ab2d872d.js",
+    "chunks/chunk.1c448fd61900.js",
     "chunks/chunk.99ad77e49fbc.js",
     "chunks/chunk.385b5371c4d9.js",
     "chunks/chunk.687452d4bbe4.js",
@@ -31,19 +31,19 @@
    "sha256": "59c3469ed67dbae7025d99e983558c37032270384c5f268df19c3edbfb95f6ca",
    "name": null
   },
-  "chunks/widgets.ff1a5c95676e.js": {
+  "chunks/widgets.7c6a95c5811a.js": {
    "bytes": 11597,
-   "sha256": "ff1a5c95676e3ee4c2186f608fd645d42301aa4da8940849a6d3c5bba0d6a9b4",
+   "sha256": "7c6a95c5811a40a836d917366f5e117f75a3fa89ae2bab9fb9390670b3f72c3a",
    "name": "widgets"
   },
-  "chunks/chunk.2cc3ab2d872d.js": {
-   "bytes": 37816,
-   "sha256": "2cc3ab2d872d88dd5f48e63420e301b4a44a75a7666b08dbec48329f56cb4be9",
+  "chunks/chunk.1c448fd61900.js": {
+   "bytes": 39541,
+   "sha256": "1c448fd619004fb0f310556936c364c2f24f34e130cb43a2dd048c3814772c50",
    "name": null
   },
-  "chunks/reviews.97f7f54eab8c.js": {
-   "bytes": 20160,
-   "sha256": "97f7f54eab8cf364f2ded860da465fbd1fde1fc74bf1c68f2ed79545f80ecbf1",
+  "chunks/reviews.6a29c40a7cdc.js": {
+   "bytes": 20385,
+   "sha256": "6a29c40a7cdc1b2167e9290ceb83a3c1c2181eccbf0c5354e51b69728d078f83",
    "name": "reviews"
   },
   "chunks/chunk.99ad77e49fbc.js": {
@@ -84,9 +84,9 @@
  },
  "css": {
   "chrome": {
-   "file": "chrome.ca665d9759dd.css",
-   "bytes": 168305,
-   "sha256": "ca665d9759dde49f92b533f3b821b4431815bbb04ab7bc8ccb47160a171edf30",
+   "file": "chrome.bd4a4ceec8e4.css",
+   "bytes": 169650,
+   "sha256": "bd4a4ceec8e4bb82e9ededef28b60d7f22a284ed64a38b19bfed798007c7de5a",
    "sources": [
     "assets/css/theme-system.css",
     "assets/dsb8-beta2-header.css",

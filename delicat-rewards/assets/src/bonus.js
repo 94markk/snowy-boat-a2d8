@@ -603,6 +603,9 @@
       var c = m.claimed || {}, line;
       if (m.status === 'claimed') line = c.choice === 'htg' ? num(c.amount) + ' HTG ajoutés à votre portefeuille' : diamonds(c.amount) + ' reçus';
       else if (m.status === 'pending') line = 'Réclamation en cours…';
+      else if (m.status === 'review') line = 'En vérification par l’équipe : votre récompense est envoyée après validation.';
+      else if (m.status === 'refused') line = 'Non accordée après vérification. Contactez le support si c’est une erreur.';
+      else if (m.status === 'capped') line = 'Palier atteint. Il se débloque quand vos amis invités auront fait plus d’achats' + (s.rules && s.rules.capPct ? ' (récompenses limitées à ' + num(s.rules.capPct) + ' % de leurs achats).' : '.');
       else if (m.status === 'claimable') line = 'Palier atteint : choisissez votre récompense.';
       else line = s.blocked ? 'Indisponible' : 'Encore ' + plural(Math.max(0, m.points - pts), 'point', 'points');
       var p = node('p', 'dbf-mile-line'); if (m.status === 'claimed') p.appendChild(icon('check_circle')); p.appendChild(d.createTextNode(line)); info.appendChild(p);
@@ -614,7 +617,7 @@
         var acts = node('div', 'dbf-mile-acts');
         if (m.diamonds) acts.appendChild(choiceButton(m, 'diamonds'));
         if (m.htg && s.wallet) acts.appendChild(choiceButton(m, 'htg'));
-        acts.appendChild(node('small', 'dbf-muted', 'Touchez votre choix puis confirmez. Le choix est définitif.'));
+        acts.appendChild(node('small', 'dbf-muted', 'Touchez votre choix puis confirmez. Le choix est définitif.' + (m.manual ? ' L’équipe vérifie ce palier avant de l’envoyer.' : '')));
         li.appendChild(acts);
       } else if (m.status === 'claimed' && c.choice === 'diamonds' && c.order > 0) {
         var see = node('button', 'dbf-btn dbf-btn--ghost dbf-mile-see', 'Voir mon PIN'); see.type = 'button'; see.id = 'dbf-ref-pin-' + m.points;
@@ -695,6 +698,7 @@
       .then(function (reply) {
         R.claiming = false; renderRef(reply); notice('');
         var c = reply.claimed || {};
+        if (c.review) { openNote('Demande envoyée', 'L’équipe vérifie vos invitations avant d’envoyer ce palier. Vous serez prévenu par e-mail.'); return; }
         confetti(true);
         if (c.choice === 'htg') openNote('Bravo ! ' + num(c.amount) + ' HTG gagnés', 'Le montant est ajouté à votre portefeuille Delicat : utilisez-le pour vos prochains achats.');
         else if (c.delivery) openDelivery(c.delivery, true);

@@ -2,18 +2,24 @@
 /**
  * Plugin Name: Delicat Assistant Pro
  * Description: Secure mobile-first customer assistant for WooCommerce with wallet, orders, multilingual FAQ, WhatsApp and live admin chat.
- * Version: 7.1.0
+ * Version: 7.1.1
  * Author: Delicat Store
  * Text Domain: delicat-assistant
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'DSA2_VERSION', '7.1.0' );
+define( 'DSA2_VERSION', '7.1.1' );
 define( 'DSA2_FILE', __FILE__ );
 define( 'DSA2_DIR', plugin_dir_path( __FILE__ ) );
 define( 'DSA2_URL', plugin_dir_url( __FILE__ ) );
+// 7.1.1: a staff phone-app key is valid this many days after sign-in, at most (it was up to 90).
+define( 'DSA2_STAFF_SESSION_MAX_DAYS', 7 );
 
 /**
+ * v7.1.1 Security: staff phone app off by default (2FA, 7-day keys, signed out on any password or role
+ *        change), throttled team alerts, contact details before the team, Cloudflare-aware limits, private
+ *        payment screenshots, full phone for guest order lookups, per-viewer prices in suggestions,
+ *        old customer chat API removed.
  * v7.1.0 Smarter answers: order lookup by number (own orders only) with a shareable receipt, small talk
  *        that no longer swallows questions, specific answers before generic guides, store programmes.
  * v7.0.0 Rebuilt storefront: a 3 KB launcher (no request, no nonce in the HTML), a new chat app loaded on the
@@ -69,6 +75,19 @@ add_action( 'dsa2_daily_cleanup', static function() {
     dsa2_load_full_engine();
     if ( class_exists( 'DSA2_Install', false ) ) DSA2_Install::cleanup();
     if ( class_exists( 'DSA2_Groups', false ) ) DSA2_Groups::cleanup();
+} );
+
+// 7.1.1: payment screenshots move from the public uploads folder to the private one, a batch at a time.
+add_action( 'dsa2_private_files_batch', static function() {
+    dsa2_load_full_engine();
+    if ( class_exists( 'DSA2_Data', false ) && DSA2_Data::migrate_public_images( 25 ) > 0 && ! wp_next_scheduled( 'dsa2_private_files_batch' ) ) {
+        wp_schedule_single_event( time() + 2 * MINUTE_IN_SECONDS, 'dsa2_private_files_batch' );
+    }
+} );
+// 7.1.1: when the hourly cap of team alert e-mails is reached, one summary goes out at the end of the hour.
+add_action( 'dsa2_send_alert_summary', static function() {
+    dsa2_load_full_engine();
+    if ( class_exists( 'DSA2_Data', false ) ) DSA2_Data::send_alert_summary();
 } );
 
 add_action( 'dsa2_group_question_alert', static function( $group_id, $message_id ) {
@@ -143,6 +162,78 @@ function dsa2_suppress_legacy_widget() {
         }
     }
 }
+
+/**
+ * 7.1.1 -- the visitor's address for every rate limit of this plugin. Behind Cloudflare the
+ * connection address is a Cloudflare edge shared by many customers, so one script could use
+ * up a limit for everyone. Identity's address first (it believes CF-Connecting-IP only from
+ * Cloudflare's own ranges), then the Builder's (same rule), else the connection address.
+ */
+function dsa2_client_ip() {
+    static $resolved = null;
+    if ( null !== $resolved ) return $resolved;
+    $candidate = '';
+    try {
+        if ( class_exists( 'DIP_Native_Auth' ) && is_callable( array( 'DIP_Native_Auth', 'throttle_ip' ) ) ) {
+            $candidate = (string) DIP_Native_Auth::throttle_ip();
+        } elseif ( class_exists( 'Delicat_Builder_V9_Security' ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ) {
+            $candidate = (string) Delicat_Builder_V9_Security::client_ip();
+        }
+    } catch ( Throwable $error ) {
+        $candidate = '';
+    }
+    if ( ! filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+        $remote    = isset( $_SERVER['REMOTE_ADDR'] ) ? trim( (string) wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- validated below.
+        $candidate = filter_var( $remote, FILTER_VALIDATE_IP ) ? $remote : '0.0.0.0';
+    }
+    $resolved = $candidate;
+    return $resolved;
+}
+
+/** 7.1.1 -- who may use the staff phone app (same rule as the app's own permission check). */
+function dsa2_is_staff_user( $user ) {
+    return $user instanceof WP_User && (
+        user_can( $user, 'manage_delicat_assistant' ) ||
+        user_can( $user, 'manage_woocommerce' ) ||
+        user_can( $user, 'manage_options' )
+    );
+}
+
+/**
+ * 7.1.1 -- signs a person out of the staff phone app everywhere. Registered below, outside
+ * the loader, so a password reset from wp-login.php or the account page, a role change or a
+ * deleted account always ends the app keys; before, these hooks only existed on the
+ * requests that loaded the full engine, and a reset from the normal page left keys working.
+ */
+function dsa2_revoke_staff_app_sessions( $user_id ) {
+    $user_id = absint( $user_id );
+    if ( ! $user_id || ! get_option( 'dap_db_version' ) ) return 0;
+    global $wpdb;
+    return (int) $wpdb->delete( $wpdb->prefix . 'dap_admin_sessions', array( 'user_id' => $user_id ), array( '%d' ) );
+}
+add_action( 'password_reset', static function( $user ) {
+    if ( $user instanceof WP_User ) dsa2_revoke_staff_app_sessions( $user->ID );
+}, 10, 1 );
+add_action( 'after_password_reset', static function( $user ) {
+    if ( $user instanceof WP_User ) dsa2_revoke_staff_app_sessions( $user->ID );
+}, 10, 1 );
+add_action( 'wp_set_password', static function( $password, $user_id = 0 ) {
+    dsa2_revoke_staff_app_sessions( $user_id );
+}, 10, 2 );
+add_action( 'profile_update', static function( $user_id, $old_user_data = null ) {
+    $user = get_userdata( absint( $user_id ) );
+    $password_changed = $user && $old_user_data instanceof WP_User && ! hash_equals( (string) $old_user_data->user_pass, (string) $user->user_pass );
+    if ( $password_changed || ! dsa2_is_staff_user( $user ) ) dsa2_revoke_staff_app_sessions( $user_id );
+}, 10, 2 );
+add_action( 'set_user_role', static function( $user_id ) {
+    if ( ! dsa2_is_staff_user( get_userdata( absint( $user_id ) ) ) ) dsa2_revoke_staff_app_sessions( $user_id );
+}, 10, 1 );
+add_action( 'remove_user_role', static function( $user_id ) {
+    if ( ! dsa2_is_staff_user( get_userdata( absint( $user_id ) ) ) ) dsa2_revoke_staff_app_sessions( $user_id );
+}, 10, 1 );
+add_action( 'delete_user', 'dsa2_revoke_staff_app_sessions', 10, 1 );
+add_action( 'deleted_user', 'dsa2_revoke_staff_app_sessions', 10, 1 );
+add_action( 'remove_user_from_blog', 'dsa2_revoke_staff_app_sessions', 10, 1 );
 
 /**
  * 6.6.1 (ported from 6.2.2) -- account deletion erases the customer's support history.

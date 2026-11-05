@@ -288,3 +288,66 @@ html.dlc-theme-dark .dbv9-notifications__panel .dbv9-notifications__push-button.
   background: #12372a;
   color: #9ff1c4;
 }
+
+/* ------------------------------------------------------------------ */
+/* 9.7.8 (FE-13, FE-21): readable small text and thumb-sized targets.  */
+/* Measured on a 390 px phone: these texts were under 4.5:1 or 10 px,  */
+/* and these links and controls under 44 px.                            */
+/* ------------------------------------------------------------------ */
+.dbv9-install-bar .dbv9-install-bar__copy small {
+  color: #c3c8da;
+}
+.dbv9-install-bar .dbv9-install-bar__close {
+  width: 44px;
+  height: 44px;
+}
+html:not(.dlc-theme-dark) body .delicat-native-product .dnp-stock.is-neutral {
+  color: #545d70;
+}
+body .delicat-native-product-main .dnp-mobile-dock .dnp-dock-price small {
+  font-size: 12px !important;
+}
+html:not(.dlc-theme-dark) body .delicat-native-product-main .dnp-mobile-dock .dnp-dock-price small {
+  color: #545d70;
+}
+body .delicat-native-product .dnp-trust > span {
+  font-size: 12px;
+}
+body nav.delicat-native-category-chips > a {
+  min-height: 44px !important;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px !important;
+}
+body nav.delicat-native-category-chips > a span {
+  font-size: inherit !important;
+}
+body nav.woocommerce-pagination ul.page-numbers .page-numbers {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+body .delicat-archive-toolbar select.orderby {
+  min-height: 44px !important;
+}
+body .dsb8-header .dsb8-header__brand,
+body .dbv9-ft__brand .dbv9-footer-logo {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+body .dpn-head .dpn-back {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+}
+body .wc-block-grid__product .wc-block-grid__product-title,
+body .wc-block-grid__product .woocommerce-Price-amount {
+  font-size: 12px;
+}
+body .wc-block-grid__product-add-to-cart .wp-block-button__link {
+  color: #fff !important; /* the button is drawn on #111 */
+}

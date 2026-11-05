@@ -64,7 +64,7 @@ const php = (code) => {
   fs.cpSync(copy, dir, { recursive: true });
   ageTree(dir); // a copy installed an hour ago: nothing in it counts as freshly written
   const swap = (target) => { fs.unlinkSync(link); fs.symlinkSync(target, link); };
-  const reset = () => { setOpt('active_plugins', savedActive); setOpt('delicat_builder_v9_safe_mode', '0'); delOpt('delicat_builder_v9_circuit_breaker_tripped', 'delicat_builder_v9_fatal_streak', 'delicat_builder_v9_purge_pending'); };
+  const reset = () => { setOpt('active_plugins', savedActive); setOpt('delicat_builder_v9_safe_mode', '0'); delOpt('delicat_builder_v9_circuit_breaker_tripped', 'delicat_builder_v9_fatal_streak', 'delicat_builder_v9_purge_pending', 'delicat_builder_v9_incomplete_copy', 'delicat_builder_v9_routine_purge_at'); };
   fs.writeFileSync(mu, `<?php // STAGING ONLY: written and removed by tests/redesign/update-safety.cjs.\nadd_action( 'litespeed_purge_all', function () { file_put_contents( __DIR__ . '/zz-update-safety.log', "purge_all\\n", FILE_APPEND ); } );\nadd_action( 'litespeed_control_set_nocache', function ( $why = '' ) { file_put_contents( __DIR__ . '/zz-update-safety.log', 'nocache ' . $why . "\\n", FILE_APPEND ); } );\n`);
   swap(dir);
   reset();
@@ -122,8 +122,41 @@ const php = (code) => {
       try {
         for (let i = 1; i <= 3; i++) { const r = await get('/'); seen.push(`#${i}: ${r.status} active=${active()} streak=${streak()} safe=${opt('delicat_builder_v9_safe_mode')}`); }
       } finally { fs.writeFileSync(f, full); age(f); }
-      ok(/#1: 500 active=true streak=1 safe=1/.test(seen[0]) && /#2: 500 active=true streak=2/.test(seen[1]), seen.join(' | '));
-      ok(/#3: 500 active=false/.test(seen[2]) && !!opt('delicat_builder_v9_circuit_breaker_tripped'), seen.join(' | '));
+      // Every request that loads WordPress counts (WP-Cron's loopback too), so the switch-off is checked on the
+      // count of fatals, not on the number of visits made here: never before the third, always once it is reached.
+      ok(/#1: 500 active=true streak=[12] safe=1/.test(seen[0]), seen.join(' | '));
+      ok(!active() && streak() >= 3 && !!opt('delicat_builder_v9_circuit_breaker_tripped'), seen.join(' | '));
+    });
+    reset();
+
+    // 9.7.8 (BLD-01): the update window of 9.7.7 had no end and counted any shipped file.
+    const fault = (f) => { const full = fs.readFileSync(f); fs.writeFileSync(f, Buffer.concat([full, Buffer.from('\nclass Delicat_Builder_V9_Cache {}\n')])); age(f); return full; };
+    await step('a missing README or font never silences the safety net (9.7.8)', async () => {
+      const readme = path.join(dir, 'README.txt');
+      const core = path.join(dir, 'includes/class-delicat-builder-core.php');
+      fs.renameSync(readme, readme + '.gone');
+      const full = fault(core);
+      let r;
+      try { r = await get('/'); } finally { fs.writeFileSync(core, full); age(core); fs.renameSync(readme + '.gone', readme); }
+      ok(r.status === 500 && opt('delicat_builder_v9_safe_mode') === '1', `status ${r.status} safe=${opt('delicat_builder_v9_safe_mode')}: the fault was taken for an update`);
+    });
+    reset();
+
+    await step('a code file missing for more than 10 minutes: the safety net works again and wp-admin names the file (9.7.8)', async () => {
+      const footer = path.join(dir, 'includes/class-delicat-builder-footer.php');
+      const core = path.join(dir, 'includes/class-delicat-builder-core.php');
+      const now = Math.floor(Date.now() / 1000);
+      setOpt('delicat_builder_v9_incomplete_copy', `a:3:{s:5:"since";i:${now - 660};s:4:"seen";i:${now - 30};s:7:"missing";a:0:{}}`);
+      fs.renameSync(footer, footer + '.gone');
+      const full = fault(core);
+      let r, notice = '';
+      try {
+        r = await get('/');
+        fs.writeFileSync(core, full); age(core); // the notice is read by a healthy request
+        notice = php(`ob_start(); delicat_builder_v9_incomplete_copy_notice(); echo ob_get_clean();`);
+      } finally { fs.writeFileSync(core, full); age(core); fs.renameSync(footer + '.gone', footer); age(footer); }
+      ok(r.status === 500 && opt('delicat_builder_v9_safe_mode') === '1', `status ${r.status} safe=${opt('delicat_builder_v9_safe_mode')}: still treated as an update after 11 minutes`);
+      ok(/class-delicat-builder-footer\.php/.test(notice) && /Réinstallez/.test(notice), `admin notice: ${notice.slice(0, 200)}`);
     });
     reset();
 

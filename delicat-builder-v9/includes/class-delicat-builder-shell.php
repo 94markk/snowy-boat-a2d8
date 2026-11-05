@@ -427,10 +427,17 @@ final class Delicat_Builder_V9_Shell {
 		$cache_version = class_exists( 'Delicat_Builder_V9_Cache' ) ? Delicat_Builder_V9_Cache::version() : 1;
 		// Bump the format key whenever the suggestion payload shape/format changes
 		// so a stale server cache cannot reintroduce old malformed prices.
-		$cache_key = 'v411_' . md5( $normalized . '|' . get_locale() . '|' . $limit . '|' . $cache_version );
+		/* 9.7.8 (BLD-03): the suggestions carry prices, and the key was the search text alone, so the first shopper
+		 * to type a word set the prices everyone saw for 30 minutes - a reseller's, or another currency's. Only
+		 * signed-out visitors share the cache now, keyed by the currency and the app view they see; a signed-in
+		 * shopper (reseller prices, wallet, role) always gets their own fresh answer. */
+		$shared_cache = ! is_user_logged_in();
+		$price_context = ( function_exists( 'get_woocommerce_currency' ) ? (string) get_woocommerce_currency() : '' )
+			. '|' . ( class_exists( 'Delicat_Builder_V9_App_View', false ) && Delicat_Builder_V9_App_View::active() ? ( Delicat_Builder_V9_App_View::hides_gifts() ? 'app2' : 'app1' ) : 'web' );
+		$cache_key = 'v978_' . md5( $normalized . '|' . get_locale() . '|' . $limit . '|' . $cache_version . '|' . $price_context );
 		$external_object_cache = function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache();
-		$cached = wp_cache_get( $cache_key, 'delicat_builder_v9_search' );
-		if ( ! is_array( $cached ) && ! $external_object_cache ) {
+		$cached = $shared_cache ? wp_cache_get( $cache_key, 'delicat_builder_v9_search' ) : false;
+		if ( $shared_cache && ! is_array( $cached ) && ! $external_object_cache ) {
 			$cached = get_transient( 'dbv9_search_' . $cache_key );
 		}
 		if ( is_array( $cached ) ) {
@@ -521,9 +528,11 @@ final class Delicat_Builder_V9_Shell {
 			}
 		}
 
-		wp_cache_set( $cache_key, $results, 'delicat_builder_v9_search', 30 * MINUTE_IN_SECONDS );
-		if ( ! $external_object_cache ) {
-			set_transient( 'dbv9_search_' . $cache_key, $results, 30 * MINUTE_IN_SECONDS );
+		if ( $shared_cache ) {
+			wp_cache_set( $cache_key, $results, 'delicat_builder_v9_search', 30 * MINUTE_IN_SECONDS );
+			if ( ! $external_object_cache ) {
+				set_transient( 'dbv9_search_' . $cache_key, $results, 30 * MINUTE_IN_SECONDS );
+			}
 		}
 		nocache_headers();
 		wp_send_json_success( array( 'query' => $query, 'results' => $results, 'cached' => false ) );

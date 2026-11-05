@@ -83,7 +83,7 @@ final class DSA2_Brain {
 
 	/** Fixed one-hour window per account, and per address for every caller. */
 	private static function lookup_allowed( $uid ) {
-		$ip   = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+		$ip   = dsa2_client_ip(); // 7.1.1: the visitor's address behind Cloudflare
 		$keys = array( 'dap_olk_ip_' . md5( $ip ) => self::LOOKUPS_PER_HOUR * 10 ); // carrier-NAT: many customers share one address
 		if ( $uid > 0 ) $keys[ 'dap_olk_u_' . (int) $uid ] = self::LOOKUPS_PER_HOUR;
 		foreach ( $keys as $k => $limit ) {

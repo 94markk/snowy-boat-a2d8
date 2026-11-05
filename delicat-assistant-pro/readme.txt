@@ -3,7 +3,7 @@ Contributors: delicat-store
 Tags: woocommerce, customer support, live chat, chatbot, whatsapp
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 7.1.0
+Stable tag: 7.1.1
 
 A multilingual WooCommerce help center with a private agent inbox, automated answers, mobile-app support, tickets and WhatsApp handoff.
 
@@ -22,7 +22,7 @@ Features include French, English and Haitian Creole; persistent message composer
 == Installation ==
 
 1. In WordPress, open Plugins > Add New > Upload Plugin.
-2. Select the `delicat-assistant-pro-7.1.0.zip` file, choose « Replace current with uploaded », and activate it.
+2. Select the `delicat-assistant-pro-7.1.1.zip` file, choose « Replace current with uploaded », and activate it.
 3. Open Delicat Assistant > Settings to configure the brand, team availability, WhatsApp and notifications.
 4. Add users to the **Agent support Delicat** role when they should use the inbox without receiving store-wide administration rights.
 
@@ -43,6 +43,48 @@ Yes. The human support timeline remains focused, and an authorized agent can ope
 No. WhatsApp is shown only when it is enabled and a valid number has been saved.
 
 == Changelog ==
+
+= 7.1.1 =
+* (1) Clients : pour écrire à l'équipe dans le chat, un visiteur non connecté laisse d'abord son nom et un numéro
+  WhatsApp ou un e-mail (un formulaire dans l'onglet « Équipe » ; la zone de saisie s'ouvre ensuite). Les clients
+  connectés ne voient aucun changement, et l'assistant automatique reste ouvert à tous.
+* (2) Clients : les captures de paiement envoyées dans le chat sont privées : seuls le client lui-même et l'équipe
+  peuvent les ouvrir, et la position GPS ou le modèle du téléphone enregistrés dans la photo sont effacés à l'envoi.
+  Les anciennes captures passent peu à peu dans le dossier privé (déplacées, jamais supprimées).
+* (3) Clients : « Suivre ma commande » sans être connecté demande le numéro de commande et l'e-mail ou le numéro de
+  téléphone complet donnés à l'achat (avec ou sans +509), plus seulement la fin du numéro.
+* (4) Clients : les cartes « Souvent pris ensemble » et « Recommandé pour vous » montrent toujours les prix de la
+  personne qui les regarde : un prix revendeur ne peut plus apparaître chez un autre client.
+* (5) Équipe : l'application Android du personnel est désactivée par défaut. Quand elle est activée : connexion avec
+  la vérification en deux étapes de Delicat Identity (code à 6 chiffres de l'application Authenticator, ou code de
+  récupération), sessions de 7 jours au plus après la connexion, téléphone déconnecté à chaque changement ou
+  réinitialisation de mot de passe, changement de rôle ou suppression du compte, et essais limités par compte et par
+  adresse. Le personnel avec la 2FA a besoin d'une version de l'application qui envoie le code (champ « otp »
+  ou « code ») ; un compte sans 2FA ne peut pas se connecter tant que « Exiger la 2FA pour l'application » est
+  cochée.
+* (6) Équipe : e-mails d'alerte du chat limités : un au plus toutes les 2 minutes par conversation, 30 par heure au
+  maximum puis un seul e-mail récapitulatif, et aucun e-mail pour un visiteur sans coordonnées. Tous les messages
+  restent dans la boîte de réception.
+* (7) Sécurité : toutes les limites du chat (nouveaux chats, messages, images, recherche de commande, connexion de
+  l'application Android) comptent l'adresse réelle du visiteur derrière Cloudflare (règle de Delicat Identity, sinon
+  du Builder), et non l'adresse de Cloudflare.
+* (8) Nettoyage : l'ancienne API client « Delicat Assistance » (adresses delicat-assistant/v1 et v2, désactivée
+  depuis 6.6.1) est supprimée avec son réglage ; ses adresses répondent toujours « introuvable ». La page Tickets,
+  la page « Production & sécurité » et l'API Android administrateur restent.
+* (9) Technique : nouveaux réglages « Exiger la 2FA pour l'application », « Alertes e-mail par heure (maximum) » et
+  « Conservation des captures de paiement » (0 = garder, par défaut) ; images servies par
+  admin-ajax.php?action=dsa2_chat_file après vérification (adresse signée valable environ 12 h pour les
+  applications) ; dossier privé dans uploads avec un nom aléatoire et un .htaccess qui refuse tout accès direct ;
+  listes de recommandations mises en cache sans les prix ; date d'expiration de l'application Android donnée en
+  heure UTC réelle ; app.js reconstruit.
+* (10) Réglages modifiés une fois à la mise à jour (vous pouvez les remettre dans Delicat Assistant → Paramètres) :
+  « Activer l'application Android » décochée si la page des réglages n'avait jamais été enregistrée avec la case
+  cochée, et les téléphones connectés sont alors déconnectés ; « Durée des sessions Android » ramenée à 7 jours au
+  plus (les sessions déjà ouvertes finissent 7 jours après leur connexion) ; « Anti-spam des alertes » passe de 0 à
+  120 secondes ; « Exiger la 2FA pour l'application » cochée ; « Alertes e-mail par heure » à 30.
+* (11) Installation : Extensions → Ajouter → Téléverser une extension, choisissez delicat-assistant-pro-7.1.1.zip
+  puis « Remplacer la version actuelle par la version téléversée ». Les conversations, les données et les réglages
+  sont conservés.
 
 = 7.1.0 =
 * Suivre une commande dans le chat : un client connecté tape « #23170 », « commande 23170 », « kòmand 23170 » ou

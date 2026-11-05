@@ -15,6 +15,54 @@ final class Delicat_Builder_V9_Audit_Fixes {
   // Also run after LiteSpeed's optimizer when it owns the outer buffer. Idempotent.
   add_filter( 'litespeed_buffer_after', array( __CLASS__, 'document' ), PHP_INT_MAX );
   add_filter( 'woocommerce_locate_template', array( __CLASS__, 'result_count_template' ), PHP_INT_MAX, 3 );
+  /* 9.7.8 (FE-12): no Gravatar on the storefront. */
+  if ( ! is_admin() ) { add_filter( 'get_avatar_data', array( __CLASS__, 'local_avatar' ), PHP_INT_MAX, 2 ); }
+  /* 9.7.8 (BLD-07): a page carrying a WooCommerce notice is one shopper's page. */
+  if ( ! is_admin() ) { add_action( 'wp', array( __CLASS__, 'notice_no_store' ), 99 ); }
+  /* 9.7.8 (FE-09): My Account carries styles none of its screens use. */
+  add_action( 'wp_enqueue_scripts', array( __CLASS__, 'trim_account_assets' ), PHP_INT_MAX );
+ }
+ /**
+  * 9.7.8 (FE-09): every My Account screen loaded select2 (only the address form has a country picker),
+  * dashicons (used only by the admin bar and the wallet screen) and the wallet's block-checkout
+  * stylesheet. Removed where nothing uses them; WooCommerce's own account styles stay.
+  */
+ public static function trim_account_assets(): void {
+  if ( is_admin() || ! function_exists( 'is_account_page' ) || ! is_account_page() ) { return; }
+  $address = function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'edit-address' );
+  if ( ! $address ) {
+   wp_dequeue_style( 'select2' );
+   wp_dequeue_script( 'selectWoo' );
+   wp_dequeue_script( 'select2' );
+  }
+  /* The wallet screen (TeraWallet's account endpoint) draws its buttons with dashicons. */
+  global $wp;
+  $wallet = isset( $wp->query_vars ) && is_array( $wp->query_vars ) && array_key_exists( 'woo-wallet', $wp->query_vars );
+  if ( ! is_admin_bar_showing() && ! $wallet ) { wp_dequeue_style( 'dashicons' ); }
+  wp_dequeue_style( 'partial-payment-blocks-integration' );
+ }
+ /**
+  * 9.7.8 (BLD-07): "« X » a été ajouté à votre panier" and the other WooCommerce notices are printed into the
+  * product or shop page that follows. Such a page belongs to one shopper and is never stored by a cache (page,
+  * CDN or the app's offline copy).
+  */
+ public static function notice_no_store(): void {
+  if ( ! function_exists( 'wc_notice_count' ) || ! function_exists( 'WC' ) || ! WC() || ! WC()->session || ! function_exists( 'delicat_builder_v9_no_store' ) ) { return; }
+  if ( wc_notice_count() > 0 ) { delicat_builder_v9_no_store( 'woocommerce notice' ); }
+ }
+ /**
+  * 9.7.8 (FE-12): every signed-in page asked gravatar.com for the customer's picture, which hands a third party a
+  * hash of their e-mail address on each visit, for a "mystery person" image nearly everyone has. A picture the
+  * customer uploaded (any URL that is not Gravatar's) is kept; otherwise there is no picture and the storefront
+  * shows its own fallback (the account icon in the header, the initial in the menu).
+  */
+ public static function local_avatar( $args, $id_or_email ) {
+  unset( $id_or_email );
+  if ( is_array( $args ) && ! empty( $args['url'] ) && preg_match( '#^https?://([a-z0-9-]+\.)?gravatar\.com/#i', (string) $args['url'] ) ) {
+   $args['url']          = '';
+   $args['found_avatar'] = false;
+  }
+  return $args;
  }
  public static function asset_url( $url ) {
   if ( ! is_string( $url ) || '' === $url ) { return $url; }

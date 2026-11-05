@@ -294,7 +294,7 @@ html.dlc-theme-dark .dbf-toast, html[data-delicat-theme="dark"] .dbf-toast { bac
 .dbf-mile.is-claimable { border-color: color-mix(in srgb, var(--ds-color-success, #16a34a) 60%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--ds-color-success, #16a34a) 14%, transparent); }
 .dbf-mile.is-claimable .dbf-mile-pts { background: linear-gradient(135deg, #15803d, #059669); color: #fff; }
 .dbf-mile.is-claimable .dbf-mile-line { color: var(--dbf-ok); font-weight: 650; }
-.dbf-mile.is-claimed .dbf-mile-pts, .dbf-mile.is-pending .dbf-mile-pts { background: color-mix(in srgb, var(--ds-color-success, #16a34a) 14%, transparent); color: var(--dbf-ok); }
+.dbf-mile.is-claimed .dbf-mile-pts, .dbf-mile.is-pending .dbf-mile-pts, .dbf-mile.is-review .dbf-mile-pts { background: color-mix(in srgb, var(--ds-color-success, #16a34a) 14%, transparent); color: var(--dbf-ok); }
 .dbf-mile-acts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }
 .dbf-mile-acts small { grid-column: 1 / -1; font-size: 13px; }
 .dbf-choice { min-height: 50px; padding: 0 12px; }

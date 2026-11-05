@@ -123,7 +123,7 @@ function dlr_admin_tab_revendeurs() {
 function dlr_admin_tab_historique() {
 	global $wpdb;
 	$rows = $wpdb->get_results( 'SELECT * FROM ' . dlr_table( 'log' ) . ' ORDER BY id DESC LIMIT 200' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
-	$ev = array( 'applied' => 'Demande envoyée', 'approved' => 'Approuvée (dépôt attendu)', 'rejected' => 'Refusée par l’équipe', 'declined' => 'Refusée : envoi entre portefeuilles', 'expired' => 'Expirée (dépôt incomplet)', 'cancelled' => 'Annulée par le client', 'activated' => 'Activé', 'upgraded' => 'Niveau supérieur', 'kept' => 'Minimum atteint', 'downgraded' => 'Niveau baissé', 'removed' => 'Retiré (minimum non atteint)', 'admin_set' => 'Changé par l’équipe', 'paused' => 'Programme fermé : mois non dus' );
+	$ev = array( 'applied' => 'Demande envoyée', 'approved' => 'Approuvée (dépôt attendu)', 'rejected' => 'Refusée par l’équipe', 'declined' => 'Refusée : envoi entre portefeuilles', 'expired' => 'Expirée (dépôt incomplet)', 'cancelled' => 'Annulée par le client', 'activated' => 'Activé', 'upgraded' => 'Niveau supérieur', 'kept' => 'Minimum atteint', 'downgraded' => 'Niveau baissé', 'removed' => 'Retiré (minimum non atteint)', 'admin_set' => 'Changé par l’équipe', 'paused' => 'Programme fermé : mois non dus', 'reversed' => 'Niveau revu : recharge annulée', 'erased' => 'Données effacées (confidentialité)' );
 	echo '<div class="box"><h2>Historique (200 derniers)</h2>';
 	if ( ! $rows ) { echo '<p>Rien pour le moment.</p></div>'; return; }
 	echo '<table class="widefat striped"><thead><tr><th>Date</th><th>Client</th><th>Événement</th><th>Niveau</th><th>Montant</th><th>Détail</th></tr></thead><tbody>';
@@ -142,7 +142,24 @@ function dlr_admin_tab_reglages() {
 	foreach ( $c['tiers'] as $t => $s ) {
 		echo '<tr><td>' . esc_html( ucfirst( $t ) ) . '</td><td><input name="tiers[' . esc_attr( $t ) . '][label]" value="' . esc_attr( $s['label'] ) . '" maxlength="40"></td><td><input type="number" min="1" max="10000000" name="tiers[' . esc_attr( $t ) . '][min]" value="' . (int) $s['min'] . '" style="width:130px"></td><td><input type="number" min="0" max="90" step="0.5" name="tiers[' . esc_attr( $t ) . '][discount]" value="' . esc_attr( (string) $s['discount'] ) . '" style="width:90px"></td></tr>';
 	}
-	echo '</tbody></table><p class="description">Les prix revendeurs se saisissent sur chaque produit (onglet Général) et chaque variation. Un produit sans prix pour un niveau utilise la remise de ce niveau (0 = prix normal). Le produit de recharge du portefeuille n’a jamais de prix revendeur. Les minimums doivent aller en baissant : Premium &gt; Gold &gt; Silver.</p></td></tr>';
+	echo '</tbody></table><p class="description">Les prix revendeurs se saisissent sur chaque produit (onglet Général) et chaque variation. Un produit sans prix pour un niveau utilise la remise de ce niveau (0 = prix normal), seulement dans les catégories cochées ci-dessous. Le produit de recharge du portefeuille n’a jamais de prix revendeur. Les minimums doivent aller en baissant : Premium &gt; Gold &gt; Silver.</p></td></tr>';
+	// 1.1.1: where the % discount applies.
+	$cats = dlr_product_cats();
+	echo '<tr><th>Catégories avec remise revendeur</th><td>';
+	if ( ! $cats ) echo '<p>Aucune catégorie de produits.</p>';
+	else {
+		$kids = array();
+		foreach ( $cats as $id => $t ) $kids[ isset( $cats[ (int) $t->parent ] ) ? (int) $t->parent : 0 ][] = $id; // a category whose parent is missing shows at the top
+		$draw = function ( $parent, $depth ) use ( &$draw, $kids, $cats, $c ) {
+			foreach ( $kids[ $parent ] ?? array() as $id ) {
+				$t = $cats[ $id ];
+				echo '<label style="display:block;margin:3px 0 3px ' . (int) ( 22 * $depth ) . 'px"><input type="checkbox" name="discount_cats[]" value="' . (int) $id . '"' . checked( in_array( (int) $id, (array) $c['discount_cats'], true ), true, false ) . '> ' . esc_html( html_entity_decode( $t->name, ENT_QUOTES, 'UTF-8' ) ) . ' <small>(' . (int) $t->count . ')</small>' . ( dlr_is_finance_name( $t->name ) || dlr_is_finance_name( $t->slug ) ? ' <small style="color:#b32d2e">échange / finance</small>' : '' ) . '</label>';
+				if ( $depth < 6 ) $draw( $id, $depth + 1 );
+			}
+		};
+		$draw( 0, 0 );
+	}
+	echo '<p class="description">La remise en % d’un niveau s’applique seulement aux produits rangés dans une catégorie cochée (une sous-catégorie se coche à part). Ne cochez jamais une catégorie d’échange ou de finance (USDT, PayPal, Zelle, Wise…) : 5 % de 100 000 HTG, c’est 5 000 HTG perdus. Un prix revendeur saisi sur un produit s’applique dans toutes les catégories ; « Pas de prix revendeur » l’emporte toujours.</p></td></tr>';
 	echo '<tr><th>Délai du dépôt</th><td><input type="number" min="1" max="60" name="deposit_days" value="' . (int) $c['deposit_days'] . '" style="width:80px"> jours après l’approbation</td></tr>';
 	echo '<tr><th>Rappel mensuel</th><td>à partir du <input type="number" min="1" max="28" name="reminder_day" value="' . (int) $c['reminder_day'] . '" style="width:70px"> du mois, un e-mail rappelle ce qu’il manque à un revendeur sous son minimum</td></tr>';
 	echo '<tr><th>Page revendeur</th><td>' . wp_dropdown_pages( array( 'name' => 'page_id', 'echo' => 0, 'selected' => (int) $c['page_id'], 'show_option_none' => 'Automatique : la page qui contient [delicat_revendeur]', 'option_none_value' => '0' ) ) . '</td></tr>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
@@ -199,6 +216,8 @@ add_action( 'admin_post_dlr_admin_save', function () {
 		);
 	}
 	if ( ! ( $c['tiers']['premium']['min'] > $c['tiers']['gold']['min'] && $c['tiers']['gold']['min'] > $c['tiers']['silver']['min'] ) ) dlr_admin_back( 'reglages', 'Les minimums doivent baisser d’un niveau à l’autre : Premium > Gold > Silver. Rien n’a été enregistré.', false );
+	$picked                = isset( $_POST['discount_cats'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['discount_cats'] ) ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- cast to integers
+	$c['discount_cats']    = array_values( array_intersect( array_keys( dlr_product_cats() ), $picked ) ); // existing categories only
 	$c['deposit_days']     = max( 1, min( 60, isset( $_POST['deposit_days'] ) ? (int) $_POST['deposit_days'] : 7 ) );
 	$c['reminder_day']     = max( 1, min( 28, isset( $_POST['reminder_day'] ) ? (int) $_POST['reminder_day'] : 22 ) );
 	$c['page_id']          = isset( $_POST['page_id'] ) ? absint( $_POST['page_id'] ) : 0;

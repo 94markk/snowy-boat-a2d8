@@ -451,6 +451,12 @@ final class Delicat_Builder_V9_Maintenance {
 	}
 
 	public static function guard_frontend(): void {
+		/* 9.7.8 (BLD-05): while the store is closed, a page shown to a visitor let in by the secret link or an
+		 * allowed address is the OPEN store. LiteSpeed could keep that copy and serve it to everyone, so the
+		 * closed store looked open. Such pages are never cached. */
+		if ( ! is_admin() && ! self::$rendering && self::is_enabled() && ! self::is_locked() && function_exists( 'delicat_builder_v9_no_store' ) ) {
+			delicat_builder_v9_no_store( 'maintenance preview' );
+		}
 		if ( is_admin() || ! self::is_locked() || self::$rendering ) {
 			return;
 		}

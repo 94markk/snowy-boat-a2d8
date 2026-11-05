@@ -261,12 +261,6 @@ class Delicat_Workflow {
             ) ] );
         }
 
-        $desc = sprintf( 'Remboursement recharge #%d – %s', $id, $reason ?: 'sans motif' );
-        $res  = Delicat_TeraWallet::debit( $user_id, (float) $r->montant, $desc );
-        if ( is_wp_error( $res ) ) {
-            wp_send_json_error( [ 'message' => 'Échec du débit: ' . $res->get_error_message() ] );
-        }
-
         // Audit trail in note_admin + status.
         $admin = wp_get_current_user();
         $stamp = sprintf(
@@ -275,12 +269,37 @@ class Delicat_Workflow {
             $admin ? $admin->user_login : 'admin',
             $reason ? ' — ' . $reason : ''
         );
-        $note = trim( (string) $r->note_admin . "\n" . $stamp );
-        Delicat_Database::update( $id, [
-            'statut'          => 'rejete',
-            'wallet_credited' => 0,
-            'note_admin'      => $note,
-        ] );
+
+        // 6.6.4 (RCH-03): ONE conditional update flips "credited" to "not
+        // credited" (and writes the note) BEFORE any money moves. Only the
+        // request whose update changed the row (1 row) may debit: a double
+        // click or two admins at once now debit once; the others stop here.
+        global $wpdb;
+        $tbl     = $wpdb->prefix . 'delicat_recharges';
+        $flipped = $wpdb->query( $wpdb->prepare(
+            "UPDATE {$tbl}
+                SET statut = 'rejete', wallet_credited = 0,
+                    note_admin = TRIM(BOTH '\n' FROM CONCAT(COALESCE(note_admin, ''), %s))
+              WHERE id = %d AND statut = 'approuve' AND wallet_credited = 1",
+            "\n" . $stamp, $id
+        ) );
+        if ( $flipped !== 1 ) {
+            wp_send_json_error( [ 'message' => 'Cette recharge a déjà été remboursée (ou un remboursement est en cours). Rien n\'a été débité une deuxième fois.' ] );
+        }
+
+        $desc = sprintf( 'Remboursement recharge #%d – %s', $id, $reason ?: 'sans motif' );
+        $res  = Delicat_TeraWallet::debit( $user_id, (float) $r->montant, $desc );
+        if ( is_wp_error( $res ) ) {
+            // Nothing was debited: put the row back exactly as it was, plus a trace.
+            $note = trim( (string) $r->note_admin . "\n" . sprintf( '[Échec du remboursement le %s par %s : %s]', date_i18n( 'd/m/Y H:i' ), $admin ? $admin->user_login : 'admin', $res->get_error_message() ) );
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE {$tbl} SET statut = 'approuve', wallet_credited = 1, note_admin = %s
+                  WHERE id = %d AND statut = 'rejete' AND wallet_credited = 0",
+                $note, $id
+            ) );
+            wp_send_json_error( [ 'message' => 'Échec du débit: ' . $res->get_error_message() ] );
+        }
+        do_action( 'delicat_recharge_record_updated', absint( $id ), [ 'status' => 'rejete', 'wallet_changed' => true ] );
 
         wp_send_json_success( [
             'message' => sprintf( '%s HTG remboursés (débités du wallet). Trace enregistrée.', number_format( (float) $r->montant, 2 ) ),

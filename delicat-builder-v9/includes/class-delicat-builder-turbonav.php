@@ -421,11 +421,14 @@ final class Delicat_Builder_V9_TurboNav {
 			if ( $in_place ) {
 				$pre[] = array( 'not' => array( 'href_matches' => $in_place ) );
 			}
+			/* 9.7.8 (FE-19): on phones Chrome reads "moderate" as "the link has been on screen for a while",
+			 * and the tab bar keeps the wallet and account links on screen all the time: both pages were built
+			 * in the background on every visit (uncached PHP, data). "conservative" waits for the finger. */
 			$rules['prerender'] = array(
 				array(
 					'source'    => 'document',
 					'where'     => array( 'and' => array_merge( $pre, $guards ) ),
-					'eagerness' => 'moderate',
+					'eagerness' => 'conservative',
 				),
 			);
 		}

@@ -1055,7 +1055,9 @@ final class Delicat_Builder_V9_Engine {
 	 * from install and the first product tap reads them from the device.
 	 */
 	public static function record_product_scripts(): void {
-		if ( 'product' !== self::$route ) {
+		/* 9.7.8 (FE-04): recorded from guest pages only. A signed-in administrator's product page added the
+		 * admin bar and editing scripts, which every shopper's app then downloaded at install. */
+		if ( 'product' !== self::$route || is_user_logged_in() ) {
 			return;
 		}
 		$scripts = wp_scripts();
@@ -1109,7 +1111,14 @@ final class Delicat_Builder_V9_Engine {
 	/** Absolute URLs the service worker precaches besides the plugin's own files. */
 	public static function precache_urls(): array {
 		$urls = (array) get_option( self::PRODUCT_SCRIPTS_OPTION, array() );
-		return array_values( array_filter( array_map( 'esc_url_raw', $urls ) ) );
+		/* 9.7.8: lists recorded before 9.7.8 may hold the admin bar and its helpers: never precached. */
+		$urls = array_filter(
+			array_map( 'esc_url_raw', $urls ),
+			static function ( $url ) {
+				return '' !== $url && ! preg_match( '#/wp-admin/|/wp-includes/js/(?:admin-bar|hoverintent)|/wp-includes/css/#i', $url );
+			}
+		);
+		return array_values( $urls );
 	}
 
 	/* -------------------------------------------------------- litespeed */

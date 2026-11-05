@@ -1,4 +1,36 @@
-DELICAT RESELLERS 1.1.0 — PROGRAMME REVENDEUR
+DELICAT RESELLERS 1.1.1 — PROGRAMME REVENDEUR
+
+NOUVEAUTÉS 1.1.1 — CORRECTIFS DE L'AUDIT DU 5 NOVEMBRE 2026 (RSL-02 À RSL-04)
+(1) Remise en % seulement dans les catégories choisies (RSL-02). La remise d'un niveau (Réglages, en %)
+  ne s'applique plus qu'aux produits rangés dans une catégorie cochée dans Réglages › « Catégories avec
+  remise revendeur ». Avant, elle s'appliquait à tout produit sans prix revendeur, y compris USDT,
+  PayPal, Zelle, Wise… (5 % de 100 000 HTG = 5 000 HTG perdus). Un prix revendeur saisi sur un produit
+  s'applique toujours, dans toutes les catégories ; « Pas de prix revendeur » l'emporte toujours.
+(2) Recharge annulée (RSL-03). Si une recharge qui a qualifié un revendeur (dépôt de la demande) ou qui
+  lui a fait garder son niveau le mois dernier est annulée ou remboursée dans Delicat Recharge, le niveau
+  est revu tout de suite : il baisse au niveau que les recharges restantes atteignent (jamais sous le
+  niveau qu'il avait avant de monter), ou le revendeur sort du programme. E-mail au revendeur et à
+  l'équipe, ligne « Niveau revu : recharge annulée » dans l'Historique. Delicat Revendeurs ne touche
+  jamais aux portefeuilles. Un niveau changé à la main par l'équipe n'est pas revu automatiquement.
+(3) Outils › Exporter / Effacer les données personnelles (RSL-04). L'export contient le niveau, les
+  demandes (activité, téléphone WhatsApp, ville, comment le client vend, volume, note de l'équipe) et
+  l'historique. L'effacement vide ces informations des demandes (une demande en cours est annulée) et
+  les motifs de refus ; les lignes restent (niveau, dates, montants), car l'historique et les commandes
+  à prix revendeur y renvoient. Supprimer le compte supprime toujours tout.
+(4) Technique : options dlr_cats_migrated et dlr_cats_review ; réglage discount_cats dans dlr_config ;
+  événements « reversed » et « erased » dans l'historique. Aucune table modifiée. Les prix revendeur ne
+  sont jamais gardés dans un cache partagé par l'extension elle-même (seulement le cache des prix des
+  variations de WooCommerce, séparé par niveau).
+(5) Réglage modifié à la mise à jour : « Catégories avec remise revendeur » est rempli une fois, à la
+  première visite après la mise à jour : toutes vos catégories sont cochées, sauf celles dont le nom
+  parle d'échange ou de finance (USDT, crypto, PayPal, Zelle, Wise, Payoneer, Skrill, Cash App, échange,
+  transfert, Binance, Perfect Money, finance, MonCash, NatCash). Un message en haut de l'administration
+  liste les catégories laissées de côté et les produits au nom d'échange rangés ailleurs : vérifiez,
+  cochez ou décochez dans Réglages, puis « J'ai vérifié ». Une nouvelle catégorie n'est jamais cochée
+  toute seule.
+(6) Installation : WordPress › Extensions › Ajouter › Téléverser : delicat-resellers-1.1.1.zip, remplacer
+  la version existante. Les données et les réglages sont conservés. Ouvrez ensuite WooCommerce › Delicat
+  Revendeurs › Réglages pour vérifier les catégories cochées.
 
 NOUVEAUTÉS 1.1.0
 - Mon compte › Programme Revendeur : la demande, son avancement, le niveau et les dépôts du mois sont
@@ -44,7 +76,8 @@ COMMENT ÇA MARCHE
    - sinon il descend au niveau que ses recharges atteignent (ex. un Premium qui a rechargé 60 000 HTG
      devient Gold) ;
    - sous le minimum Silver : le badge et les prix revendeur sont retirés (il peut refaire une demande).
-   Le mois de l'activation compte comme réussi (grâce au dépôt d'activation). À partir du 22 du mois
+   Le mois de l'activation compte comme réussi (grâce au dépôt d'activation). Une recharge annulée ou
+   remboursée après coup fait revoir le niveau aussitôt (1.1.1). À partir du 22 du mois
    (réglable), un e-mail rappelle ce qu'il manque. Un e-mail annonce chaque baisse ou retrait.
 7. Pour monter de niveau, le revendeur fait une nouvelle demande depuis sa page (même étape de dépôt).
    Le mois précédent est d'abord compté au niveau qu'il avait, puis le nouveau niveau commence.
@@ -53,7 +86,8 @@ COMMENT ÇA MARCHE
 
 PRIX REVENDEUR
 - Sur chaque produit (onglet Général) et chaque variation : un prix Premium, Gold et Silver.
-- Un produit sans prix pour un niveau utilise la remise du niveau (Réglages, en %). 0 % = prix normal.
+- Un produit sans prix pour un niveau utilise la remise du niveau (Réglages, en %), seulement s'il est
+  rangé dans une « catégorie avec remise revendeur » (Réglages). 0 % = prix normal.
 - Case « Pas de prix revendeur » sur un produit : prix normal pour tous.
 - Le produit de recharge du portefeuille n'a jamais de prix revendeur.
 - Si une promotion normale est plus basse que le prix revendeur, la promotion s'applique.

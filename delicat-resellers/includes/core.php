@@ -84,6 +84,7 @@ function dlr_defaults() {
 		'page_id'          => 0,   // the reseller page (shortcode [delicat_revendeur]); 0 = found automatically
 		'recharge_page_id' => 0,   // the recharge page (shortcode [delicat_recharge]); 0 = found automatically
 		'notify'           => '',  // e-mail for new applications and changes; '' = the site's admin e-mail
+		'discount_cats'    => array(), // 1.1.1: product categories where the level's % discount applies (term ids); see dlr_cats_migrate()
 	);
 }
 function dlr_cfg( $key = null, $reload = false ) {
@@ -102,6 +103,7 @@ function dlr_cfg( $key = null, $reload = false ) {
 			);
 		}
 		$c['tiers'] = $tiers;
+		$c['discount_cats'] = array_values( array_unique( array_filter( array_map( 'absint', (array) $c['discount_cats'] ) ) ) );
 	}
 	return null === $key ? $c : ( $c[ $key ] ?? null );
 }
@@ -561,6 +563,94 @@ function dlr_month_progress( $user_id ) {
 	);
 }
 
+/* ============================================================== reversed recharges (1.1.1) */
+
+/**
+ * A recharge that counted is reversed: Delicat Recharge marks it 'rejete' (a refund by the team also
+ * debits the wallet; here no wallet is ever touched). The level that recharge paid for is checked again,
+ * on the last thing that set it: the qualifying deposit of the activation (or move up), or the last month
+ * settled. Below the minimum, the reseller moves down to the level the remaining recharges reach (never
+ * below the level held before a move up) or leaves the programme: e-mail to the reseller and the team,
+ * and a history line. A level set by hand by the team is left as it is.
+ */
+function dlr_recharge_reversed( $recharge_id ) {
+	global $wpdb;
+	$t = dlr_source_table( 'delicat_recharges' );
+	if ( '' === $t ) return;
+	$row = $wpdb->get_row( $wpdb->prepare( "SELECT id,user_id,statut,wallet_credited FROM $t WHERE id=%d", (int) $recharge_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( ! $row || (int) $row->user_id < 1 || ( 'approuve' === $row->statut && 1 === (int) $row->wallet_credited ) ) return; // still counts
+	dlr_recheck_level( (int) $row->user_id, (int) $row->id );
+}
+add_action( 'delicat_recharge_record_updated', function ( $recharge_id, $info = array() ) {
+	if ( 'rejete' === ( is_array( $info ) ? (string) ( $info['status'] ?? '' ) : '' ) ) dlr_recharge_reversed( (int) $recharge_id );
+}, 20, 2 );
+add_action( 'dlr_level_recheck', function ( $user_id, $recharge_id = 0 ) {
+	dlr_recheck_level( (int) $user_id, (int) $recharge_id );
+}, 10, 2 );
+
+/** Was this recharge sent inside [from, to)? (the deposit windows count recharges by the moment they were sent) */
+function dlr_recharge_in( $user_id, $recharge_id, $from_ts, $to_ts ) {
+	global $wpdb;
+	$t = dlr_source_table( 'delicat_recharges' );
+	$w = '' === $t ? '' : dlr_recharge_where( $user_id, $from_ts, $to_ts );
+	return '' !== $w && (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE $w AND id=%d", (int) $recharge_id ) ) > 0; // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+}
+
+function dlr_recheck_level( $user_id, $recharge_id ) {
+	global $wpdb;
+	$user_id = (int) $user_id;
+	if ( '' === dlr_user_tier( $user_id, true ) ) return;
+	if ( ! dlr_lock( 'eval_' . $user_id, 60 ) ) { // a month is being settled for this reseller: look again shortly
+		$args = array( $user_id, (int) $recharge_id );
+		if ( ! wp_next_scheduled( 'dlr_level_recheck', $args ) ) wp_schedule_single_event( time() + MINUTE_IN_SECONDS, 'dlr_level_recheck', $args );
+		return;
+	}
+	try {
+		$tier = dlr_user_tier( $user_id, true );
+		if ( '' === $tier ) return;
+		// What set the current level last: an activation or move up, a month settled, or the team by hand.
+		$last = $wpdb->get_row( $wpdb->prepare( 'SELECT event,tier_from,tier_to,note FROM ' . dlr_table( 'log' ) . " WHERE user_id=%d AND event IN ('activated','upgraded','kept','downgraded','admin_set','reversed','removed') ORDER BY id DESC LIMIT 1", $user_id ) );
+		if ( ! $last || $last->tier_to !== $tier ) return;
+		// The basis of the level: an application (« Demande #N ») or a month (« 2026-10 »); a level already
+		// revised by a reversal carries its basis at the end of its note (« [D89] » or « [2026-10] »).
+		$basis = '';
+		if ( in_array( $last->event, array( 'activated', 'upgraded' ), true ) && preg_match( '/^Demande #(\d+)$/', (string) $last->note, $m ) ) $basis = 'D' . $m[1];
+		elseif ( in_array( $last->event, array( 'kept', 'downgraded' ), true ) && preg_match( '/^\d{4}-\d{2}$/', (string) $last->note ) ) $basis = (string) $last->note;
+		elseif ( 'reversed' === $last->event && preg_match( '/\[(D\d+|\d{4}-\d{2})\]$/', (string) $last->note, $m ) ) $basis = $m[1];
+		if ( '' === $basis ) return; // set by hand by the team: left as it is
+		$floor = ''; $paid = 0.0; $what = '';
+		if ( 'D' === $basis[0] ) {
+			$app = dlr_app( (int) substr( $basis, 1 ) );
+			if ( ! $app || ! dlr_recharge_in( $user_id, $recharge_id, dlr_ts( $app->decided_at ), dlr_ts( $app->deadline ) ) ) return;
+			$paid  = dlr_app_paid( $app );
+			$floor = (string) $wpdb->get_var( $wpdb->prepare( 'SELECT tier_from FROM ' . dlr_table( 'log' ) . " WHERE user_id=%d AND event='upgraded' AND note=%s ORDER BY id DESC LIMIT 1", $user_id, 'Demande #' . (int) $app->id ) ); // the level held before moving up
+			$what  = sprintf( 'dépôt de qualification de la demande #%d', (int) $app->id );
+		} else {
+			list( $a, $b ) = dlr_month_bounds( $basis );
+			if ( ! dlr_recharge_in( $user_id, $recharge_id, $a, $b ) ) return;
+			$paid = dlr_deposits( $user_id, $a, $b );
+			$what = 'recharges de ' . dlr_month_name( $basis );
+		}
+		if ( $paid >= dlr_tier_min( $tier ) ) return; // the remaining recharges still reach the level
+		$keep = dlr_level_for( $paid, $tier );
+		if ( '' !== $floor && dlr_tier_rank( $floor ) > dlr_tier_rank( $keep ) ) $keep = $floor;
+		if ( $keep === $tier ) return;
+		$note = sprintf( 'Recharge #%d annulée — %s [%s]', (int) $recharge_id, $what, $basis );
+		dlr_set_tier( $user_id, $keep, 'reversed', $paid, $note );
+		// The qualifying deposit no longer settles this month: it is owed at the new level, counted at its end as usual.
+		if ( '' !== $keep && get_user_meta( $user_id, '_dlr_eval', true ) === dlr_month_key() ) update_user_meta( $user_id, '_dlr_eval', dlr_month_shift( dlr_month_key(), -1 ) );
+		$name = dlr_user_name( $user_id );
+		if ( '' === $keep ) {
+			dlr_mail_user( $user_id, 'Votre statut revendeur est arrêté', sprintf( "Une recharge qui comptait pour votre niveau %s a été annulée ou remboursée (recharge #%d). Sans elle, vos recharges (%s) n’atteignent plus le minimum de %s.\n\nVotre badge et vos prix revendeur sont retirés. Votre portefeuille n’est pas modifié par ce changement. Vous pouvez refaire une demande quand vous voulez.", dlr_tier_label( $tier ), (int) $recharge_id, dlr_money( $paid ), dlr_money( dlr_tier_min( 'silver' ) ) ) );
+		} else {
+			dlr_mail_user( $user_id, 'Votre niveau revendeur change : ' . dlr_tier_label( $keep ), sprintf( "Une recharge qui comptait pour votre niveau %s a été annulée ou remboursée (recharge #%d). Sans elle, vos recharges (%s) n’atteignent plus le minimum de %s.\n\nVotre niveau devient %s. Votre portefeuille n’est pas modifié par ce changement. Pour remonter, refaites une demande depuis votre espace revendeur.", dlr_tier_label( $tier ), (int) $recharge_id, dlr_money( $paid ), dlr_money( dlr_tier_min( $tier ) ), dlr_tier_label( $keep ) ) );
+		}
+		dlr_mail_admin( 'Niveau revu après une recharge annulée', sprintf( "%s : la recharge #%d a été annulée ou remboursée. %s : %s, sous le minimum de %s (%s).\nNouveau niveau : %s. Aucun portefeuille n’a été modifié par Delicat Revendeurs.", $name, (int) $recharge_id, ucfirst( $what ), dlr_money( $paid ), dlr_money( dlr_tier_min( $tier ) ), dlr_tier_label( $tier ), '' === $keep ? 'retiré du programme' : dlr_tier_label( $keep ) ) );
+	} finally {
+		dlr_unlock( 'eval_' . $user_id );
+	}
+}
+
 /* ============================================================== automation */
 
 /* A recharge approved (by the team or automatically): an application awaiting its deposit is looked at now. */
@@ -641,6 +731,85 @@ add_action( 'delete_user', function ( $user_id ) {
 	$wpdb->delete( dlr_table( 'apps' ), array( 'user_id' => (int) $user_id ) );
 	$wpdb->delete( dlr_table( 'log' ), array( 'user_id' => (int) $user_id ) );
 } );
+
+/* ============================================================== privacy tools (1.1.1) */
+
+/*
+ * Tools › Export / Erase personal data. Export: the reseller level, every application (activity,
+ * WhatsApp phone, city, how the customer sells, volume, the team's note) and the history. Erase: the
+ * applications' contact details and free text are blanked, an application still in progress is
+ * cancelled, and the team's refusal notes are cleared; the rows themselves stay (level, dates,
+ * amounts), because the reseller history and the orders placed at reseller price refer to them.
+ * Deleting the account still deletes everything (delete_user above).
+ */
+add_filter( 'wp_privacy_personal_data_exporters', function ( $exporters ) {
+	$exporters['delicat-resellers'] = array( 'exporter_friendly_name' => 'Delicat Revendeurs', 'callback' => 'dlr_privacy_export' );
+	return $exporters;
+} );
+add_filter( 'wp_privacy_personal_data_erasers', function ( $erasers ) {
+	$erasers['delicat-resellers'] = array( 'eraser_friendly_name' => 'Delicat Revendeurs', 'callback' => 'dlr_privacy_erase' );
+	return $erasers;
+} );
+function dlr_privacy_export( $email, $page = 1 ) {
+	global $wpdb;
+	$user = get_user_by( 'email', (string) $email );
+	if ( ! $user ) return array( 'data' => array(), 'done' => true );
+	$page = max( 1, (int) $page ); $per = 100; $data = array();
+	if ( 1 === $page ) {
+		$tier  = dlr_user_tier( $user->ID, true );
+		$since = (int) get_user_meta( $user->ID, '_dlr_since', true );
+		if ( '' !== $tier ) $data[] = array( 'group_id' => 'delicat-reseller', 'group_label' => 'Programme revendeur', 'item_id' => 'dlr-level-' . $user->ID, 'data' => array(
+			array( 'name' => 'Niveau', 'value' => dlr_tier_label( $tier ) ),
+			array( 'name' => 'Revendeur depuis', 'value' => $since ? wp_date( 'Y-m-d', $since ) : '' ),
+		) );
+	}
+	$apps = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . dlr_table( 'apps' ) . ' WHERE user_id=%d ORDER BY id LIMIT %d OFFSET %d', $user->ID, $per, ( $page - 1 ) * $per ) );
+	foreach ( (array) $apps as $a ) {
+		$data[] = array( 'group_id' => 'delicat-reseller-apps', 'group_label' => 'Demandes revendeur', 'item_id' => 'dlr-app-' . (int) $a->id, 'data' => array(
+			array( 'name' => 'Demande', 'value' => '#' . (int) $a->id ),
+			array( 'name' => 'Niveau demandé', 'value' => dlr_tier_label( $a->tier ) ?: $a->tier ),
+			array( 'name' => 'État', 'value' => $a->status ),
+			array( 'name' => 'Nom ou activité', 'value' => (string) $a->business ),
+			array( 'name' => 'Téléphone (WhatsApp)', 'value' => (string) $a->phone ),
+			array( 'name' => 'Ville', 'value' => (string) $a->city ),
+			array( 'name' => 'Comment vous vendez', 'value' => (string) $a->channel ),
+			array( 'name' => 'Ventes par mois', 'value' => dlr_volumes()[ $a->volume ] ?? (string) $a->volume ),
+			array( 'name' => 'Note de l’équipe', 'value' => (string) $a->note_admin ),
+			array( 'name' => 'Envoyée le (UTC)', 'value' => (string) $a->created_at ),
+			array( 'name' => 'Décidée le (UTC)', 'value' => (string) $a->decided_at ),
+			array( 'name' => 'Activée le (UTC)', 'value' => (string) $a->activated_at ),
+		) );
+	}
+	$log = $wpdb->get_results( $wpdb->prepare( 'SELECT * FROM ' . dlr_table( 'log' ) . ' WHERE user_id=%d ORDER BY id LIMIT %d OFFSET %d', $user->ID, $per, ( $page - 1 ) * $per ) );
+	foreach ( (array) $log as $l ) {
+		$data[] = array( 'group_id' => 'delicat-reseller-log', 'group_label' => 'Historique revendeur', 'item_id' => 'dlr-log-' . (int) $l->id, 'data' => array(
+			array( 'name' => 'Date (UTC)', 'value' => (string) $l->created_at ),
+			array( 'name' => 'Événement', 'value' => (string) $l->event ),
+			array( 'name' => 'Niveau', 'value' => trim( ( dlr_tier_label( $l->tier_from ) ?: '—' ) . ' → ' . ( dlr_tier_label( $l->tier_to ) ?: '—' ) ) ),
+			array( 'name' => 'Montant (HTG)', 'value' => (string) $l->amount ),
+			array( 'name' => 'Détail', 'value' => (string) $l->note ),
+		) );
+	}
+	return array( 'data' => $data, 'done' => count( (array) $apps ) < $per && count( (array) $log ) < $per );
+}
+function dlr_privacy_erase( $email, $page = 1 ) {
+	global $wpdb;
+	$user = get_user_by( 'email', (string) $email );
+	if ( ! $user ) return array( 'items_removed' => false, 'items_retained' => false, 'messages' => array(), 'done' => true );
+	$t = dlr_table( 'apps' );
+	$wpdb->query( $wpdb->prepare( "UPDATE $t SET status='cancelled', reason='erased', decided_at=%s WHERE user_id=%d AND status IN ('pending','deposit')", current_time( 'mysql', 1 ), $user->ID ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$apps = (int) $wpdb->query( $wpdb->prepare( "UPDATE $t SET business='', phone='', city='', channel=NULL, volume='', note_admin=NULL WHERE user_id=%d AND (business<>'' OR phone<>'' OR city<>'' OR channel IS NOT NULL OR volume<>'' OR note_admin IS NOT NULL)", $user->ID ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	$notes = (int) $wpdb->query( $wpdb->prepare( 'UPDATE ' . dlr_table( 'log' ) . " SET note='' WHERE user_id=%d AND event='rejected' AND note<>''", $user->ID ) ); // the team's refusal reason, typed freely
+	delete_transient( 'dlr_flash_' . $user->ID ); // values typed in a form that failed
+	$kept = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM $t WHERE user_id=%d", $user->ID ) ) + (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM ' . dlr_table( 'log' ) . ' WHERE user_id=%d', $user->ID ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+	if ( $apps || $notes ) dlr_log( $user->ID, 'erased', '', '', 0, sprintf( '%d demande(s) anonymisée(s)', $apps ) );
+	return array(
+		'items_removed'  => ( $apps + $notes ) > 0,
+		'items_retained' => $kept > 0,
+		'messages'       => $kept ? array( 'Delicat Revendeurs : les coordonnées des demandes revendeur sont effacées ; le niveau, les dates et les montants sont gardés, car l’historique revendeur et les commandes à prix revendeur y font référence.' ) : array(),
+		'done'           => true,
+	);
+}
 
 /* ============================================================== e-mail, names, pages */
 

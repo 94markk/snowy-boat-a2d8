@@ -948,7 +948,7 @@ add_filter( 'wp_headers', static function ( $headers ) {
 		$headers['Referrer-Policy'] = 'strict-origin-when-cross-origin';
 	}
 	if ( Delicat_Builder_V9_Security::request_is_secure() && ! isset( $headers['Strict-Transport-Security'] ) ) {
-		$headers['Strict-Transport-Security'] = 'max-age=15552000';
+		$headers['Strict-Transport-Security'] = 'max-age=31536000'; // 9.7.8: one year, like every other path
 	}
 	return $headers;
 }, 20 );

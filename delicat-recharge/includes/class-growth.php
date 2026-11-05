@@ -36,10 +36,49 @@ class Delicat_Growth {
         // Admin settings UI under the existing settings page.
         add_action( 'delicat_settings_extra', [ $this, 'settings_ui' ] );
         add_action( 'admin_init', [ $this, 'register_settings' ] );
+        add_action( 'admin_notices', [ __CLASS__, 'referral_notice' ] );
     }
 
     public static function enabled(): bool {
         return (bool) get_option( self::OPT_ENABLED, 0 );
+    }
+
+    /**
+     * 6.6.4 (RCH-06): Delicat Rewards runs the store's referral programme (codes,
+     * fraud checks, milestones). When its referral module is installed, this
+     * older « Growth » referral stands down: it no longer records who invited
+     * whom, pays no referral bonus and shows no referral card. Promo codes and
+     * loyalty tiers are not referral and keep working. Stored data
+     * (delicat_referred_by / delicat_referral_paid) is kept untouched.
+     */
+    public static function rewards_referral_active(): bool {
+        return (bool) apply_filters( 'delicat_growth_rewards_referral_active', function_exists( 'delicat_ref_on' ) );
+    }
+
+    /**
+     * 6.6.4 (RCH-07): who may be credited as a referrer: an existing customer
+     * account, never the new account itself, never staff.
+     */
+    public static function eligible_referrer( int $ref_id, int $user_id ): bool {
+        if ( $ref_id <= 0 || $ref_id === $user_id ) return false;
+        $ref = get_userdata( $ref_id );
+        if ( ! $ref ) return false;
+        $roles = (array) apply_filters( 'delicat_growth_referrer_roles', [ 'customer' ] );
+        if ( ! array_intersect( $roles, (array) $ref->roles ) ) return false;
+        foreach ( [ 'manage_options', 'manage_woocommerce', 'edit_posts' ] as $cap ) {
+            if ( user_can( $ref, $cap ) ) return false;
+        }
+        return true;
+    }
+
+    /** Admin notice while both referral programmes could run (RCH-06). */
+    public static function referral_notice(): void {
+        if ( ! current_user_can( 'manage_options' ) || ! self::rewards_referral_active() ) return;
+        $screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+        if ( ! $screen || strpos( (string) $screen->id, 'delicat' ) === false ) return;
+        if ( ! self::enabled() || (float) get_option( self::OPT_REF_BONUS, 0 ) <= 0 ) return;
+        echo '<div class="notice notice-info"><p><strong>Parrainage :</strong> le parrainage de Delicat Recharge (Croissance) est en pause, car Delicat Rewards gère maintenant le parrainage (un seul programme, pour ne jamais payer deux fois le même ami). '
+            . 'Aucun bonus de parrainage Recharge n\'est versé et sa carte n\'est plus affichée ; les données déjà enregistrées sont conservées. Les codes promo et la fidélité continuent normalement. Réglez le parrainage dans Delicat Rewards.</p></div>';
     }
 
     /* ================================================================
@@ -61,10 +100,9 @@ class Delicat_Growth {
         if ( ! $user_id ) return;
 
         // Idempotency guard: never apply bonuses to the same recharge twice.
-        $done = get_post_meta( 0, '', false ); // no-op placeholder to keep linters calm
-        $flag_key = '_delicat_bonus_done_' . $recharge_id;
-        if ( get_option( $flag_key ) ) return;
-        update_option( $flag_key, 1, false );
+        // 6.6.4 (RCH-08): claimed atomically on the recharge row (bonus_done)
+        // instead of one never-cleaned option per recharge.
+        if ( ! self::claim_bonus( (int) $r->id ) ) return;
 
         $amount = (float) $r->montant;
 
@@ -76,6 +114,35 @@ class Delicat_Growth {
 
         // 5) REFERRAL reward (only on the user's FIRST approved recharge).
         $this->apply_referral( $user_id );
+    }
+
+    /** Legacy per-recharge marker written up to 6.6.3 (cleaned in batches by Delicat_Maintenance). */
+    const LEGACY_FLAG_PREFIX = '_delicat_bonus_done_';
+
+    /**
+     * True for the one caller allowed to pay this recharge's bonuses. The
+     * bonus_done column is flipped 0→1 by a single conditional UPDATE, so two
+     * approvals firing at once cannot both pay. Older recharges keep their
+     * pre-6.6.4 option marker until the clean-up has copied it to the column.
+     */
+    public static function claim_bonus( int $recharge_id ): bool {
+        global $wpdb;
+        $flag_key = self::LEGACY_FLAG_PREFIX . $recharge_id;
+        if ( ! Delicat_Database::bonus_column_ready() ) {
+            // Column missing (database refused the upgrade): the old way.
+            if ( get_option( $flag_key ) ) return false;
+            update_option( $flag_key, 1, false );
+            return true;
+        }
+        $claimed = $wpdb->query( $wpdb->prepare(
+            "UPDATE {$wpdb->prefix}delicat_recharges SET bonus_done = 1 WHERE id = %d AND bonus_done = 0",
+            $recharge_id
+        ) );
+        if ( 1 !== (int) $claimed ) return false;
+        if ( ! get_option( 'delicat_bonus_flags_migrated' ) && get_option( $flag_key ) ) {
+            return false; // paid before 6.6.4; the clean-up has not reached it yet
+        }
+        return true;
     }
 
     /* ---- 4) Promo codes ---------------------------------------------- */
@@ -162,7 +229,7 @@ class Delicat_Growth {
             ];
         }
         $ref = (float) get_option( self::OPT_REF_BONUS, 0 );
-        if ( $ref > 0 ) {
+        if ( $ref > 0 && ! self::rewards_referral_active() ) {
             return [
                 'label' => __( 'Parrainage', 'delicat-recharge' ),
                 'value' => '+' . number_format_i18n( $ref ) . ' HTG',
@@ -205,16 +272,22 @@ class Delicat_Growth {
     /* ---- 5) Referral rewards ----------------------------------------- */
 
     public function capture_referral( int $user_id ): void {
-        if ( empty( $_GET['ref'] ) ) return;
-        $code = sanitize_text_field( wp_unslash( $_GET['ref'] ) );
+        // 6.6.4 (RCH-06): Rewards owns ?ref= (its codes are not user IDs).
+        if ( self::rewards_referral_active() ) return;
+        if ( empty( $_GET['ref'] ) || ! is_scalar( $_GET['ref'] ) ) return;
+        $code = trim( sanitize_text_field( wp_unslash( $_GET['ref'] ) ) );
         // The ref code is a referrer's user ID (simple + unique).
+        // 6.6.4 (RCH-07): digits only (« 12abc » no longer means user 12), and
+        // the referrer must be an existing customer, not the new account, not staff.
+        if ( ! preg_match( '/^[0-9]{1,20}$/', $code ) ) return;
         $ref_id = absint( $code );
-        if ( $ref_id && $ref_id !== $user_id && get_userdata( $ref_id ) ) {
+        if ( self::eligible_referrer( $ref_id, $user_id ) ) {
             update_user_meta( $user_id, 'delicat_referred_by', $ref_id );
         }
     }
 
     private function apply_referral( int $user_id ): void {
+        if ( self::rewards_referral_active() ) return; // 6.6.4 (RCH-06): one programme only
         $ref_bonus = (float) get_option( self::OPT_REF_BONUS, 0 );
         if ( $ref_bonus <= 0 ) return;
 
@@ -230,7 +303,7 @@ class Delicat_Growth {
         if ( $approved_count < 1 ) return;
 
         $ref_id = (int) get_user_meta( $user_id, 'delicat_referred_by', true );
-        if ( ! $ref_id || ! get_userdata( $ref_id ) ) return;
+        if ( ! self::eligible_referrer( $ref_id, $user_id ) ) return; // 6.6.4 (RCH-07): re-checked at pay time
 
         // Pay both sides, once.
         Delicat_TeraWallet::credit( $user_id, $ref_bonus, 'Bonus de bienvenue (parrainage)' );
@@ -256,6 +329,21 @@ class Delicat_Growth {
     public function sanitize_promos( $raw ): array {
         // Raw textarea: one per line  CODE|percent|10|max  OR  CODE|fixed|100
         $out = [];
+        // 6.6.4: WordPress sanitizes a brand-new option twice (update_option, then
+        // add_option); the second pass gets this array back. It used to be cast to
+        // the string "Array", which emptied the promo list on the very first save.
+        if ( is_array( $raw ) ) {
+            foreach ( $raw as $code => $p ) {
+                $code = strtoupper( sanitize_text_field( (string) $code ) );
+                if ( $code === '' || ! is_array( $p ) ) continue;
+                $out[ $code ] = [
+                    'type'  => ( $p['type'] ?? 'percent' ) === 'fixed' ? 'fixed' : 'percent',
+                    'value' => (float) ( $p['value'] ?? 0 ),
+                    'max'   => (float) ( $p['max'] ?? 0 ),
+                ];
+            }
+            return $out;
+        }
         foreach ( preg_split( '/\r?\n/', (string) $raw ) as $line ) {
             $line = trim( $line );
             if ( $line === '' ) continue;
@@ -274,6 +362,12 @@ class Delicat_Growth {
     public function sanitize_tiers( $raw ): array {
         // Raw textarea: one per line  THRESHOLD|percent   e.g. 5000|3
         $out = [];
+        if ( is_array( $raw ) ) { // second pass on a new option (see sanitize_promos)
+            foreach ( $raw as $thr => $pct ) {
+                if ( (float) $thr > 0 && (float) $pct > 0 ) $out[ (string) (float) $thr ] = (float) $pct;
+            }
+            return $out;
+        }
         foreach ( preg_split( '/\r?\n/', (string) $raw ) as $line ) {
             $line = trim( $line );
             if ( $line === '' ) continue;
@@ -317,7 +411,10 @@ class Delicat_Growth {
             <tr><th>Bonus de parrainage (HTG)</th>
                 <td>
                     <input type="number" step="0.01" min="0" name="<?php echo self::OPT_REF_BONUS; ?>" value="<?php echo esc_attr( $ref ); ?>" class="small-text">
-                    <p class="description">Versé au filleul ET au parrain après la 1re recharge approuvée du filleul. 0 = désactivé. Lien de parrainage : <code><?php echo esc_html( home_url( '/?ref=VOTRE_ID' ) ); ?></code></p>
+                    <p class="description">Versé au filleul ET au parrain après la 1re recharge approuvée du filleul. 0 = désactivé. Lien de parrainage : <code><?php echo esc_html( home_url( '/?ref=VOTRE_ID' ) ); ?></code> (parrain : un compte client existant).</p>
+                    <?php if ( self::rewards_referral_active() ) : ?>
+                    <p class="description" style="color:#b45309;font-weight:600;">En pause : Delicat Rewards gère le parrainage du magasin. Ce bonus n'est pas versé et sa carte n'est pas affichée tant que Delicat Rewards est installé (données conservées).</p>
+                    <?php endif; ?>
                 </td></tr>
 
             <tr><th>Paliers de fidélité</th>

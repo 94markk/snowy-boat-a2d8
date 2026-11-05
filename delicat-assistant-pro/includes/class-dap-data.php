@@ -2,6 +2,9 @@
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 class DSA2_Data {
+    /** 7.1.1: a chat image in the private folder: YYYY/MM/dap-<20 letters/digits>.<ext>. */
+    const PRIVATE_FILE_RE = '#^\d{4}/\d{2}/dap-[A-Za-z0-9]{20}\.(jpg|png|gif|webp)$#';
+
     public static function init() {
         add_action( 'wp_ajax_dsa2_send_message', array( __CLASS__, 'ajax_send_message' ) );
         add_action( 'wp_ajax_nopriv_dsa2_send_message', array( __CLASS__, 'ajax_send_message' ) );
@@ -27,6 +30,9 @@ class DSA2_Data {
         add_action( 'wp_ajax_nopriv_dsa2_upload', array( __CLASS__, 'ajax_upload' ) );
         add_action( 'wp_ajax_dsa2_find_order', array( __CLASS__, 'ajax_find_order' ) );
         add_action( 'wp_ajax_nopriv_dsa2_find_order', array( __CLASS__, 'ajax_find_order' ) );
+        // 7.1.1: chat images live in a private folder and are served only through this check.
+        add_action( 'wp_ajax_dsa2_chat_file', array( __CLASS__, 'ajax_chat_file' ) );
+        add_action( 'wp_ajax_nopriv_dsa2_chat_file', array( __CLASS__, 'ajax_chat_file' ) );
         // Agent alert e-mail runs out of band so SMTP never blocks a customer's message.
         add_action( 'dsa2_send_agent_email', array( __CLASS__, 'send_agent_email' ) );
         add_action( 'dsa2_send_message_alert', array( __CLASS__, 'send_message_alert' ), 10, 3 );
@@ -720,6 +726,11 @@ class DSA2_Data {
         $deleted = 0;
         foreach ( $rows as $row ) {
             $meta = json_decode( (string) $row->meta, true );
+            if ( is_array( $meta ) && ! empty( $meta['private'] ) && ! empty( $meta['file'] ) ) { // 7.1.1
+                $private = self::private_path( (string) $meta['file'] );
+                if ( '' !== $private && @unlink( $private ) ) $deleted++; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+                continue;
+            }
             if ( 'attachment' === $row->message_type && ! empty( $meta['attachment_id'] ) ) {
                 if ( wp_delete_attachment( absint( $meta['attachment_id'] ), true ) ) $deleted++;
                 continue;
@@ -735,11 +746,330 @@ class DSA2_Data {
         return $deleted;
     }
 
+    /* ------------------------------------------------------------------ 7.1.1 private chat files */
+
+    /**
+     * The private folder of chat images, inside uploads under a random name kept in an option,
+     * with deny-all .htaccess and index.php files (LiteSpeed/Apache refuse every direct request;
+     * the random name also hides it where .htaccess is ignored). Images are only served by
+     * ajax_chat_file() after a check. '' when it cannot be used.
+     */
+    public static function private_dir( $create = true ) {
+        $uploads = wp_get_upload_dir();
+        if ( empty( $uploads['basedir'] ) ) return '';
+        $key = (string) get_option( 'dap_private_dir_key', '' );
+        if ( ! preg_match( '/^[a-z0-9]{16}$/', $key ) ) {
+            if ( ! $create ) return '';
+            add_option( 'dap_private_dir_key', strtolower( wp_generate_password( 16, false, false ) ), '', false );
+            $key = (string) get_option( 'dap_private_dir_key', '' ); // a parallel request may have written it first
+            if ( ! preg_match( '/^[a-z0-9]{16}$/', $key ) ) return '';
+        }
+        $dir = untrailingslashit( wp_normalize_path( $uploads['basedir'] ) ) . '/delicat-assistant-private-' . $key;
+        if ( $create ) {
+            if ( ! is_dir( $dir ) && ! wp_mkdir_p( $dir ) ) return '';
+            if ( ! is_file( $dir . '/.htaccess' ) ) {
+                @file_put_contents( $dir . '/.htaccess', "# Delicat Assistant: private chat images. Served only by admin-ajax.php after a check.\n<IfModule mod_authz_core.c>\n\tRequire all denied\n</IfModule>\n<IfModule !mod_authz_core.c>\n\tOrder deny,allow\n\tDeny from all\n</IfModule>\n" ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+            }
+            if ( ! is_file( $dir . '/index.php' ) ) {
+                @file_put_contents( $dir . '/index.php', "<?php\n// Silence is golden.\n" ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+            }
+        }
+        return $dir;
+    }
+
+    /** Absolute path of a stored private image, '' when the name is not ours or the file is gone. */
+    private static function private_path( $file ) {
+        $file = (string) $file;
+        if ( ! preg_match( self::PRIVATE_FILE_RE, $file ) ) return '';
+        $dir = self::private_dir( false );
+        if ( '' === $dir ) return '';
+        $path = $dir . '/' . $file;
+        return is_file( $path ) ? $path : '';
+    }
+
+    /**
+     * Moves the uploaded image of $_FILES[$field] into the private folder under a generated name
+     * and removes its photo data. array( file, path, type ) or null.
+     */
+    private static function store_private_image( $field, $ext ) {
+        $dir = self::private_dir();
+        if ( '' === $dir || empty( $_FILES[ $field ] ) ) return null;
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        $sub = gmdate( 'Y/m' );
+        $_FILES[ $field ]['name'] = 'dap-' . wp_generate_password( 20, false, false ) . '.' . $ext; // unguessable, no user-controlled name
+        $redirect = static function( $uploads ) use ( $dir, $sub ) {
+            $uploads['path']    = $dir . '/' . $sub;
+            $uploads['url']     = '';
+            $uploads['subdir']  = '/' . $sub;
+            $uploads['basedir'] = $dir;
+            $uploads['baseurl'] = '';
+            $uploads['error']   = false;
+            return $uploads;
+        };
+        add_filter( 'upload_dir', $redirect, PHP_INT_MAX );
+        try {
+            $moved = wp_handle_upload( $_FILES[ $field ], array(
+                'test_form' => false,
+                'mimes'     => array( 'jpg|jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp' ),
+            ) );
+        } finally {
+            remove_filter( 'upload_dir', $redirect, PHP_INT_MAX );
+        }
+        if ( ! is_array( $moved ) || isset( $moved['error'] ) || empty( $moved['file'] ) ) return null;
+        $path = wp_normalize_path( (string) $moved['file'] );
+        $rel  = 0 === strpos( $path, $dir . '/' ) ? substr( $path, strlen( $dir ) + 1 ) : '';
+        $type = ! empty( $moved['type'] ) ? sanitize_mime_type( (string) $moved['type'] ) : 'image/' . ( 'jpg' === $ext ? 'jpeg' : $ext );
+        if ( ! preg_match( self::PRIVATE_FILE_RE, $rel ) || ! self::strip_image_metadata( $path, $type ) ) {
+            if ( is_file( $path ) ) wp_delete_file( $path );
+            return null;
+        }
+        return array( 'file' => $rel, 'path' => $path, 'type' => $type );
+    }
+
+    /**
+     * Re-encodes the image (WordPress image editor, GD when available: it never copies photo
+     * data) so GPS position, phone model and the like are gone, straightened first when the
+     * phone stored it sideways. JPEG files then lose any metadata block left (also when no
+     * editor is available). GIF is kept as it is (no photo data; re-encoding loses animation).
+     */
+    private static function strip_image_metadata( $path, $mime ) {
+        if ( 'image/gif' === $mime ) return true;
+        $use_gd = static function( $editors ) {
+            return in_array( 'WP_Image_Editor_GD', (array) $editors, true ) ? array( 'WP_Image_Editor_GD' ) : $editors;
+        };
+        add_filter( 'wp_image_editors', $use_gd, PHP_INT_MAX );
+        $editor = wp_get_image_editor( $path, array( 'mime_type' => $mime ) );
+        remove_filter( 'wp_image_editors', $use_gd, PHP_INT_MAX );
+        if ( ! is_wp_error( $editor ) ) {
+            if ( method_exists( $editor, 'maybe_exif_rotate' ) ) $editor->maybe_exif_rotate();
+            $saved = $editor->save( $path, $mime );
+            // An output-format filter may have written another file: drop it, the original stays.
+            if ( is_array( $saved ) && ! empty( $saved['path'] ) && wp_normalize_path( $saved['path'] ) !== wp_normalize_path( $path ) && is_file( $saved['path'] ) ) {
+                wp_delete_file( $saved['path'] );
+            }
+        }
+        return 'image/jpeg' === $mime ? self::strip_jpeg_segments( $path ) : true;
+    }
+
+    /** Removes the JPEG metadata segments (EXIF/XMP, IPTC, comments); keeps colour data (APP0, APP2, APP14). */
+    private static function strip_jpeg_segments( $path ) {
+        $data = @file_get_contents( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+        if ( ! is_string( $data ) || strlen( $data ) < 4 || "\xFF\xD8" !== substr( $data, 0, 2 ) ) return false;
+        $out = "\xFF\xD8";
+        $pos = 2;
+        $len = strlen( $data );
+        $changed = false;
+        $scan = false;
+        while ( $pos + 4 <= $len ) {
+            if ( "\xFF" !== $data[ $pos ] ) return false;
+            $marker = ord( $data[ $pos + 1 ] );
+            if ( 0xFF === $marker ) { $pos++; continue; }
+            if ( 0xDA === $marker ) { $out .= substr( $data, $pos ); $scan = true; break; } // image data follows
+            if ( 0x01 === $marker || ( $marker >= 0xD0 && $marker <= 0xD8 ) ) { $out .= substr( $data, $pos, 2 ); $pos += 2; continue; }
+            $size = ( ord( $data[ $pos + 2 ] ) << 8 ) | ord( $data[ $pos + 3 ] );
+            if ( $size < 2 || $pos + 2 + $size > $len ) return false;
+            $drop = 0xFE === $marker || ( $marker >= 0xE1 && $marker <= 0xEF && ! in_array( $marker, array( 0xE2, 0xEE ), true ) );
+            if ( $drop ) $changed = true;
+            else $out .= substr( $data, $pos, 2 + $size );
+            $pos += 2 + $size;
+        }
+        if ( ! $scan ) return false;
+        if ( ! $changed ) return true;
+        return false !== @file_put_contents( $path, $out, LOCK_EX ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+    }
+
+    private static function file_signature( $conversation_id, $file, $expires ) {
+        return substr( hash_hmac( 'sha256', absint( $conversation_id ) . '|' . (string) $file . '|' . absint( $expires ), wp_salt( 'auth' ) . '|dap-chat-file' ), 0, 40 );
+    }
+
+    /** Address of a private chat image; with $expires, signed so an app can load it until then. */
+    public static function chat_file_url( $conversation_id, $file, $expires = 0 ) {
+        $args = array( 'action' => 'dsa2_chat_file', 'c' => absint( $conversation_id ), 'f' => basename( (string) $file ) );
+        if ( $expires ) {
+            $args['e'] = absint( $expires );
+            $args['s'] = self::file_signature( $conversation_id, $file, $expires );
+        }
+        return add_query_arg( $args, admin_url( 'admin-ajax.php' ) );
+    }
+
+    /**
+     * Message meta as sent to a viewer who may read this conversation (the chat, the staff app,
+     * the inbox): a private image gets a signed address valid 12-13 hours (the same address for
+     * an hour, so it stays in the browser cache), for apps that load images without cookies.
+     */
+    public static function public_meta( $meta, $conversation_id ) {
+        if ( ! is_array( $meta ) || empty( $meta['private'] ) || empty( $meta['file'] ) ) return $meta;
+        $expires = ( (int) floor( time() / HOUR_IN_SECONDS ) + 13 ) * HOUR_IN_SECONDS;
+        $meta['url'] = self::chat_file_url( $conversation_id, (string) $meta['file'], $expires );
+        unset( $meta['file'] );
+        return $meta;
+    }
+
+    /** The customer of the conversation (account or guest cookie) or the support team. */
+    private static function may_view_conversation( $conversation_id ) {
+        global $wpdb;
+        $conv = $wpdb->get_row( $wpdb->prepare( "SELECT id,session_key,user_id,assigned_to FROM {$wpdb->prefix}dap_conversations WHERE id=%d", absint( $conversation_id ) ) );
+        if ( ! $conv ) return false;
+        $uid = get_current_user_id();
+        if ( $uid ) {
+            if ( current_user_can( DSA2_Install::CAP_SUPPORT ) || current_user_can( 'manage_woocommerce' ) || current_user_can( 'manage_options' ) ) {
+                $manager = current_user_can( DSA2_Install::CAP_SETTINGS ) || current_user_can( 'manage_options' ) || current_user_can( 'manage_woocommerce' );
+                // Same rule as the inbox: an agent sees unassigned threads and their own.
+                if ( $manager || ! (int) $conv->assigned_to || (int) $conv->assigned_to === $uid ) return true;
+            }
+            if ( (int) $conv->user_id === $uid || 'user_' . $uid === (string) $conv->session_key ) return true;
+        }
+        $cookie = isset( $_COOKIE['dap_session'] ) ? sanitize_text_field( wp_unslash( $_COOKIE['dap_session'] ) ) : '';
+        return (bool) preg_match( '/^[a-zA-Z0-9_-]{20,100}$/', $cookie ) && hash_equals( (string) $conv->session_key, 'guest_' . $cookie );
+    }
+
+    /**
+     * Serves a private chat image to someone who may read the conversation, or to a valid
+     * signed address. Every refusal is the same 404, whether the file exists or not.
+     */
+    public static function ajax_chat_file() {
+        $deny = static function() {
+            status_header( 404 );
+            nocache_headers();
+            header( 'Content-Type: text/plain; charset=utf-8' );
+            echo 'Introuvable.';
+            exit;
+        };
+        $conversation_id = isset( $_GET['c'] ) ? absint( $_GET['c'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        $name    = isset( $_GET['f'] ) ? sanitize_file_name( wp_unslash( $_GET['f'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        $expires = isset( $_GET['e'] ) ? absint( $_GET['e'] ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        $sig     = isset( $_GET['s'] ) ? preg_replace( '/[^a-f0-9]/', '', (string) wp_unslash( $_GET['s'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+        if ( ! $conversation_id || ! preg_match( '/^dap-[A-Za-z0-9]{20}\.(jpg|png|gif|webp)$/', $name ) ) $deny();
+        global $wpdb;
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id,meta FROM {$wpdb->prefix}dap_messages WHERE conversation_id=%d AND message_type='image' AND meta LIKE %s ORDER BY id DESC LIMIT 5",
+            $conversation_id,
+            '%' . $wpdb->esc_like( $name ) . '%'
+        ) );
+        $file = '';
+        foreach ( (array) $rows as $row ) {
+            $meta = json_decode( (string) $row->meta, true );
+            if ( is_array( $meta ) && ! empty( $meta['private'] ) && ! empty( $meta['file'] ) && basename( (string) $meta['file'] ) === $name ) {
+                $file = (string) $meta['file'];
+                break;
+            }
+        }
+        if ( '' === $file ) $deny();
+        $allowed = $expires >= time() && '' !== $sig && hash_equals( self::file_signature( $conversation_id, $file, $expires ), $sig );
+        if ( ! $allowed ) $allowed = self::may_view_conversation( $conversation_id );
+        $path = $allowed ? self::private_path( $file ) : '';
+        $info = '' !== $path ? @getimagesize( $path ) : false; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+        $types = array( IMAGETYPE_JPEG => 'image/jpeg', IMAGETYPE_PNG => 'image/png', IMAGETYPE_GIF => 'image/gif', IMAGETYPE_WEBP => 'image/webp' );
+        if ( ! $info || ! isset( $types[ (int) $info[2] ] ) ) $deny();
+        do_action( 'litespeed_control_set_nocache', 'delicat assistant private chat image' );
+        if ( function_exists( 'header_remove' ) ) { header_remove( 'Expires' ); header_remove( 'Pragma' ); }
+        header( 'Content-Type: ' . $types[ (int) $info[2] ] );
+        header( 'Content-Length: ' . (int) filesize( $path ) );
+        header( 'Cache-Control: private, max-age=3600' );
+        header( 'X-LiteSpeed-Cache-Control: no-cache' );
+        header( 'X-Content-Type-Options: nosniff' );
+        header( "Content-Security-Policy: default-src 'none'; sandbox" );
+        header( 'Content-Disposition: inline; filename="' . $name . '"' );
+        header( 'X-Robots-Tag: noindex, nofollow' );
+        header( 'Referrer-Policy: no-referrer' );
+        readfile( $path ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_readfile
+        exit;
+    }
+
+    /** Path of an old public chat image (uploads, generated dap- name) from its stored address, or ''. */
+    private static function public_upload_path( $url ) {
+        static $base = null;
+        if ( null === $base ) {
+            $uploads = wp_get_upload_dir();
+            $base = array( '', '' );
+            if ( ! empty( $uploads['basedir'] ) && ! empty( $uploads['baseurl'] ) ) {
+                $base = array( trailingslashit( wp_normalize_path( $uploads['basedir'] ) ), trailingslashit( (string) wp_parse_url( $uploads['baseurl'], PHP_URL_PATH ) ) );
+            }
+        }
+        list( $basedir, $base_path ) = $base;
+        if ( '' === $basedir || '/' === $base_path || '' === $base_path ) return '';
+        $url_path = (string) wp_parse_url( (string) $url, PHP_URL_PATH );
+        if ( '' === $url_path || 0 !== strpos( $url_path, $base_path ) ) return '';
+        $path = wp_normalize_path( $basedir . substr( $url_path, strlen( $base_path ) ) );
+        if ( 0 !== strpos( $path, $basedir ) || false !== strpos( $path, '..' ) ) return '';
+        return preg_match( '#/\d{4}/\d{2}/dap-[A-Za-z0-9]{20}\.(jpg|png|gif|webp)$#', $path ) ? $path : '';
+    }
+
+    /**
+     * Moves chat images sent before 7.1.1 from the public uploads folder to the private one, a
+     * batch at a time, and points their message at the checked address (the file itself is
+     * moved, never deleted). Resumes after the last message looked at. Returns the number of
+     * messages looked at (0 = finished).
+     */
+    public static function migrate_public_images( $limit = 25 ) {
+        global $wpdb;
+        $table  = $wpdb->prefix . 'dap_messages';
+        $cursor = (int) get_option( 'dap_private_migration_cursor', 0 );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id,conversation_id,meta FROM $table WHERE id>%d AND message_type='image' ORDER BY id ASC LIMIT %d", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $cursor,
+            max( 1, min( 200, (int) $limit ) )
+        ) );
+        if ( ! $rows ) return 0;
+        $dir = self::private_dir();
+        if ( '' === $dir ) return 0;
+        $done = $cursor;
+        foreach ( $rows as $row ) {
+            $meta   = json_decode( (string) $row->meta, true );
+            $source = is_array( $meta ) && empty( $meta['private'] ) && ! empty( $meta['url'] ) ? self::public_upload_path( (string) $meta['url'] ) : '';
+            if ( '' === $source || ! is_file( $source ) ) { $done = (int) $row->id; continue; } // not ours, already private or already gone
+            $rel    = preg_match( '#(\d{4}/\d{2}/dap-[A-Za-z0-9]{20}\.(?:jpg|png|gif|webp))$#', $source, $m ) ? $m[1] : '';
+            if ( ! preg_match( self::PRIVATE_FILE_RE, $rel ) ) { $done = (int) $row->id; continue; }
+            $target = $dir . '/' . $rel;
+            if ( ! is_dir( dirname( $target ) ) && ! wp_mkdir_p( dirname( $target ) ) ) break; // retried by the next batch
+            if ( ! @rename( $source, $target ) ) break; // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename
+            $meta['file']    = $rel;
+            $meta['private'] = 1;
+            $meta['url']     = self::chat_file_url( (int) $row->conversation_id, $rel );
+            if ( false === $wpdb->update( $table, array( 'meta' => wp_json_encode( $meta ) ), array( 'id' => (int) $row->id ), array( '%s' ), array( '%d' ) ) ) {
+                @rename( $target, $source ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged, WordPress.WP.AlternativeFunctions.rename_rename -- keep the old reference working
+                break;
+            }
+            $done = (int) $row->id;
+        }
+        update_option( 'dap_private_migration_cursor', $done, false );
+        return $done > $cursor ? count( $rows ) : 0;
+    }
+
+    /** Retention setting « Conservation des captures de paiement »: removes private images older than $days. */
+    public static function expire_private_images( $days ) {
+        $days = absint( $days );
+        if ( $days < 1 ) return 0;
+        global $wpdb;
+        $table  = $wpdb->prefix . 'dap_messages';
+        // created_at is site time (current_time('mysql')).
+        $cutoff = gmdate( 'Y-m-d H:i:s', (int) current_time( 'timestamp' ) - $days * DAY_IN_SECONDS );
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id,meta FROM $table WHERE message_type='image' AND created_at<%s AND meta LIKE %s ORDER BY id ASC LIMIT 200", // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+            $cutoff,
+            '%' . $wpdb->esc_like( '"private":1' ) . '%'
+        ) );
+        $removed = 0;
+        foreach ( (array) $rows as $row ) {
+            $meta = json_decode( (string) $row->meta, true );
+            if ( ! is_array( $meta ) || empty( $meta['private'] ) ) continue;
+            $path = self::private_path( (string) ( $meta['file'] ?? '' ) );
+            if ( '' !== $path ) @unlink( $path ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+            $wpdb->update( $table, array(
+                'message_type' => 'deleted',
+                'body'         => 'Image supprimée (durée de conservation)',
+                'meta'         => wp_json_encode( array( 'title' => 'Image supprimée (durée de conservation)', 'expired' => 1 ) ),
+            ), array( 'id' => (int) $row->id ), array( '%s', '%s', '%s' ), array( '%d' ) );
+            $removed++;
+        }
+        return $removed;
+    }
+
     private static function client_ip() {
-        // Never trust a forwarded header here: unless the proxy address is verified, an
-        // attacker can rotate CF-Connecting-IP/X-Forwarded-For and mint unlimited counters.
-        // Hosts using a trusted-proxy plugin normally rewrite REMOTE_ADDR before WordPress.
-        return sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? '' ) );
+        // 7.1.1: the visitor's address behind Cloudflare (dsa2_client_ip(): Identity's or the
+        // Builder's rule, which believe CF-Connecting-IP only from Cloudflare's own ranges, so a
+        // forged header sent straight to the server still cannot mint fresh counters).
+        return dsa2_client_ip();
     }
 
     // Fixed-window counter: returns the hit count for the current window.
@@ -808,6 +1138,8 @@ class DSA2_Data {
         }
         // No esc_html here: add_message() sanitizes and the JS escapes on render — double-escaping showed &#039; in the chat.
         $channel = ( 'agent' === $intent || ( '' === $intent && self::is_live_agent_thread( $conv ) ) ) ? 'agent' : 'bot';
+        // 7.1.1: a visitor reaches the team only after leaving a name and a phone or e-mail.
+        if ( 'agent' === $channel && ! self::is_identified( $conv ) ) self::contact_required( $conv, $lang, $after );
         $message_meta = $context ? array( 'context' => $context ) : array();
         if ( $client_message_id ) $message_meta['client_message_id'] = $client_message_id;
         $message_id = self::add_message( $conv->id, 'customer', $body, 'text', $message_meta, $channel );
@@ -950,6 +1282,7 @@ class DSA2_Data {
         $key = 'dap_notify_' . (int) $conv->id;
         if ( get_transient( $key ) ) return;
         set_transient( $key, 1, 45 );
+        if ( ! self::alert_budget_allows( (int) $conv->id ) ) return; // 7.1.1: hourly cap, then one summary
 
         // wp_mail() is synchronous: a slow SMTP host added seconds to the customer's
         // request, right at the moment they are waiting for an answer. Hand it to cron and
@@ -1046,12 +1379,19 @@ class DSA2_Data {
         if ( 'customer' !== $sender || 'agent' !== $channel ) return;
         $s = get_option( 'dap_settings', array() );
         if ( empty( $s['notify_enabled'] ) || empty( $s['notify_every_message'] ) ) return;
-        $throttle = isset( $s['notify_throttle'] ) ? max( 0, min( 900, (int) $s['notify_throttle'] ) ) : 0;
+        // 7.1.1: no e-mail for a visitor who left no way to be reached (no account, no phone, no
+        // e-mail): the chat asks for those first, whatever app or script sent the message.
+        global $wpdb;
+        $who = $wpdb->get_row( $wpdb->prepare( "SELECT user_id,customer_email,customer_phone FROM {$wpdb->prefix}dap_conversations WHERE id=%d", absint( $conversation_id ) ) );
+        if ( ! $who || ( (int) $who->user_id < 1 && ! self::has_contact( $who ) ) ) return;
+        // 7.1.1: 120 s by default (it was 0: one e-mail per message).
+        $throttle = isset( $s['notify_throttle'] ) ? max( 0, min( 900, (int) $s['notify_throttle'] ) ) : 120;
         if ( $throttle > 0 ) {
             $key = 'dap_msg_alert_' . absint( $conversation_id );
             if ( get_transient( $key ) ) return;
             set_transient( $key, 1, $throttle );
         }
+        if ( ! self::alert_budget_allows( absint( $conversation_id ) ) ) return;
         set_transient( 'dap_notify_' . absint( $conversation_id ), 1, 45 ); // no duplicate escalation mail
         $preview = self::redact_secrets( DSA2_Compat::substr( wp_strip_all_tags( html_entity_decode( (string) $body, ENT_QUOTES, 'UTF-8' ) ), 0, 400 ) );
         if ( 'image' === $type && '' === trim( $preview ) ) $preview = '[Image envoyée par le client]';
@@ -1063,6 +1403,85 @@ class DSA2_Data {
             return;
         }
         self::send_message_alert( absint( $conversation_id ), $preview, absint( $message_id ) );
+    }
+
+    /**
+     * 7.1.1: one budget for every team alert e-mail (new message and "a customer is waiting"):
+     * the « Alertes e-mail par heure » setting (30 by default) per clock hour. Past it, the
+     * alerts are counted and one summary e-mail goes out after the hour, so a script cannot use
+     * up the host's daily e-mail quota (order and PIN e-mails would stop). Every message stays
+     * in the inbox either way.
+     */
+    private static function alert_budget_allows( $conversation_id ) {
+        $s    = get_option( 'dap_settings', array() );
+        $cap  = isset( $s['notify_hourly_cap'] ) ? max( 5, min( 500, (int) $s['notify_hourly_cap'] ) ) : 30;
+        $hour = (int) floor( time() / HOUR_IN_SECONDS );
+        $state = self::alert_budget_state( $hour );
+        if ( (int) $state['sent'] < $cap ) {
+            $state['sent'] = (int) $state['sent'] + 1;
+            update_option( 'dap_alert_budget', $state, false );
+            return true;
+        }
+        $state['held'] = (int) $state['held'] + 1;
+        if ( count( $state['convs'] ) < 50 ) $state['convs'][ (string) absint( $conversation_id ) ] = 1;
+        update_option( 'dap_alert_budget', $state, false );
+        if ( ! wp_next_scheduled( 'dsa2_send_alert_summary' ) ) {
+            wp_schedule_single_event( ( $hour + 1 ) * HOUR_IN_SECONDS + 30, 'dsa2_send_alert_summary' );
+        }
+        return false;
+    }
+
+    /** Budget of the given hour; the alerts held back in an earlier hour wait in 'pending' for the summary. */
+    private static function alert_budget_state( $hour ) {
+        $state = get_option( 'dap_alert_budget', array() );
+        if ( ! is_array( $state ) ) $state = array();
+        $state = wp_parse_args( $state, array( 'hour' => $hour, 'sent' => 0, 'held' => 0, 'convs' => array(), 'pending' => array( 'held' => 0, 'convs' => array() ) ) );
+        if ( (int) $state['hour'] !== (int) $hour ) {
+            $pending = is_array( $state['pending'] ) ? $state['pending'] : array();
+            $pending = array(
+                'held'  => (int) ( $pending['held'] ?? 0 ) + (int) $state['held'],
+                'convs' => array_slice( (array) ( $pending['convs'] ?? array() ) + (array) $state['convs'], 0, 50, true ),
+            );
+            $state = array( 'hour' => (int) $hour, 'sent' => 0, 'held' => 0, 'convs' => array(), 'pending' => $pending );
+        }
+        $state['convs'] = (array) $state['convs'];
+        return $state;
+    }
+
+    /** Cron target: the one summary of the alerts held back by the hourly cap. */
+    public static function send_alert_summary() {
+        $state   = self::alert_budget_state( (int) floor( time() / HOUR_IN_SECONDS ) );
+        $pending = (array) $state['pending'];
+        $held    = (int) ( $pending['held'] ?? 0 );
+        $convs   = array_keys( (array) ( $pending['convs'] ?? array() ) );
+        $state['pending'] = array( 'held' => 0, 'convs' => array() );
+        update_option( 'dap_alert_budget', $state, false );
+        // Alerts already held back in the current hour get their own summary after it.
+        if ( (int) $state['held'] > 0 && ! wp_next_scheduled( 'dsa2_send_alert_summary' ) ) {
+            wp_schedule_single_event( ( (int) $state['hour'] + 1 ) * HOUR_IN_SECONDS + 30, 'dsa2_send_alert_summary' );
+        }
+        if ( $held < 1 ) return false;
+        $s = get_option( 'dap_settings', array() );
+        if ( empty( $s['notify_enabled'] ) ) return false;
+        $to = self::alert_recipients( $s );
+        if ( ! $to ) return false;
+        $site = wp_specialchars_decode( get_bloginfo( 'name' ), ENT_QUOTES );
+        $subject = sprintf( '[%s] %d alertes du chat regroupées', $site, $held );
+        $message = sprintf( "La limite d'alertes e-mail par heure a été atteinte : %d alertes n'ont pas été envoyées une par une.
+Tous les messages sont dans la boîte de réception :
+%s
+", $held, admin_url( 'admin.php?page=delicat-assistant' ) );
+        if ( $convs ) {
+            $message .= "
+Conversations concernées :
+";
+            foreach ( array_slice( $convs, 0, 20 ) as $cid ) $message .= '#' . absint( $cid ) . ' ' . admin_url( 'admin.php?page=delicat-assistant&conversation=' . absint( $cid ) ) . "
+";
+        }
+        $message .= "
+Si ce n'est pas un pic normal, un robot écrit peut-être au chat. Réglage : Delicat Assistant → Paramètres → Agents et canaux.
+";
+        return wp_mail( $to, $subject, $message );
     }
 
     /** Everyone who should hear about a waiting customer: the alert box plus the support team. */
@@ -1387,32 +1806,30 @@ class DSA2_Data {
         $intent = isset( $_POST['intent'] ) ? sanitize_key( wp_unslash( $_POST['intent'] ) ) : '';
         $context = self::request_context();
         $channel = ( 'agent' === $intent || ( '' === $intent && self::is_live_agent_thread( $conv ) ) ) ? 'agent' : 'bot';
+        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0;
+        // 7.1.1: images go to the team, so the same contact rule applies.
+        if ( 'agent' === $channel && ! self::is_identified( $conv ) ) self::contact_required( $conv, $lang, $after );
         global $wpdb;
         $sent = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM " . $wpdb->prefix . "dap_messages WHERE conversation_id=%d AND message_type='image'", (int) $conv->id ) );
         if ( $sent >= 10 || self::bump_window( 'dap_up_' . md5( self::client_ip() ), HOUR_IN_SECONDS ) > 20 ) {
             wp_send_json_error( array( 'message' => self::t( $lang, 'Limite d’images atteinte. Parlez à un agent.', 'Image limit reached. Talk to an agent.', 'Ou rive nan limit imaj yo. Pale ak yon ajan.' ) ), 429 );
         }
 
-        require_once ABSPATH . 'wp-admin/includes/file.php';
-        $name = 'dap-' . wp_generate_password( 20, false, false ) . '.' . $ext; // unguessable, no user-controlled name
-        $overrides = array(
-            'test_form' => false,
-            'mimes'     => array( 'jpg|jpeg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp' ),
-        );
-        $_FILES['file']['name'] = $name;
-        $moved = wp_handle_upload( $_FILES['file'], $overrides );
-        if ( ! $moved || isset( $moved['error'] ) || empty( $moved['url'] ) ) {
+        // 7.1.1: the private folder (not the public uploads), photo data (GPS, phone model) removed.
+        $moved = self::store_private_image( 'file', $ext );
+        if ( ! $moved ) {
             $fail( self::t( $lang, 'Envoi impossible. Réessayez.', 'Upload failed. Please try again.', 'Nou pa ka voye l. Eseye ankò.' ) );
         }
-        $after = isset( $_POST['after_id'] ) ? absint( $_POST['after_id'] ) : 0;
         $message_id = self::add_message( $conv->id, 'customer', 'image', 'image', array(
-            'url' => esc_url_raw( $moved['url'] ),
-            'mime' => isset( $moved['type'] ) ? sanitize_text_field( $moved['type'] ) : 'image/' . $ext,
+            'file' => $moved['file'],
+            'url' => self::chat_file_url( (int) $conv->id, $moved['file'] ),
+            'private' => 1,
+            'mime' => $moved['type'],
             'title' => self::t( $lang, 'Image envoyée', 'Image sent', 'Imaj voye' ),
             'context' => $context,
         ), $channel );
         if ( ! $message_id ) {
-            if ( ! empty( $moved['file'] ) && is_file( $moved['file'] ) ) wp_delete_file( $moved['file'] );
+            wp_delete_file( $moved['path'] );
             $fail( self::t( $lang, 'Envoi impossible. Réessayez.', 'Upload failed. Please try again.', 'Nou pa ka voye l. Eseye ankò.' ) );
         }
         if ( 'agent' === $channel ) self::fire_webhook( $conv, 'customer_image', 'image' );
@@ -1442,8 +1859,9 @@ class DSA2_Data {
         // (the limits reveal nothing): 5 per order number from one address; 20 per order number from all addresses
         // together, so a stranger cannot lock the owner out with a few tries; 10 per e-mail or phone across all order
         // numbers (a known phone tried against many orders). A signed-in owner always has the chat lookup.
-        $proof_digits = preg_replace( '/\D+/', '', $proof );
-        $proof_id     = is_email( $proof ) ? strtolower( $proof ) : ( strlen( $proof_digits ) >= 8 ? substr( $proof_digits, -8 ) : '' );
+        // 7.1.1: the whole billing phone (or the billing e-mail), not its last 8 digits.
+        $proof_digits = self::normalize_phone( $proof );
+        $proof_id     = is_email( $proof ) ? strtolower( $proof ) : ( strlen( $proof_digits ) >= 8 ? $proof_digits : '' );
         $fail_keys    = array();
         if ( $id && '' !== $proof ) {
             $fail_keys[ 'dap_ofail_' . md5( $id . '|' . self::client_ip() ) ] = 5;
@@ -1461,10 +1879,10 @@ class DSA2_Data {
             // billing getters — calling them there is a fatal error.
             if ( $candidate instanceof WC_Order ) {
                 $email_ok = is_email( $proof ) && 0 === strcasecmp( trim( $candidate->get_billing_email() ), $proof );
-                // 7.0: the digits must be the END of the billing phone (its last 8 or more),
-                // not any 8-digit run found inside it.
-                $billing_digits = preg_replace( '/\D+/', '', $candidate->get_billing_phone() );
-                $phone_ok = strlen( $proof_digits ) >= 8 && strlen( $billing_digits ) >= strlen( $proof_digits ) && substr( $billing_digits, - strlen( $proof_digits ) ) === $proof_digits;
+                // 7.1.1: the same full number as the billing phone, with or without +509 / 00509
+                // (7.0 accepted any ending of 8 digits or more).
+                $billing_digits = self::normalize_phone( $candidate->get_billing_phone() );
+                $phone_ok = ! is_email( $proof ) && strlen( $proof_digits ) >= 8 && '' !== $billing_digits && hash_equals( $billing_digits, $proof_digits );
                 if ( $email_ok || $phone_ok ) $order = $candidate;
             }
         }
@@ -1475,7 +1893,7 @@ class DSA2_Data {
             // Same answer whether the order is missing or the proof is wrong: no enumeration.
             $payload = array( 'type' => 'help_card', 'body' => 'order_not_found:' . substr( md5( $number . '|' . $proof ), 0, 8 ), 'meta' => array(
                 'title' => self::t( $lang, 'Commande introuvable', 'Order not found', 'Nou pa jwenn kòmand lan' ),
-                'intro' => self::t( $lang, 'Vérifiez le numéro de commande et l’e-mail ou le numéro utilisé lors de l’achat. Un agent peut aussi vérifier pour vous.', 'Check the order number and the e-mail or phone used at purchase. An agent can also check for you.', 'Tcheke nimewo kòmand lan ak imel oswa nimewo ou te itilize a. Yon ajan ka tcheke pou ou tou.' ),
+                'intro' => self::t( $lang, 'Vérifiez le numéro de commande et l’e-mail ou le numéro de téléphone complet donnés lors de l’achat. Un agent peut aussi vérifier pour vous.', 'Check the order number and the e-mail or the full phone number given at purchase. An agent can also check for you.', 'Tcheke nimewo kòmand lan ak imel la oswa nimewo telefòn konplè ou te bay la. Yon ajan ka tcheke pou ou tou.' ),
                 'buttons' => self::human_buttons( $lang ),
             ) );
         } else {
@@ -1494,6 +1912,18 @@ class DSA2_Data {
         }
         self::add_message( $conv->id, 'assistant', $payload['body'], $payload['type'], $payload['meta'], 'bot' );
         wp_send_json_success( array( 'messages' => self::format_messages( self::client_messages( $conv->id, $after ) ) ) );
+    }
+
+    /**
+     * 7.1.1: digits of a phone number to compare whole numbers: an international 00 prefix and
+     * the Haiti code (509 before an 8-digit number) are removed, so « +509 3700-1111 »,
+     * « 0050937001111 » and « 37001111 » are the same number.
+     */
+    private static function normalize_phone( $raw ) {
+        $digits = preg_replace( '/\D+/', '', (string) $raw );
+        if ( 0 === strpos( $digits, '00' ) ) $digits = substr( $digits, 2 );
+        if ( 11 === strlen( $digits ) && 0 === strpos( $digits, '509' ) ) $digits = substr( $digits, 3 );
+        return (string) $digits;
     }
 
     public static function ajax_rate() {
@@ -1527,13 +1957,36 @@ class DSA2_Data {
 
     private static function contact_request_payload( $lang ) {
         return array( 'type' => 'contact_card', 'body' => 'contact_request', 'meta' => array(
-            'title'      => self::t( $lang, 'Avant de parler à un agent', 'Before talking to an agent', 'Anvan ou pale ak yon ajan' ),
-            'intro'      => self::t( $lang, 'Indiquez votre nom et votre e-mail pour que l’agent puisse vous répondre.', 'Leave your name and e-mail so the agent can get back to you.', 'Bay non w ak imel ou pou ajan an ka reponn ou.' ),
+            'title'      => self::t( $lang, 'Avant d’écrire à l’équipe', 'Before writing to the team', 'Anvan ou ekri ekip la' ),
+            'intro'      => self::t( $lang, 'Indiquez votre nom et un numéro WhatsApp ou un e-mail : l’équipe vous répond ici et peut vous recontacter.', 'Leave your name and a WhatsApp number or an e-mail: the team replies here and can get back to you.', 'Bay non w ak yon nimewo WhatsApp oswa yon imel: ekip la reponn ou isit la epi li ka kontakte w.' ),
             'nameLabel'  => self::t( $lang, 'Votre nom', 'Your name', 'Non ou' ),
-            'emailLabel' => self::t( $lang, 'Votre e-mail ou WhatsApp', 'Your e-mail or WhatsApp', 'Imel ou oswa WhatsApp' ),
-            'button'     => self::t( $lang, 'Continuer vers l’agent', 'Continue to the agent', 'Kontinye al jwenn ajan an' ),
+            'emailLabel' => self::t( $lang, 'Numéro WhatsApp ou e-mail', 'WhatsApp number or e-mail', 'Nimewo WhatsApp oswa imel' ),
+            'button'     => self::t( $lang, 'Continuer vers l’équipe', 'Continue to the team', 'Kontinye al jwenn ekip la' ),
             'privacy'    => self::t( $lang, 'Utilisées uniquement pour vous répondre.', 'Used only to reply to you.', 'Nou itilize yo sèlman pou reponn ou.' ),
         ) );
+    }
+
+    /**
+     * 7.1.1: refuses a message (or image) to the team from a visitor who left no contact
+     * details. Nothing is stored for the team and no alert leaves; the contact form is posted
+     * once, and the chat keeps the visitor's text so they can send it right after.
+     */
+    private static function contact_required( $conv, $lang, $after = 0 ) {
+        $payload = self::contact_request_payload( $lang );
+        if ( ! self::is_duplicate_assistant_reply( $conv->id, $payload['body'], 10 * MINUTE_IN_SECONDS ) ) {
+            self::add_message( $conv->id, 'assistant', $payload['body'], $payload['type'], $payload['meta'], 'agent' );
+        }
+        wp_send_json_error( array(
+            'code'     => 'contact_required',
+            'message'  => self::t( $lang, 'Laissez d’abord votre nom et un numéro WhatsApp ou un e-mail, pour que l’équipe puisse vous répondre.', 'First leave your name and a WhatsApp number or an e-mail, so the team can reply.', 'Bay non w ak yon nimewo WhatsApp oswa yon imel anvan, pou ekip la ka reponn ou.' ),
+            'messages' => self::format_messages( self::client_messages( $conv->id, $after ) ),
+        ), 409 );
+    }
+
+    /** 7.1.1: whether the visitor of this request may write to the team (for the chat app). */
+    public static function visitor_has_contact( $conv ) {
+        if ( is_user_logged_in() ) return true;
+        return $conv && self::is_identified( $conv, 0 );
     }
 
     public static function ajax_set_contact() {
@@ -1567,7 +2020,7 @@ class DSA2_Data {
             self::add_message( $conv->id, 'assistant', $payload['body'], $payload['type'], $payload['meta'], 'agent' );
         }
         self::escalate( $conv );
-        wp_send_json_success( array( 'messages' => self::format_messages( self::client_messages( $conv->id, $after ) ) ) );
+        wp_send_json_success( array( 'messages' => self::format_messages( self::client_messages( $conv->id, $after ) ), 'contact' => 1 ) );
     }
 
 
@@ -2121,9 +2574,9 @@ class DSA2_Data {
         if ( ! $signed_in && in_array($action,array('last_order','order_center','payment_missing','pin_missing','order_agent'),true) ) {
             return array( 'type' => 'order_card', 'body' => 'order_lookup', 'meta' => array(
                 'title'       => self::t( $lang, 'Suivre ma commande', 'Track my order', 'Swiv kòmand mwen' ),
-                'intro'       => self::t( $lang, 'Entrez votre numéro de commande et l’e-mail ou le numéro WhatsApp utilisé lors de l’achat.', 'Enter your order number and the e-mail or WhatsApp number used at purchase.', 'Antre nimewo kòmand ou ak imel oswa nimewo WhatsApp ou te itilize a.' ),
+                'intro'       => self::t( $lang, 'Entrez votre numéro de commande et l’e-mail ou le numéro de téléphone complet donnés lors de l’achat.', 'Enter your order number and the e-mail or the full phone number given at purchase.', 'Antre nimewo kòmand ou ak imel la oswa nimewo telefòn konplè ou te bay lè w t ap achte a.' ),
                 'orderLabel'  => self::t( $lang, 'Numéro de commande', 'Order number', 'Nimewo kòmand' ),
-                'proofLabel'  => self::t( $lang, 'E-mail ou WhatsApp', 'E-mail or WhatsApp', 'Imel oswa WhatsApp' ),
+                'proofLabel'  => self::t( $lang, 'E-mail ou téléphone complet', 'E-mail or full phone number', 'Imel oswa nimewo telefòn konplè' ),
                 'button'      => self::t( $lang, 'Vérifier', 'Check', 'Tcheke' ),
                 'privacy'     => self::t( $lang, 'Vérification sécurisée : nous ne montrons la commande qu’à son propriétaire.', 'Secure check: we only show an order to its owner.', 'Verifikasyon an sekirite: nou montre kòmand lan sèlman ak mèt li.' ),
                 'buttons'     => array( array( 'label' => self::t( $lang, 'Se connecter', 'Sign in', 'Konekte' ), 'action' => 'url', 'value' => $account_url ) ),
@@ -2356,7 +2809,7 @@ class DSA2_Data {
                 // Decode so messages stored double-encoded by v1.2.0 render correctly; the JS escapes on output.
                 'body'=>html_entity_decode( $m->body, ENT_QUOTES, 'UTF-8' ),
                 'type'=>$m->message_type,
-                'meta'=>$m->meta ? json_decode($m->meta,true) : array(),
+                'meta'=>self::public_meta( $m->meta ? json_decode($m->meta,true) : array(), isset( $m->conversation_id ) ? (int) $m->conversation_id : 0 ), // 7.1.1: signed private image address
                 'time'=>mysql2date('H:i',$m->created_at),
             );
         }, $messages );

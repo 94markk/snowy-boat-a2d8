@@ -1,3 +1,72 @@
+9.7.8 — Sécurité des paiements, boutique plus légère sur téléphone, référencement Google
+(1) Paiement : un client dont le paiement avait réussi mais dont la page s’était arrêtée juste après (envoi d’e-mail,
+livraison) restait bloqué sur « Un paiement est déjà en cours » à chaque commande, jusqu’à ce qu’un administrateur
+clique « Libérer ». Le verrou se libère maintenant tout seul après 5 minutes quand la commande est payée et appartient
+à ce client ; l’ancien écran de paiement est refusé, le même panier ne peut pas être payé deux fois par erreur.
+(2) Recherche de l’en-tête : les suggestions (avec leurs prix) étaient gardées 30 minutes pour tout le monde selon le
+seul mot cherché ; un revendeur qui cherchait le premier faisait voir ses prix à tous. Elles ne sont plus partagées
+qu’entre visiteurs non connectés, séparées par devise et par vue application ; un client connecté reçoit toujours
+ses propres prix.
+(3) Téléphone et données mobiles : la navigation ne télécharge plus deux fois la page d’accueil (un lien
+« #connexion » comptait comme une autre page), ne précharge plus les liens de connexion ni la page affichée, et
+le préchargement en arrière-plan se fait seulement pour les visiteurs non connectés sur une bonne connexion 4G.
+Le portefeuille et le compte ne sont plus préparés en arrière-plan à chaque visite : seulement quand le doigt
+touche le lien. Le rappel « Laisser un avis » n’interroge plus le serveur à chaque page (une fois par demi-heure).
+(4) Sans connexion : toucher un produit hors connexion affiche « Pa gen koneksyon · Réessayer » sur la même page au
+lieu de l’écran d’erreur du navigateur, et une page de la boutique ouverte hors connexion affiche la page « Vous êtes
+hors ligne » de Delicat. Avec un serveur lent, la navigation n’attend plus deux fois de suite (jusqu’à 42 s) : elle
+passe directement au chargement normal.
+(5) Application installée : elle ne télécharge plus à nouveau ~950 Ko à l’installation (les fichiers déjà en cache
+sont réutilisés) et ne garde plus les scripts de la barre d’administration ; son « squelette » a son propre cache
+qui n’est plus vidé par les images ; le serveur n’est plus réveillé à chaque vérification de mise à jour (Cloudflare
+répond pendant 5 minutes, sauf pendant une maintenance).
+(6) Fiches produit à options : les 30 Ko de styles des options sont un fichier mis en cache au lieu d’être répétés
+dans chaque page. Mon compte : select2, les icônes de l’administration et un style du paiement en blocs ne sont plus
+chargés là où rien ne les utilise.
+(7) Confidentialité : la boutique ne demande plus la photo Gravatar du client (cela envoyait à un service extérieur
+une empreinte de son e-mail à chaque page) ; une photo envoyée par le client reste affichée, sinon l’icône ou
+l’initiale de la boutique.
+(8) Lisibilité et doigts : textes plus contrastés (bandeau « Delicat en application », stock et total de la fiche
+produit, boutons du panier), plus de texte de 10 px dans la barre d’achat et les pastilles de catégories, et
+pastilles, pagination, tri, logo et bouton retour du panier d’au moins 44 px de haut.
+(9) Google : le fil d’Ariane envoyé à Google affiche « Jeux & Recharges » (et non « Jeux &amp; Recharges ») et
+« Boutique » au lieu de « Shop » ; la description de secours des catégories est plus courte (affichée en entier) ;
+les pages panier, paiement et compte n’ont plus « You may be interested in… » comme description ; la boutique et
+les catégories sans image ont l’image de leur premier produit pour les partages WhatsApp/Facebook. Les données
+produit indiquent la marque (si une marque WooCommerce ou un attribut « Marque » existe) et la boutique comme
+vendeur. Nouveau dans Delicat SEO : « Retours » et « Délai de livraison maximal » ; vides par défaut, rien n’est
+déclaré tant que vous ne les remplissez pas (mettez seulement ce que disent vos conditions de vente).
+(10) iPhone : le bandeau « Delicat en application » ne s’affiche plus sur la première page d’un visiteur venu de
+Google ou d’un autre moteur de recherche (il apparaît à la page suivante).
+(11) Fermeture pour maintenance : une page vue par le lien secret ou une adresse autorisée n’est plus gardée en
+cache ; avant, LiteSpeed pouvait montrer la boutique ouverte à tout le monde.
+(12) Produits calculateur : un prix qui tombe à 0,00 G après arrondi est refusé à l’ajout au panier (« Ce produit
+n’a pas de prix valide pour le moment ») au lieu d’être vendu gratuitement ; l’erreur est notée dans les journaux
+WooCommerce. Les pages qui affichent un message WooCommerce (« ajouté au panier »…) ne sont plus mises en cache.
+(13) Sécurité : une erreur d’une autre extension (passerelle de paiement…) dont la trace passe par le Builder ne met
+plus toute la boutique en mode sans échec ; seules les erreurs du Builder comptent. Le cache n’est plus vidé à
+chaque fin automatique du mode sans échec (au plus une fois toutes les 6 heures). Les anciennes routes « appareil »
+de l’application (clé intégrée à l’APK) acceptent au plus 10 nouveaux téléphones par heure et par connexion ; un
+téléphone déjà connu reste toujours accepté. HSTS d’un an sur toutes les pages.
+(14) Protection « mise à jour » de 9.7.7 corrigée (mon erreur) : elle ne compte plus que les fichiers de code, s’arrête
+au bout de 10 minutes, et wp-admin affiche un avertissement rouge qui nomme les fichiers manquants avec la marche à
+suivre. Avant, un seul fichier manquant (même un README) désactivait pour toujours le mode sans échec sans prévenir.
+(15) Nouvelle petite extension « Delicat Guard » (dossier mu-plugins), installée automatiquement : elle garde
+l’éditeur de fichiers fermé et XML-RPC coupé même si Delicat Builder est désactivé, et affiche alors « Delicat
+Builder V9 ne fonctionne pas » dans wp-admin. Elle est supprimée si vous supprimez Delicat Builder.
+(16) Nouveau dans Purchase Studio : « Panier et paiement légers ». Un bouton passe le panier et le paiement de la
+version « blocs » de WooCommerce (environ 730 Ko de scripts, près de 2 s de blocage sur un téléphone d’entrée de
+gamme) à la version classique, déjà mise en forme par le Builder. Le contenu actuel des deux pages est gardé et un
+bouton permet de revenir en arrière. Rien ne change tant que vous ne cliquez pas : faites ensuite un achat test
+(wallet, MonCash, NatCash).
+(17) Technique : le moteur (sources lisibles et outil de construction) est maintenant dans le dépôt, dossier
+tools/builder (hors du zip). Pour Cloudflare : ajoutez une règle de limite sur les adresses contenant
+« wc-ajax=delicat_session » ou « dbp_state=1 » (par ex. 120 requêtes par minute et par adresse), le serveur n’a pas de cache objet pour
+les limiter lui-même.
+(18) Installer : Extensions → Ajouter → Téléverser le zip → « Remplacer la version actuelle » (pas besoin de
+désactiver : 9.7.7 et 9.7.8 gèrent la mise à jour). Puis purger LiteSpeed et Cloudflare. Réglages et données
+sont conservés.
+
 9.7.7 — Mise à jour sans coupure de la boutique, images des cartes nettes
 (1) Mise à jour : le Builder ne se désactive plus tout seul pendant une mise à jour. WordPress remplace les fichiers
 un par un ; un visiteur arrivé à ce moment-là provoquait une erreur « fichier introuvable » et le Builder se retirait

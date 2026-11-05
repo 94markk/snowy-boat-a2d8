@@ -181,7 +181,30 @@ final class Delicat_Builder_V9_Express_Payment {
     if ( $order_id <= 0 || ! function_exists( 'wc_get_order' ) ) { return false; }
     $order = wc_get_order( $order_id );
     if ( ! $order || ! is_callable( array( $order, 'is_paid' ) ) || ! is_callable( array( $order, 'needs_payment' ) ) ) { return false; }
-    if ( $order->is_paid() || ! $order->needs_payment() ) { return false; }
+    if ( $order->is_paid() || ! $order->needs_payment() ) {
+     /*
+      * 9.7.8 (BLD-02): a payment that SUCCEEDED but whose request then died (a
+      * delivery or e-mail hook fataling after the charge) never reached
+      * success() or shutdown(), and this branch kept its guard forever: the
+      * customer met "Un paiement est déjà en cours" at every checkout until an
+      * administrator clicked "Libérer". Past the abandon threshold the outcome
+      * is no longer unknown - the order is paid, or settled without needing
+      * payment - so the guard has done its job. It is released only for the
+      * customer's own order, after stamping the completion success() would
+      * have stamped: any review issued before the payment is refused, so the
+      * cart that was just paid cannot be charged again from an old screen.
+      */
+     if ( ! is_callable( array( $order, 'get_customer_id' ) ) || (int) $order->get_customer_id() !== $uid ) { return false; }
+     if ( ! self::stamp_completed( $uid ) ) { return false; }
+     $settled = $record;
+     $settled['status'] = $order->is_paid() ? 'confirmed' : 'submitted';
+     $settled['reclaimed'] = time();
+     self::change( 'delicat_payment_' . $uid . '_' . $held, $record, $settled );
+     try {
+      $order->update_meta_data( '_delicat_payment_intent_result', array( 'intent' => $held, 'status' => $settled['status'], 'time' => time(), 'reclaimed' => 1 ) );
+      $order->save_meta_data();
+     } catch ( Throwable $e ) { /* The intent row still holds the outcome. */ }
+    }
    }
 
    /* Compare-and-swap on the owner, so a guard taken between the read above
@@ -234,8 +257,7 @@ final class Delicat_Builder_V9_Express_Payment {
   $record['status'] = $order->is_paid() ? 'confirmed' : 'submitted'; $record['response'] = $result;
   self::save( $record );
   self::remember_on_order( $order, $record['status'] );
-  $key = 'delicat_payment_completed_' . self::$context['uid']; $stamp = sprintf( '%.6F', microtime( true ) ); $before = self::read( $key );
-  if ( null === $before ? ! self::insert( $key, $stamp ) : ! self::change( $key, $before, $stamp ) ) { throw new RuntimeException( 'Résultat à vérifier dans vos commandes.' ); }
+  if ( ! self::stamp_completed( (int) self::$context['uid'] ) ) { throw new RuntimeException( 'Résultat à vérifier dans vos commandes.' ); }
   // Hold the mutex until PHP shutdown, after WooCommerce saves its session.
   self::$context['finished'] = true;
   return $result;
@@ -303,6 +325,11 @@ final class Delicat_Builder_V9_Express_Payment {
   $count = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$table} WHERE user_id = %d AND type = %s AND date >= %s", $uid, 'debit', $from ) );
   if ( $wpdb->last_error || null === $count ) { return false; }
   return 0 === (int) $count;
+ }
+ /** Record that this customer completed a payment now: every review issued before it is refused. */
+ private static function stamp_completed( int $uid ): bool {
+  $key = 'delicat_payment_completed_' . $uid; $stamp = sprintf( '%.6F', microtime( true ) ); $before = self::read( $key );
+  return null === $before ? self::insert( $key, $stamp ) : self::change( $key, $before, $stamp );
  }
  /** Keep the outcome on the order itself; intent rows are pruned after the retention window. */
  private static function remember_on_order( $order, string $status ): void {

@@ -1313,14 +1313,66 @@ final class Delicat_Builder_V9_Swatches {
             }
         }
         if ( ! $needs_swatches ) { return; }
-        $s = $this->settings();
-        wp_register_style( 'delicat-direct-swatches', false, array(), self::VERSION );
-        wp_enqueue_style( 'delicat-direct-swatches' );
-        wp_add_inline_style( 'delicat-direct-swatches', $this->css( $s ) );
+        $s   = $this->settings();
+        $css = $this->css( $s );
+        /* 9.7.8 (FE-08): these 30 KB depend only on the Swatch Studio settings, yet were printed inside every
+         * variable product page, so a phone downloaded them again with each product. They are now one file
+         * named by its content, cached by the browser and the CDN; inline stays the fallback when the uploads
+         * folder cannot be written. */
+        $file = self::css_file( $css );
+        if ( '' !== $file ) {
+            wp_enqueue_style( 'delicat-direct-swatches', $file, array(), null );
+        } else {
+            wp_register_style( 'delicat-direct-swatches', false, array(), self::VERSION );
+            wp_enqueue_style( 'delicat-direct-swatches' );
+            wp_add_inline_style( 'delicat-direct-swatches', $css );
+        }
 
         wp_register_script( 'delicat-direct-swatches', false, array( 'jquery', 'wc-add-to-cart-variation' ), self::VERSION, true );
         wp_enqueue_script( 'delicat-direct-swatches' );
         wp_add_inline_script( 'delicat-direct-swatches', $this->js() );
+    }
+
+    /** URL of the stylesheet holding $css (written once per content), or '' to print it inline. */
+    private static function css_file( string $css ): string {
+        if ( '' === trim( $css ) || ! function_exists( 'wp_upload_dir' ) ) {
+            return '';
+        }
+        $uploads = wp_upload_dir( null, false );
+        if ( ! empty( $uploads['error'] ) || empty( $uploads['basedir'] ) || empty( $uploads['baseurl'] ) ) {
+            return '';
+        }
+        $name = 'ddsw-' . substr( hash( 'sha256', $css ), 0, 12 ) . '.css';
+        $dir  = trailingslashit( $uploads['basedir'] ) . 'delicat-builder-v9';
+        $path = $dir . '/' . $name;
+        if ( ! is_file( $path ) ) {
+            if ( ( time() - (int) get_transient( 'delicat_ddsw_write_failed' ) ) < HOUR_IN_SECONDS ) {
+                return '';
+            }
+            if ( ! wp_mkdir_p( $dir ) ) {
+                set_transient( 'delicat_ddsw_write_failed', time(), HOUR_IN_SECONDS );
+                return '';
+            }
+            $tmp = $path . '.' . wp_generate_password( 6, false ) . '.tmp';
+            if ( false === file_put_contents( $tmp, $css ) || ! @rename( $tmp, $path ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents,WordPress.PHP.NoSilencedErrors.Discouraged
+                if ( is_file( $tmp ) ) {
+                    wp_delete_file( $tmp );
+                }
+                set_transient( 'delicat_ddsw_write_failed', time(), HOUR_IN_SECONDS );
+                return '';
+            }
+            /* Older copies (settings changed since) are removed; the newest two stay for pages still cached. */
+            $old = glob( $dir . '/ddsw-*.css' );
+            if ( is_array( $old ) && count( $old ) > 2 ) {
+                usort( $old, static function ( $a, $b ) { return (int) @filemtime( $b ) <=> (int) @filemtime( $a ); } ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+                foreach ( array_slice( $old, 2 ) as $stale ) {
+                    if ( $stale !== $path ) {
+                        wp_delete_file( $stale );
+                    }
+                }
+            }
+        }
+        return set_url_scheme( trailingslashit( $uploads['baseurl'] ) . 'delicat-builder-v9/' . $name, 'https' );
     }
 
     private function css( $s ) {

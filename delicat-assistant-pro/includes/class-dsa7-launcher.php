@@ -172,7 +172,7 @@ final class DSA7_Launcher {
     public static function find_conversation() {
         global $wpdb;
         $table = $wpdb->prefix . 'dap_conversations';
-        $cols  = 'id,status,last_customer_read_id,last_agent_read_id';
+        $cols  = 'id,status,last_customer_read_id,last_agent_read_id,user_id,customer_email,customer_phone';
         if ( is_user_logged_in() ) {
             $user_id = get_current_user_id();
             $row = $wpdb->get_row( $wpdb->prepare( "SELECT $cols FROM $table WHERE session_key=%s", 'user_' . $user_id ) ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -196,7 +196,7 @@ final class DSA7_Launcher {
     public static function ajax_ping() {
         self::no_cache();
         if ( wp_using_ext_object_cache() ) {
-            $ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+            $ip  = dsa2_client_ip(); // 7.1.1: the visitor's address behind Cloudflare
             $key = 'dsa7_ping_' . md5( $ip ) . '_' . (int) floor( time() / 60 );
             wp_cache_add( $key, 0, 'dsa7', 120 );
             if ( (int) wp_cache_incr( $key, 1, 'dsa7' ) > 900 ) wp_send_json_error( array( 'code' => 'rate_limited' ), 429 );
@@ -227,7 +227,7 @@ final class DSA7_Launcher {
         // Two limits: per address (generous, carrier-NAT puts many customers behind one) and per visitor (address
         // + account or guest cookie), so one client cannot use up the address's budget; a rotated cookie still
         // counts against the address. Both are checked before anything is written.
-        $ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '';
+        $ip  = dsa2_client_ip(); // 7.1.1: the visitor's address behind Cloudflare
         $who = get_current_user_id() ? 'u' . get_current_user_id() : ( isset( $_COOKIE['dap_session'] ) ? 'g' . substr( preg_replace( '/[^A-Za-z0-9_-]/', '', (string) wp_unslash( $_COOKIE['dap_session'] ) ), 0, 100 ) : 'n' );
         $limits = array(
             'dsa7_boot_' . md5( $ip )               => 120,
@@ -285,6 +285,8 @@ final class DSA7_Launcher {
             // Whether a thread exists: the app only loads history when there is one, so opening
             // the chat never creates an empty conversation row.
             'thread'   => $conv ? 1 : 0,
+            // 7.1.1: a visitor writes to the team only after leaving a name and a phone or e-mail.
+            'contact'  => DSA2_Data::visitor_has_contact( $conv ) ? 1 : 0,
             'urls'     => array(
                 'wallet'  => DSA2_Data::store_url( 'wallet' ),
                 'redeem'  => DSA2_Data::store_url( 'redeem' ),

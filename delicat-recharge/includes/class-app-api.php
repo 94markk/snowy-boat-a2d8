@@ -13,6 +13,13 @@ if ( ! defined( 'ABSPATH' ) ) exit;
  *  - Write (approve/reject): in addition to device auth, each action carries an
  *    HMAC signature over (device_id|action|id|timestamp). A leaked read view
  *    cannot be replayed to move money without the device's secret.
+ *  - /app/manual-code, 6.6.4 signature v2 (optional for the app): add
+ *    sig_v=2 and sign device_id|manual|id|ts|trans_code — HMAC-SHA256 with the
+ *    device sign key, lowercase hex, trans_code exactly as sent. The old v1
+ *    signature (without trans_code) stays accepted until the device sends its
+ *    first valid v2; from then on that device must use v2.
+ *  - Every approval claims the TransCode in the one-time ledger first (6.6.4
+ *    for /app/action approve and /app/manual-entry), like the website paths.
  *  - Timestamp window: signed actions older than 120s are rejected (anti-replay).
  *  - Per-device enable/revoke + last-seen, manageable from the admin console.
  *  - Full audit: every approve/reject records which device acted, in note_admin.
@@ -96,8 +103,13 @@ class Delicat_App_Api {
         return $device_id;
     }
 
-    /** Verify the HMAC signature on a write action. */
-    private function verify_signature( string $device_id, string $unused, array $p ): bool {
+    /**
+     * Verify the HMAC signature on a write action.
+     *
+     * @param string|null $extra 6.6.4 (RCH-12): a value the signature must also
+     *                           cover, appended as "|<extra>" (signature v2).
+     */
+    private function verify_signature( string $device_id, string $unused, array $p, ?string $extra = null ): bool {
         $devices = self::devices();
         if ( ! isset( $devices[ $device_id ] ) ) return false;
         $key = (string) ( $devices[ $device_id ]['sign_key'] ?? '' );
@@ -107,6 +119,7 @@ class Delicat_App_Api {
         if ( abs( time() - $ts ) > self::SIG_WINDOW ) return false; // stale/future
 
         $base = $device_id . '|' . $p['action'] . '|' . $p['id'] . '|' . $ts;
+        if ( null !== $extra ) $base .= '|' . $extra;
         $expected = hash_hmac( 'sha256', $base, $key );
         if ( ! hash_equals( $expected, (string) ( $p['sig'] ?? '' ) ) ) return false;
 
@@ -227,19 +240,36 @@ class Delicat_App_Api {
         $device_id = $this->auth_device( $request );
         if ( $device_id === '' ) return new WP_Error( 'auth', 'Non autorisé.', [ 'status' => 401 ] );
 
-        $id     = (int) $request->get_param( 'id' );
-        $code   = sanitize_text_field( (string) $request->get_param( 'trans_code' ) );
-        $verify = (int) $request->get_param( 'verify' ) === 1;
-        $tbl    = $wpdb->prefix . 'delicat_recharges';
+        $id       = (int) $request->get_param( 'id' );
+        $raw_code = (string) $request->get_param( 'trans_code' );
+        $code     = sanitize_text_field( $raw_code );
+        $verify   = (int) $request->get_param( 'verify' ) === 1;
+        $tbl      = $wpdb->prefix . 'delicat_recharges';
 
-        // Signature: base = device_id|manual|id|ts (same scheme as approve/reject).
+        // Signature v1: base = device_id|manual|id|ts (same scheme as approve/reject).
+        // 6.6.4 (RCH-12) v2: send sig_v=2 and sign device_id|manual|id|ts|trans_code
+        // (the trans_code exactly as sent), so the code cannot be swapped under a
+        // valid signature. v1 keeps working for today's app; once a device has
+        // sent one valid v2 signature, v1 is refused for that device.
         $p = [
             'action' => 'manual',
             'id'     => $id,
             'ts'     => absint( $request->get_param( 'ts' ) ),
             'sig'    => (string) $request->get_param( 'sig' ),
         ];
-        if ( ! $this->verify_signature( $device_id, '', $p ) ) {
+        $devices = self::devices();
+        $v2_only = ! empty( $devices[ $device_id ]['sig_v2'] );
+        if ( '2' === (string) $request->get_param( 'sig_v' ) ) {
+            if ( ! $this->verify_signature( $device_id, '', $p, $raw_code ) ) {
+                return new WP_Error( 'bad_sig', 'Signature invalide ou expirée.', [ 'status' => 403 ] );
+            }
+            if ( ! $v2_only ) {
+                $devices[ $device_id ]['sig_v2'] = 1;
+                self::save_devices( $devices );
+            }
+        } elseif ( $v2_only ) {
+            return new WP_Error( 'bad_sig', 'Signature v2 requise pour cet appareil (le TransCode doit être signé).', [ 'status' => 403 ] );
+        } elseif ( ! $this->verify_signature( $device_id, '', $p ) ) {
             return new WP_Error( 'bad_sig', 'Signature invalide ou expirée.', [ 'status' => 403 ] );
         }
 
@@ -408,12 +438,19 @@ class Delicat_App_Api {
             'statut'     => 'approuve',
         ];
 
+        if ( $mode === 'credit' && ! $user_id ) {
+            return rest_ensure_response( [ 'ok' => false, 'message' => "Email d'un client existant requis pour créditer." ] );
+        }
+        // 6.6.4 (RCH-02): burn the code in the one-time ledger too, like every
+        // other approval path, so no later path can credit it again.
+        if ( ! Delicat_Database::claim_code( $trans_code, 0, $montant, 'app_mentry_' . $mode ) ) {
+            return rest_ensure_response( [ 'ok' => false, 'message' => 'Ce code est déjà enregistré (déjà bloqué pour le site).' ] );
+        }
+
         if ( $mode === 'credit' ) {
-            if ( ! $user_id ) {
-                return rest_ensure_response( [ 'ok' => false, 'message' => "Email d'un client existant requis pour créditer." ] );
-            }
             $id = Delicat_Database::insert( $row );
             if ( is_wp_error( $id ) ) {
+                Delicat_Database::release_code( $trans_code ); // nothing recorded → free it
                 return rest_ensure_response( [ 'ok' => false, 'message' => 'Erreur DB: ' . $id->get_error_message() ] );
             }
             $res = Delicat_TeraWallet::credit( $user_id, $montant,
@@ -438,6 +475,7 @@ class Delicat_App_Api {
         // mode = block: record + burn, no credit.
         $id = Delicat_Database::insert( $row );
         if ( is_wp_error( $id ) ) {
+            Delicat_Database::release_code( $trans_code ); // nothing recorded → free it
             return rest_ensure_response( [ 'ok' => false, 'message' => 'Erreur DB: ' . $id->get_error_message() ] );
         }
         Delicat_Database::update( (int) $id, [
@@ -448,26 +486,6 @@ class Delicat_App_Api {
             'ok'      => true,
             'message' => sprintf( 'Code « %s » enregistré et bloqué. Toute soumission sur le site sera refusée.', $trans_code ),
         ] );
-    }
-
-    /** Check the Natcash-auto SMS log for a matching TransCode + amount. */
-    private function transcode_in_sms_log( string $code, float $amount ): bool {
-        $entries = get_option( 'delicat_natcash_log', [] );
-        if ( ! is_array( $entries ) ) return false;
-        foreach ( $entries as $e ) {
-            $sms = (string) ( $e['sms'] ?? '' );
-            if ( $sms === '' ) continue;
-            // Match the code appearing in the SMS text.
-            if ( stripos( $sms, $code ) !== false ) {
-                // Also require the amount to appear (loose check).
-                $amt = number_format( $amount, 0, '', '' );
-                if ( strpos( preg_replace( '/[,\.]/', '', $sms ), $amt ) !== false
-                     || strpos( $sms, number_format( $amount, 2 ) ) !== false ) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /* ---------------- Client history ---------------- */
@@ -580,16 +598,28 @@ class Delicat_App_Api {
                 return rest_ensure_response( [ 'ok' => true, 'message' => 'Déjà approuvé.', 'noop' => true ] );
             }
 
-            // ATOMIC CLAIM: prevents double-credit if the SMS auto-verify or
-            // another device approves the same recharge at the same time.
             global $wpdb;
             $tbl = $wpdb->prefix . 'delicat_recharges';
+
+            // 6.6.4 (RCH-02): AUTHORITATIVE ONE-TIME GATE (DB UNIQUE index), the
+            // same claim every other approval path makes. The row claim below
+            // only protects THIS row: without this, a second row carrying an
+            // already-credited TransCode could be approved from the app and one
+            // real payment credited twice.
+            $rec_code = (string) ( $record->trans_code ?? '' );
+            if ( $rec_code !== '' && ! Delicat_Database::claim_code( $rec_code, (int) $record->id, (float) $record->montant, 'app_approve' ) ) {
+                return new WP_Error( 'code_used', 'Ce TransCode a déjà été crédité (double approbation évitée). Rien n\'a été crédité.', [ 'status' => 409 ] );
+            }
+
+            // ATOMIC CLAIM: prevents double-credit if the SMS auto-verify or
+            // another device approves the same recharge at the same time.
             $claimed = $wpdb->query( $wpdb->prepare(
                 "UPDATE {$tbl} SET wallet_credited = 1, statut = 'approuve'
                  WHERE id = %d AND wallet_credited = 0",
                 (int) $p['id']
             ) );
             if ( $claimed !== 1 ) {
+                if ( $rec_code !== '' ) Delicat_Database::release_code( $rec_code ); // not credited here → free it
                 return rest_ensure_response( [ 'ok' => true, 'message' => 'Déjà traité.', 'noop' => true ] );
             }
 
@@ -600,6 +630,7 @@ class Delicat_App_Api {
             }
             if ( ! $user_id ) {
                 $wpdb->query( $wpdb->prepare( "UPDATE {$tbl} SET wallet_credited = 0, statut = 'en_attente' WHERE id = %d", (int) $p['id'] ) );
+                if ( $rec_code !== '' ) Delicat_Database::release_code( $rec_code );
                 return new WP_Error( 'no_user', 'Utilisateur introuvable.', [ 'status' => 422 ] );
             }
 
@@ -607,6 +638,7 @@ class Delicat_App_Api {
                 sprintf( 'Recharge #%d approuvée (app)', $record->id ), (int) $record->id );
             if ( is_wp_error( $res ) ) {
                 $wpdb->query( $wpdb->prepare( "UPDATE {$tbl} SET wallet_credited = 0, statut = 'en_attente' WHERE id = %d", (int) $p['id'] ) );
+                if ( $rec_code !== '' ) Delicat_Database::release_code( $rec_code );
                 return new WP_Error( 'credit_fail', 'Échec du crédit: ' . $res->get_error_message(), [ 'status' => 500 ] );
             }
 

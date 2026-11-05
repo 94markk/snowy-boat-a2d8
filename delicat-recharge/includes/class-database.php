@@ -35,6 +35,7 @@ class Delicat_Database {
             created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
             code_norm varchar(200) NOT NULL DEFAULT '',
+            bonus_done tinyint(1) NOT NULL DEFAULT 0,
             PRIMARY KEY  (id),
             KEY user_id (user_id),
             KEY statut (statut),
@@ -48,6 +49,10 @@ class Delicat_Database {
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta( $sql );
         self::backfill_code_norm( $table );
+        // 6.6.4 (RCH-08): growth bonuses are marked on the row (bonus_done)
+        // instead of one option per recharge. Used only once the column exists.
+        $has_bonus = $wpdb->get_var( $wpdb->prepare( "SHOW COLUMNS FROM {$table} LIKE %s", 'bonus_done' ) );
+        update_option( 'delicat_bonus_col_ready', $has_bonus ? '1' : '0', true );
 
         // ── TransCode spend ledger ──────────────────────────────────────────
         // Application-level checks can always lose a race under enough load.
@@ -98,6 +103,11 @@ class Delicat_Database {
 
     /** The normalisation every TransCode check has always used, in SQL. */
     const CODE_EXPR = "REPLACE(REPLACE(UPPER(TRIM(trans_code)),' ',''),'-','')";
+
+    /** 6.6.4: does the recharges table have the bonus_done column? */
+    public static function bonus_column_ready(): bool {
+        return '1' === (string) get_option( 'delicat_bonus_col_ready', '0' );
+    }
 
     /** Column (indexed) or expression to compare a normalised TransCode with. */
     public static function code_sql(): string {

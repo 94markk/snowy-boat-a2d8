@@ -8,6 +8,83 @@ final class Delicat_Builder_V9_Purchase_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ), 22 );
 		add_action( 'admin_init', array( __CLASS__, 'register_settings' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'assets' ) );
+		add_action( 'admin_post_delicat_builder_v9_checkout_flow', array( __CLASS__, 'switch_checkout_flow' ) );
+	}
+
+	const FLOW_BACKUP = 'delicat_builder_v9_checkout_blocks_backup';
+
+	/**
+	 * 9.7.8 (FE-01): the cart and checkout pages built with WooCommerce's blocks load 75 to 130 scripts
+	 * (about 730 KB compressed) and freeze a budget phone for 1.6-1.8 s, on the pages that make money. The
+	 * classic cart and checkout, which this plugin already styles, need a fraction of that. One click moves
+	 * both pages to the classic shortcodes and keeps their block content; a second click puts it back.
+	 * Nothing changes on update: the owner decides, after testing a payment.
+	 */
+	public static function switch_checkout_flow(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Accès refusé.', 'delicat-builder-v9' ), '', array( 'response' => 403 ) );
+		}
+		check_admin_referer( 'delicat_builder_v9_checkout_flow' );
+		$mode   = isset( $_POST['flow'] ) ? sanitize_key( wp_unslash( $_POST['flow'] ) ) : '';
+		$result = 'none';
+		if ( function_exists( 'wc_get_page_id' ) && in_array( $mode, array( 'classic', 'blocks' ), true ) ) {
+			$backup = get_option( self::FLOW_BACKUP, array() );
+			$backup = is_array( $backup ) ? $backup : array();
+			foreach ( array( 'cart' => '[woocommerce_cart]', 'checkout' => '[woocommerce_checkout]' ) as $type => $shortcode ) {
+				$page_id = (int) wc_get_page_id( $type );
+				$post    = $page_id > 0 ? get_post( $page_id ) : null;
+				if ( ! $post instanceof WP_Post ) {
+					continue;
+				}
+				if ( 'classic' === $mode && has_block( 'woocommerce/' . $type, $post ) ) {
+					$backup[ $type ] = array( 'id' => $page_id, 'content' => (string) $post->post_content, 'time' => time() );
+					update_option( self::FLOW_BACKUP, $backup, false ); // saved before the page changes
+					wp_update_post( array( 'ID' => $page_id, 'post_content' => "<!-- wp:shortcode -->\n" . $shortcode . "\n<!-- /wp:shortcode -->" ) );
+					$result = 'classic';
+				} elseif ( 'blocks' === $mode && ! empty( $backup[ $type ]['content'] ) && (int) ( $backup[ $type ]['id'] ?? 0 ) === $page_id ) {
+					wp_update_post( array( 'ID' => $page_id, 'post_content' => (string) $backup[ $type ]['content'] ) );
+					unset( $backup[ $type ] );
+					update_option( self::FLOW_BACKUP, $backup, false );
+					$result = 'blocks';
+				}
+			}
+			if ( 'none' !== $result ) {
+				if ( class_exists( 'Delicat_Builder_V9_Cache' ) ) {
+					Delicat_Builder_V9_Cache::bump_version();
+				}
+				do_action( 'litespeed_purge_all' );
+			}
+		}
+		wp_safe_redirect( add_query_arg( 'delicat_flow', $result, admin_url( 'admin.php?page=delicat-builder-v9-purchase' ) ) );
+		exit;
+	}
+
+	private static function checkout_flow_card(): void {
+		$cart     = self::page_mode( 'cart' );
+		$checkout = self::page_mode( 'checkout' );
+		$blocks   = in_array( $cart, array( __( 'Cart Block', 'delicat-builder-v9' ) ), true ) || in_array( $checkout, array( __( 'Checkout Block', 'delicat-builder-v9' ) ), true );
+		$backup   = get_option( self::FLOW_BACKUP, array() );
+		$flash    = isset( $_GET['delicat_flow'] ) ? sanitize_key( wp_unslash( $_GET['delicat_flow'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display only.
+		echo '<section class="delicat-admin__card" style="margin-top:20px"><h2>Panier et paiement légers</h2>';
+		if ( 'classic' === $flash ) {
+			echo '<div class="notice notice-success inline"><p>Le panier et le paiement utilisent maintenant la version classique. Faites un achat test (wallet, MonCash, NatCash) pour vérifier.</p></div>';
+		} elseif ( 'blocks' === $flash ) {
+			echo '<div class="notice notice-success inline"><p>Le panier et le paiement sont revenus aux blocs WooCommerce.</p></div>';
+		}
+		echo '<p>Panier : <strong>' . esc_html( $cart ) . '</strong> · Paiement : <strong>' . esc_html( $checkout ) . '</strong></p>';
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		wp_nonce_field( 'delicat_builder_v9_checkout_flow' );
+		echo '<input type="hidden" name="action" value="delicat_builder_v9_checkout_flow">';
+		if ( $blocks ) {
+			echo '<p>La version « blocs » de WooCommerce charge environ 730 Ko de scripts et bloque un téléphone d’entrée de gamme pendant près de 2 secondes. La version classique, déjà mise en forme par Delicat Builder, est bien plus légère. Le contenu actuel des deux pages est gardé : vous pouvez revenir en arrière à tout moment.</p>';
+			echo '<button class="button button-primary" name="flow" value="classic">Passer au panier et paiement classiques (recommandé)</button>';
+		} elseif ( is_array( $backup ) && ( ! empty( $backup['cart'] ) || ! empty( $backup['checkout'] ) ) ) {
+			echo '<p>La version classique est active. Le contenu « blocs » d’origine est gardé.</p>';
+			echo '<button class="button" name="flow" value="blocks">Revenir aux blocs WooCommerce</button>';
+		} else {
+			echo '<p>Le panier et le paiement utilisent déjà la version classique.</p>';
+		}
+		echo '</form></section>';
 	}
 
 	public static function menu(): void {
@@ -234,6 +311,8 @@ final class Delicat_Builder_V9_Purchase_Admin {
 
 				<?php submit_button( __( 'Save Purchase Studio', 'delicat-builder-v9' ) ); ?>
 			</form>
+
+			<?php self::checkout_flow_card(); ?>
 
 			<section class="delicat-admin__card" style="margin-top:20px">
 				<h2><?php esc_html_e( 'Performance policy', 'delicat-builder-v9' ); ?></h2>

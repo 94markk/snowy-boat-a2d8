@@ -7,14 +7,18 @@
  *   2. the product they are looking at right now (cross-sells, up-sells, same category)
  *   3. what the store sells most (guests, and anyone with no history)
  *
- * Everything is cached: a recommendation is never worth a slow chat. Per-customer
- * results live 30 minutes, per-product and store-wide results 12 and 6 hours.
+ * The product lists are cached: a recommendation is never worth a slow chat. Per-customer
+ * lists live 30 minutes, per-product and store-wide lists 12 and 6 hours.
+ *
+ * 7.1.1: only the product ids are cached. Names, prices and stock are read for each viewer,
+ * so a reseller's price (or another currency) never reaches a guest from the cache: the
+ * per-product list used to be cached with the prices of whoever asked first (RSL-01).
  */
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 class DSA2_Recommend {
 
-    const CACHE_PREFIX = 'dap_reco_503_';
+    const CACHE_PREFIX = 'dap_reco_711_'; // 7.1.1: was dap_reco_503_ (cached whole cards with prices)
 
     public static function init() {
         // A new sale changes what "best selling" means, but not often enough to
@@ -153,7 +157,9 @@ class DSA2_Recommend {
         $uid = get_current_user_id();
         $key = self::CACHE_PREFIX . self::surface_key() . ( $uid ? 'u' . $uid : 'top' ) . '_' . $lang;
         $cached = get_transient( $key );
-        if ( is_array( $cached ) ) return $cached;
+        if ( is_array( $cached ) && isset( $cached['ids'] ) ) {
+            return self::customer_payload( (array) $cached['ids'], ! empty( $cached['personal'] ), $lang, $limit );
+        }
 
         $ids = array(); $personal = false;
         if ( $uid ) {
@@ -170,8 +176,13 @@ class DSA2_Recommend {
         if ( count( $ids ) < $limit ) $ids = array_merge( $ids, self::best_sellers( $limit, $ids ) );
         if ( count( $ids ) < $limit ) $ids = array_merge( $ids, self::newest( $limit, $ids ) );
         $ids = array_slice( array_values( array_unique( array_map( 'absint', $ids ) ) ), 0, $limit * 2 );
+        set_transient( $key, array( 'ids' => $ids, 'personal' => $personal ? 1 : 0 ), $personal ? 30 * MINUTE_IN_SECONDS : 6 * HOUR_IN_SECONDS );
+        return self::customer_payload( $ids, $personal, $lang, $limit );
+    }
 
-        $payload = DSA2_Products::payload( $ids, $lang, 'reco' );
+    /** The "Pour vous" card from cached ids: prices and stock of this viewer, read now. */
+    private static function customer_payload( $ids, $personal, $lang, $limit ) {
+        $payload = DSA2_Products::payload( array_map( 'absint', (array) $ids ), $lang, 'reco' );
         if ( ! $payload ) return null;
         $payload['meta']['items'] = array_slice( $payload['meta']['items'], 0, $limit );
         $payload['body'] = 'reco:' . ( $personal ? 'you' : 'top' ) . ':' . implode( '-', wp_list_pluck( $payload['meta']['items'], 'id' ) );
@@ -185,8 +196,6 @@ class DSA2_Recommend {
                 : self::t( $lang, 'Connectez-vous pour des suggestions basées sur vos achats.', 'Sign in for suggestions based on your own orders.', 'Konekte pou jwenn sijesyon dapre pwòp acha w yo.' ) );
         $payload['meta']['help'] = self::t( $lang, 'Vous cherchez autre chose ?', 'Looking for something else?', 'W ap chèche yon lòt bagay?' );
         $payload['meta']['chips'] = self::chips( $lang );
-
-        set_transient( $key, $payload, $personal ? 30 * MINUTE_IN_SECONDS : 6 * HOUR_IN_SECONDS );
         return $payload;
     }
 
@@ -199,12 +208,13 @@ class DSA2_Recommend {
         $product_id = absint( $product_id );
         if ( ! $product_id || ! DSA2_Products::is_public( $product_id ) || DSA2_Products::hidden_for_app( $product_id ) ) return null;
 
-        $key = self::CACHE_PREFIX . self::surface_key() . 'p' . $product_id . '_' . $lang;
-        $cached = get_transient( $key );
-        if ( is_array( $cached ) ) return $cached;
-
         $product = wc_get_product( $product_id );
         if ( ! $product ) return null;
+        // 7.1.1: the cache holds the ids only (one list per product and surface, for everyone).
+        $key = self::CACHE_PREFIX . self::surface_key() . 'p' . $product_id;
+        $cached = get_transient( $key );
+        if ( is_array( $cached ) && isset( $cached['ids'] ) ) return self::related_payload( $product, (array) $cached['ids'], $lang, $limit );
+
         $ids = array_merge( (array) $product->get_cross_sell_ids(), (array) $product->get_upsell_ids() );
         if ( count( $ids ) < $limit ) {
             $cats = wp_get_post_terms( $product_id, 'product_cat', array( 'fields' => 'ids' ) );
@@ -213,8 +223,15 @@ class DSA2_Recommend {
         if ( count( $ids ) < $limit ) $ids = array_merge( $ids, self::best_sellers( $limit, array_merge( array( $product_id ), $ids ) ) );
         $ids = array_values( array_diff( array_unique( array_map( 'absint', $ids ) ), array( $product_id ) ) );
         if ( ! $ids ) return null;
+        $ids = array_slice( $ids, 0, $limit * 2 );
+        set_transient( $key, array( 'ids' => $ids ), 12 * HOUR_IN_SECONDS );
+        return self::related_payload( $product, $ids, $lang, $limit );
+    }
 
-        $payload = DSA2_Products::payload( array_slice( $ids, 0, $limit * 2 ), $lang, 'reco-p' );
+    /** The "Souvent pris ensemble" card from cached ids: prices and stock of this viewer, read now. */
+    private static function related_payload( $product, $ids, $lang, $limit ) {
+        $product_id = (int) $product->get_id();
+        $payload = DSA2_Products::payload( array_map( 'absint', (array) $ids ), $lang, 'reco-p' );
         if ( ! $payload ) return null;
         $payload['meta']['items'] = array_slice( $payload['meta']['items'], 0, $limit );
         $payload['body'] = 'reco:p' . $product_id;
@@ -225,8 +242,6 @@ class DSA2_Recommend {
         );
         $payload['meta']['help'] = self::t( $lang, 'Besoin d’un conseil ?', 'Need advice?', 'Ou bezwen yon konsèy?' );
         $payload['meta']['chips'] = self::chips( $lang );
-
-        set_transient( $key, $payload, 12 * HOUR_IN_SECONDS );
         return $payload;
     }
 
