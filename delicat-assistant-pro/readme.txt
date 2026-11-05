@@ -50,7 +50,10 @@ No. WhatsApp is shown only when it is enabled and a valid number has been saved.
   connectés ne voient aucun changement, et l'assistant automatique reste ouvert à tous.
 * (2) Clients : les captures de paiement envoyées dans le chat sont privées : seuls le client lui-même et l'équipe
   peuvent les ouvrir, et la position GPS ou le modèle du téléphone enregistrés dans la photo sont effacés à l'envoi.
-  Les anciennes captures passent peu à peu dans le dossier privé (déplacées, jamais supprimées).
+  Les anciennes captures passent peu à peu dans le dossier privé (déplacées, jamais supprimées) et perdent elles
+  aussi leurs données GPS ; une capture impossible à déplacer est sautée et signalée, les autres continuent.
+  L'adresse enregistrée de chaque capture est signée (aléatoire, valable 5 ans) pour que l'application Flutter
+  continue de l'afficher.
 * (3) Clients : « Suivre ma commande » sans être connecté demande le numéro de commande et l'e-mail ou le numéro de
   téléphone complet donnés à l'achat (avec ou sans +509), plus seulement la fin du numéro.
 * (4) Clients : les cartes « Souvent pris ensemble » et « Recommandé pour vous » montrent toujours les prix de la
@@ -81,7 +84,9 @@ No. WhatsApp is shown only when it is enabled and a valid number has been saved.
   « Activer l'application Android » décochée si la page des réglages n'avait jamais été enregistrée avec la case
   cochée, et les téléphones connectés sont alors déconnectés ; « Durée des sessions Android » ramenée à 7 jours au
   plus (les sessions déjà ouvertes finissent 7 jours après leur connexion) ; « Anti-spam des alertes » passe de 0 à
-  120 secondes ; « Exiger la 2FA pour l'application » cochée ; « Alertes e-mail par heure » à 30.
+  120 secondes ; « Exiger la 2FA pour l'application » cochée, sauf si l'application était déjà activée (elle reste
+  décochée pour que l'application actuelle, qui n'envoie pas encore de code, continue de marcher : cochez-la dès
+  qu'une version de l'application envoie le code) ; « Alertes e-mail par heure » à 30.
 * (11) Installation : Extensions → Ajouter → Téléverser une extension, choisissez delicat-assistant-pro-7.1.1.zip
   puis « Remplacer la version actuelle par la version téléversée ». Les conversations, les données et les réglages
   sont conservés.

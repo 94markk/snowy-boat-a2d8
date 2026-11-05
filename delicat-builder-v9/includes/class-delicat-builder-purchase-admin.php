@@ -39,10 +39,10 @@ final class Delicat_Builder_V9_Purchase_Admin {
 				if ( 'classic' === $mode && has_block( 'woocommerce/' . $type, $post ) ) {
 					$backup[ $type ] = array( 'id' => $page_id, 'content' => (string) $post->post_content, 'time' => time() );
 					update_option( self::FLOW_BACKUP, $backup, false ); // saved before the page changes
-					wp_update_post( array( 'ID' => $page_id, 'post_content' => "<!-- wp:shortcode -->\n" . $shortcode . "\n<!-- /wp:shortcode -->" ) );
+					wp_update_post( array( 'ID' => $page_id, 'post_content' => wp_slash( "<!-- wp:shortcode -->\n" . $shortcode . "\n<!-- /wp:shortcode -->" ) ) );
 					$result = 'classic';
 				} elseif ( 'blocks' === $mode && ! empty( $backup[ $type ]['content'] ) && (int) ( $backup[ $type ]['id'] ?? 0 ) === $page_id ) {
-					wp_update_post( array( 'ID' => $page_id, 'post_content' => (string) $backup[ $type ]['content'] ) );
+					wp_update_post( array( 'ID' => $page_id, 'post_content' => wp_slash( (string) $backup[ $type ]['content'] ) ) ); // wp_insert_post() unslashes: block JSON keeps its backslashes
 					unset( $backup[ $type ] );
 					update_option( self::FLOW_BACKUP, $backup, false );
 					$result = 'blocks';

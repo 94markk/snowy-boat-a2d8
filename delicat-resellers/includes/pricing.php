@@ -39,7 +39,7 @@ function dlr_excluded( $product ) {
  * by the 1.1.1 migration, and is flagged in the settings.
  */
 function dlr_finance_pattern() {
-	return '/(?<![a-z0-9])(usdt|crypto[a-z]*|paypal|zelle|wise|payoneer|skrill|cash ?app|echange[a-z]*|transfert[a-z]*|binance|perfect ?money|financ[a-z]*|moncash|natcash)(?![a-z0-9])/';
+	return '/(?<![a-z0-9])(usdt|usdc|crypto[a-z]*|bitcoin|btc|ethereum|eth|litecoin|ltc|tether|tron|trx|paypal|zelle|wise|payoneer|skrill|neteller|cash ?app|western ?union|money ?gram|echange[a-z]*|transfert[a-z]*|binance|perfect ?money|financ[a-z]*|moncash|natcash)(?![a-z0-9])/';
 }
 function dlr_is_finance_name( $text ) {
 	$t = strtolower( remove_accents( html_entity_decode( (string) $text, ENT_QUOTES, 'UTF-8' ) ) );
@@ -83,6 +83,13 @@ function dlr_cats_migrate() {
 		foreach ( dlr_product_cats() as $id => $t ) {
 			if ( dlr_is_finance_name( $t->name ) || dlr_is_finance_name( $t->slug ) ) $left[] = $id; else $keep[] = $id;
 		}
+		/* A sub-category of a finance category (« Bitcoin » under « Échange ») is left out with it. */
+		foreach ( $left as $id ) {
+			$children = get_term_children( (int) $id, 'product_cat' );
+			if ( is_array( $children ) ) $left = array_merge( $left, array_map( 'intval', $children ) );
+		}
+		$left = array_values( array_unique( array_map( 'intval', $left ) ) );
+		$keep = array_values( array_diff( array_map( 'intval', $keep ), $left ) );
 		$suspect = array();
 		if ( $keep && function_exists( 'wc_get_products' ) ) {
 			$slugs = array();

@@ -3,7 +3,7 @@
  "note": "engine-src file -> shipped assets/dist file; src_sha = sha256 of the source the shipped file was built from. Maintained by build-engine.mjs.",
  "modules": {
   "engine.js": {
-   "dist": "engine.f99e2aafd223.js",
+   "dist": "engine.446e36877819.js",
    "src_sha": "591ad7cda1f361cd1e8cebe8bc7e4c77bbaee30217b32ad744e9747ad8571626",
    "role": "engine"
   },
@@ -23,13 +23,13 @@
    "name": null
   },
   "chunks/widgets.js": {
-   "dist": "chunks/widgets.7c6a95c5811a.js",
+   "dist": "chunks/widgets.9426e0345ba2.js",
    "src_sha": "949cd7d2e2b595ef4462a82fa6ddfb3b743f33998cce58219c316d4325749978",
    "name": "widgets"
   },
   "chunks/shared-d.js": {
-   "dist": "chunks/chunk.1c448fd61900.js",
-   "src_sha": "ef191600ab3d3c19bc45374208cc4197cf7d09fca13a5d356392e825471ce9b5",
+   "dist": "chunks/chunk.24e5a10064c2.js",
+   "src_sha": "7321f455027e79c44df93798b01bf469b4456d75f687ba2768877eb1e4b5568d",
    "name": null
   },
   "chunks/reviews.js": {

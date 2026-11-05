@@ -16,6 +16,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class Delicat_Builder_V9_Product_Fields_Calculator {
+	/** 9.7.8: the last total compute_total() worked out, before rounding (see validate()). */
+	private $last_raw_total = 0.0;
 
 	const META = '_dmc_calc';
 
@@ -473,6 +475,7 @@ class Delicat_Builder_V9_Product_Fields_Calculator {
 		};
 		/* 9.7.8 (BLD-10): the floor is checked on the price that is charged, i.e. after rounding. 0.004 passed
 		 * the check, then rounded to a 0.00 line. */
+		$this->last_raw_total = is_finite( $total ) ? (float) $total : 0.0;
 		$total = is_finite( $total ) ? round( $total, 2 ) : NAN;
 		if ( ! $floor_ok( $total ) ) {
 			$total = round( $base + $sum, 2 );
@@ -870,11 +873,18 @@ class Delicat_Builder_V9_Product_Fields_Calculator {
 		 * adds nothing: a setup mistake) is refused instead of being sold for free. Digital goods are delivered
 		 * automatically, so a free line is an immediate loss. */
 		$variation_id  = isset( $_POST['variation_id'] ) ? absint( wp_unslash( $_POST['variation_id'] ) ) : 0; // phpcs:ignore WordPress.Security.NonceVerification.Missing
-		$price_product = $variation_id ? wc_get_product( $variation_id ) : wc_get_product( $product_id );
-		if ( ! $price_product instanceof WC_Product ) {
-			$price_product = wc_get_product( $product_id );
+		$parent        = wc_get_product( $product_id );
+		if ( ! $variation_id && $parent instanceof WC_Product && $parent->is_type( 'variable' ) ) {
+			return $passed; // WooCommerce itself asks for the option first
 		}
-		if ( $price_product instanceof WC_Product && $this->compute_total( $price_product, $cfg, $result['values'], $result['active'] ) <= 0 ) {
+		$price_product = $variation_id ? wc_get_product( $variation_id ) : $parent;
+		if ( ! $price_product instanceof WC_Product ) {
+			$price_product = $parent;
+		}
+		/* Only a price the formula meant (above zero) that rounding turned into 0.00; a product free by design
+		 * (base price 0, nothing added) stays allowed. */
+		$this->last_raw_total = 0.0;
+		if ( $price_product instanceof WC_Product && $this->compute_total( $price_product, $cfg, $result['values'], $result['active'] ) <= 0 && $this->last_raw_total > 0 ) {
 			if ( function_exists( 'wc_get_logger' ) ) {
 				wc_get_logger()->error( sprintf( 'Calculator product %d priced at 0.00: add to cart refused. Check its base price and formula.', (int) $product_id ), array( 'source' => 'delicat-builder-v9-calculator' ) );
 			}

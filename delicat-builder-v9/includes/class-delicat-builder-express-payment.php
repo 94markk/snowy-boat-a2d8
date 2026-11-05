@@ -182,6 +182,9 @@ final class Delicat_Builder_V9_Express_Payment {
     $order = wc_get_order( $order_id );
     if ( ! $order || ! is_callable( array( $order, 'is_paid' ) ) || ! is_callable( array( $order, 'needs_payment' ) ) ) { return false; }
     if ( $order->is_paid() || ! $order->needs_payment() ) {
+     /* « En attente » (on-hold) is a MonCash/NatCash or manual payment still being confirmed: the outcome is not
+        known yet, so that guard stays until the order is paid, cancelled or refunded. */
+     if ( ! $order->is_paid() && ! $order->has_status( array( 'cancelled', 'refunded' ) ) ) { return false; }
      /*
       * 9.7.8 (BLD-02): a payment that SUCCEEDED but whose request then died (a
       * delivery or e-mail hook fataling after the charge) never reached

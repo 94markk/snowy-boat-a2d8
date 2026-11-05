@@ -1,8 +1,8 @@
 9.7.8 — Sécurité des paiements, boutique plus légère sur téléphone, référencement Google
 (1) Paiement : un client dont le paiement avait réussi mais dont la page s’était arrêtée juste après (envoi d’e-mail,
 livraison) restait bloqué sur « Un paiement est déjà en cours » à chaque commande, jusqu’à ce qu’un administrateur
-clique « Libérer ». Le verrou se libère maintenant tout seul après 5 minutes quand la commande est payée et appartient
-à ce client ; l’ancien écran de paiement est refusé, le même panier ne peut pas être payé deux fois par erreur.
+clique « Libérer ». Le verrou se libère maintenant tout seul après 5 minutes quand la commande est payée (ou annulée,
+remboursée) et appartient à ce client ; une commande « en attente » de confirmation MonCash/NatCash garde le verrou ; l’ancien écran de paiement est refusé, le même panier ne peut pas être payé deux fois par erreur.
 (2) Recherche de l’en-tête : les suggestions (avec leurs prix) étaient gardées 30 minutes pour tout le monde selon le
 seul mot cherché ; un revendeur qui cherchait le premier faisait voir ses prix à tous. Elles ne sont plus partagées
 qu’entre visiteurs non connectés, séparées par devise et par vue application ; un client connecté reçoit toujours
@@ -46,7 +46,7 @@ WooCommerce. Les pages qui affichent un message WooCommerce (« ajouté au panie
 (13) Sécurité : une erreur d’une autre extension (passerelle de paiement…) dont la trace passe par le Builder ne met
 plus toute la boutique en mode sans échec ; seules les erreurs du Builder comptent. Le cache n’est plus vidé à
 chaque fin automatique du mode sans échec (au plus une fois toutes les 6 heures). Les anciennes routes « appareil »
-de l’application (clé intégrée à l’APK) acceptent au plus 10 nouveaux téléphones par heure et par connexion ; un
+de l’application (clé intégrée à l’APK) acceptent au plus 30 nouveaux téléphones par heure et par connexion ; un
 téléphone déjà connu reste toujours accepté. HSTS d’un an sur toutes les pages.
 (14) Protection « mise à jour » de 9.7.7 corrigée (mon erreur) : elle ne compte plus que les fichiers de code, s’arrête
 au bout de 10 minutes, et wp-admin affiche un avertissement rouge qui nomme les fichiers manquants avec la marche à

@@ -1045,8 +1045,12 @@ function delicat_ref_review_pay( $claim_id ) {
 	$lock = 'delicat_ref_claim_' . $uid;
 	if ( ! delicat_lock( $lock, 5 ) ) return new WP_Error( 'busy', 'Une réclamation de ce client est en cours. Réessayez.' );
 	try {
+		/* 3.4.2 review: blocked for fraud, or over the cap since the claim (a friend's purchase refunded): not paid. */
+		if ( delicat_ref_blocked( $uid ) ) return new WP_Error( 'blocked', 'Ce client est bloqué pour le parrainage : rien n’a été payé. Refusez la demande.' );
 		delicat_ref_confirm_due( $uid, 20 );
 		if ( delicat_ref_points( $uid ) < (int) $cl->milestone ) return new WP_Error( 'points', 'Le client n’a plus assez de points pour ce palier (invitation retirée ou achat remboursé) : rien n’a été payé.' );
+		$cap = delicat_ref_cap( $uid, true );
+		if ( null !== $cap['room'] && $cap['room'] < 0 ) return new WP_Error( 'cap', 'Depuis la demande, les achats des filleuls ont baissé (remboursement) et ce palier dépasse le plafond : rien n’a été payé. Libérez la demande pour qu’elle attende de nouveaux achats, ou refusez-la.' );
 		if ( 1 !== (int) $wpdb->query( $wpdb->prepare( "UPDATE $t SET status='pending' WHERE id=%d AND status='review'", (int) $cl->id ) ) ) return new WP_Error( 'state', 'Réclamation déjà traitée.' ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$given = delicat_ref_deliver( $uid, (int) $cl->milestone, (string) $cl->choice, (int) $cl->amount, (int) $cl->id, true );
 		if ( is_wp_error( $given ) ) return new WP_Error( 'deliver', 'Paiement impossible : ' . $given->get_error_message() );

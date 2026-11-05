@@ -16,7 +16,9 @@ NOUVEAUTÉS 3.4.2 — CORRECTIFS DE L'AUDIT DU 5 NOVEMBRE 2026 (RWD-01 À RWD-05
   - Validation par l'équipe : un palier de 35 points ou plus n'est payé qu'après votre accord. Le client
     voit « En vérification par l'équipe » ; vous recevez un e-mail. Onglet Parrainage › « Récompenses à
     valider » : « Valider et payer » (le client reçoit un e-mail) ou « Refuser » (le client est prévenu ;
-    « Libérer » lui permet de réclamer à nouveau).
+    « Libérer » lui permet de réclamer à nouveau). « Valider et payer » refuse de payer un client bloqué pour
+    fraude entre-temps, ou un palier qui dépasse le plafond parce que des achats de filleuls ont été remboursés
+    depuis la demande.
   - Les récompenses déjà données restent acquises ; elles comptent dans le plafond des suivantes.
 (2) Meilleur client : un remboursement après la fin de la semaine est vérifié (RWD-02).
   - Quand une commande comptée dans une semaine terminée est remboursée ou annulée, le classement de cette

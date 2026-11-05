@@ -559,7 +559,7 @@ function Ze(e) {
 }
 async function W(e, a = {}) {
   if (e instanceof URL || (e = S(e)), !e) return;
-  if (navigator.onLine === false && !pe(e) && a.push !== false) {
+  if (navigator.onLine === false && a.push !== false) {
     dlcOff(e, a);
     return;
   }
@@ -609,7 +609,7 @@ async function W(e, a = {}) {
     await Ve(f, p, l ? Object.assign(h, { push: false, placeholder: true }) : h, t);
   } catch (s) {
     if (s && s.name === "AbortError" || t !== i.token) return;
-    if (!l && s && s.network) {
+    if (!l && s && s.network && navigator.onLine === false) {
       dlcOff(e, a);
       return;
     }

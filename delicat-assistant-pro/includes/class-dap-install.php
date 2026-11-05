@@ -75,7 +75,10 @@ class DSA2_Install {
         $owner_saved = array_key_exists( 'training_corpus_enabled', $settings );
         $app_on      = $owner_saved && ! empty( $settings['admin_app_enabled'] );
         $settings['admin_app_enabled'] = $app_on ? 1 : 0;
-        if ( ! array_key_exists( 'admin_app_require_2fa', $settings ) ) $settings['admin_app_require_2fa'] = 1;
+        // A site already using the staff app keeps it working: today's app cannot send a 2FA code, so the
+        // requirement starts unticked there (the owner ticks it once the app sends the code). Everywhere
+        // else the app is off and the requirement is on.
+        if ( ! array_key_exists( 'admin_app_require_2fa', $settings ) ) $settings['admin_app_require_2fa'] = $app_on ? 0 : 1;
         $days = isset( $settings['admin_session_days'] ) ? (int) $settings['admin_session_days'] : 7;
         $settings['admin_session_days'] = max( 1, min( DSA2_STAFF_SESSION_MAX_DAYS, $days > 0 ? $days : DSA2_STAFF_SESSION_MAX_DAYS ) );
         if ( ! isset( $settings['notify_throttle'] ) || (int) $settings['notify_throttle'] < 1 ) $settings['notify_throttle'] = 120;

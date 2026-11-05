@@ -23,8 +23,9 @@ NOUVEAUTÉS 1.1.1 — CORRECTIFS DE L'AUDIT DU 5 NOVEMBRE 2026 (RSL-02 À RSL-04
   variations de WooCommerce, séparé par niveau).
 (5) Réglage modifié à la mise à jour : « Catégories avec remise revendeur » est rempli une fois, à la
   première visite après la mise à jour : toutes vos catégories sont cochées, sauf celles dont le nom
-  parle d'échange ou de finance (USDT, crypto, PayPal, Zelle, Wise, Payoneer, Skrill, Cash App, échange,
-  transfert, Binance, Perfect Money, finance, MonCash, NatCash). Un message en haut de l'administration
+  parle d'échange ou de finance (USDT, USDC, crypto, Bitcoin, Ethereum, Litecoin, Tether, Tron, PayPal,
+  Zelle, Wise, Payoneer, Skrill, Neteller, Cash App, Western Union, MoneyGram, échange, transfert, Binance,
+  Perfect Money, finance, MonCash, NatCash), et leurs sous-catégories. Un message en haut de l'administration
   liste les catégories laissées de côté et les produits au nom d'échange rangés ailleurs : vérifiez,
   cochez ou décochez dans Réglages, puis « J'ai vérifié ». Une nouvelle catégorie n'est jamais cochée
   toute seule.
