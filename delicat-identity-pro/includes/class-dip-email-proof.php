@@ -56,6 +56,16 @@ final class DIP_Email_Proof {
     }
 
     /**
+     * Still waiting for its own verification link (the account was created by someone who never proved the
+     * mailbox). Only these accounts have their pre-proof credentials reset by a code, a magic link, Google or
+     * the link opened in another browser. An older verified account without a fingerprint is not one of them:
+     * signing in with a code must never wipe a long-standing password or log every device out.
+     */
+    public static function awaiting_verification($user_id) {
+        return 'no' === (string) get_user_meta(absint($user_id), 'dip_email_verified', true);
+    }
+
+    /**
      * Credentials an unproven account carries that a proof does not end
      * (passkeys, an authenticator app, provider identities). They belong to
      * whoever set the account up, so a proof by someone else is refused

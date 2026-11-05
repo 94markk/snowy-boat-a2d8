@@ -277,7 +277,7 @@ final class DIP_Account_Sync {
         // another browser, nothing set up before that proof may keep working.
         // Only the verification link opened in the browser that registered
         // keeps the password: that browser chose it (IDN-01, 6.17.5).
-        $foreign_proof = in_array($source, DIP_Email_Proof::FOREIGN_SOURCES, true) && DIP_Email_Proof::is_unproven($user_id);
+        $foreign_proof = in_array($source, DIP_Email_Proof::FOREIGN_SOURCES, true) && DIP_Email_Proof::awaiting_verification($user_id);
         if ($foreign_proof && self::reset_pre_verification_credentials($user_id, $source)) {
             DIP_Email_Proof::note_password_replaced($user_id);
         }

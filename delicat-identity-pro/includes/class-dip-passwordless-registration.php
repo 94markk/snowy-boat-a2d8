@@ -278,9 +278,14 @@ final class DIP_Passwordless_Registration {
         $ip = class_exists('DIP_Native_Auth') ? DIP_Native_Auth::throttle_ip() : (string) ($_SERVER['REMOTE_ADDR'] ?? '');
         $device = class_exists('DIP_Devices') && method_exists('DIP_Devices', 'browser_key') ? (string) DIP_Devices::browser_key() : '';
         if ($device === '') $device = self::client_key();
+        /* 6.17.5 review: the per-mailbox caps were shared by everyone, so a stranger asking every minute kept the
+         * owner out of e-mail sign-in. A browser this account already signed in from counts in buckets of its
+         * own (same limits); strangers only exhaust theirs. */
+        $owner = get_user_by('email', $email);
+        $own = $owner && class_exists('DIP_Devices') && method_exists('DIP_Devices', 'is_known_browser') && DIP_Devices::is_known_browser($owner->ID) ? 'own_' : '';
         $buckets = [
-            ['key'=>self::RATE_PREFIX . 'cd_' . $action . '_' . $mailbox, 'window'=>max(30, absint($seconds)), 'limit'=>1],
-            ['key'=>self::RATE_PREFIX . 'mb_' . $action . '_' . $mailbox, 'window'=>HOUR_IN_SECONDS, 'limit'=>self::MAILBOX_HOURLY],
+            ['key'=>self::RATE_PREFIX . 'cd_' . $own . $action . '_' . $mailbox, 'window'=>max(30, absint($seconds)), 'limit'=>1],
+            ['key'=>self::RATE_PREFIX . 'mb_' . $own . $action . '_' . $mailbox, 'window'=>HOUR_IN_SECONDS, 'limit'=>self::MAILBOX_HOURLY],
             ['key'=>self::RATE_PREFIX . 'dev_' . $action . '_' . substr(hash_hmac('sha256', $ip . '|' . $device, wp_salt('nonce')), 0, 32), 'window'=>10 * MINUTE_IN_SECONDS, 'limit'=>self::DEVICE_REQUESTS],
             ['key'=>self::RATE_PREFIX . 'ip_' . $action . '_' . substr(hash_hmac('sha256', $ip, wp_salt('nonce')), 0, 32), 'window'=>10 * MINUTE_IN_SECONDS, 'limit'=>self::ADDRESS_REQUESTS],
         ];
@@ -547,7 +552,7 @@ final class DIP_Passwordless_Registration {
         if (!$user) self::redirect(['dip_auth'=>'account_required']);
         // A valid OTP proves mailbox ownership even for a pre-existing unproven
         // account; credentials set up before that proof are reset (pre-hijacking).
-        if (DIP_Email_Proof::is_unproven($user->ID)) {
+        if (DIP_Email_Proof::awaiting_verification($user->ID)) {
             if (is_wp_error(DIP_Email_Proof::prove($user->ID, $email, 'otp'))) self::redirect(['dip_auth'=>'unverified_account_conflict']);
         }
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user->ID) : true;
@@ -701,7 +706,7 @@ final class DIP_Passwordless_Registration {
             if (class_exists('DIP_Audit')) DIP_Audit::record('passwordless_privileged_blocked', 'warning', $user->ID, ['method'=>'magic_link']);
             wp_safe_redirect(add_query_arg('dip_auth','privileged_passwordless_blocked',home_url('/'))); exit;
         }
-        if (DIP_Email_Proof::is_unproven($user->ID)) {
+        if (DIP_Email_Proof::awaiting_verification($user->ID)) {
             if (is_wp_error(DIP_Email_Proof::prove($user->ID, $email, 'magic'))) { wp_safe_redirect(add_query_arg('dip_auth', 'unverified_account_conflict', home_url('/'))); exit; }
         }
         $guard = class_exists('DIP_Account_Sync') ? DIP_Account_Sync::login_guard($user->ID) : true;

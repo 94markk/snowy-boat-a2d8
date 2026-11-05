@@ -179,7 +179,8 @@ final class DIP_Privacy {
             if (self::table_exists($table)) $removed += (int) $wpdb->delete($table, ['user_id' => $uid], ['%d']);
         }
         if (class_exists('DIP_Devices') && method_exists('DIP_Devices', 'delete_for_user')) $removed += (int) DIP_Devices::delete_for_user($uid);
-        if (class_exists('DIP_Audit')) $removed += (int) $wpdb->delete(DIP_Audit::table(), ['user_id' => $uid], ['%d']);
+        // Staff keep their security history (who signed in, 2FA changes): the shop needs it to investigate.
+        if (class_exists('DIP_Audit') && !user_can($uid, 'manage_options') && !user_can($uid, 'manage_woocommerce')) $removed += (int) $wpdb->delete(DIP_Audit::table(), ['user_id' => $uid], ['%d']);
         $wpdb->suppress_errors($suppress);
 
         foreach (array_keys(self::profile_fields()) as $key) {

@@ -81,6 +81,14 @@ Corrections de l’audit du 5 novembre 2026 (sécurité d’abord). Références
 * L’en-tête Cloudflare (CF-Connecting-IP, CF-IPCountry) n’est cru que si la connexion vient réellement de
   Cloudflare, avec ou sans les constantes DIP_TRUST_CLOUDFLARE_* (IDN-03). DIP_TRUST_CLOUDFLARE_HEADERS = false
   le désactive toujours ; le filtre dip_native_auth_client_ip reste prioritaire.
+  Site derrière un tunnel ou un proxy local (cloudflared, nginx sur 127.0.0.1) : l’adresse vue est celle du
+  proxy pour tout le monde ; indiquez la vraie adresse avec le filtre dip_native_auth_client_ip, sinon les
+  limites de connexion s’appliquent à tous les clients à la fois.
+* Revue 6.17.5 : un code ou un lien de connexion par e-mail ne réinitialise plus le mot de passe d’un ancien
+  client (seulement d’un compte qui attend encore sa confirmation) ; le plafond de codes par adresse e-mail est
+  séparé pour un téléphone déjà connu du compte, pour qu’un inconnu ne puisse pas bloquer son propriétaire ; le
+  compte Google ou Microsoft utilisé à l’inscription n’est pas retiré par « mot de passe oublié » ; l’effacement
+  des données personnelles garde l’historique de sécurité des comptes du personnel.
 * Nouvelles classes : DIP_Email_Proof, DIP_Recent_Credentials, DIP_Privacy. Nouvelle route publique
   POST delicat-identity/v1/mobile/google/nonce. Filtres : dip_two_factor_required_capabilities,
   dip_native_modal_inline.
