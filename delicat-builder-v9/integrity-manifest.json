@@ -1,13 +1,13 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-06T02:18:03.258Z",
+ "built": "2026-11-06T02:23:09.762Z",
  "version": "9.10.0",
- "bytes": 7144206,
+ "bytes": 7145741,
  "count": 303,
  "files": {
   "README.txt": {
-   "bytes": 101330,
-   "sha256": "a93ec6d45cf9a8a57dc71665e61739e6e80da6b179332c9f64680be121ad2792"
+   "bytes": 102865,
+   "sha256": "b82694e1f1d9bc9747ae34e8249632365957593f214fc805d56c7b38ee7278cd"
   },
   "asset-versions.php": {
    "bytes": 6736,
@@ -391,7 +391,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9789,
-   "sha256": "2b815d5417aa743fb7500065c4bc6ceb705ba06ce453483fd9d04688a0e67549"
+   "sha256": "fb09afdf51e3bc6d8b394b77a84d1762f90734a2327e7986c94a0e302fa0eaf3"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
