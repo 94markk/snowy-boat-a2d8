@@ -11,10 +11,12 @@ Chaque page et chaque catégorie a maintenant un des trois états suivants :
 (1) Cachées de Google, toujours ouvertes : connexion, inscription, mot de passe oublié, maintenance, « mes-donnees »,
 « delete-account » (demandée par Google Play), « free-fire-redeem », « adm-free-fire ».
 (2) Redirigées vers l’accueil : « test », « test-2 », « accueil » (texte modèle du thème), « sample-page », l’article
-d’exemple « Hello world! » de WordPress et les pages vraiment vides (« comment-ca-marche », « bon-kliyan » sur le site en
-ligne). Une page n’est jamais jugée vide si elle a du texte, une image, un code court, un bloc, une mise en page
-Elementor ou Delicat Builder, un modèle, une sous-page, ou si une extension l’affiche (portefeuille, application,
-parrainage, revendeurs, bonus). « sondaj » reste proposée.
+d’exemple « Hello world! » de WordPress et les pages vraiment vides. Une page n’est jugée vide que si son contenu ne
+contient rien du tout : ni texte, ni image, ni code court, ni bloc, ni élément de mise en page, ni Elementor ou Delicat
+Builder, ni modèle, ni sous-page, et si aucune extension ne l’affiche (portefeuille, application, parrainage, revendeurs,
+bonus). Sur le site en ligne, « comment-ca-marche » et « bon-kliyan » n’affichent rien : vérifiez dans Delicat Builder →
+SEO qu’elles sont marquées « Redirigée » ; sinon (un reste de mise en page invisible), choisissez « Redirigée » pour
+elles. « sondaj » reste proposée.
 (3) Catégories créées par les fournisseurs — tous, pas seulement Delicat Digital : une catégorie dont l’adresse contient un
 code machine (« delicat-topup-c9e2614d39 », « gp-9f3a7c21d0 »…) est redirigée vers son produit (ou vers sa vraie
 catégorie parente, sinon la boutique). Les catégories au nom d’un fournisseur (« Delicat Digital », « Direct Topup »,

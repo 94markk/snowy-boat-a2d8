@@ -840,13 +840,19 @@ add_action( 'init', 'delicat_builder_v9_run_pending_purge', 100 );
  * or a supplier's REST sync. Those requests do not all load the SEO module, so the watch lives here.
  * Stock, price and order updates (product_visibility, product_type terms, untouched titles) do not
  * empty it.
+ *
+ * Each change writes a new generation stamp; the cache carries the stamp it was built from and is
+ * thrown away when they differ. A rebuild that overlaps a supplier sync (built before change B,
+ * saved after it) is therefore never served.
  */
+function delicat_builder_v9_seo_index_generation(): string {
+	return (string) get_option( 'delicat_builder_v9_seo_index_gen', '' );
+}
 function delicat_builder_v9_seo_index_stale(): void {
+	update_option( 'delicat_builder_v9_seo_index_gen', uniqid( '', true ), true );
 	if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
-		Delicat_Builder_V9_SEO_Index::flush();
-		return;
+		Delicat_Builder_V9_SEO_Index::forget();
 	}
-	delete_transient( 'dlc_seo_index_v2' );
 }
 function delicat_builder_v9_seo_index_watch(): void {
 	$types = array( 'page', 'post', 'product' );
@@ -891,7 +897,8 @@ function delicat_builder_v9_seo_index_watch(): void {
 		$then = array_map( 'intval', (array) $old_tt_ids );
 		sort( $now );
 		sort( $then );
-		if ( $now !== $then ) {
+		/* appending: only a category the product did not have yet is a change */
+		if ( $append ? (bool) array_diff( $now, $then ) : $now !== $then ) {
 			delicat_builder_v9_seo_index_stale();
 		}
 	}, 10, 6 );
@@ -901,6 +908,13 @@ function delicat_builder_v9_seo_index_watch(): void {
 			delicat_builder_v9_seo_index_stale();
 		}
 	}, 10, 3 );
+	/* deferred term counting (importer, bulk syncs) updates the counts at the end */
+	add_action( 'edited_term_taxonomy', static function ( $tt_id, $taxonomy = '' ) use ( $taxes ): void {
+		$name = is_object( $taxonomy ) && isset( $taxonomy->name ) ? (string) $taxonomy->name : (string) $taxonomy;
+		if ( in_array( $name, $taxes, true ) ) {
+			delicat_builder_v9_seo_index_stale();
+		}
+	}, 10, 2 );
 	$keys = array( '_elementor_data', '_wp_page_template', '_delicat_builder_v9_enabled', '_delicat_builder_v9_layout', '_dlc_seo_canonical' );
 	foreach ( array( 'added_post_meta', 'updated_post_meta', 'deleted_post_meta' ) as $hook ) {
 		add_action( $hook, static function ( $meta_id, $object_id, $key ) use ( $keys ): void {
@@ -909,8 +923,10 @@ function delicat_builder_v9_seo_index_watch(): void {
 			}
 		}, 10, 3 );
 	}
-	foreach ( array( 'page_on_front', 'page_for_posts', 'show_on_front', 'wp_page_for_privacy_policy', 'default_product_cat', 'default_category', 'woocommerce_shop_page_id', 'woocommerce_cart_page_id', 'woocommerce_checkout_page_id', 'woocommerce_myaccount_page_id', 'woocommerce_terms_page_id', 'permalink_structure', 'delicat_builder_v9_seo', 'delicat_builder_v9_legal' ) as $option ) {
+	/* pages and addresses the rules depend on, including the pages other plugins draw (app, referral, resellers) */
+	foreach ( array( 'page_on_front', 'page_for_posts', 'show_on_front', 'wp_page_for_privacy_policy', 'default_product_cat', 'default_category', 'woocommerce_shop_page_id', 'woocommerce_cart_page_id', 'woocommerce_checkout_page_id', 'woocommerce_myaccount_page_id', 'woocommerce_terms_page_id', 'permalink_structure', 'woocommerce_permalinks', 'category_base', 'tag_base', 'delicat_builder_v9_seo', 'delicat_builder_v9_legal', 'delicat_builder_v9_android_page', 'delicat_ref_config', 'dlr_config' ) as $option ) {
 		add_action( 'update_option_' . $option, 'delicat_builder_v9_seo_index_stale' );
+		add_action( 'add_option_' . $option, 'delicat_builder_v9_seo_index_stale' );
 	}
 }
 delicat_builder_v9_seo_index_watch();

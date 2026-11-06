@@ -186,6 +186,10 @@ $subshelf = seo_term( 'rayon-enfant', 'Sous-rayon', 'product_cat', $shelf );
 // a real shelf where a supplier left two machine-made categories
 $stray1   = seo_term( 'dg-aa11bb22cc', 'Stray one', 'product_cat', $games_id );
 $stray2   = seo_term( 'dg-dd33ee44ff', 'Stray two', 'product_cat', $games_id );
+// a real shelf holding products directly, each also in its own machine-made category under it
+$ffshelf  = seo_term( 'rayon-ff', 'Rayon FF', 'product_cat' );
+$ffkid1   = seo_term( 'dg-0a1b2c3d4e', 'FF kid one', 'product_cat', $ffshelf );
+$ffkid2   = seo_term( 'dg-5f6a7b8c9d', 'FF kid two', 'product_cat', $ffshelf );
 $tag      = seo_term( 'jeux', 'JEUX', 'product_tag' );
 $emoji    = seo_term( '%f0%9f%8e%ae-jeux', '🎮 JEUX', 'product_tag' );
 
@@ -201,6 +205,8 @@ wp_set_object_terms( $arena_product, array( $arena ), 'product_cat' );          
 wp_set_object_terms( $social_a, array( $usa1 ), 'product_cat', true );
 wp_set_object_terms( $social_b, array( $usa2 ), 'product_cat', true );
 wp_set_object_terms( $shelf_product, array( $shelf ), 'product_cat', true );
+wp_set_object_terms( $social_a, array( $ffshelf, $ffkid1 ), 'product_cat', true );
+wp_set_object_terms( $social_b, array( $ffshelf, $ffkid2 ), 'product_cat', true );
 wp_set_object_terms( $social_a, array( $subshelf ), 'product_cat', true );
 wp_set_object_terms( $social_b, array( $subshelf ), 'product_cat', true );
 wp_remove_object_terms( $both, array( (int) get_term_by( 'slug', 'copie-produit', 'product_cat' )->term_id ), 'product_cat' ); // an interrupted run
@@ -281,6 +287,7 @@ $result = array(
 		'USA (PSN)'       => $term( $usa2, 'product_cat' ),
 		'shelf named like its product' => $term( $shelf, 'product_cat' ),
 		'real shelf under a supplier name' => $term( $arena, 'product_cat' ),
+		'shelf whose products also sit in supplier categories' => $term( $ffshelf, 'product_cat' ),
 		'sondaj'          => $link( $pages['sondaj'] ),
 		'games'           => $term( $games_id, 'product_cat' ),
 		'social keeper'   => $term( $social, 'product_cat' ),
@@ -298,6 +305,7 @@ $result = array(
 	'chips_out'     => array( $term( $dd, 'product_cat' ), $term( $gp, 'product_cat' ), $term( $direct, 'product_cat' ), $term( $social2, 'product_cat' ) ),
 	'arena'         => array( 'url' => $link( $arena_product ), 'name' => get_the_title( $arena_product ), 'shelf' => 'Arena Breakout' ),
 	'copy'          => $term( $copy, 'product_cat' ),
+	'usa_itunes'    => array( 'url' => $term( $usa1, 'product_cat' ), 'id' => $usa1, 'product' => $link( $social_a ) ),
 	'ids'           => array( 'login' => $pages['login'], 'test' => $pages['test'], 'tutoriels' => $pages['tutoriels'], 'social_copy' => $social2, 'only_supplier' => $only_supplier, 'both' => $both, 'conditions' => class_exists( 'Delicat_Builder_V9_Legal' ) ? Delicat_Builder_V9_Legal::page_id( 'conditions' ) : 0 ),
 	'editor_cookie' => array( 'name' => LOGGED_IN_COOKIE, 'value' => wp_generate_auth_cookie( $eid, $expire, 'logged_in' ) ),
 	'pending'       => 1,

@@ -65,8 +65,10 @@ final class Delicat_Builder_V9_SEO_Index {
 		if ( null !== self::$map ) {
 			return self::$map;
 		}
+		/* the stamp the plugin's bootstrap renews on every change (delicat_builder_v9_seo_index_stale) */
+		$gen    = function_exists( 'delicat_builder_v9_seo_index_generation' ) ? delicat_builder_v9_seo_index_generation() : '';
 		$cached = get_transient( self::CACHE );
-		if ( is_array( $cached ) && isset( $cached['posts'], $cached['terms'], $cached['paths'], $cached['targets'], $cached['supplier_auto'] ) ) {
+		if ( is_array( $cached ) && isset( $cached['posts'], $cached['terms'], $cached['paths'], $cached['targets'], $cached['supplier_auto'] ) && ( $cached['gen'] ?? null ) === $gen ) {
 			return self::$map = $cached;
 		}
 		$reco      = self::recommend();
@@ -98,7 +100,8 @@ final class Delicat_Builder_V9_SEO_Index {
 			}
 		}
 		if ( $terms ) {
-			$singles = self::single_products( array_keys( array_filter( $terms, static fn( $row ) => self::REDIRECT === $row[0] && 'product' === ( $row[2] ?? '' ) ) ) );
+			/* every redirected category that may lead to its one product (rules or the owner's choice) */
+			$singles = self::single_products( array_keys( array_filter( $terms, static fn( $row ) => self::REDIRECT === $row[0] && ! in_array( (string) ( $row[2] ?? '' ), array( 'shop', 'home' ), true ) && 0 !== strpos( (string) ( $row[2] ?? '' ), 'keeper:' ) ) ) );
 			$found   = get_terms( array( 'include' => array_keys( $terms ), 'hide_empty' => false, 'taxonomy' => array( 'product_cat', 'category', 'product_tag' ) ) );
 			foreach ( is_array( $found ) ? $found : array() as $term ) {
 				$link = $term instanceof WP_Term ? get_term_link( $term ) : '';
@@ -114,7 +117,7 @@ final class Delicat_Builder_V9_SEO_Index {
 			}
 		}
 		unset( $paths[''], $paths['/'], $targets[''], $targets['/'] );
-		self::$map = array( 'posts' => $posts, 'terms' => $terms, 'paths' => $paths, 'targets' => $targets, 'supplier_auto' => (int) $reco['supplier_auto'] );
+		self::$map = array( 'posts' => $posts, 'terms' => $terms, 'paths' => $paths, 'targets' => $targets, 'supplier_auto' => (int) $reco['supplier_auto'], 'gen' => $gen );
 		set_transient( self::CACHE, self::$map, 12 * HOUR_IN_SECONDS );
 		return self::$map;
 	}
@@ -230,11 +233,11 @@ final class Delicat_Builder_V9_SEO_Index {
 				$other_kids[ $parent ] = true;
 			}
 		}
-		/* a group of supplier categories: two machine-made children or more, no real sub-shelf, and no more products
-		 * of its own than those children hold (a real shelf with two stray supplier categories keeps its address) */
+		/* a group of supplier categories: two machine-made children or more, no real sub-shelf and no product of its
+		 * own (a real shelf where a supplier left categories keeps its address; a supplier whose parent also holds
+		 * products is caught by its name, or the owner chooses « Redirigée ») */
 		$supplier_group = static function ( int $id ) use ( $machine_kids, $other_kids, $count ): bool {
-			$kids = (int) ( $machine_kids[ $id ] ?? 0 );
-			return $kids >= 2 && empty( $other_kids[ $id ] ) && (int) ( $count[ $id ] ?? 0 ) <= $kids;
+			return (int) ( $machine_kids[ $id ] ?? 0 ) >= 2 && empty( $other_kids[ $id ] ) && 0 === (int) ( $count[ $id ] ?? 0 );
 		};
 		$supplier_slugs = array_map( 'strval', (array) apply_filters( 'delicat_builder_v9_seo_supplier_categories', self::SUPPLIER_SLUGS ) );
 		$supplier_auto  = 0;
@@ -252,12 +255,17 @@ final class Delicat_Builder_V9_SEO_Index {
 			$terms[ $default ] = array( self::REDIRECT, 'catégorie par défaut de WooCommerce', 'shop' );
 		}
 		/* a category whose only product carries its name repeats that product (not a parent: its sub-shelves stay) */
-		$singles = self::single_products( array_keys( array_filter( $count, static fn( $n ) => 1 === (int) $n ) ) );
+		$candidates = array();
 		foreach ( $by_id as $id => $term ) {
-			if ( isset( $terms[ $id ] ) || empty( $singles[ $id ] ) || ! empty( $other_kids[ $id ] ) || ! empty( $machine_kids[ $id ] ) ) {
-				continue;
+			if ( 1 === (int) ( $count[ $id ] ?? 0 ) && ! isset( $terms[ $id ] ) && empty( $other_kids[ $id ] ) && empty( $machine_kids[ $id ] ) ) {
+				$candidates[] = (int) $id;
 			}
-			if ( self::norm( get_the_title( $singles[ $id ] ) ) === self::norm( $term->name ) ) {
+		}
+		$titles  = array();
+		$singles = self::single_products( $candidates, false, $titles );
+		foreach ( $singles as $id => $product_id ) {
+			$term = $by_id[ $id ];
+			if ( self::norm( (string) ( $titles[ $id ] ?? '' ) ) === self::norm( $term->name ) ) {
 				$terms[ $id ] = array( self::REDIRECT, 'répète le seul produit qu’elle contient', 'product' );
 			}
 		}
@@ -326,22 +334,24 @@ final class Delicat_Builder_V9_SEO_Index {
 	 * @param int[] $term_ids
 	 * @return array<int,int>
 	 */
-	private static function single_products( array $term_ids ): array {
+	private static function single_products( array $term_ids, bool $prime = true, ?array &$titles = null ): array {
 		global $wpdb;
 		$term_ids = array_values( array_filter( array_map( 'intval', $term_ids ) ) );
+		$titles   = array();
 		if ( empty( $term_ids ) ) {
 			return array();
 		}
 		$out = array();
 		foreach ( array_chunk( $term_ids, 500 ) as $chunk ) {
 			$in   = implode( ',', $chunk );
-			$rows = $wpdb->get_results( "SELECT tt.term_id, MIN(p.ID) AS pid, COUNT(*) AS n FROM {$wpdb->term_taxonomy} tt INNER JOIN {$wpdb->term_relationships} tr ON tr.term_taxonomy_id = tt.term_taxonomy_id INNER JOIN {$wpdb->posts} p ON p.ID = tr.object_id WHERE tt.taxonomy = 'product_cat' AND tt.term_id IN ({$in}) AND p.post_type = 'product' AND p.post_status = 'publish' GROUP BY tt.term_id HAVING n = 1" ); // phpcs:ignore WordPress.DB -- integers only.
+			$rows = $wpdb->get_results( "SELECT tt.term_id, MIN(p.ID) AS pid, MIN(p.post_title) AS title, COUNT(*) AS n FROM {$wpdb->term_taxonomy} tt INNER JOIN {$wpdb->term_relationships} tr ON tr.term_taxonomy_id = tt.term_taxonomy_id INNER JOIN {$wpdb->posts} p ON p.ID = tr.object_id WHERE tt.taxonomy = 'product_cat' AND tt.term_id IN ({$in}) AND p.post_type = 'product' AND p.post_status = 'publish' GROUP BY tt.term_id HAVING n = 1" ); // phpcs:ignore WordPress.DB -- integers only.
 			foreach ( (array) $rows as $row ) {
-				$out[ (int) $row->term_id ] = (int) $row->pid;
+				$out[ (int) $row->term_id ]    = (int) $row->pid;
+				$titles[ (int) $row->term_id ] = (string) $row->title;
 			}
 		}
-		if ( $out ) {
-			_prime_post_caches( array_values( $out ), false, false );
+		if ( $out && $prime ) {
+			_prime_post_caches( array_values( $out ), false, false ); // their addresses are read next
 		}
 		return $out;
 	}
@@ -406,9 +416,14 @@ final class Delicat_Builder_V9_SEO_Index {
 		return false;
 	}
 
-	public static function flush(): void {
+	/** This request's copies only (the stored map is retired by its generation stamp). */
+	public static function forget(): void {
 		self::$map       = null;
 		self::$protected = null;
+	}
+
+	public static function flush(): void {
+		self::forget();
 		delete_transient( self::CACHE );
 	}
 
