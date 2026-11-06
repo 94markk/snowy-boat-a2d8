@@ -25,6 +25,11 @@ if ( ! defined( 'ABSPATH' ) ) {
  *
  * It steps aside completely when Yoast, Rank Math, AIOSEO, SEOPress, The SEO
  * Framework, Slim SEO, SmartCrawl or Squirrly is active.
+ *
+ * 9.9.0: what is hidden from Google (pages, categories, tags, duplicates) lives
+ * in class-delicat-builder-seo-index.php. This file stays a little over 800
+ * lines on purpose: it keeps its settings screen and meta box next to the
+ * fields they edit.
  */
 final class Delicat_Builder_V9_SEO {
 
@@ -50,6 +55,10 @@ final class Delicat_Builder_V9_SEO {
 			/* 9.7.8 (FE-11): what Google's product listings ask for. Empty = nothing is declared. */
 			'return_days'      => '',
 			'delivery_hours'   => '',
+			/* 9.9.0 (SEO-02/03): null = the recommended selection (Delicat_Builder_V9_SEO_Index). */
+			'hidden_posts'     => null,
+			'hidden_terms'     => null,
+			'index_tags'       => 0,
 		);
 	}
 
@@ -60,6 +69,10 @@ final class Delicat_Builder_V9_SEO {
 		$saved = get_option( self::OPTION, array() );
 		$s     = wp_parse_args( is_array( $saved ) ? $saved : array(), self::defaults() );
 		foreach ( self::defaults() as $key => $default ) {
+			if ( null === $default ) {
+				$s[ $key ] = is_array( $s[ $key ] ) ? array_values( array_filter( array_map( 'absint', $s[ $key ] ) ) ) : null;
+				continue;
+			}
 			$s[ $key ] = is_int( $default ) ? ( empty( $s[ $key ] ) ? 0 : 1 ) : ( is_scalar( $s[ $key ] ) ? (string) $s[ $key ] : '' );
 		}
 		return self::$settings_cache = $s;
@@ -98,6 +111,13 @@ final class Delicat_Builder_V9_SEO {
 		/* Sitemaps are built on `init`; these callbacks check active() lazily. */
 		add_filter( 'wp_sitemaps_add_provider', array( __CLASS__, 'sitemap_provider' ), 10, 2 );
 		add_filter( 'wp_sitemaps_posts_query_args', array( __CLASS__, 'sitemap_posts_args' ), 10, 2 );
+		/* 9.9.0 (SEO-02/03/05): hidden pages and categories, duplicates, clean breadcrumbs. */
+		if ( ! class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-seo-index.php' );
+		}
+		if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
+			Delicat_Builder_V9_SEO_Index::boot();
+		}
 
 		if ( is_admin() ) {
 			add_action( 'admin_menu', array( __CLASS__, 'menu' ), 40 );
@@ -132,6 +152,10 @@ final class Delicat_Builder_V9_SEO {
 	public static function product_markup( $markup, $product ) {
 		if ( ! is_array( $markup ) || ! $product instanceof WC_Product ) {
 			return $markup;
+		}
+		/* 9.9.0 (SEO-06): a product without a description sent `"description": ""`; leave the property out. */
+		if ( array_key_exists( 'description', $markup ) && '' === trim( wp_strip_all_tags( (string) $markup['description'] ) ) ) {
+			unset( $markup['description'] );
 		}
 		$s    = self::settings();
 		$home = home_url( '/' );
@@ -209,6 +233,12 @@ final class Delicat_Builder_V9_SEO {
 			}
 		}
 		$suffix = trim( $s['product_suffix'] );
+		/* 9.9.0: WordPress already ends every title with the store name; a suffix naming the store again
+		 * gave « FREE FIRE PIN Delicat Store – Delicat Store ». */
+		$site = self::site_name();
+		if ( '' !== $site && '' !== $suffix && ( false !== mb_stripos( $suffix, $site ) || false !== mb_stripos( $site, $suffix ) ) ) {
+			$suffix = '';
+		}
 		if ( '' !== $suffix && isset( $parts['title'] ) && ( is_singular( 'product' ) || self::is_product_archive_term() ) ) {
 			$title = (string) $parts['title'];
 			if ( ! preg_match( '/ha[iï]ti/iu', $title ) ) {
@@ -254,7 +284,8 @@ final class Delicat_Builder_V9_SEO {
 			return $robots;
 		}
 		$shop_like = ( function_exists( 'is_shop' ) && is_shop() ) || self::is_product_archive_term();
-		if ( is_search() || self::private_page() || ( $shop_like && self::catalogue_query_args() ) ) {
+		$hidden    = class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && Delicat_Builder_V9_SEO_Index::hide_current();
+		if ( $hidden || is_search() || self::private_page() || ( $shop_like && self::catalogue_query_args() ) ) {
 			$robots['noindex'] = true;
 			$robots['follow']  = true;
 			return $robots;
@@ -443,6 +474,11 @@ final class Delicat_Builder_V9_SEO {
 		return add_query_arg( 'paged', $paged, $base );
 	}
 
+	/** 9.9.0: the category a product's breadcrumb goes through (the visible trail uses it too). */
+	public static function primary_category( WC_Product $product ): ?WP_Term {
+		return self::primary_term( $product );
+	}
+
 	private static function primary_term( WC_Product $product ): ?WP_Term {
 		$terms = get_the_terms( $product->get_id(), 'product_cat' );
 		if ( ! is_array( $terms ) || empty( $terms ) ) {
@@ -453,6 +489,10 @@ final class Delicat_Builder_V9_SEO {
 		$depth = -1;
 		foreach ( $terms as $term ) {
 			if ( ! $term instanceof WP_Term || 'uncategorized' === $term->slug || 'non-classe' === $term->slug ) {
+				continue;
+			}
+			/* 9.9.0 (SEO-05): not through the supplier's per-product categories or any hidden one. */
+			if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && Delicat_Builder_V9_SEO_Index::is_hidden_term( $term ) ) {
 				continue;
 			}
 			$d = count( get_ancestors( $term->term_id, 'product_cat', 'taxonomy' ) );
@@ -592,7 +632,15 @@ final class Delicat_Builder_V9_SEO {
 		$older = get_option( 'delicat_builder_v9_same_as', array() );
 		$list  = array_merge( is_array( $lines ) ? $lines : array(), is_array( $older ) ? $older : array() );
 		$list  = apply_filters( 'delicat_builder_v9_organization_same_as', $list );
-		return array_values( array_unique( array_filter( array_map( 'esc_url_raw', array_map( 'trim', array_map( 'strval', (array) $list ) ) ) ) ) );
+		/* 9.9.0 (SEO-06): share links carry tracking codes (?mibextid=, ?_r=, ?utm_source=); a profile is its address alone. */
+		$track = array( 'mibextid', '_r', '_t', 'igsh', 'igshid', 'psln', 'si', 'fbclid', 'gclid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term' );
+		$list  = array_map(
+			static function ( $url ) use ( $track ): string {
+				return remove_query_arg( $track, trim( (string) $url ) );
+			},
+			(array) $list
+		);
+		return array_values( array_unique( array_filter( array_map( 'esc_url_raw', $list ) ) ) );
 	}
 
 	private static function site_graph(): array {
@@ -658,10 +706,10 @@ final class Delicat_Builder_V9_SEO {
 	}
 
 	public static function sitemap_posts_args( $args, $post_type ) {
-		if ( 'page' !== $post_type || ! is_array( $args ) || ! self::active() ) {
+		if ( ! in_array( $post_type, array( 'page', 'post' ), true ) || ! is_array( $args ) || ! self::active() ) {
 			return $args;
 		}
-		$exclude = array();
+		$exclude = class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ? Delicat_Builder_V9_SEO_Index::sitemap_excluded_posts() : array();
 		if ( function_exists( 'wc_get_page_id' ) ) {
 			foreach ( array( 'cart', 'checkout', 'myaccount' ) as $page ) {
 				$id = (int) wc_get_page_id( $page );
@@ -723,7 +771,7 @@ final class Delicat_Builder_V9_SEO {
 			'email'            => sanitize_email( (string) ( $input['email'] ?? '' ) ),
 			'return_days'      => '' === trim( (string) ( $input['return_days'] ?? '' ) ) ? '' : (string) min( 365, absint( $input['return_days'] ) ),
 			'delivery_hours'   => '' === trim( (string) ( $input['delivery_hours'] ?? '' ) ) ? '' : (string) max( 1, min( 720, absint( $input['delivery_hours'] ) ) ),
-		);
+		) + ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ? Delicat_Builder_V9_SEO_Index::sanitize( $input, (array) get_option( self::OPTION, array() ) ) : array() );
 	}
 
 	public static function page(): void {
@@ -756,6 +804,9 @@ final class Delicat_Builder_V9_SEO {
 		$field( 'Retours (fiches produits Google)', '<input type="number" min="0" max="365" step="1" class="small-text" name="' . esc_attr( $opt ) . '[return_days]" value="' . esc_attr( $s['return_days'] ) . '"> jours', 'Indiquez seulement ce que disent vos conditions de vente. Vide : rien n’est déclaré à Google. 0 : pas de retour possible (produits numériques livrés). 7 : retour possible sous 7 jours.' );
 		$field( 'Délai de livraison maximal', '<input type="number" min="1" max="720" step="1" class="small-text" name="' . esc_attr( $opt ) . '[delivery_hours]" value="' . esc_attr( $s['delivery_hours'] ) . '"> heures', 'Livraison numérique en Haïti, sans frais d’envoi. Vide : rien n’est déclaré. Mettez le délai que vous tenez vraiment (ex. 1 pour « en moins d’une heure »).' );
 		echo '</table>';
+		if ( '' === $other && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
+			Delicat_Builder_V9_SEO_Index::render_settings( $opt );
+		}
 		submit_button();
 		echo '</form></div>';
 	}
@@ -776,6 +827,10 @@ final class Delicat_Builder_V9_SEO {
 		echo '<p><label for="delicat-seo-title"><strong>Titre Google</strong> <span class="description">(utilisé tel quel, environ 60 caractères ; vide : titre automatique)</span></label><br><input id="delicat-seo-title" class="widefat" type="text" maxlength="70" name="delicat_seo_title" value="' . esc_attr( $title ) . '" placeholder="Ex. Diamants Free Fire LATAM en Haïti – Livraison rapide"></p>';
 		echo '<p><label for="delicat-seo-desc"><strong>Description Google</strong> <span class="description">(140 à 160 caractères ; vide : description courte du produit)</span></label><br><textarea id="delicat-seo-desc" class="widefat" rows="3" maxlength="300" name="delicat_seo_description" placeholder="Ex. Recharge Free Fire LATAM livrée en quelques minutes en Haïti. Paiement sécurisé, support WhatsApp.">' . esc_textarea( $desc ) . '</textarea></p>';
 		echo '<p class="description" data-delicat-seo-count></p>';
+		if ( 'page' === $post->post_type && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
+			$original = (string) get_post_meta( $post->ID, Delicat_Builder_V9_SEO_Index::META_CANONICAL, true );
+			echo '<p><label for="delicat-seo-canonical"><strong>Page originale</strong> <span class="description">(seulement si cette page en répète une autre : Google sera renvoyé vers l’originale)</span></label><br><input id="delicat-seo-canonical" class="widefat" type="url" name="delicat_seo_canonical" value="' . esc_attr( $original ) . '" placeholder="' . esc_attr( home_url( '/…/' ) ) . '"></p>';
+		}
 		echo '<script>(function(){var t=document.getElementById("delicat-seo-title"),d=document.getElementById("delicat-seo-desc"),o=document.querySelector("[data-delicat-seo-count]");if(!t||!d||!o)return;function u(){o.textContent="Titre : "+t.value.length+" / 60 · Description : "+d.value.length+" / 160";}t.addEventListener("input",u);d.addEventListener("input",u);u();})();</script>';
 	}
 
@@ -793,5 +848,13 @@ final class Delicat_Builder_V9_SEO {
 		$desc  = isset( $_POST['delicat_seo_description'] ) ? sanitize_textarea_field( wp_unslash( (string) $_POST['delicat_seo_description'] ) ) : '';
 		'' !== $title ? update_post_meta( $post_id, self::META_TITLE, $title ) : delete_post_meta( $post_id, self::META_TITLE );
 		'' !== $desc ? update_post_meta( $post_id, self::META_DESC, $desc ) : delete_post_meta( $post_id, self::META_DESC );
+		if ( 'page' === $post->post_type && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && isset( $_POST['delicat_seo_canonical'] ) ) {
+			$original = esc_url_raw( trim( wp_unslash( (string) $_POST['delicat_seo_canonical'] ) ) );
+			/* this site only, and never the page itself */
+			$same_site = '' !== $original && wp_parse_url( $original, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST );
+			$same_site && untrailingslashit( $original ) !== untrailingslashit( (string) get_permalink( $post_id ) )
+				? update_post_meta( $post_id, Delicat_Builder_V9_SEO_Index::META_CANONICAL, $original )
+				: delete_post_meta( $post_id, Delicat_Builder_V9_SEO_Index::META_CANONICAL );
+		}
 	}
 }

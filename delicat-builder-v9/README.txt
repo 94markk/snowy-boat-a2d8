@@ -1,3 +1,34 @@
+9.9.0 — Référencement Google : ce qui est proposé, les doublons, le fil d’Ariane (plan de confiance, SEO-02 à SEO-06)
+Contrôle du site en ligne le 6 novembre 2026 : le plan du site (wp-sitemap.xml) proposait à Google 127 adresses, dont des
+pages qui ne doivent jamais sortir dans une recherche, et des catégories en double.
+(1) Ne sont plus proposées à Google (balise « noindex » et retrait du plan du site), tout en restant accessibles
+normalement : les pages de connexion, d’inscription et de mot de passe oublié, « test » et « test-2 », la page de
+maintenance, « accueil » (modèle du thème), « mes-donnees », « delete-account », « free-fire-redeem », « sondaj »,
+« adm-free-fire », les pages vides (« comment-ca-marche », « bon-kliyan » sur le site en ligne) et l’article d’exemple
+« Hello world! » de WordPress.
+(2) Les catégories créées par le fournisseur sous « Delicat Digital » (une par produit, nommée comme le produit :
+« delicat-topup-c9e2614d39 » = « Free Fire (LATAM) ») faisaient concurrence aux fiches produits dans Google : elles ne
+sont plus proposées, ni « Uncategorized ». Les pages d’étiquettes produits (« jeux », « 🎮 jeux », « instant »…) non
+plus : elles répètent les catégories. Les étiquettes servent toujours aux badges.
+(3) « rewards-program » et « program-bon-kliyan » affichent le même écran : la première (utilisée par l’application)
+indique maintenant à Google que l’originale est « program-bon-kliyan » (celle des menus du site). Une boîte « Page
+originale » dans l’éditeur de page permet de faire de même pour d’autres doublons.
+(4) Fil d’Ariane : il ne passe plus par les catégories du fournisseur (« Accueil › Delicat Digital › Free Fire (LATAM) ›
+Free Fire (LATAM) » devient « Accueil › Free Fire (LATAM) »). Pour obtenir « Accueil › Jeux › Free Fire (LATAM) »,
+cochez aussi la catégorie « Jeux » sur la fiche du produit (WooCommerce → Produits → Modifier ou Modification rapide).
+Le fil d’Ariane visible (Native Product Builder → Sections → Fil d’Ariane, désactivé sur votre site) suit la même règle,
+et un seul fil d’Ariane est envoyé à Google, sans « &amp; » parasite.
+(5) Titres : le suffixe des produits était « Delicat Store » alors que WordPress ajoute déjà le nom du site, d’où
+« FREE FIRE PIN Delicat Store – Delicat Store ». Un suffixe qui répète le nom du site n’est plus ajouté.
+(6) Données pour Google : une fiche produit sans description n’envoie plus une description vide ; les liens vers vos
+profils (Facebook, TikTok, Instagram) sont envoyés sans les codes de suivi (?mibextid=, ?_r=, ?utm_source=…).
+(7) Delicat Builder → SEO, nouvelle partie « Ce que Google voit » : toutes les pages et catégories avec une case à
+cocher, la sélection recommandée déjà cochée. Tant que vous n’enregistrez pas, la recommandation s’applique ; vos choix
+enregistrés passent ensuite avant elle. Rien n’est supprimé.
+Déjà en place et vérifié sur le site en ligne : les adresses avec paramètres (tri, filtres, recherche) ne sont pas
+indexées, les fiches produits ont leur adresse canonique propre, les anciennes adresses redirigent (301), les produits
+et la pagination sont de vrais liens dans le HTML envoyé (pas de chargement uniquement en JavaScript).
+
 9.8.1 — Avis : la même note partout
 (1) Fiche produit et fenêtre « Voir tous les avis » : la note moyenne est maintenant affichée comme sur la page
 d’accueil, avec une décimale arrondie vers le bas (une moyenne de 4,87 s’affiche 4,8 et non plus 4,9), comme le
