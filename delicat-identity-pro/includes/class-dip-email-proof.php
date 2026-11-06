@@ -57,6 +57,8 @@ final class DIP_Email_Proof {
 
     /** Days during which an unproven account still counts as possibly pre-registered by someone else. */
     const PRE_HIJACK_DAYS = 30;
+    /** 6.17.6: when the current, unproven address arrived on the account (an e-mail change), as a Unix time. */
+    const UNPROVEN_SINCE = '_dip_email_unproven_since';
 
     /**
      * Whether a proof of the mailbox (a code, a magic link, Google, the link opened in another browser) resets
@@ -71,7 +73,11 @@ final class DIP_Email_Proof {
         if (!self::is_unproven($user_id)) return false;
         $user = get_userdata($user_id);
         $registered = $user ? strtotime($user->user_registered . ' UTC') : 0;
-        return $registered > 0 && (time() - $registered) < self::PRE_HIJACK_DAYS * DAY_IN_SECONDS;
+        // 6.17.6: the window runs from when this address arrived on the account, not from the registration: an
+        // old account whose e-mail was just changed (verification off) to someone else's unregistered Gmail is
+        // as young as a new registration for that address.
+        $start = max($registered, absint(get_user_meta($user_id, self::UNPROVEN_SINCE, true)));
+        return $start > 0 && (time() - $start) < self::PRE_HIJACK_DAYS * DAY_IN_SECONDS;
     }
 
     /**
@@ -118,7 +124,10 @@ final class DIP_Email_Proof {
         $user_id = absint($user_id);
         $source = sanitize_key((string) $source);
         if (!$user_id || !class_exists('DIP_Account_Sync')) return false;
-        if (in_array($source, self::FOREIGN_SOURCES, true) && DIP_Account_Sync::is_customer_account($user_id) && self::is_unproven($user_id)) {
+        // 6.17.6: refused only when the proof is about to reset the account (still waiting for its link, or
+        // younger than PRE_HIJACK_DAYS): credentials a reset cannot end would then outlive it. A long-standing
+        // customer is not reset (after_verified_registration()), so nothing of theirs is refused either.
+        if (in_array($source, self::FOREIGN_SOURCES, true) && DIP_Account_Sync::is_customer_account($user_id) && self::awaiting_verification($user_id)) {
             $found = self::foreign_credentials($user_id, $provider, $sub);
             if ($found) {
                 if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user_id, ['method'=>$source, 'credentials'=>implode(',', $found)]);
@@ -132,6 +141,7 @@ final class DIP_Email_Proof {
             delete_user_meta($user_id, '_dip_email_verify_hash');
             delete_user_meta($user_id, '_dip_email_verify_email_hash');
             delete_user_meta($user_id, '_dip_email_verify_expires');
+            delete_user_meta($user_id, self::UNPROVEN_SINCE);
             self::forget_registration_browser($user_id);
         }
         return $ok;

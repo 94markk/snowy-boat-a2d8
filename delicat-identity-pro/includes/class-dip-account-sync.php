@@ -554,6 +554,8 @@ final class DIP_Account_Sync {
         if (!$old || !$new || hash_equals($old, $new)) return;
 
         $requires = class_exists('DIP_Passwordless_Registration') && DIP_Passwordless_Registration::requires_email_verification();
+        // 6.17.6: the pre-registration window (DIP_Email_Proof::awaiting_verification) starts again for the new address.
+        update_user_meta($user_id, DIP_Email_Proof::UNPROVEN_SINCE, time());
         delete_user_meta($user_id, '_dip_verified_email_fingerprint');
         delete_user_meta($user_id, '_dip_verified_email_proof_v2');
         delete_user_meta($user_id, '_dip_wc_verified_email_sync');

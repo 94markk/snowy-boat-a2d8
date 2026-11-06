@@ -305,12 +305,29 @@ final class DIP_Identity {
 
     /**
      * Google has proven the mailbox of an existing account whose current
-     * address was never proven. after_verified_registration(…, 'oidc')
-     * replaces the password and sessions created before that proof.
-     * Credentials that would survive it (passkeys, TOTP, another provider
-     * identity) belong to whoever set the account up, so the merge is refused.
+     * address was never proven. While the account may have been registered
+     * by someone else first (still waiting for its link, or created less than
+     * PRE_HIJACK_DAYS ago), after_verified_registration(…, 'oidc') replaces
+     * the password and sessions created before that proof, and credentials
+     * that would survive it (passkeys, TOTP, another provider identity) make
+     * the merge refused.
+     *
+     * 6.17.6: a long-standing customer is never reset by this. 6.17.5 marked
+     * every unproven address « not confirmed » here, whatever the account's
+     * age, so the first Google sign-in of a customer who had registered with
+     * a password while e-mail verification was off ended their password, every
+     * website and app session (« my account was disconnected »), and a
+     * customer with another sign-in method was refused (« I can't sign back in
+     * with Google »). Same rule as an e-mail code or a magic link
+     * (DIP_Email_Proof::awaiting_verification()).
      */
     private function adopt_unproven_account($user_id, $provider, $sub) {
+        if (!DIP_Email_Proof::awaiting_verification($user_id)) {
+            // Accepted risk, recorded: other sign-in methods on such an account stay (the case 6.17.5 refused).
+            $kept = DIP_Email_Proof::foreign_credentials($user_id, $provider, $sub);
+            if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_linked_long_standing', $kept ? 'warning' : 'notice', $user_id, ['provider'=>$provider, 'credentials_kept'=>implode(',', array_unique($kept))]);
+            return true; // Google proves the address below (prove(…, 'oidc')); nothing is wiped
+        }
         $foreign = DIP_Email_Proof::foreign_credentials($user_id, $provider, $sub);
         if ($foreign) {
             if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user_id, ['provider'=>$provider, 'credentials'=>implode(',', array_unique($foreign))]);

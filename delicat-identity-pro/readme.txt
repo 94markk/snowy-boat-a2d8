@@ -2,10 +2,51 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.5
+Stable tag: 6.17.6
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.6 ==
+Correctif urgent : des clients déconnectés qui ne pouvaient plus revenir avec Google.
+
+(1) Connexion Google d'un client existant (site et application)
+* En 6.17.5, la première connexion Google d'un client dont l'adresse e-mail n'avait jamais été confirmée (par
+  exemple inscrit avec un mot de passe quand la vérification par e-mail était désactivée) était traitée comme une
+  inscription suspecte, quel que soit l'âge du compte : mot de passe remplacé, toutes les sessions du site et de
+  l'application fermées (« mon compte a été déconnecté »), e-mail « Votre adresse e-mail est confirmée… le mot de
+  passe ne fonctionne plus ». Si le client avait aussi une passkey, la 2FA ou un compte Microsoft relié, Google
+  était refusé (« Un compte dont l'adresse n'est pas encore confirmée… »).
+* Désormais la règle annoncée en 6.17.5 s'applique aussi à Google : seul un compte qui attend encore son lien de
+  confirmation, ou créé il y a moins de 30 jours, est réinitialisé (protection contre quelqu'un qui aurait inscrit
+  l'adresse d'un client avant lui). Un client plus ancien se connecte avec Google, garde son mot de passe, ses
+  appareils et ses sessions ; Google confirme simplement son adresse.
+* Les 30 jours comptent à partir de l'arrivée de l'adresse sur le compte : un compte ancien dont l'adresse e-mail
+  vient d'être changée est traité comme une nouvelle inscription pour cette adresse (personne ne peut donc changer
+  l'adresse d'un vieux compte pour celle d'un client puis attendre qu'il se connecte avec Google).
+* Clients déjà touchés : rien à faire de leur côté pour Google, la connexion Google fonctionne. Leur ancien mot de
+  passe a été remplacé par la 6.17.5 : ils peuvent en choisir un nouveau avec « Mot de passe oublié » ou dans
+  Mon compte › Mot de passe.
+
+(2) Application Delicat : session gardée quand le réseau coupe
+* L'application renouvelle sa session régulièrement. Quand la réponse se perdait (réseau Digicel/Natcom faible,
+  application fermée avant d'enregistrer la réponse), l'application gardait l'ancien jeton et le client était
+  déconnecté ; depuis la 6.17.5, au-delà d'une minute, la session entière était même fermée comme un vol.
+* Désormais l'ancien jeton est renouvelé une nouvelle fois s'il revient du même téléphone et de la même
+  installation de l'application : dans la minute, ou dans les 30 minutes si le nouveau jeton n'a jamais servi. Deux
+  renouvellements lancés en même temps par l'application ne la déconnectent plus. Un jeton copié utilisé depuis un
+  autre téléphone, après que le nouveau a servi, ou plus de 30 minutes après, reste refusé et ferme la session comme
+  avant.
+
+(3) Technique
+* DIP_Identity::adopt_unproven_account() et DIP_Email_Proof::prove() suivent DIP_Email_Proof::awaiting_verification()
+  (30 jours, PRE_HIJACK_DAYS) comme le code et le lien de connexion par e-mail ; la fenêtre part de
+  max(inscription, _dip_email_unproven_since), noté à chaque changement d'adresse et effacé quand l'adresse est
+  prouvée. Nouveaux événements du journal : unverified_account_linked_long_standing (« warning » quand d'autres
+  moyens de connexion restent sur le compte), mobile_refresh_lost_answer_recovered (session, délai, règle ;
+  « warning » au-delà d'une minute).
+* Aucun changement de base de données ni de réglage. Installation : Extensions → Ajouter → Téléverser
+  delicat-identity-pro-6.17.6.zip → « Remplacer la version actuelle ».
 
 == Version 6.17.5 ==
 Corrections de l’audit du 5 novembre 2026 (sécurité d’abord). Références IDN-01 à IDN-15.

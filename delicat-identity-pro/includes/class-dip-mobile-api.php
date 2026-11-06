@@ -11,6 +11,8 @@ final class DIP_Mobile_API {
     const ROTATION_READY_OPTION = 'dip_mobile_rotation_ready';
     /** A rotated refresh token reused later than this ends its session (a retry right after is tolerated). */
     const REFRESH_REPLAY_GRACE = 60;
+    /** 6.17.6: how long after a rotation the previous token may still recover a lost answer, if the new pair shows no use. */
+    const LOST_ANSWER_WINDOW = 1800;
     const GOOGLE_NONCE_PREFIX = 'dip_mgn_';
     const GOOGLE_NONCE_TTL = 600;
     const BIOMETRIC_READY_OPTION = 'dip_mobile_biometric_keys_ready';
@@ -926,9 +928,17 @@ final class DIP_Mobile_API {
         $token=trim(self::scalar($request->get_param('refresh_token')));
         if(!preg_match('/^[A-Za-z0-9\-_]{40,512}$/',$token)){ if ($e = self::proof_failed($gate, 'malformed_refresh')) return $e; return new WP_Error('invalid_refresh','Invalid refresh token.',['status'=>401]); }
         global $wpdb; $row=$wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE refresh_hash=%s AND revoked_at IS NULL AND refresh_expires_at > UTC_TIMESTAMP() LIMIT 1',self::hash_token($token)));
+        $token_hash = self::hash_token($token);
+        $expected_hash = $token_hash;
         if(!$row){
-            if (self::refresh_replay_detected(self::hash_token($token))) { if ($e = self::proof_failed($gate, 'refresh_replayed')) return $e; return new WP_Error('refresh_replayed','Refresh token has already been rotated.',['status'=>401]); }
-            if ($e = self::proof_failed($gate, 'invalid_refresh')) return $e; return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]);
+            // 6.17.6: the app lost the answer to its last renewal (weak network, app closed meanwhile) and still
+            // holds the previous token. Renewed again from the same phone while the new pair was never used.
+            $lost = self::lost_rotation_row($token_hash, $request);
+            if ($lost) {
+                $row = $lost;
+                $expected_hash = (string) $lost->refresh_hash;
+            } elseif (self::refresh_replay_detected($token_hash)) { if ($e = self::proof_failed($gate, 'refresh_replayed')) return $e; return new WP_Error('refresh_replayed','Refresh token has already been rotated.',['status'=>401]); }
+            else { if ($e = self::proof_failed($gate, 'invalid_refresh')) return $e; return new WP_Error('invalid_refresh','Refresh token expired or revoked.',['status'=>401]); }
         }
         $d=self::request_device($request);
         if(!hash_equals((string)$row->installation_hash,(string)$d['installation_hash']) || !hash_equals((string)$row->device_hash,(string)$d['device_hash'])){
@@ -942,9 +952,48 @@ final class DIP_Mobile_API {
         if ($limited) return $limited;
         $limited = self::session_throttle($gate, (int) $row->id, self::SESSION_FLOOD_LIMIT);
         if ($limited) return $limited;
-        $issued = self::issue((int)$row->user_id,$request,(int)$row->id,self::hash_token($token));
+        $issued = self::issue((int)$row->user_id,$request,(int)$row->id,$expected_hash);
+        if (is_wp_error($issued) && $issued->get_error_code() === 'refresh_replayed' && $expected_hash === $token_hash) {
+            // Two renewals of the same app crossed: the other one rotated this token between the read above and
+            // this write. It is now the previous token of the session: renewed again under the same rules.
+            $crossed = self::lost_rotation_row($token_hash, $request);
+            if ($crossed) $issued = self::issue((int) $crossed->user_id, $request, (int) $crossed->id, (string) $crossed->refresh_hash);
+        }
         if (is_wp_error($issued) && $issued->get_error_code() === 'refresh_replayed' && ($e = self::proof_failed($gate, 'refresh_replayed'))) return $e;
         return $issued;
+    }
+
+    /**
+     * 6.17.6: the session row whose PREVIOUS refresh token this is, when that token may be renewed again: the
+     * answer to the last renewal was lost (weak Digicel/Natcom connection, app closed before it saved the new
+     * pair) or two renewals of the same app crossed. Allowed only from the same installation and device as the
+     * session, while the session is live, within REFRESH_REPLAY_GRACE of the rotation, or within
+     * LOST_ANSWER_WINDOW while the new pair shows no use (last_used_at not moved since the rotation; it is
+     * written at most once a minute, so this signal is bounded in time). Any other reuse of an old token stays
+     * a replay (refresh_replay_detected()). Each recovery is in the audit log with its session and delay.
+     */
+    private static function lost_rotation_row($hash, WP_REST_Request $request) {
+        if (get_option(self::ROTATION_READY_OPTION) !== '1' || !self::valid_device_request($request)) return null;
+        global $wpdb;
+        $suppress = $wpdb->suppress_errors(true);
+        $row = $wpdb->get_row($wpdb->prepare('SELECT * FROM '.self::table().' WHERE previous_refresh_hash=%s AND revoked_at IS NULL AND refresh_expires_at > UTC_TIMESTAMP() LIMIT 1', $hash));
+        $wpdb->suppress_errors($suppress);
+        if (!$row || empty($row->rotated_at)) return null;
+        $d = self::request_device($request);
+        if (!hash_equals((string) $row->installation_hash, (string) $d['installation_hash']) || !hash_equals((string) $row->device_hash, (string) $d['device_hash'])) return null;
+        $rotated = strtotime((string) $row->rotated_at . ' UTC');
+        $used = $row->last_used_at ? strtotime((string) $row->last_used_at . ' UTC') : 0;
+        if (!$rotated) return null;
+        $age = max(0, time() - $rotated);
+        $branch = '';
+        if ($age <= self::REFRESH_REPLAY_GRACE) {
+            $branch = 'grace';
+        } elseif ($age <= self::LOST_ANSWER_WINDOW && $used <= $rotated + 2) {
+            $branch = 'unused';
+        }
+        if ($branch === '') return null;
+        if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_refresh_lost_answer_recovered', $branch === 'grace' ? 'info' : 'warning', (int) $row->user_id, ['session_id'=>(int) $row->id, 'age'=>$age, 'branch'=>$branch]);
+        return $row;
     }
 
     /**
