@@ -197,7 +197,7 @@ $entry       = static fn( string $title, string $url ): array => array( 'title' 
 $menu        = array_values( array_filter( (array) $menu, static fn( $it ) => ! in_array( $it['title'] ?? '', array( 'SEO entree test', 'SEO entree tutos', 'SEO entree fournisseur', 'SEO entree copie' ), true ) ) );
 $menu[]      = $entry( 'SEO entree test', '/test/' );
 $menu[]      = $entry( 'SEO entree fournisseur', '/product-category/delicat-digital/' );
-$menu[]      = $entry( 'SEO entree tutos', '/tutoriels/' );
+$menu[]      = $entry( 'SEO entree tutos', '/tutoriels' ); // no final slash, like « /sondaj » on the live drawer
 $menu[]      = $entry( 'SEO entree copie', '/product-category/copie-produit/' ); // a category repeating one product: leads to it
 update_option( 'dsb_menu_builder_items', $menu );
 $bump();

@@ -113,6 +113,7 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const chipLeak = want.chips_out.filter((u) => chips.includes('href="' + u + '"'));
   check('shop chips leave out supplier names and copies', chips !== '' && !chipLeak.length, chips ? chipLeak.join(' ') : 'no chips on the shop page');
   check('drawer leaves out entries to fake and supplier addresses, keeps real ones', home.body.includes('SEO entree tutos') && !home.body.includes('SEO entree test') && !home.body.includes('SEO entree fournisseur'));
+  check('drawer entry typed without the final slash links to the real address (no 301 per click)', /href="(https?:\/\/[^"]+)?\/tutoriels\/"/.test(home.body) && !/href="(https?:\/\/[^"]+)?\/tutoriels"/.test(home.body));
   check('drawer entry to a copy category leads straight to its product', home.body.includes('SEO entree copie') && !home.body.includes('/product-category/copie-produit/') && home.body.includes('href="' + want.only_supplier.url + '"'));
   const sondaj = await page(want.sondaj);
   check('« sondaj » (Elementor shortcode widget) gets the hero module and its styles', indexable(sondaj) && /delicat-builder-v9-native-pages-css/.test(sondaj.body), `${sondaj.status}`);

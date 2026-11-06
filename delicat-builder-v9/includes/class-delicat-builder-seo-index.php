@@ -393,7 +393,7 @@ final class Delicat_Builder_V9_SEO_Index {
 	 */
 	public static function menu_link( string $url ): ?string {
 		if ( self::REDIRECT !== self::url_state( $url ) ) {
-			return $url;
+			return self::with_slash( $url );
 		}
 		$to = (string) ( self::map()['targets'][ self::path( $url ) ] ?? '' );
 		$dead = array( self::path( home_url( '/' ) ) );
@@ -401,6 +401,28 @@ final class Delicat_Builder_V9_SEO_Index {
 			$dead[] = self::path( (string) wc_get_page_permalink( 'shop' ) );
 		}
 		return '' === $to || in_array( self::path( $to ), $dead, true ) ? null : $to;
+	}
+
+	/**
+	 * « /sondaj » → « /sondaj/ » when the store's addresses end with a slash: the live drawer entry cost every
+	 * visitor a 301 on each click. Other sites, files (« .pdf »), anchors and empty paths are left alone.
+	 */
+	public static function with_slash( string $url ): string {
+		$parts = wp_parse_url( $url );
+		if ( ! is_array( $parts ) || empty( $parts['path'] ) || '/' === substr( $parts['path'], -1 ) || false !== strpos( basename( $parts['path'] ), '.' ) ) {
+			return $url;
+		}
+		if ( ! empty( $parts['host'] ) && self::bare_host( (string) $parts['host'] ) !== self::bare_host( (string) wp_parse_url( home_url(), PHP_URL_HOST ) ) ) {
+			return $url;
+		}
+		if ( empty( $parts['host'] ) && 0 !== strpos( $url, '/' ) ) {
+			return $url; // « tel: », « mailto: », « #… » or a relative path
+		}
+		if ( '/' !== substr( (string) get_option( 'permalink_structure' ), -1 ) ) {
+			return $url;
+		}
+		$at = strpos( $url, $parts['path'] ) + strlen( $parts['path'] );
+		return substr( $url, 0, $at ) . '/' . substr( $url, $at );
 	}
 
 	public static function bare_host( string $host ): string {
