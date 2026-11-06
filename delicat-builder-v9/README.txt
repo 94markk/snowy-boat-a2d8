@@ -1,3 +1,18 @@
+9.10.0 — « top up free fire haïti » : les mots que tapent vos clients, dans ce que Google lit
+Contrôle du site en ligne le 6 novembre 2026 : aucune page n’avait « top up », « Free Fire » et « Haïti » dans son titre
+Google. L’accueil s’appelait « La rapidité et la qualité en un clic » ; les produits « Free Fire (LATAM) Delicat Store –
+Delicat Store » ; aucune page ne regroupait les recharges Free Fire.
+(1) Produits → Catégories → Modifier une catégorie : nouvelle partie « Delicat SEO — ce que Google montre » avec
+ - « Titre Google » et « Description Google » de la page de la catégorie (utilisés tels quels) ;
+ - « Titre Google de ses produits » : un modèle avec {produit}, par exemple « Top Up {produit} Haïti – Diamants FF ».
+   Chaque produit de la catégorie (et de ses sous-catégories), d’aujourd’hui ou ajouté demain par un fournisseur, prend
+   ce titre, suivi de « – Delicat Store ». Un produit qui a son propre « Titre Google » le garde ;
+ - « Description Google de ses produits » : même principe.
+   Un modèle sans {produit} n’est pas enregistré (tous les produits auraient le même titre).
+(2) Un suffixe produit qui répète seulement le nom du site (votre réglage « Delicat Store ») donne le suffixe par défaut
+« en Haïti » : « Free Fire (LATAM) en Haïti – Delicat Store » au lieu de « Free Fire (LATAM) – Delicat Store ».
+Seul le texte montré à Google change : noms des produits, catégories, prix et commandes ne bougent pas.
+
 9.9.0 — Référencement Google : fausses adresses supprimées, catégories de tous les fournisseurs, doublons, fil d’Ariane (plan de confiance, SEO-02 à SEO-06)
 Contrôle du site en ligne le 6 novembre 2026 : le plan du site (wp-sitemap.xml) proposait à Google 127 adresses, dont des
 pages de test ou vides, les catégories techniques des fournisseurs et des catégories en double.

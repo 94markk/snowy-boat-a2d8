@@ -1,4 +1,4 @@
-// node seo-990.cjs <base> <expected.json> <site-dir> — STAGING ONLY. Builder 9.9.0 (SEO-02 to SEO-06).
+// node seo-990.cjs <base> <expected.json> <site-dir> — STAGING ONLY. Builder 9.9.0 (SEO-02 to SEO-06) and 9.10.0 (Google title and description per category, product title patterns).
 // Run `php seo-setup.php <site-dir> <expected.json>` first. Checks, the way Google and a visitor see the site:
 //  1. SEO-02 the sitemap leaves out functional pages, fake pages, supplier categories (three suppliers, one with a
 //     name the plugin does not know), copies, « Uncategorized », tags and the duplicate page; keeps the real ones;
@@ -25,6 +25,7 @@ const php = (...args) => execFileSync('php', ['-d', 'memory_limit=512M', __dirna
 const results = [];
 const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`); };
 const norm = (u) => { try { const x = new URL(u, base); return decodeURIComponent(x.pathname).replace(/\/+$/, '').toLowerCase() + x.search; } catch (e) { return String(u || ''); } };
+const decode = (s) => String(s).replace(/&#(\d+);/g, (m, n) => String.fromCodePoint(+n)).replace(/&#x([0-9a-f]+);/gi, (m, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&ndash;/g, '–').replace(/&mdash;/g, '—').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#039;|&apos;/g, "'");
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 (async () => {
@@ -35,12 +36,13 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const { status, body, location } = await get(url, ctx);
     const robots = ((body.match(/<meta name=['"]robots['"] content=['"]([^'"]*)/i) || [])[1] || '');
     const canonical = ((body.match(/<link rel=['"]canonical['"] href=['"]([^'"]*)/i) || [])[1] || '');
-    const title = ((body.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '').replace(/&#8211;|&ndash;/g, '–').replace(/\s+/g, ' ').trim();
+    const title = decode(((body.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '')).replace(/\s+/g, ' ').trim();
+    const description = decode(((body.match(/<meta name=['"]description['"] content=['"]([^'"]*)/i) || [])[1] || ''));
     const ld = [];
     for (const m of body.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
       try { const j = JSON.parse(m[1]); for (const it of (j['@graph'] || [j])) ld.push(it); } catch (e) { ld.push({ '@type': 'INVALID' }); }
     }
-    return { status, body, robots, canonical, title, ld, location };
+    return { status, body, robots, canonical, title, description, ld, location };
   };
   const sitemapUrls = async () => {
     const index = (await get(base + '/wp-sitemap.xml')).body;
@@ -102,6 +104,19 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     check(`${key}: title names the store once`, p.title.split(want.site_name).length - 1 <= 1, p.title);
     check(`${key}: name and price in the HTML as sent`, new RegExp('<h1[^>]*>\\s*' + esc(prod.name)).test(p.body) && /woocommerce-Price-amount|dnp-price|data-base-price="[^"]*\d/.test(p.body));
   }
+  // 9.10.0: the category's Google title and description, its products' pattern, the « en Haïti » fallback
+  const cs = want.category_seo;
+  const gamesPage = await page(want.indexed.games);
+  check('category page: its « Titre Google » as written', gamesPage.title === cs.title, gamesPage.title);
+  check('category page: its « Description Google »', gamesPage.description === cs.description, gamesPage.description);
+  const patterned = await page(want.both.url);
+  const wantTitle = cs.product_title.replace('{produit}', want.both.name) + ' – ' + want.site_name;
+  check('product of the category: title from the pattern, store name once at the end', patterned.title === wantTitle, `${patterned.title} (want ${wantTitle})`);
+  check('product of the category: description from the pattern', patterned.description === cs.product_description.replace('{produit}', want.both.name), patterned.description);
+  const fallback = await page(want.only_supplier.url);
+  check('a suffix equal to the store name becomes « en Haïti »', fallback.title === `${want.only_supplier.name} en Haïti – ${want.site_name}`, fallback.title);
+  const form = JSON.parse(php('term-form'));
+  check('category edit screen: four fields; a pattern without {produit} is refused; saving works', form.fields && form.refused_without_token && form.saved, JSON.stringify(form));
   const games = await page(want.indexed.games);
   check('category page links to its products in the HTML as sent', games.body.includes('href="' + want.both.url + '"'));
   const home = await page(base + '/');

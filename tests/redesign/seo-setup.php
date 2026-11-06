@@ -1,5 +1,5 @@
 <?php
-// php seo-setup.php <site-dir> <out.json> [action] — STAGING ONLY. Builder 9.9.0 (SEO-02 to SEO-06).
+// php seo-setup.php <site-dir> <out.json> [action] — STAGING ONLY. Builder 9.9.0 (SEO-02 to SEO-06) and 9.10.0 (category fields).
 // Recreates on the test site what the live audit of 6 Nov 2026 found, for SEVERAL suppliers:
 //  - pages: log-in and maintenance (open, out of Google), « test » and an empty page (fake: redirected home),
 //    WordPress's « Hello world! » (redirected), a page repeating another (rewards-program → program-bon-kliyan),
@@ -108,10 +108,34 @@ if ( 'restore' === $action ) {
 	} else {
 		update_option( 'dsb_menu_builder_items', $saved['restore']['menu'] );
 	}
+	foreach ( array( '_dlc_seo_title', '_dlc_seo_description', '_dlc_seo_product_title', '_dlc_seo_product_description' ) as $key ) {
+		delete_term_meta( (int) ( $saved['ids']['games'] ?? 0 ), $key ); // 9.10.0 category fields set by the setup
+	}
 	$saved['pending'] = 0;
 	file_put_contents( $out, wp_json_encode( $saved, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES ) );
 	$bump();
 	echo "restored\n";
+	exit;
+}
+// « term-form »: the category edit screen shows the four fields, and saving it keeps a pattern only with {produit}
+if ( 'term-form' === $action ) {
+	$load_admin();
+	$saved = json_decode( (string) file_get_contents( $out ), true );
+	$term  = get_term( (int) $saved['ids']['games'], 'product_cat' );
+	if ( ! class_exists( 'Delicat_Builder_V9_SEO_Terms' ) ) { fwrite( STDERR, "no SEO terms module\n" ); exit( 5 ); }
+	ob_start();
+	Delicat_Builder_V9_SEO_Terms::fields( $term ); // what product_cat_edit_form_fields prints (is_admin() is false here)
+	$html = (string) ob_get_clean();
+	$keep = array( 'title' => get_term_meta( $term->term_id, '_dlc_seo_product_title', true ), 'desc' => get_term_meta( $term->term_id, '_dlc_seo_product_description', true ) );
+	$post = static function ( array $fields ) use ( $term ): void {
+		$_POST = array( 'delicat_seo_term_nonce' => wp_create_nonce( 'delicat_seo_term_' . $term->term_id ), 'delicat_seo_term' => wp_slash( $fields ) );
+		Delicat_Builder_V9_SEO_Terms::save( $term->term_id ); // what edited_product_cat runs
+	};
+	$post( array( 'title' => 'Titre test', 'description' => '', 'product_title' => 'Sans le jeton', 'product_description' => 'Achetez {produit} ici' ) );
+	$refused = '' === (string) get_term_meta( $term->term_id, '_dlc_seo_product_title', true ) && 'Achetez {produit} ici' === get_term_meta( $term->term_id, '_dlc_seo_product_description', true );
+	$post( array( 'title' => (string) $saved['category_seo']['title'], 'description' => (string) $saved['category_seo']['description'], 'product_title' => (string) $keep['title'], 'product_description' => (string) $keep['desc'] ) );
+	$back = (string) $saved['category_seo']['title'] === get_term_meta( $term->term_id, '_dlc_seo_title', true ) && (string) $keep['title'] === get_term_meta( $term->term_id, '_dlc_seo_product_title', true );
+	echo wp_json_encode( array( 'fields' => 4 === substr_count( $html, 'name="delicat_seo_term[' ) && false !== strpos( $html, 'delicat_seo_term_nonce' ), 'refused_without_token' => $refused, 'saved' => $back ) ), "\n";
 	exit;
 }
 
@@ -211,6 +235,17 @@ wp_set_object_terms( $social_a, array( $subshelf ), 'product_cat', true );
 wp_set_object_terms( $social_b, array( $subshelf ), 'product_cat', true );
 wp_remove_object_terms( $both, array( (int) get_term_by( 'slug', 'copie-produit', 'product_cat' )->term_id ), 'product_cat' ); // an interrupted run
 wp_update_post( array( 'ID' => $only_supplier, 'post_excerpt' => '', 'post_content' => '' ) ); // no description, as on the live site
+// 9.10.0: the owner fills the new fields on « Jeux & recharges » (Produits → Catégories → Modifier)
+$category_seo = array(
+	'title'               => 'Top Up Jeux Haïti – Recharges rapides | Delicat Store',
+	'description'         => 'Recharges de jeux en Haïti : Free Fire, PUBG, Blood Strike. Paiement MonCash, NatCash ou portefeuille.',
+	'product_title'       => 'Top Up {produit} Haïti – Diamants FF',
+	'product_description' => 'Achetez {produit} en Haïti sur Delicat Store : paiement MonCash, NatCash ou portefeuille.',
+);
+update_term_meta( $games_id, '_dlc_seo_title', $category_seo['title'] );
+update_term_meta( $games_id, '_dlc_seo_description', $category_seo['description'] );
+update_term_meta( $games_id, '_dlc_seo_product_title', $category_seo['product_title'] );
+update_term_meta( $games_id, '_dlc_seo_product_description', $category_seo['product_description'] );
 
 // settings as on the live site: suffix = store name, profile links with tracking codes, no choices saved yet
 $seo_before = get_option( 'delicat_builder_v9_seo', array() );
@@ -305,8 +340,9 @@ $result = array(
 	'chips_out'     => array( $term( $dd, 'product_cat' ), $term( $gp, 'product_cat' ), $term( $direct, 'product_cat' ), $term( $social2, 'product_cat' ) ),
 	'arena'         => array( 'url' => $link( $arena_product ), 'name' => get_the_title( $arena_product ), 'shelf' => 'Arena Breakout' ),
 	'copy'          => $term( $copy, 'product_cat' ),
+	'category_seo'  => $category_seo,
 	'usa_itunes'    => array( 'url' => $term( $usa1, 'product_cat' ), 'id' => $usa1, 'product' => $link( $social_a ) ),
-	'ids'           => array( 'login' => $pages['login'], 'test' => $pages['test'], 'tutoriels' => $pages['tutoriels'], 'social_copy' => $social2, 'only_supplier' => $only_supplier, 'both' => $both, 'conditions' => class_exists( 'Delicat_Builder_V9_Legal' ) ? Delicat_Builder_V9_Legal::page_id( 'conditions' ) : 0 ),
+	'ids'           => array( 'login' => $pages['login'], 'test' => $pages['test'], 'tutoriels' => $pages['tutoriels'], 'social_copy' => $social2, 'only_supplier' => $only_supplier, 'both' => $both, 'games' => $games_id, 'conditions' => class_exists( 'Delicat_Builder_V9_Legal' ) ? Delicat_Builder_V9_Legal::page_id( 'conditions' ) : 0 ),
 	'editor_cookie' => array( 'name' => LOGGED_IN_COOKIE, 'value' => wp_generate_auth_cookie( $eid, $expire, 'logged_in' ) ),
 	'pending'       => 1,
 	'restore'       => array( 'seo' => $seo_before, 'show_breadcrumbs' => (int) ( $np_before['show_breadcrumbs'] ?? 0 ), 'blog_public' => $public_before, 'menu' => $menu_before ),

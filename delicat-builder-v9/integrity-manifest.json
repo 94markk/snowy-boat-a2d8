@@ -1,9 +1,9 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-06T01:37:33.290Z",
- "version": "9.9.0",
- "bytes": 7133604,
- "count": 302,
+ "built": "2026-11-06T02:18:03.258Z",
+ "version": "9.10.0",
+ "bytes": 7144206,
+ "count": 303,
  "files": {
   "README.txt": {
    "bytes": 101330,
@@ -391,7 +391,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9789,
-   "sha256": "7b4db8a3c94a1a75744e6a858adbfc232a32108b67746240bb23667eb438247c"
+   "sha256": "2b815d5417aa743fb7500065c4bc6ceb705ba06ce453483fd9d04688a0e67549"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -642,8 +642,8 @@
    "sha256": "894a2032adc23434fd6c44bc6c2f752d09fe87f9142529ef7cca00e4920672fd"
   },
   "delicat-builder-v9.php": {
-   "bytes": 125179,
-   "sha256": "da8883e85410a989e4b8f41c5afde50734476b5b06cb2890d30288cb39103361"
+   "bytes": 125181,
+   "sha256": "383b4ef7485ce085990f499889625b41c2c11f0a6d0ae4b739d60794c16bd754"
   },
   "includes/class-delicat-builder-admin.php": {
    "bytes": 23272,
@@ -937,9 +937,13 @@
    "bytes": 45090,
    "sha256": "b295004bbc7c33b96195e78a87e213855b1877b56c43bd9fd039be9dc271d83a"
   },
+  "includes/class-delicat-builder-seo-terms.php": {
+   "bytes": 8728,
+   "sha256": "c8a283922938b996f72b0bc3927d703135968ea43731cac76059fded876652cc"
+  },
   "includes/class-delicat-builder-seo.php": {
-   "bytes": 44484,
-   "sha256": "cf530539b82e49a0795b12eea3a87a35a6e9cb59dc851a00163d04e2ec738499"
+   "bytes": 46356,
+   "sha256": "90a5c3462a1da69bbe255e10f01dcfd1d1f6bb837f541d6b4b41f131387d575f"
   },
   "includes/class-delicat-builder-server-engine.php": {
    "bytes": 25503,

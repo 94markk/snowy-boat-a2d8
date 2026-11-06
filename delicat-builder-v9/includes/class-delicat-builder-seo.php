@@ -117,6 +117,13 @@ final class Delicat_Builder_V9_SEO {
 		if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
 			Delicat_Builder_V9_SEO_Index::boot();
 		}
+		/* 9.10.0: Google title and description per category, and a title pattern for its products. */
+		if ( ! class_exists( 'Delicat_Builder_V9_SEO_Terms', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-seo-terms.php' );
+		}
+		if ( class_exists( 'Delicat_Builder_V9_SEO_Terms', false ) ) {
+			Delicat_Builder_V9_SEO_Terms::boot();
+		}
 
 		if ( is_admin() ) {
 			add_action( 'admin_menu', array( __CLASS__, 'menu' ), 40 );
@@ -231,6 +238,22 @@ final class Delicat_Builder_V9_SEO {
 				return array( 'title' => $custom );
 			}
 		}
+		/* 9.10.0: the category's own « Titre Google », used as written; its products follow the category's pattern */
+		$terms_on = class_exists( 'Delicat_Builder_V9_SEO_Terms', false );
+		if ( $terms_on && self::is_product_archive_term() && get_queried_object() instanceof WP_Term ) {
+			$typed = Delicat_Builder_V9_SEO_Terms::term_title( get_queried_object() );
+			if ( '' !== $typed ) {
+				return array( 'title' => $typed );
+			}
+		}
+		if ( $terms_on && is_singular( 'product' ) && function_exists( 'wc_get_product' ) ) {
+			$product = wc_get_product( (int) get_queried_object_id() );
+			$pattern = $product instanceof WC_Product ? Delicat_Builder_V9_SEO_Terms::product_title( $product ) : '';
+			if ( '' !== $pattern && isset( $parts['title'] ) ) {
+				$parts['title'] = $pattern; // the store name is still added after it
+				return $parts;
+			}
+		}
 		$suffix = trim( $s['product_suffix'] );
 		/* 9.9.0: WordPress already ends every title with the store name; a suffix naming the store again
 		 * gave « FREE FIRE PIN Delicat Store – Delicat Store ». */
@@ -239,7 +262,9 @@ final class Delicat_Builder_V9_SEO {
 		$site = $bare( $name );
 		if ( '' !== $site && '' !== $suffix ) {
 			if ( $bare( $suffix ) === $site ) {
-				$suffix = '';
+				/* 9.10.0: a suffix that only repeats the store name gives the default one (« en Haïti »): the
+				 * store name stays at the end of the title and the country customers type is in it */
+				$suffix = (string) self::defaults()['product_suffix'];
 			} elseif ( '' !== $name ) {
 				/* « en Haïti – Delicat Store » keeps « en Haïti » */
 				$suffix = trim( (string) preg_replace( '/[\s\-–—|·:,]*' . preg_quote( $name, '/' ) . '\s*$/iu', '', $suffix ) );
@@ -394,7 +419,8 @@ final class Delicat_Builder_V9_SEO {
 					$product = wc_get_product( $post->ID );
 					if ( $product ) {
 						$ctx['type'] = 'product';
-						$text        = '' !== $custom ? $custom : (string) $product->get_short_description();
+						$pattern     = '' === $custom && class_exists( 'Delicat_Builder_V9_SEO_Terms', false ) ? Delicat_Builder_V9_SEO_Terms::product_description( $product ) : '';
+						$text        = '' !== $custom ? $custom : ( '' !== $pattern ? $pattern : (string) $product->get_short_description() );
 						if ( '' === trim( wp_strip_all_tags( $text ) ) ) {
 							$text = (string) $product->get_description();
 						}
@@ -428,7 +454,8 @@ final class Delicat_Builder_V9_SEO {
 		} elseif ( self::is_product_archive_term() ) {
 			$term = get_queried_object();
 			if ( $term instanceof WP_Term ) {
-				$ctx['description'] = self::clean( (string) $term->description );
+				$typed              = class_exists( 'Delicat_Builder_V9_SEO_Terms', false ) ? Delicat_Builder_V9_SEO_Terms::term_description( $term ) : '';
+				$ctx['description'] = self::clean( '' !== $typed ? $typed : (string) $term->description );
 				if ( '' === $ctx['description'] ) {
 					/* 9.7.8 (FE-20): short enough for Google to show it whole. */
 					$ctx['description'] = self::clean( sprintf( '%1$s sur %2$s : livraison rapide en Haïti, paiement MonCash, NatCash ou wallet.', html_entity_decode( $term->name, ENT_QUOTES | ENT_HTML5, 'UTF-8' ), $name ) );
