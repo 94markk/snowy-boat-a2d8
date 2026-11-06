@@ -1,0 +1,76 @@
+{
+ "version": 1,
+ "note": "engine-src file -> shipped assets/dist file; src_sha = sha256 of the source the shipped file was built from. Maintained by build-engine.mjs.",
+ "modules": {
+  "engine.js": {
+   "dist": "engine.77f1984c3153.js",
+   "src_sha": "591ad7cda1f361cd1e8cebe8bc7e4c77bbaee30217b32ad744e9747ad8571626",
+   "role": "engine"
+  },
+  "chunks/purchase.js": {
+   "dist": "chunks/purchase.4df92b44414e.js",
+   "src_sha": "e6d200923ce49620fb6b44844bab228926dd431693481dd8fd157e99221914dd",
+   "name": "purchase"
+  },
+  "chunks/product.js": {
+   "dist": "chunks/product.a6591498e335.js",
+   "src_sha": "bb7fdb6c95896dafb4051ba3d69bad94498ec9e6bbd2674d8c11922e8b34e65d",
+   "name": "product"
+  },
+  "chunks/shared-e.js": {
+   "dist": "chunks/chunk.59c3469ed67d.js",
+   "src_sha": "e4686a442b82b66f86a830e121e2b17e9f8e8f39adf1ab1b2cae41c4064487a6",
+   "name": null
+  },
+  "chunks/widgets.js": {
+   "dist": "chunks/widgets.9426e0345ba2.js",
+   "src_sha": "949cd7d2e2b595ef4462a82fa6ddfb3b743f33998cce58219c316d4325749978",
+   "name": "widgets"
+  },
+  "chunks/shared-d.js": {
+   "dist": "chunks/chunk.24e5a10064c2.js",
+   "src_sha": "7321f455027e79c44df93798b01bf469b4456d75f687ba2768877eb1e4b5568d",
+   "name": null
+  },
+  "chunks/reviews.js": {
+   "dist": "chunks/reviews.6b28bbbd6611.js",
+   "src_sha": "910e4475e4cfde2433c5eeaa9f6ee91b617d7a123311e9d5a4bed1e8c8fe4c60",
+   "name": "reviews"
+  },
+  "chunks/shared-c.js": {
+   "dist": "chunks/chunk.99ad77e49fbc.js",
+   "src_sha": "7117d2be90c83c33ab37b97f8b8478c230b80ba38c84501c065fc9e59858c45e",
+   "name": null
+  },
+  "chunks/purchase-native.js": {
+   "dist": "chunks/purchase-native.451d1f377e58.js",
+   "src_sha": "23e6f3f66ffcda1bffe00b7e433664281a18052232d757153947e3230acd101d",
+   "name": "purchase-native"
+  },
+  "chunks/notifications.js": {
+   "dist": "chunks/notifications.2edf7d4c5178.js",
+   "src_sha": "a84a25b2c40e0db33a55d74ea3d4a5d983b3dcbf9f644ef5dd2d9fedf516f22d",
+   "name": "notifications"
+  },
+  "chunks/shared-b.js": {
+   "dist": "chunks/chunk.385b5371c4d9.js",
+   "src_sha": "2d719207f476e865efe4410a82bb827483b4c8f520bf38533c3e76a982b77eb8",
+   "name": null
+  },
+  "chunks/shared-a.js": {
+   "dist": "chunks/chunk.687452d4bbe4.js",
+   "src_sha": "b2fd7bb7fbbce3e7d9d5c97cd4f8df737699c7f3c7799b9ad81860cae78b9233",
+   "name": null
+  },
+  "chunks/shared-base.js": {
+   "dist": "chunks/chunk.71647e346105.js",
+   "src_sha": "97ceb0726f8e218f336fc8e311f647319100c724b88f2f36488c1162bcb03aa6",
+   "name": null
+  },
+  "chunks/shell-header.js": {
+   "dist": "chunks/shell-header.2874f1e410f4.js",
+   "src_sha": "f6d2328ed70850481b56d7b391d8821ef118318257c0c5e0e169f4984ddeefbf",
+   "name": "shell-header"
+  }
+ }
+}

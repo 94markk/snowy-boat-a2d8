@@ -1,0 +1,242 @@
+<?php
+defined('ABSPATH') || exit;
+
+/**
+ * Embedded Email Studio bridge.
+ *
+ * One source of truth for WordPress, WooCommerce and Delicat Identity email design.
+ * The former standalone Email Studio plugin is migrated/deactivated to avoid double hooks.
+ */
+final class DIP_Email_Studio_Bridge {
+    const OPTION = 'delicat_email_studio_settings_v3';
+    const LEGACY_OPTION = 'delicat_email_settings';
+    const OLD_IDENTITY_OPTION = 'dip_email_designer_settings';
+    const MIGRATION_FLAG = 'dip_email_studio_unified_migrated_690';
+
+    private static $loaded = false;
+    private static $admin_loaded = false;
+    /** @var bool|null per-request result of standalone_active() */
+    private static $standalone_active = null;
+
+    public static function init() {
+
+        // Plugin replacement/update does not always execute an activation hook.
+        // Finish the migration on the next privileged admin request as well.
+        // The plugins screen also catches a renamed copy of the old plugin, and
+        // a flag stored by an older version without autoload gets repaired.
+        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION || !self::flag_autoloaded() || 'plugins.php' === ($GLOBALS['pagenow'] ?? '')) {
+            add_action('admin_init', [__CLASS__, 'maybe_complete_migration'], 1);
+        }
+
+        // Never register two e-mail renderers in the same request. If the old
+        // standalone plugin is active it will finish this request alone; the
+        // embedded studio takes over cleanly after migration/deactivation.
+        if (self::standalone_active()) {
+            add_action('admin_notices', [__CLASS__, 'standalone_notice']);
+            return;
+        }
+        if (self::load() && self::needs_admin_ui()) {
+            self::load_admin_ui();
+        }
+    }
+
+    public static function maybe_complete_migration() {
+        if (!is_admin() || !current_user_can('activate_plugins')) return;
+        if (self::standalone_active() || get_option(self::MIGRATION_FLAG, '') !== DIP_VERSION) {
+            self::install();
+            return;
+        }
+        if (!self::flag_autoloaded()) self::store_flag(DIP_VERSION);
+        // Plugins screen: name-based scan (get_plugins() is loaded there anyway).
+        if ('plugins.php' === ($GLOBALS['pagenow'] ?? '')) self::deactivate_standalone();
+    }
+
+    public static function install() {
+        self::migrate_settings();
+        self::deactivate_standalone();
+        self::store_flag(DIP_VERSION);
+        self::$standalone_active = null;
+    }
+
+    /** The migration flag is read by init() on every request: autoloaded, so it costs no query. */
+    private static function store_flag($value) {
+        if (function_exists('wp_set_option_autoload')) {
+            update_option(self::MIGRATION_FLAG, $value, true);
+            wp_set_option_autoload(self::MIGRATION_FLAG, true);
+            return;
+        }
+        // WordPress < 6.4: update_option() keeps the autoload of an unchanged value.
+        delete_option(self::MIGRATION_FLAG);
+        add_option(self::MIGRATION_FLAG, $value, '', 'yes');
+    }
+
+    private static function flag_autoloaded() {
+        $all = function_exists('wp_load_alloptions') ? wp_load_alloptions() : [];
+        return is_array($all) && array_key_exists(self::MIGRATION_FLAG, $all);
+    }
+
+    public static function load() {
+        if (self::$loaded) return true;
+        if (self::standalone_active()) return false;
+
+        if (!defined('DIPES_VERSION')) define('DIPES_VERSION', DIP_VERSION);
+        if (!defined('DIPES_DIR')) define('DIPES_DIR', trailingslashit(DIP_DIR . 'includes/email-studio'));
+        if (!defined('DIPES_URL')) define('DIPES_URL', trailingslashit(DIP_URL . 'includes/email-studio'));
+        if (!defined('DIPES_OPTION')) define('DIPES_OPTION', self::OPTION);
+        if (!defined('DIPES_LEGACY_OPTION')) define('DIPES_LEGACY_OPTION', self::LEGACY_OPTION);
+
+        $base = DIP_DIR . 'includes/email-studio/';
+        // Runtime hooks/templates are required for WordPress/WooCommerce mail.
+        // Preview/admin rendering is intentionally excluded from storefront boots.
+        foreach (['presets.php','settings.php','helpers.php','render.php','templates.php','wordpress-notifications.php'] as $file) {
+            $path = $base . $file;
+            if (!is_readable($path)) {
+                if (class_exists('DIP_Audit')) DIP_Audit::record('email_studio_module_missing', 'error', get_current_user_id(), ['file'=>$file]);
+                return false;
+            }
+            require_once $path;
+        }
+        self::$loaded = true;
+        return true;
+    }
+
+    private static function needs_admin_ui() {
+        if (!is_admin() || wp_doing_ajax()) return false;
+        $action = sanitize_key((string) wp_unslash($_REQUEST['action'] ?? ''));
+        $page = sanitize_key((string) wp_unslash($_GET['page'] ?? ''));
+        return 'delicat-identity-emails' === $page || 0 === strpos($action, 'dipes_');
+    }
+
+    private static function load_admin_ui() {
+        if (self::$admin_loaded) return true;
+        if (!self::load()) return false;
+        $base = DIP_DIR . 'includes/email-studio/';
+        foreach (['preview.php','admin.php'] as $file) {
+            $path = $base . $file;
+            if (!is_readable($path)) {
+                if (class_exists('DIP_Audit')) DIP_Audit::record('email_studio_admin_module_missing', 'error', get_current_user_id(), ['file'=>$file]);
+                return false;
+            }
+            require_once $path;
+        }
+        self::$admin_loaded = true;
+        return true;
+    }
+
+    public static function page() {
+        if (!current_user_can('manage_options')) return;
+        if (!self::load() || !self::load_admin_ui() || !function_exists('dipes_admin_page')) {
+            echo '<div class="wrap"><h1>Delicat Identity — Email Studio</h1><div class="notice notice-error"><p>Le module Email Studio n’a pas pu être chargé.</p></div></div>';
+            return;
+        }
+        dipes_admin_page();
+    }
+
+    public static function standalone_notice() {
+        if (!current_user_can('activate_plugins')) return;
+        echo '<div class="notice notice-warning"><p><strong>Delicat Identity Pro:</strong> l’ancien plugin Delicat Email Studio Pro est encore actif pour cette requête. La migration sécurisée va le désactiver automatiquement; le module e-mail unifié prendra le relais à la prochaine requête.</p></div>';
+    }
+
+    private static function plugin_inventory() {
+        if (!function_exists('get_plugins')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        return function_exists('get_plugins') ? get_plugins() : [];
+    }
+
+    public static function standalone_basenames() {
+        $matches = [];
+        foreach (self::plugin_inventory() as $basename => $data) {
+            $name = isset($data['Name']) ? (string)$data['Name'] : '';
+            if (stripos($name, 'Delicat Email Studio Pro') !== false || preg_match('~(?:^|/)delicat-email-studio-pro\.php$~', $basename)) {
+                $matches[] = $basename;
+            }
+        }
+        return array_values(array_unique($matches));
+    }
+
+    /**
+     * Whether the old standalone Email Studio is active, from the (autoloaded)
+     * active plugin lists only: no plugins-directory scan (get_plugins()) and
+     * no wp-admin include on storefront, REST, mobile or AJAX requests. The
+     * name-based scan of renamed copies stays in the privileged migration
+     * (maybe_complete_migration() / deactivate_standalone()).
+     */
+    public static function standalone_active() {
+        if (null !== self::$standalone_active) return self::$standalone_active;
+        $active = (array) get_option('active_plugins', []);
+        if (is_multisite()) $active = array_merge($active, array_keys((array) get_site_option('active_sitewide_plugins', [])));
+        $found = false;
+        foreach ($active as $basename) {
+            // Any folder (renamed copies included) holding the old main file.
+            if (is_string($basename) && preg_match('~(?:^|/)delicat-email-studio-pro\.php$~', $basename)) { $found = true; break; }
+        }
+        self::$standalone_active = $found;
+        return $found;
+    }
+
+    public static function deactivate_standalone() {
+        if (!function_exists('deactivate_plugins')) require_once ABSPATH . 'wp-admin/includes/plugin.php';
+        $active = [];
+        foreach (self::standalone_basenames() as $basename) {
+            if (function_exists('is_plugin_active') && is_plugin_active($basename)) $active[] = $basename;
+        }
+        if ($active && function_exists('deactivate_plugins')) {
+            deactivate_plugins($active, true, false);
+            self::$standalone_active = null;
+            if (class_exists('DIP_Audit')) DIP_Audit::record('standalone_email_studio_deactivated', 'notice', get_current_user_id(), ['count'=>count($active)]);
+        }
+    }
+
+    public static function migrate_settings() {
+        $existing = get_option(self::OPTION, null);
+        if (is_array($existing) && !empty($existing)) {
+            // Existing Email Studio settings are already the preferred source.
+            return;
+        }
+
+        $old = get_option(self::OLD_IDENTITY_OPTION, []);
+        if (!is_array($old) || !$old) return;
+
+        // Load only the settings primitives to obtain secure defaults, without
+        // registering the full renderer during activation.
+        if (!defined('DIPES_VERSION')) define('DIPES_VERSION', DIP_VERSION);
+        if (!defined('DIPES_DIR')) define('DIPES_DIR', trailingslashit(DIP_DIR . 'includes/email-studio'));
+        if (!defined('DIPES_URL')) define('DIPES_URL', trailingslashit(DIP_URL . 'includes/email-studio'));
+        if (!defined('DIPES_OPTION')) define('DIPES_OPTION', self::OPTION);
+        if (!defined('DIPES_LEGACY_OPTION')) define('DIPES_LEGACY_OPTION', self::LEGACY_OPTION);
+        require_once DIP_DIR . 'includes/email-studio/presets.php';
+        require_once DIP_DIR . 'includes/email-studio/settings.php';
+
+        $settings = dipes_defaults();
+        $map = [
+            'logo_url'   => 'logo_url',
+            'accent'     => 'accent',
+            'background' => 'page_bg',
+            'card'       => 'card_bg',
+            'text'       => 'text',
+            'muted'      => 'muted',
+            'radius'     => 'radius',
+        ];
+        foreach ($map as $old_key => $new_key) {
+            if (!array_key_exists($old_key, $old)) continue;
+            $value = $old[$old_key];
+            if (in_array($new_key, ['accent','page_bg','card_bg','text','muted'], true)) {
+                $value = sanitize_hex_color($value) ?: $settings[$new_key];
+            } elseif ('logo_url' === $new_key) {
+                $value = esc_url_raw($value);
+            } elseif ('radius' === $new_key) {
+                $value = min(32, max(0, absint($value)));
+            }
+            $settings[$new_key] = $value;
+        }
+        if (!empty($old['from_name'])) $settings['brand_name'] = sanitize_text_field($old['from_name']);
+        if (!empty($old['from_email']) && is_email($old['from_email'])) $settings['support_email'] = sanitize_email($old['from_email']);
+        if (!empty($old['footer_text'])) $settings['footer_note'] = sanitize_text_field($old['footer_text']);
+
+        // Keep related surfaces coherent.
+        $settings['button_bg'] = $settings['accent'];
+        $settings['card_border'] = $settings['border'];
+        update_option(self::OPTION, dipes_normalize_settings($settings), false);
+
+        if (class_exists('DIP_Audit')) DIP_Audit::record('identity_email_settings_migrated', 'notice', get_current_user_id());
+    }
+}

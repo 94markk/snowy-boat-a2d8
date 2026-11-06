@@ -1,0 +1,285 @@
+/* Delicat Builder V9 — archive product cards (homepage design). */
+
+
+
+
+/* =============================================================================
+   pro.17 — the badge component
+   -----------------------------------------------------------------------------
+   One shape for every badge in the storefront. Before this there were four:
+   the card's corner tag, the card's status pill, the product page's
+   "Livraison instantanée" (built from an emoji, with its own class and its own
+   colours), and two more in the archive and page builders. They disagreed on
+   height, radius, letter-spacing and case, so the same product could carry two
+   differently-shaped badges on the same screen.
+
+   The tone classes below set two custom properties and nothing else. That is
+   the whole of the per-badge styling: the shape is declared once, and a new
+   badge type is two colours rather than a new rule that has to re-state the
+   geometry and can get it slightly wrong.
+   ========================================================================== */
+
+.delicat-badge {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+
+  /* A thumb never touches a badge, but a badge must never be so small that it
+     reads as an artefact. 24px is the floor at which the icon and the text can
+     both stay legible at the sizes these cards run at. */
+  min-height: 24px;
+  padding: 0 9px;
+
+  border-radius: 999px;
+  background: var(--dbv9-badge-bg, rgba(20, 20, 48, .82));
+  color: var(--dbv9-badge-ink, #fff);
+
+  font-size: .66rem;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: .01em;
+  white-space: nowrap;
+
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.delicat-badge__icon {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  /* The icon inherits the badge's own colour, which is why one drawn set works
+     on every tone and in both themes without a second asset. */
+  color: currentColor;
+}
+
+.delicat-badge__text {
+  overflow: hidden;
+  /* Stated rather than inherited: a theme with a tight line height slices the
+     tops off the letters, which is what happened to the drawer's menu labels. */
+  line-height: 1.25;
+  text-overflow: ellipsis;
+}
+
+/* ---- Slots. Where a badge sits is a property of the slot, not the badge. ---- */
+
+.delicat-badge--topic  { top: 10px; left: 10px; }
+.delicat-badge--status { bottom: 10px; left: 10px; }
+
+/* ---- Tones. Two colours each, and nothing else. ---- */
+
+.delicat-badge--topic   { --dbv9-badge-bg: rgba(16, 16, 44, .84); --dbv9-badge-ink: #fff; }
+.delicat-badge--rank    { --dbv9-badge-bg: #f5b301; --dbv9-badge-ink: #241a00; }
+.delicat-badge--promo   { --dbv9-badge-bg: #ff4258; --dbv9-badge-ink: #fff; }
+.delicat-badge--top     { --dbv9-badge-bg: #6659ff; --dbv9-badge-ink: #fff; }
+.delicat-badge--instant { --dbv9-badge-bg: #0f9d58; --dbv9-badge-ink: #fff; }
+
+/* "Livraison instantanée" is the one badge that sits in the page rather than on
+   a card, so it is the one that is not positioned. */
+.dnp-identity .delicat-badge--instant {
+  position: static;
+  flex: 0 0 auto;
+  white-space: normal;
+}
+
+/* On a phone the cards are small enough that a badge with its icon and its
+   label starts to crowd the artwork. The label goes; the icon and the colour
+   still say which topic it is, and the status badge keeps its words because
+   "Promo" is the part a shopper is scanning for. */
+@media (max-width: 460px) {
+  .delicat-badge--topic { gap: 0; padding: 0 7px; }
+  .delicat-badge--topic .delicat-badge__text { display: none; }
+}
+
+/* =============================================================================
+   pro.33 — the like button
+   -----------------------------------------------------------------------------
+   One favourite control for every product card. It replaces the heart bubble,
+   the decorative static bubble and the RC81 tap pulse; every rule that styled
+   those is gone from this sheet, app-tuning.css and app-polish.css.
+
+   The button is a 44px hit area and the chip inside it is smaller, so the tap
+   target stays generous while the artwork stays the subject. This sheet owns
+   the resting and liked states, so a card is right before any script runs.
+   heart.js owns every movement through the Web Animations API, so no
+   touch-device or reduced-motion rule here has to fight it.
+   ========================================================================== */
+.delicat-like {
+  --dbv9-like-size: 34px;
+  --dbv9-like-glyph: 18px;
+  position: absolute;
+  /* 8: above the ranking variant's stretched name link (z-index 7). */
+  z-index: 8;
+  top: 3px;
+  right: 3px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+  font: inherit;
+  line-height: 0;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.delicat-like__chip {
+  display: grid;
+  place-items: center;
+  width: var(--dbv9-like-size);
+  height: var(--dbv9-like-size);
+  border-radius: 50%;
+  background: var(--dbv9-heart-bg, #fff);
+  box-shadow: 0 1px 2px rgba(9, 13, 38, .24), 0 6px 14px rgba(9, 13, 38, .2);
+  transition: transform .18s cubic-bezier(.3, .7, .4, 1), box-shadow .18s ease;
+}
+
+.delicat-like.is-pressed .delicat-like__chip {
+  transform: scale(.86);
+  box-shadow: 0 1px 2px rgba(9, 13, 38, .24);
+  transition-duration: .09s;
+}
+
+.delicat-like__outline,
+.delicat-like__fill {
+  grid-area: 1 / 1;
+  display: block;
+  width: var(--dbv9-like-glyph);
+  height: var(--dbv9-like-glyph);
+  overflow: visible;
+  pointer-events: none;
+}
+
+.delicat-like__outline {
+  fill: none;
+  stroke: var(--dbv9-like-ink, #1f2340);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  transition: stroke .2s ease;
+}
+
+.delicat-like__fill {
+  color: var(--dbv9-heart-color, var(--ds-color-primary-hover,#1d4ed8));
+  fill: currentColor;
+  opacity: 0;
+  transform: scale(0);
+  transform-origin: 50% 55%;
+}
+
+.delicat-like[aria-pressed="true"] .delicat-like__outline {
+  stroke: var(--dbv9-heart-color, var(--ds-color-primary-hover,#1d4ed8));
+}
+
+.delicat-like[aria-pressed="true"] .delicat-like__fill {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.delicat-like:focus {
+  outline: none;
+}
+
+.delicat-like:focus-visible .delicat-like__chip {
+  box-shadow: 0 0 0 2px var(--dbv9-heart-bg, #fff), 0 0 0 4px var(--dbv9-heart-color, var(--ds-color-primary-hover,#1d4ed8));
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .delicat-like:hover .delicat-like__chip {
+    transform: scale(1.07);
+  }
+  .delicat-like.is-pressed:hover .delicat-like__chip {
+    transform: scale(.86);
+  }
+}
+
+@media (min-width: 961px) {
+  .delicat-like {
+    --dbv9-like-size: 38px;
+    --dbv9-like-glyph: 20px;
+    top: 4px;
+    right: 4px;
+  }
+}
+
+/* The burst is drawn on <body> at the chip's position, outside the card's
+   rounded clipping; heart.js removes the layer the moment it finishes. */
+.delicat-like-burst {
+  position: fixed;
+  z-index: 2147483000;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.delicat-like-burst__ring,
+.delicat-like-burst__dot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.delicat-like-burst__ring {
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+}
+
+.delicat-like-burst__dot {
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delicat-like__chip,
+  .delicat-like__outline {
+    transition: none;
+  }
+}
+
+/* =============================================================================
+   9.7.4 — shop, category, tag and search pages: the homepage card
+   -----------------------------------------------------------------------------
+   The archive card is the homepage poster card (pro.51 in products.css): the
+   picture with its badges and the name over it, the like button, and a dark
+   footer with « À partir de » and the round cart button. The two blocks above
+   are copied from products.css (badge component, like button) because this
+   bundle does not load the homepage sheet; keep them in step with it.
+   ========================================================================== */
+body.delicat-native-archive-document .delicat-product-card.delicat-product-card--home{display:flex;flex-direction:column;border:0;border-radius:16px;background:#101334;box-shadow:0 2px 7px rgba(6,10,30,.1);overflow:hidden;contain:layout paint style;content-visibility:auto;contain-intrinsic-size:260px}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__media-wrap{position:relative;flex:none;overflow:hidden}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__media{display:block;position:relative;aspect-ratio:1/1;overflow:hidden;background:#090d26;isolation:isolate;color:#fff;text-decoration:none;-webkit-tap-highlight-color:transparent}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__media::after{content:"";position:absolute;top:28%;right:0;bottom:0;left:0;background:linear-gradient(transparent,rgba(4,6,18,.2) 36%,rgba(4,6,18,.88));z-index:1;pointer-events:none}
+/* 9.7.7: the picture fills its square whatever else asks for height:auto (app-polish's image-shift guard does, and
+   wins on order). A lazy picture with sizes="auto" is size-contained by the browser itself, so with height:auto it
+   was drawn 1500px tall (WordPress's stand-in height) in a 183px square: every card after the first looked zoomed. */
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__image{position:absolute;top:0;left:0;display:block;width:100%;height:100%!important;aspect-ratio:auto;object-fit:cover;margin:0!important;border-radius:0;transform:none!important;transition:none!important}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__poster-title{position:absolute;z-index:2;bottom:10px;left:10px;right:10px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;margin:0!important;padding:0!important;color:#fff!important;font-size:clamp(12px,3.3vw,16px)!important;font-weight:750!important;line-height:1.3!important;letter-spacing:0!important;text-shadow:0 1px 3px rgba(0,0,0,.4);text-align:left;overflow-wrap:anywhere}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-badge--status{top:auto;bottom:58px;left:8px;max-width:calc(100% - 16px);min-height:22px;padding:4px 7px;font-size:10px;line-height:1.2;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__body{display:flex;flex:0 0 auto;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:space-between;gap:4px;min-height:52px;padding:4px 7px 4px 10px;background:#101334;text-align:left}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__price{display:flex;flex:1 1 0;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;width:auto;margin:0;color:#93c5fd!important;font-size:inherit!important;font-weight:780;line-height:1.2;white-space:normal;overflow:visible}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__price>span{color:#c6c9db;font-size:9px;font-weight:560;line-height:1.2}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__price strong{max-width:100%;color:#93c5fd;font-size:clamp(12px,3.5vw,17px);line-height:1.2;overflow-wrap:anywhere}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__soldout{flex:none;padding:3px 6px;border-radius:999px;background:rgba(255,255,255,.12);color:#fecaca;font-size:9px;font-weight:700;line-height:1.1}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta{display:inline-flex;flex:0 0 44px;align-items:center;justify-content:center;width:44px;height:44px;min-height:44px;margin:0 0 0 auto;padding:0;border-radius:12px;background:transparent;color:#93c5fd;-webkit-tap-highlight-color:transparent}
+html[data-delicat-theme="dark"] body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta{background:transparent}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta svg,body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta svg path{width:21px;height:21px;flex:none;fill:currentColor;stroke:none}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta svg path{width:auto;height:auto}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta:focus-visible,body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__media:focus-visible{outline:2px solid #93c5fd;outline-offset:-3px}
+body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__media:active,body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__cta:active{opacity:.82}
+@media(max-width:360px){body.delicat-native-archive-document .delicat-product-card--home .delicat-product-card__body{padding:5px}}

@@ -1,0 +1,9 @@
+{
+  "name": "delicat-builder-tools",
+  "private": true,
+  "description": "Release build for the Delicat Builder V9 WordPress plugin (engine modules, CSS bundles, manifests).",
+  "type": "module",
+  "dependencies": {
+    "esbuild": "0.24.2"
+  }
+}

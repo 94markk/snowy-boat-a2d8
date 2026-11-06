@@ -1,0 +1,257 @@
+// node reviews-980.cjs <base> <expected.json> — STAGING ONLY. Delicat Builder 9.8.0 (TR-01): review figures.
+// Run `php reviews-setup.php <site-dir> <expected.json>` first; it counts the reviews with plain WordPress calls.
+// Usage: node reviews-980.cjs <base> <expected.json> <site-dir>
+// Checks, at phone and desktop size, light and dark:
+//  1. the rating block shows the computed store average and count, never the hand-typed 4.8 / 219 « AVIS VÉRIFIÉS »;
+//  2. product reviews are stated apart (average, count, verified buyers) with a link to the review policy;
+//  3. the stars are filled to the real average;
+//  4. the two sample lines the plugin used to ship are gone; a typed line stays, without the tick;
+//  5. the « Achat vérifié » tick marks exactly the reviews of buyers (paid order / verified product review);
+//  6. pending, unrated, draft-product reviews never show; the summary can be hidden; nothing scrolls sideways;
+//  7. the summary text keeps WCAG AA contrast on its card;
+//  8. the policy page no longer carries « 4,8 sur 81 »;
+//  9. a customer with no paid order is told so before writing (popup) and cannot post; a buyer can;
+// 10. the figures follow real changes on their own: a review approved / put back, a product unpublished / back.
+// 11. helpful votes: one per customer (a repeat does not count twice), switch and remove, kept after reload,
+//     not on one's own review, guests asked to sign in;
+// 12. on a phone: the review form opens inside the screen and closes cleanly; « Voir tous les avis » lists the
+//     reviews; the product page and the sheet show the product average rounded down, like the homepage.
+// Averages are shown rounded down (« sans arrondi favorable »); a review stored with duplicate rating/verified rows
+// counts once (fixture in reviews-setup.php).
+const fs = require('fs');
+const { execFileSync } = require('child_process');
+const site = process.argv[4] || '';
+const mutate = (action, id) => JSON.parse(execFileSync('php', ['-d', 'memory_limit=512M', __dirname + '/reviews-mutate.php', site, action, String(id || '')], { encoding: 'utf8' }).trim().split('\n').pop());
+const { chromium } = require('playwright');
+const base = process.argv[2] || 'https://localhost:8943';
+const want = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+if (!/localhost|127\.0\.0\.1/.test(base)) { console.error('refusing: not a staging address'); process.exit(3); }
+
+const results = [];
+const check = (name, ok, detail = '') => { results.push(!!ok); console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`); };
+const TICKED = ['RV STORE BUYER FIVE', 'RV STORE BUYER TWO', 'RV PRODUCT VERIFIED FIVE', 'RV PRODUCT VERIFIED FOUR'];
+const UNTICKED = ['RV STORE NOBUY FOUR', 'RV PRODUCT UNVERIFIED FOUR', 'RV TYPED LINE'];
+const NEVER = ['JEAN-MARC', 'MIKAËLL', 'RV PRODUCT UNRATED', 'RV PRODUCT HELD ONE', 'RV PRODUCT ON DRAFT', 'RV STORE PENDING ONE', 'RV PRODUCT UNVERIFIED THREE'];
+
+const contrastOf = (page, sel) => page.evaluate((sel) => {
+  const parse = (c) => { const m = c && c.match(/rgba?\(([^)]+)\)/); if (!m) return null; const v = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return { r: v[0], g: v[1], b: v[2], a: v.length > 3 ? v[3] : 1 }; };
+  const lum = (c) => { const f = (x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4); }; return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b); };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const blend = (t, u) => ({ r: t.r * t.a + u.r * (1 - t.a), g: t.g * t.a + u.g * (1 - t.a), b: t.b * t.a + u.b * (1 - t.a), a: 1 });
+  const el = document.querySelector(sel);
+  if (!el) return null;
+  // every candidate background under the text: solid colours, and each stop of a gradient (worst case wins)
+  let unders = [{ r: 255, g: 255, b: 255, a: 1 }];
+  const layers = [];
+  for (let e = el; e; e = e.parentElement) {
+    const cs = getComputedStyle(e);
+    const stops = cs.backgroundImage.includes('gradient') ? (cs.backgroundImage.match(/rgba?\([^)]+\)/g) || []).map(parse).filter(Boolean) : [];
+    const solid = parse(cs.backgroundColor);
+    if (stops.length) layers.push(stops);
+    if (solid && solid.a > 0) layers.push([solid]);
+    if ((solid && solid.a >= 0.99) || (stops.length && stops.every((s) => s.a >= 0.99))) break;
+  }
+  for (const stops of layers.reverse()) { const next = []; for (const s of stops) for (const u of unders) next.push(blend(s, u)); unders = next; }
+  const fg = parse(getComputedStyle(el).color);
+  return Math.min(...unders.map((u) => ratio(fg.a < 1 ? blend(fg, u) : fg, u)));
+}, sel);
+
+async function login(browser, who) {
+  const ctx = await browser.newContext({ ignoreHTTPSErrors: true, ...PHONE });
+  const p = await ctx.newPage();
+  await p.goto(base + '/wp-login.php');
+  await p.fill('#user_login', who);
+  await p.fill('#user_pass', want.users.pass);
+  await p.click('#wp-submit');
+  // signed in once WordPress sets its logged-in cookie (the redirect target varies with the Identity plugin's flow)
+  for (let i = 0; i < 60 && !(await ctx.cookies()).some((c) => c.name.startsWith('wordpress_logged_in_')); i++) await p.waitForTimeout(250);
+  await p.waitForLoadState('load').catch(() => {});
+  if (!/localhost:\d+\/(?!wp-login)/.test(p.url())) await p.goto(base + '/', { waitUntil: 'load' });
+  return { ctx, p };
+}
+
+const prompt = (p) => p.evaluate(async (base) => (await (await fetch(base + '/wp-admin/admin-ajax.php?action=delicat_builder_v9_review_prompt', { credentials: 'same-origin' })).json()).data, base);
+
+const votes = (p, id) => p.evaluate(async ({ base, id }) => (await (await fetch(base + '/wp-admin/admin-ajax.php?action=delicat_builder_v9_review_votes&ids=' + id, { credentials: 'same-origin' })).json()).data, { base, id });
+const vote = (p, id, v) => p.evaluate(async ({ base, id, v }) => {
+  const ajax = base + '/wp-admin/admin-ajax.php';
+  const st = await (await fetch(ajax + '?action=delicat_builder_v9_review_votes&ids=' + id, { credentials: 'same-origin' })).json();
+  const body = new URLSearchParams({ action: 'delicat_builder_v9_review_vote', nonce: (st.data && st.data.nonce) || '', review: String(id), vote: v });
+  const r = await fetch(ajax, { method: 'POST', credentials: 'same-origin', body });
+  return { status: r.status, body: await r.json() };
+}, { base, id, v });
+const PHONE = { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
+
+const submit = (p, name) => p.evaluate(async ({ base, name }) => {
+  const ajax = base + '/wp-admin/admin-ajax.php';
+  const prompt = await (await fetch(ajax + '?action=delicat_builder_v9_review_prompt', { credentials: 'same-origin' })).json();
+  const body = new URLSearchParams({ action: 'delicat_builder_v9_review_submit', nonce: prompt.data.nonce, rating: '4', quote: 'Test de l’envoi d’un avis depuis la fenêtre.', city: 'Jacmel', name });
+  const r = await fetch(ajax, { method: 'POST', credentials: 'same-origin', body });
+  return { status: r.status, body: await r.json() };
+}, { base, name });
+
+(async () => {
+  const browser = await chromium.launch();
+  for (const [vw, vh] of [[390, 844], [1280, 900]]) {
+    for (const scheme of ['light', 'dark']) {
+      const tag = `${vw}px ${scheme}`;
+      const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, isMobile: vw < 500, hasTouch: vw < 500, colorScheme: scheme, ignoreHTTPSErrors: true });
+      const page = await ctx.newPage();
+      await page.goto(`${base}/reviews-home/`, { waitUntil: 'load' });
+      await page.waitForTimeout(scheme === 'dark' ? 700 : 150);
+      // the dark-mode rules are keyed on the site's theme attribute: make sure it is really on
+      const theme = await page.evaluate(() => document.documentElement.getAttribute('data-delicat-theme') || '');
+      check(`${tag} site theme is ${scheme}`, scheme === 'dark' ? theme === 'dark' : theme !== 'dark', theme);
+      const r = await page.evaluate(() => {
+        const box = document.querySelector('.delicat-testimonials__rating');
+        const stars = box && box.querySelector('.delicat-testimonials__rating-stars');
+        const note = box && box.querySelector('.delicat-testimonials__rating-note');
+        const link = note && note.querySelector('a');
+        const fill = box && box.querySelector('.delicat-testimonials__rating-fill');
+        const cards = [...document.querySelectorAll('.delicat-testimonials__mcard[role="listitem"]')].map((c) => ({ name: c.querySelector('.delicat-testimonials__mid strong').textContent.trim(), tick: !!c.querySelector('.delicat-testimonials__mcheck'), tickLabel: (c.querySelector('.delicat-testimonials__mcheck') || { getAttribute: () => '' }).getAttribute('aria-label') }));
+        return {
+          value: box ? box.querySelector('strong').textContent.trim() : null,
+          aria: stars ? stars.getAttribute('aria-label') : '',
+          fillRatio: stars && fill ? fill.getBoundingClientRect().width / stars.firstElementChild.getBoundingClientRect().width : -1,
+          label: box ? box.querySelector('.delicat-testimonials__rating-label').textContent.trim() : '',
+          note: note ? note.textContent.trim() : '',
+          href: link ? link.href : '',
+          text: document.querySelector('.delicat-testimonials').innerText,
+          html: document.querySelector('.delicat-testimonials').innerHTML,
+          cards,
+          sideways: document.documentElement.scrollWidth > window.innerWidth + 1,
+          boxRight: box ? box.getBoundingClientRect().right : 0,
+          vw: window.innerWidth,
+        };
+      });
+      // 1. computed store figures, never the typed ones
+      check(`${tag} average is the store reviews' mean`, r.value === want.store.average, `${r.value} vs ${want.store.average}`);
+      check(`${tag} count is the published store reviews`, r.label === `${want.store.count} avis sur la boutique`, r.label);
+      check(`${tag} no hand-typed 4.8 / 219 / « AVIS VÉRIFIÉS »`, !/219|AVIS VÉRIFIÉS|\b4\.8\b/i.test(r.text), r.text.slice(0, 120));
+      // 2. product reviews apart, with the policy link
+      check(`${tag} product reviews stated apart`, r.note.includes(`${want.products.average}/5 sur ${want.products.count} avis`) && r.note.includes(`dont ${want.products.verified} achats vérifiés`), r.note);
+      check(`${tag} link to the review policy`, r.href === want.policy, r.href);
+      // 3. stars filled to the real average
+      check(`${tag} stars filled to the average`, Math.abs(r.fillRatio - want.store.raw / 5) < 0.03 && r.aria.includes(want.store.average), `${r.fillRatio.toFixed(3)} vs ${(want.store.raw / 5).toFixed(3)}`);
+      // 4/5/6. cards
+      const names = r.cards.map((c) => c.name);
+      const never = NEVER.filter((n) => r.text.includes(n));
+      check(`${tag} shipped samples and ineligible reviews never shown`, !never.length, never.join(', '));
+      // the « RV SHEET n » reviews are verified buyers when n is odd (reviews-setup.php)
+      const ticked = (n) => TICKED.includes(n) || /^RV SHEET [1357]$/.test(n);
+      const wrongTick = r.cards.filter((c) => /^RV /.test(c.name) && ticked(c.name) !== c.tick).map((c) => `${c.name}:${c.tick}`);
+      const missing = TICKED.concat(UNTICKED).filter((n) => !names.includes(n));
+      check(`${tag} « Achat vérifié » tick only on buyers`, !wrongTick.length && !missing.length && r.cards.filter((c) => c.tick).every((c) => c.tickLabel === 'Achat vérifié'), wrongTick.concat(missing.map((m) => 'missing ' + m)).join(', '));
+      check(`${tag} no sideways scroll, summary inside the screen`, !r.sideways && r.boxRight <= r.vw + 1, `right ${r.boxRight} / ${r.vw}`);
+      // 7. contrast
+      const cNote = await contrastOf(page, '.delicat-testimonials__rating-note');
+      const cLabel = await contrastOf(page, '.delicat-testimonials__rating-label');
+      const cLink = await contrastOf(page, '.delicat-testimonials__rating-note a');
+      check(`${tag} summary text contrast >= 4.5`, cNote >= 4.5 && cLabel >= 4.5 && cLink >= 4.5, `note ${cNote && cNote.toFixed(2)}, label ${cLabel && cLabel.toFixed(2)}, link ${cLink && cLink.toFixed(2)}`);
+      if (vw === 390) await page.locator('.delicat-testimonials__rating').screenshot({ path: `${require('os').tmpdir()}/rating-${scheme}.png` }).catch(() => {});
+      // 6. hidden summaries
+      for (const slug of ['reviews-hidden', 'reviews-off']) {
+        await page.goto(`${base}/${slug}/`, { waitUntil: 'load' });
+        const has = await page.evaluate(() => [!!document.querySelector('.delicat-testimonials'), !!document.querySelector('.delicat-testimonials__rating')]);
+        check(`${tag} ${slug}: rail shown, summary hidden`, has[0] && !has[1]);
+      }
+      await ctx.close();
+    }
+  }
+  // 8. policy page
+  {
+    const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+    const page = await ctx.newPage();
+    await page.goto(want.policy, { waitUntil: 'load' });
+    const t = await page.evaluate(() => document.body.innerText);
+    check('policy page has no hand-written figures', !/4,8 sur 81|81 avis/.test(t) && /comptés séparément/.test(t));
+    await ctx.close();
+  }
+  // 9. who may post
+  {
+    const { ctx, p } = await login(browser, want.users.nobuy);
+    const pr = await prompt(p);
+    check('customer without a paid order is not invited', pr.can_review === false && pr.due === false, JSON.stringify(pr));
+    await p.goto(want.product_url, { waitUntil: 'load' });
+    await p.click('.dnp-reviews-btn');
+    const said = await p.waitForSelector('.dlc-review-title', { timeout: 8000 }).then((h) => h.textContent()).catch(() => '');
+    const form = await p.$('.dlc-review-star');
+    check('the review button tells them first (no form to fill in)', /réservés aux clients/.test(said) && !form, said);
+    const res = await submit(p, 'RV_NOBUY');
+    check('customer without a paid order cannot post a review', res.status === 403 && /déjà passé une commande/.test(res.body.data.message), `${res.status} ${JSON.stringify(res.body)}`);
+    await ctx.close();
+  }
+  {
+    const { ctx, p } = await login(browser, want.users.buyer);
+    const pr = await prompt(p);
+    check('buyer may review', pr.can_review === true, JSON.stringify(pr));
+    const res = await submit(p, 'RV_BUYER2');
+    check('buyer can post a review (held for moderation)', res.status === 200 && res.body.success === true, `${res.status} ${JSON.stringify(res.body)}`);
+    await ctx.close();
+  }
+  // 11. helpful votes
+  {
+    const id = want.ids.top;
+    const a = await login(browser, want.users.nobuy);
+    const up1 = await vote(a.p, id, 'up');
+    const up2 = await vote(a.p, id, 'up');
+    const kept = await votes(a.p, id);
+    check('a vote counts once, even sent twice', up1.status === 200 && up1.body.data.up === 1 && up2.body.data.up === 1, `${JSON.stringify(up1.body.data)} then ${JSON.stringify(up2.body.data)}`);
+    check('the vote is kept (read back on a new request)', kept.mine && kept.mine[String(id)] === 1 && kept.counts[String(id)].up === 1, JSON.stringify(kept));
+    const down = await vote(a.p, id, 'down');
+    const none = await vote(a.p, id, 'none');
+    check('a vote can be switched and removed', down.body.data.up === 0 && down.body.data.down === 1 && none.body.data.up === 0 && none.body.data.down === 0, `${JSON.stringify(down.body.data)} / ${JSON.stringify(none.body.data)}`);
+    await vote(a.p, id, 'up');
+    const b = await login(browser, want.users.buyer);
+    const second = await vote(b.p, id, 'up');
+    check('a second customer adds one', second.body.data && second.body.data.up === 2, JSON.stringify(second.body));
+    const o = await login(browser, want.users.owner);
+    const own = await vote(o.p, id, 'up');
+    check('no vote on one\'s own review', own.status === 403 && own.body.data.own === true, `${own.status} ${JSON.stringify(own.body)}`);
+    const g = await browser.newContext({ ignoreHTTPSErrors: true });
+    const gp = await g.newPage();
+    await gp.goto(base + '/', { waitUntil: 'load' });
+    const guest = await vote(gp, id, 'up');
+    check('guests are asked to sign in', guest.status === 401 && guest.body.data.login === true, `${guest.status} ${JSON.stringify(guest.body)}`);
+    // 12. on a phone
+    await b.p.goto(want.product_url, { waitUntil: 'load' });
+    const avg = await b.p.$eval('.dnp-reviews-avg', (e) => e.textContent.trim()).catch(() => '');
+    check('product page average rounded down', avg === want.product_average, `${avg} vs ${want.product_average} (exact ${want.product_raw})`);
+    await b.p.click('.dnp-reviews-btn');
+    const form = await b.p.waitForSelector('.dlc-review-star', { timeout: 8000 }).then(() => true).catch(() => false);
+    const box = await b.p.evaluate(() => { const d = document.querySelector('.dlc-review-dialog'); const r = d.getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, b: r.bottom, w: innerWidth, h: innerHeight }; });
+    check('review form opens inside the phone screen', form && box.l >= 0 && box.r <= box.w + 1 && box.t >= 0 && box.b <= box.h + 1, JSON.stringify(box));
+    await b.p.click('.dlc-review-dialog .dlc-review-close');
+    await b.p.waitForTimeout(700);
+    const closed = await b.p.evaluate(() => !document.body.classList.contains('dlc-review-modal-open') && !document.querySelector('.dlc-review-overlay.is-open'));
+    check('the form closes and gives the page back', closed);
+    await b.p.goto(want.sheet_url, { waitUntil: 'load' });
+    const sheetAvg = await b.p.$eval('.dnp-reviews-avg', (e) => e.textContent.trim()).catch(() => '');
+    check('a second product page, average rounded down too', sheetAvg === want.sheet_average, `${sheetAvg} vs ${want.sheet_average}`);
+    await b.p.click('[data-dlc-reviews-all]');
+    const items = await b.p.waitForSelector('.dlc-rv-item', { timeout: 8000 }).then(() => b.p.$$eval('.dlc-rv-item', (l) => l.length)).catch(() => 0);
+    const score = await b.p.$eval('.dlc-rv-score strong', (e) => e.textContent.trim()).catch(() => '');
+    check('« Voir tous les avis » lists the reviews with the same average', items > 0 && score.replace(',', '.') === want.sheet_average.replace(',', '.'), `${items} reviews, average ${score}`);
+    for (const c of [a, b, o]) await c.ctx.close();
+    await g.close();
+  }
+  await browser.close();
+  // 10. the figures follow real changes (WordPress hooks only; no manual cache flush)
+  if (site) {
+    const base0 = mutate('stats');
+    check('figures before the changes match the independent count', base0.store.count === want.store.count && base0.products.count === want.products.count && base0.products.verified === want.products.verified, JSON.stringify(base0));
+    const up = mutate('publish', want.ids.pending);
+    check('approving a store review updates the count', up.store.count === want.store.count + 1, JSON.stringify(up.store));
+    const back = mutate('unpublish', want.ids.pending);
+    check('putting it back to pending updates it again', back.store.count === want.store.count, JSON.stringify(back.store));
+    const hidden = mutate('hide-product', want.ids.product);
+    check('unpublishing a reviewed product drops its reviews', hidden.products.count < want.products.count && hidden.products.verified < want.products.verified, JSON.stringify(hidden.products));
+    const shown = mutate('show-product', want.ids.product);
+    check('publishing it again brings them back', shown.products.count === want.products.count && shown.products.verified === want.products.verified, JSON.stringify(shown.products));
+  } else {
+    check('site directory given for the change checks (4th argument)', false);
+  }
+  const passed = results.filter(Boolean).length;
+  console.log(`\n${passed}/${results.length} passed`);
+  process.exit(passed === results.length ? 0 : 1);
+})();
