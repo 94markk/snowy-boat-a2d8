@@ -66,7 +66,7 @@ final class Delicat_Builder_V9_SEO_Index {
 			return self::$map;
 		}
 		$cached = get_transient( self::CACHE );
-		if ( is_array( $cached ) && isset( $cached['posts'], $cached['terms'], $cached['paths'], $cached['supplier_auto'] ) ) {
+		if ( is_array( $cached ) && isset( $cached['posts'], $cached['terms'], $cached['paths'], $cached['targets'], $cached['supplier_auto'] ) ) {
 			return self::$map = $cached;
 		}
 		$reco      = self::recommend();
@@ -86,22 +86,34 @@ final class Delicat_Builder_V9_SEO_Index {
 				$terms[ (int) $id ] = array( $state, $row[1], $row[2] ?? '' );
 			}
 		}
-		/* The address of every hidden or redirected item, so menus, chips and breadcrumbs test a link without a query. */
-		$paths = array();
+		/* The address of every hidden or redirected item (and where a redirected one leads), so menus, chips and
+		 * breadcrumbs test a link without a query. */
+		$paths   = array();
+		$targets = array();
 		foreach ( $posts as $id => $row ) {
-			$paths[ self::path( (string) get_permalink( $id ) ) ] = $row[0];
+			$path           = self::path( (string) get_permalink( $id ) );
+			$paths[ $path ] = $row[0];
+			if ( self::REDIRECT === $row[0] ) {
+				$targets[ $path ] = home_url( '/' );
+			}
 		}
 		if ( $terms ) {
 			$found = get_terms( array( 'include' => array_keys( $terms ), 'hide_empty' => false, 'taxonomy' => array( 'product_cat', 'category', 'product_tag' ) ) );
 			foreach ( is_array( $found ) ? $found : array() as $term ) {
 				$link = $term instanceof WP_Term ? get_term_link( $term ) : '';
-				if ( is_string( $link ) && '' !== $link && isset( $terms[ (int) $term->term_id ] ) ) {
-					$paths[ self::path( $link ) ] = $terms[ (int) $term->term_id ][0];
+				if ( ! is_string( $link ) || '' === $link || ! isset( $terms[ (int) $term->term_id ] ) ) {
+					continue;
+				}
+				$row            = $terms[ (int) $term->term_id ];
+				$path           = self::path( $link );
+				$paths[ $path ] = $row[0];
+				if ( self::REDIRECT === $row[0] ) {
+					$targets[ $path ] = self::resolve_target( $term, (string) $row[2], $terms );
 				}
 			}
 		}
-		unset( $paths[''], $paths['/'] );
-		self::$map = array( 'posts' => $posts, 'terms' => $terms, 'paths' => $paths, 'supplier_auto' => (int) $reco['supplier_auto'] );
+		unset( $paths[''], $paths['/'], $targets[''], $targets['/'] );
+		self::$map = array( 'posts' => $posts, 'terms' => $terms, 'paths' => $paths, 'targets' => $targets, 'supplier_auto' => (int) $reco['supplier_auto'] );
 		set_transient( self::CACHE, self::$map, 12 * HOUR_IN_SECONDS );
 		return self::$map;
 	}
@@ -374,6 +386,23 @@ final class Delicat_Builder_V9_SEO_Index {
 		return self::map()['paths'][ self::path( $url ) ] ?? self::SHOW;
 	}
 
+	/**
+	 * A menu entry's address as visitors should get it: unchanged, the real page a copy stands for (a category
+	 * repeating one product leads to that product), or null when the entry only led to a fake page or a supplier
+	 * name (it would land on the home page or the shop anyway).
+	 */
+	public static function menu_link( string $url ): ?string {
+		if ( self::REDIRECT !== self::url_state( $url ) ) {
+			return $url;
+		}
+		$to = (string) ( self::map()['targets'][ self::path( $url ) ] ?? '' );
+		$dead = array( self::path( home_url( '/' ) ) );
+		if ( function_exists( 'wc_get_page_permalink' ) ) {
+			$dead[] = self::path( (string) wc_get_page_permalink( 'shop' ) );
+		}
+		return '' === $to || in_array( self::path( $to ), $dead, true ) ? null : $to;
+	}
+
 	public static function bare_host( string $host ): string {
 		return (string) preg_replace( '/^www\./', '', strtolower( $host ) );
 	}
@@ -416,7 +445,12 @@ final class Delicat_Builder_V9_SEO_Index {
 		if ( ! $object instanceof WP_Term ) {
 			return '';
 		}
-		$hint = (string) ( self::map()['terms'][ (int) $object->term_id ][2] ?? '' );
+		$terms = self::map()['terms'];
+		return self::resolve_target( $object, (string) ( $terms[ (int) $object->term_id ][2] ?? '' ), $terms );
+	}
+
+	/** @param array<int,array> $terms the states being built or cached (an ancestor that is « show » can be the target). */
+	private static function resolve_target( WP_Term $object, string $hint, array $terms ): string {
 		if ( 0 === strpos( $hint, 'keeper:' ) ) {
 			$keeper = get_term( (int) substr( $hint, 7 ), $object->taxonomy );
 			$link   = $keeper instanceof WP_Term ? get_term_link( $keeper ) : '';
@@ -433,7 +467,7 @@ final class Delicat_Builder_V9_SEO_Index {
 				return (string) get_permalink( $only );
 			}
 			foreach ( get_ancestors( (int) $object->term_id, 'product_cat', 'taxonomy' ) as $ancestor ) {
-				if ( self::SHOW === self::term_state( (int) $ancestor ) ) {
+				if ( ! isset( $terms[ (int) $ancestor ] ) ) {
 					$link = get_term_link( (int) $ancestor, 'product_cat' );
 					if ( is_string( $link ) ) {
 						return $link;

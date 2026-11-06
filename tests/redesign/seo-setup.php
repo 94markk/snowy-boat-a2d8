@@ -194,10 +194,11 @@ update_option( 'blog_public', '1' ); // the test site normally asks search engin
 $menu_before = isset( $prev['restore'] ) && ! empty( $prev['pending'] ) ? ( $prev['restore']['menu'] ?? null ) : get_option( 'dsb_menu_builder_items', null );
 $menu        = is_array( $menu_before ) && $menu_before ? $menu_before : ( function_exists( 'delicat_builder_v9_menu_menu_builder_default_items' ) ? delicat_builder_v9_menu_menu_builder_default_items() : array() );
 $entry       = static fn( string $title, string $url ): array => array( 'title' => $title, 'subtitle' => '', 'url' => $url, 'icon' => 'dashicons-star-filled', 'image' => '', 'color1' => '#2563eb', 'color2' => '#00004f', 'badge' => '', 'group' => 'main', 'visibility' => 'all' );
-$menu        = array_values( array_filter( (array) $menu, static fn( $it ) => ! in_array( $it['title'] ?? '', array( 'SEO entree test', 'SEO entree tutos', 'SEO entree fournisseur' ), true ) ) );
+$menu        = array_values( array_filter( (array) $menu, static fn( $it ) => ! in_array( $it['title'] ?? '', array( 'SEO entree test', 'SEO entree tutos', 'SEO entree fournisseur', 'SEO entree copie' ), true ) ) );
 $menu[]      = $entry( 'SEO entree test', '/test/' );
 $menu[]      = $entry( 'SEO entree fournisseur', '/product-category/delicat-digital/' );
 $menu[]      = $entry( 'SEO entree tutos', '/tutoriels/' );
+$menu[]      = $entry( 'SEO entree copie', '/product-category/copie-produit/' ); // a category repeating one product: leads to it
 update_option( 'dsb_menu_builder_items', $menu );
 $bump();
 

@@ -125,9 +125,14 @@ final class Delicat_Builder_V9_Drawer {
 			if ( function_exists( 'delicat_builder_v9_menu_menu_item_visible' ) && ! delicat_builder_v9_menu_menu_item_visible( $it ) ) {
 				continue;
 			}
-			/* 9.9.0: an entry to an address Delicat SEO redirects (a test page, a supplier category) goes. */
-			if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && '' !== (string) ( $it['url'] ?? '' ) && Delicat_Builder_V9_SEO_Index::REDIRECT === Delicat_Builder_V9_SEO_Index::url_state( (string) $it['url'] ) ) {
-				continue;
+			/* 9.9.0: an entry to a fake address Delicat SEO redirects (a test page, a supplier category) goes; an
+			 * entry to a copy (a category repeating one product) leads straight to the real page. */
+			if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && is_string( $it['url'] ?? null ) && '' !== $it['url'] ) {
+				$link = Delicat_Builder_V9_SEO_Index::menu_link( $it['url'] );
+				if ( null === $link ) {
+					continue;
+				}
+				$it['url'] = $link;
 			}
 			$out[] = $it;
 		}

@@ -1,30 +1,55 @@
-9.9.0 — Référencement Google : ce qui est proposé, les doublons, le fil d’Ariane (plan de confiance, SEO-02 à SEO-06)
+9.9.0 — Référencement Google : fausses adresses supprimées, catégories de tous les fournisseurs, doublons, fil d’Ariane (plan de confiance, SEO-02 à SEO-06)
 Contrôle du site en ligne le 6 novembre 2026 : le plan du site (wp-sitemap.xml) proposait à Google 127 adresses, dont des
-pages qui ne doivent jamais sortir dans une recherche, et des catégories en double.
-(1) Ne sont plus proposées à Google (balise « noindex » et retrait du plan du site), tout en restant accessibles
-normalement : les pages de connexion, d’inscription et de mot de passe oublié, « test » et « test-2 », la page de
-maintenance, « accueil » (modèle du thème), « mes-donnees », « delete-account », « free-fire-redeem », « sondaj »,
-« adm-free-fire », les pages vides (« comment-ca-marche », « bon-kliyan » sur le site en ligne) et l’article d’exemple
-« Hello world! » de WordPress.
-(2) Les catégories créées par le fournisseur sous « Delicat Digital » (une par produit, nommée comme le produit :
-« delicat-topup-c9e2614d39 » = « Free Fire (LATAM) ») faisaient concurrence aux fiches produits dans Google : elles ne
-sont plus proposées, ni « Uncategorized ». Les pages d’étiquettes produits (« jeux », « 🎮 jeux », « instant »…) non
-plus : elles répètent les catégories. Les étiquettes servent toujours aux badges.
-(3) « rewards-program » et « program-bon-kliyan » affichent le même écran : la première (utilisée par l’application)
-indique maintenant à Google que l’originale est « program-bon-kliyan » (celle des menus du site). Une boîte « Page
-originale » dans l’éditeur de page permet de faire de même pour d’autres doublons.
-(4) Fil d’Ariane : il ne passe plus par les catégories du fournisseur (« Accueil › Delicat Digital › Free Fire (LATAM) ›
-Free Fire (LATAM) » devient « Accueil › Free Fire (LATAM) »). Pour obtenir « Accueil › Jeux › Free Fire (LATAM) »,
-cochez aussi la catégorie « Jeux » sur la fiche du produit (WooCommerce → Produits → Modifier ou Modification rapide).
-Le fil d’Ariane visible (Native Product Builder → Sections → Fil d’Ariane, désactivé sur votre site) suit la même règle,
-et un seul fil d’Ariane est envoyé à Google, sans « &amp; » parasite.
-(5) Titres : le suffixe des produits était « Delicat Store » alors que WordPress ajoute déjà le nom du site, d’où
-« FREE FIRE PIN Delicat Store – Delicat Store ». Un suffixe qui répète le nom du site n’est plus ajouté.
-(6) Données pour Google : une fiche produit sans description n’envoie plus une description vide ; les liens vers vos
-profils (Facebook, TikTok, Instagram) sont envoyés sans les codes de suivi (?mibextid=, ?_r=, ?utm_source=…).
-(7) Delicat Builder → SEO, nouvelle partie « Ce que Google voit » : toutes les pages et catégories avec une case à
-cocher, la sélection recommandée déjà cochée. Tant que vous n’enregistrez pas, la recommandation s’applique ; vos choix
-enregistrés passent ensuite avant elle. Rien n’est supprimé.
+pages de test ou vides, les catégories techniques des fournisseurs et des catégories en double.
+Chaque page et chaque catégorie a maintenant un des trois états suivants :
+ - proposée à Google (comme avant) ;
+ - cachée de Google : elle s’ouvre toujours, mais porte « noindex » et sort du plan du site ;
+ - redirigée : ce n’est pas une vraie page. Visiteurs et Google arrivent directement (redirection 301) sur la vraie page, et
+   l’adresse disparaît du plan du site, des rubriques de la boutique et des raccourcis de recherche. Dans le menu latéral,
+   une entrée vers une page de test ou un nom de fournisseur disparaît ; une entrée vers une copie (catégorie qui répète
+   un produit) mène directement au produit.
+(1) Cachées de Google, toujours ouvertes : connexion, inscription, mot de passe oublié, maintenance, « mes-donnees »,
+« delete-account » (demandée par Google Play), « free-fire-redeem », « adm-free-fire ».
+(2) Redirigées vers l’accueil : « test », « test-2 », « accueil » (texte modèle du thème), « sample-page », l’article
+d’exemple « Hello world! » de WordPress et les pages vraiment vides (« comment-ca-marche », « bon-kliyan » sur le site en
+ligne). Une page n’est jamais jugée vide si elle a du texte, une image, un code court, un bloc, une mise en page
+Elementor ou Delicat Builder, un modèle, une sous-page, ou si une extension l’affiche (portefeuille, application,
+parrainage, revendeurs, bonus). « sondaj » reste proposée.
+(3) Catégories créées par les fournisseurs — tous, pas seulement Delicat Digital : une catégorie dont l’adresse contient un
+code machine (« delicat-topup-c9e2614d39 », « gp-9f3a7c21d0 »…) est redirigée vers son produit (ou vers sa vraie
+catégorie parente, sinon la boutique). Les catégories au nom d’un fournisseur (« Delicat Digital », « Direct Topup »,
+« EU Direct Topup », tout nom contenant « Direct Topup », « Topup API », « fournisseur » ou « supplier ») et celles qui
+regroupent ces catégories techniques sont redirigées vers la boutique. Un fournisseur ajouté demain est traité sans rien
+faire, dès que sa synchronisation crée ses catégories.
+(4) Doublons : une catégorie qui ne contient qu’un produit du même nom (« eFOOTBALL », « ONE STATE RP », « Poppo Live »)
+redirige vers ce produit ; deux catégories au même nom (« Réseaux sociaux » / « Reseaux Sociaux ») : celle qui a le plus
+de produits reste, l’autre y redirige ; « Uncategorized » redirige vers la boutique ; l’étiquette « 🎮 JEUX » redirige
+vers « JEUX ». Les pages d’étiquettes ne sont plus proposées (elles répètent les catégories ; les badges restent).
+Important : les produits gardent toutes leurs catégories. La synchronisation des fournisseurs, les prix revendeurs,
+l’assistant et les commandes ne changent pas ; seul ce que voient Google et les visiteurs change.
+(5) « rewards-program » et « program-bon-kliyan » affichent le même écran : la première (utilisée par l’application)
+reste ouverte et indique à Google que l’originale est « program-bon-kliyan ». La boîte « Page originale » de l’éditeur de
+page permet de faire de même pour d’autres doublons (adresse complète ou « /ma-page/ »).
+(6) Fil d’Ariane : il ne passe plus par les catégories des fournisseurs ni par les doublons (« Accueil › Delicat Digital
+› Free Fire (LATAM) › Free Fire (LATAM) » devient « Accueil › Free Fire (LATAM) »). Un seul fil d’Ariane est envoyé à
+Google sur les pages produits et catégories, sans « &amp; » parasite.
+(7) Titres : un suffixe produit qui répète le nom du site (« Delicat Store ») n’est plus ajouté : fini « FREE FIRE PIN
+Delicat Store – Delicat Store ».
+(8) Données pour Google : pas de description vide pour un produit sans description ; liens vers vos profils (Facebook,
+TikTok, Instagram) envoyés sans codes de suivi (?mibextid=, ?_r=, ?utm_source=…).
+(9) Conditions d’utilisation : le lien « programme revendeur » menait à « /programme-revendeur/ », une page qui n’existe
+pas sur le site en ligne (erreur 404). Il mène maintenant à la vraie page du programme revendeur (Delicat Resellers), ou à
+« Mon compte » si elle n’existe pas. Le texte des conditions n’a pas changé, seulement l’adresse du lien.
+(10) « sondaj » (page Elementor) affichait « [delicat_v8_hero] » en clair au-dessus du sondage : l’en-tête s’affiche de
+nouveau correctement.
+(11) Delicat Builder → SEO, partie « Ce que Google voit » : pour chaque page et catégorie, un choix « Recommandé » (la
+règle ci-dessus, affichée), « Proposée à Google », « Cachée de Google » ou « Redirigée ». Vos choix passent avant les
+règles ; « Recommandé » revient à la règle. Les catégories techniques des fournisseurs sont résumées sur une ligne. La
+liste « Produits sans vraie catégorie » montre les produits rangés seulement dans une catégorie de fournisseur : cochez-
+leur une vraie catégorie (Jeux, Gift Card, Abonnement…) pour qu’ils apparaissent dans les rayons et dans le fil
+d’Ariane. L’accueil, la boutique, le panier, la caisse, « Mon compte » et les pages légales restent toujours proposés.
+Vous (éditeurs) ouvrez toujours toutes les adresses, sans redirection, pour pouvoir les vérifier. Enregistrer vide les
+caches (LiteSpeed et Delicat).
 Déjà en place et vérifié sur le site en ligne : les adresses avec paramètres (tri, filtres, recherche) ne sont pas
 indexées, les fiches produits ont leur adresse canonique propre, les anciennes adresses redirigent (301), les produits
 et la pagination sont de vrais liens dans le HTML envoyé (pas de chargement uniquement en JavaScript).
