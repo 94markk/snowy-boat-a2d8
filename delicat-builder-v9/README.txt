@@ -5,7 +5,7 @@ Chaque page et chaque catégorie a maintenant un des trois états suivants :
  - proposée à Google (comme avant) ;
  - cachée de Google : elle s’ouvre toujours, mais porte « noindex » et sort du plan du site ;
  - redirigée : ce n’est pas une vraie page. Visiteurs et Google arrivent directement (redirection 301) sur la vraie page, et
-   l’adresse disparaît du plan du site, des rubriques de la boutique et des raccourcis de recherche. Dans le menu latéral,
+   l’adresse disparaît du plan du site et des rubriques de la boutique. Dans le menu latéral,
    une entrée vers une page de test ou un nom de fournisseur disparaît ; une entrée vers une copie (catégorie qui répète
    un produit) mène directement au produit.
 (1) Cachées de Google, toujours ouvertes : connexion, inscription, mot de passe oublié, maintenance, « mes-donnees »,
@@ -22,9 +22,10 @@ catégorie parente, sinon la boutique). Les catégories au nom d’un fournisseu
 regroupent ces catégories techniques sont redirigées vers la boutique. Un fournisseur ajouté demain est traité sans rien
 faire, dès que sa synchronisation crée ses catégories.
 (4) Doublons : une catégorie qui ne contient qu’un produit du même nom (« eFOOTBALL », « ONE STATE RP », « Poppo Live »)
-redirige vers ce produit ; deux catégories au même nom (« Réseaux sociaux » / « Reseaux Sociaux ») : celle qui a le plus
-de produits reste, l’autre y redirige ; « Uncategorized » redirige vers la boutique ; l’étiquette « 🎮 JEUX » redirige
+redirige vers ce produit ; deux catégories au même nom et au même niveau (« Réseaux sociaux » / « Reseaux Sociaux ») :
+celle qui a le plus de produits reste, l’autre y redirige (« iTunes › USA » et « PSN › USA » restent deux rayons) ; « Uncategorized » redirige vers la boutique ; l’étiquette « 🎮 JEUX » redirige
 vers « JEUX ». Les pages d’étiquettes ne sont plus proposées (elles répètent les catégories ; les badges restent).
+Une catégorie qui a de vraies sous-catégories n’est jamais redirigée, même si elle porte le nom d’un de ses produits.
 Important : les produits gardent toutes leurs catégories. La synchronisation des fournisseurs, les prix revendeurs,
 l’assistant et les commandes ne changent pas ; seul ce que voient Google et les visiteurs change.
 (5) « rewards-program » et « program-bon-kliyan » affichent le même écran : la première (utilisée par l’application)

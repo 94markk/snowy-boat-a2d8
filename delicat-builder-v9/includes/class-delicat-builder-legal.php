@@ -388,7 +388,8 @@ final class Delicat_Builder_V9_Legal {
 
 	/** 9.9.0: a conditions page the owner edited keeps the old link; point it at the real page when it is shown. */
 	public static function fix_reseller_link( $content ) {
-		if ( ! is_string( $content ) || false === strpos( $content, '/programme-revendeur/' ) || ! is_page( self::page_id( 'conditions' ) ) ) {
+		$page = self::page_id( 'conditions' );
+		if ( ! is_string( $content ) || $page <= 0 || false === strpos( $content, '/programme-revendeur/' ) || ! is_page( $page ) ) {
 			return $content;
 		}
 		return (string) preg_replace( '~href=(["\'])(?:https?://[^"\']*)?/programme-revendeur/\1~', 'href="' . esc_url( self::reseller_url() ) . '"', $content );

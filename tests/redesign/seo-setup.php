@@ -49,10 +49,22 @@ if ( 'save' === $action ) {
 	echo wp_json_encode( array( 'overrides' => $saved['seo_overrides'] ?? null, 'enabled' => $saved['enabled'] ?? null, 'suffix' => $saved['product_suffix'] ?? null ) ), "\n";
 	exit;
 }
-// « protect-front »: a stored choice to redirect the home page and the shop must be ignored
+// « grow-copy » / « shrink-copy »: a supplier sync (no Delicat SEO screen involved) puts a second product into the
+// category that repeated one product, then takes it out again; the redirect must follow at once
+if ( 'grow-copy' === $action || 'shrink-copy' === $action ) {
+	$saved = json_decode( (string) file_get_contents( $out ), true );
+	$copy  = get_term_by( 'slug', 'copie-produit', 'product_cat' );
+	'grow-copy' === $action
+		? wp_set_object_terms( (int) $saved['ids']['both'], array( (int) $copy->term_id ), 'product_cat', true )
+		: wp_remove_object_terms( (int) $saved['ids']['both'], array( (int) $copy->term_id ), 'product_cat' );
+	echo $action, "\n";
+	exit;
+}
+// « protect-front »: a stored choice to redirect the home page, the shop or a legal page must be ignored
 if ( 'protect-front' === $action ) {
+	$saved = json_decode( (string) file_get_contents( $out ), true );
 	$seo = (array) get_option( 'delicat_builder_v9_seo', array() );
-	$seo['seo_overrides'] = array( 'post' => array( (int) get_option( 'page_on_front' ) => 'redirect', (int) wc_get_page_id( 'shop' ) => 'redirect' ), 'term' => array() );
+	$seo['seo_overrides'] = array( 'post' => array( (int) get_option( 'page_on_front' ) => 'redirect', (int) wc_get_page_id( 'shop' ) => 'redirect', (int) $saved['ids']['conditions'] => 'redirect' ), 'term' => array() );
 	update_option( 'delicat_builder_v9_seo', $seo, false );
 	$bump();
 	echo "protect-front\n";
@@ -79,6 +91,7 @@ if ( 'admin' === $action ) {
 			'machine_summarised' => false === strpos( $html, 'delicat-topup-c9e2614d39</code>' ), // one line, not one row each
 			'orphans'   => false !== strpos( $html, 'Produits sans vraie catégorie' ) && false !== strpos( $html, esc_html( $saved['only_supplier']['name'] ) ),
 			'front'     => false === strpos( $html, '[choice_post][' . (int) get_option( 'page_on_front' ) . ']' ),
+			'legal'     => (int) $saved['ids']['conditions'] > 0 && false === strpos( $html, '[choice_post][' . (int) $saved['ids']['conditions'] . ']' ), // wp-admin does not load the legal module
 		)
 	), "\n";
 	exit;
@@ -122,6 +135,8 @@ $pages = array(
 	'tutoriels'          => seo_page( 'tutoriels', 'Tutoriels', 'Tutoriels vidéo : comment recharger Free Fire et payer avec MonCash.' ),
 	'elementor'          => seo_page( 'promo-elementor', 'Promo', '', array( '_elementor_data' => '[{"elType":"section","elements":[{"elType":"widget","widgetType":"heading","settings":{"title":"Promo du mois"}}]}]', '_elementor_edit_mode' => 'builder' ) ),
 	'block'              => seo_page( 'derniers-articles', 'Derniers articles', '<!-- wp:latest-posts /-->' ),
+	'group'              => seo_page( 'selection', 'Sélection', '<!-- wp:group --><div class="wp-block-group"><!-- wp:woocommerce/handpicked-products /--></div><!-- /wp:group -->' ),
+	'script'             => seo_page( 'formulaire-avis', 'Formulaire', '<div data-tf-widget="abc123"></div><script src="https://embed.example.test/next/embed.js"></script>' ),
 	'sondaj'             => seo_page( 'sondaj', 'sondaj', '<p>Sondage de la communauté Free Fire.</p>', array( '_elementor_data' => '[{"elType":"widget","widgetType":"shortcode","settings":{"shortcode":"[delicat_v8_hero]"}}]', '_elementor_edit_mode' => 'builder' ) ),
 );
 $hello = get_page_by_path( 'hello-world', OBJECT, 'post' );
@@ -141,10 +156,12 @@ function seo_term( string $slug, string $name, string $taxonomy, int $parent = 0
 }
 $games    = get_term_by( 'slug', 'jeux-recharges', 'product_cat' );
 $games_id = $games ? (int) $games->term_id : seo_term( 'jeux-recharges', 'Jeux & recharges', 'product_cat' );
-$old_cat  = get_term_by( 'slug', 'delicat-topup-c9e2614d39', 'product_cat' ); // earlier runs moved the first product there
-$ids      = get_posts( array( 'post_type' => 'product', 'post_status' => 'publish', 'numberposts' => 5, 'orderby' => 'ID', 'order' => 'ASC', 'fields' => 'ids', 'tax_query' => array( array( 'taxonomy' => 'product_cat', 'field' => 'term_id', 'terms' => array_filter( array( $games_id, $old_cat ? (int) $old_cat->term_id : 0 ) ), 'include_children' => false ) ) ) );
-if ( count( $ids ) < 5 ) { fwrite( STDERR, "need 5 products\n" ); exit( 4 ); }
-[ $only_supplier, $both, $gp_product, $social_a, $social_b ] = $ids;
+$direct   = seo_term( 'direct-topup', 'Direct Topup', 'product_cat' );
+$arena    = seo_term( 'arena-breakout', 'Arena Breakout', 'product_cat', $direct ); // a real shelf under a supplier name, as on the live site
+$old_cat  = get_term_by( 'slug', 'delicat-topup-c9e2614d39', 'product_cat' ); // earlier runs moved products out of « Jeux & recharges »
+$ids      = get_posts( array( 'post_type' => 'product', 'post_status' => 'publish', 'numberposts' => 7, 'orderby' => 'ID', 'order' => 'ASC', 'fields' => 'ids', 'tax_query' => array( array( 'taxonomy' => 'product_cat', 'field' => 'term_id', 'terms' => array_filter( array( $games_id, $old_cat ? (int) $old_cat->term_id : 0, $arena ) ), 'include_children' => false ) ) ) );
+if ( count( $ids ) < 7 ) { fwrite( STDERR, "need 7 products\n" ); exit( 4 ); }
+[ $only_supplier, $both, $gp_product, $social_a, $social_b, $arena_product, $shelf_product ] = $ids;
 
 // supplier 1, known name: Delicat Digital › one machine-made category per product
 $dd       = seo_term( 'delicat-digital', 'Delicat Digital', 'product_cat' );
@@ -154,11 +171,21 @@ $gp       = seo_term( 'gamepoint', 'GamePoint', 'product_cat' );
 $gp_one   = seo_term( 'gp-9f3a7c21d0', 'Blood Strike', 'product_cat', $gp );
 $gp_two   = seo_term( 'gp-4b8e0d1a77', 'COD Mobile', 'product_cat', $gp );
 // supplier 3, by its name only
-$direct   = seo_term( 'direct-topup', 'Direct Topup', 'product_cat' );
 // a category repeating its single product, two categories with the same name
 $copy     = seo_term( 'copie-produit', get_the_title( $only_supplier ), 'product_cat' );
 $social   = seo_term( 'reseaux-sociaux', 'Réseaux sociaux', 'product_cat' );
 $social2  = seo_term( 'reseaux-sociaux-2', 'Reseaux Sociaux', 'product_cat' );
+// same name, different parents: two shelves (« iTunes › USA », « PSN › USA »)
+$itunes   = seo_term( 'itunes', 'iTunes', 'product_cat' );
+$psn      = seo_term( 'psn', 'PSN', 'product_cat' );
+$usa1     = seo_term( 'usa-itunes', 'USA', 'product_cat', $itunes );
+$usa2     = seo_term( 'usa-psn', 'USA', 'product_cat', $psn );
+// a shelf named like its one direct product but with a sub-shelf full of others
+$shelf    = seo_term( 'rayon-parent', get_the_title( $shelf_product ), 'product_cat' );
+$subshelf = seo_term( 'rayon-enfant', 'Sous-rayon', 'product_cat', $shelf );
+// a real shelf where a supplier left two machine-made categories
+$stray1   = seo_term( 'dg-aa11bb22cc', 'Stray one', 'product_cat', $games_id );
+$stray2   = seo_term( 'dg-dd33ee44ff', 'Stray two', 'product_cat', $games_id );
 $tag      = seo_term( 'jeux', 'JEUX', 'product_tag' );
 $emoji    = seo_term( '%f0%9f%8e%ae-jeux', '🎮 JEUX', 'product_tag' );
 
@@ -170,6 +197,13 @@ wp_set_object_terms( $social_a, array( $social ), 'product_cat', true );
 wp_set_object_terms( $social_b, array( $social, $social2 ), 'product_cat', true );
 wp_set_object_terms( $social_a, array( $gp_two ), 'product_cat', true );
 wp_set_object_terms( $social_b, array( $gp_two ), 'product_cat', true );
+wp_set_object_terms( $arena_product, array( $arena ), 'product_cat' );               // only in the real shelf under « Direct Topup »
+wp_set_object_terms( $social_a, array( $usa1 ), 'product_cat', true );
+wp_set_object_terms( $social_b, array( $usa2 ), 'product_cat', true );
+wp_set_object_terms( $shelf_product, array( $shelf ), 'product_cat', true );
+wp_set_object_terms( $social_a, array( $subshelf ), 'product_cat', true );
+wp_set_object_terms( $social_b, array( $subshelf ), 'product_cat', true );
+wp_remove_object_terms( $both, array( (int) get_term_by( 'slug', 'copie-produit', 'product_cat' )->term_id ), 'product_cat' ); // an interrupted run
 wp_update_post( array( 'ID' => $only_supplier, 'post_excerpt' => '', 'post_content' => '' ) ); // no description, as on the live site
 
 // settings as on the live site: suffix = store name, profile links with tracking codes, no choices saved yet
@@ -241,6 +275,12 @@ $result = array(
 		'original'        => $link( $pages['program-bon-kliyan'] ),
 		'elementor page'  => $link( $pages['elementor'] ),
 		'block page'      => $link( $pages['block'] ),
+		'group block page' => $link( $pages['group'] ),
+		'script page'     => $link( $pages['script'] ),
+		'USA (iTunes)'    => $term( $usa1, 'product_cat' ),
+		'USA (PSN)'       => $term( $usa2, 'product_cat' ),
+		'shelf named like its product' => $term( $shelf, 'product_cat' ),
+		'real shelf under a supplier name' => $term( $arena, 'product_cat' ),
 		'sondaj'          => $link( $pages['sondaj'] ),
 		'games'           => $term( $games_id, 'product_cat' ),
 		'social keeper'   => $term( $social, 'product_cat' ),
@@ -256,7 +296,9 @@ $result = array(
 	'both'          => array( 'url' => $link( $both ), 'name' => get_the_title( $both ), 'games' => html_entity_decode( get_term( $games_id )->name, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ),
 	'site_name'     => get_bloginfo( 'name' ),
 	'chips_out'     => array( $term( $dd, 'product_cat' ), $term( $gp, 'product_cat' ), $term( $direct, 'product_cat' ), $term( $social2, 'product_cat' ) ),
-	'ids'           => array( 'login' => $pages['login'], 'test' => $pages['test'], 'tutoriels' => $pages['tutoriels'], 'social_copy' => $social2, 'only_supplier' => $only_supplier ),
+	'arena'         => array( 'url' => $link( $arena_product ), 'name' => get_the_title( $arena_product ), 'shelf' => 'Arena Breakout' ),
+	'copy'          => $term( $copy, 'product_cat' ),
+	'ids'           => array( 'login' => $pages['login'], 'test' => $pages['test'], 'tutoriels' => $pages['tutoriels'], 'social_copy' => $social2, 'only_supplier' => $only_supplier, 'both' => $both, 'conditions' => class_exists( 'Delicat_Builder_V9_Legal' ) ? Delicat_Builder_V9_Legal::page_id( 'conditions' ) : 0 ),
 	'editor_cookie' => array( 'name' => LOGGED_IN_COOKIE, 'value' => wp_generate_auth_cookie( $eid, $expire, 'logged_in' ) ),
 	'pending'       => 1,
 	'restore'       => array( 'seo' => $seo_before, 'show_breadcrumbs' => (int) ( $np_before['show_breadcrumbs'] ?? 0 ), 'blog_public' => $public_before, 'menu' => $menu_before ),

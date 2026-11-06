@@ -70,6 +70,8 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const r = await get(from);
     check(`${name}: 301 to the real page`, r.status === 301 && norm(r.location) === norm(to), `${r.status} ${r.location} (want ${to})`);
   }
+  const r301 = await api.get(want.redirected.test[0], { maxRedirects: 0 });
+  check('the 301 is not kept by browsers or caches (the choice can change)', /no-cache|no-store|max-age=0/.test(r301.headers()['cache-control'] || ''), r301.headers()['cache-control']);
   const asEditor = await page(want.redirected.test[0], editor);
   check('an editor still opens a redirected page (noindex)', asEditor.status === 200 && /noindex/.test(asEditor.robots), `${asEditor.status} [${asEditor.robots}]`);
   for (const [name, url] of Object.entries(want.indexed)) {
@@ -84,7 +86,7 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   check('the original is its own canonical', norm(orig.canonical) === norm(want.original), orig.canonical);
 
   // 4-5. product pages
-  for (const key of ['only_supplier', 'both']) {
+  for (const key of ['only_supplier', 'both', 'arena']) {
     const prod = want[key];
     const p = await page(prod.url);
     const crumbsLd = p.ld.filter((i) => i['@type'] === 'BreadcrumbList');
@@ -92,10 +94,10 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const names = crumbsLd.length ? crumbsLd[0].itemListElement.map((e) => e.name || (e.item && e.item.name) || '') : [];
     const visible = ((p.body.match(/<nav class="dnp-breadcrumb">([\s\S]*?)<\/nav>/) || [])[1] || '');
     const visibleText = visible.replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#8211;/g, '–').replace(/\s+/g, ' ').trim();
-    const supplier = /Delicat Digital|Free Fire \(LATAM\)|GamePoint|Direct Topup/;
+    const supplier = /Delicat Digital|Free Fire \(LATAM\)|GamePoint|Direct Topup|Stray/;
     check(`${key}: one Product and one BreadcrumbList`, products.length === 1 && crumbsLd.length === 1, `${products.length} / ${crumbsLd.length}`);
-    check(`${key}: breadcrumb data skips supplier categories and copies`, names.length >= 2 && !names.some((n) => supplier.test(n)) && names[names.length - 1] === prod.name && (key === 'only_supplier' ? names.length === 2 : names.includes(prod.games)), names.join(' > '));
-    check(`${key}: visible breadcrumb skips them too, with real links`, visibleText !== '' && !supplier.test(visibleText) && /<a [^>]*href="https?:\/\//.test(visible) && (key === 'only_supplier' ? visibleText.split(prod.name).length === 2 : visibleText.includes(prod.games)), visibleText);
+    check(`${key}: breadcrumb data skips supplier categories and copies`, names.length >= 2 && !names.some((n) => supplier.test(n)) && names[names.length - 1] === prod.name && (key === 'only_supplier' ? names.length === 2 : key === 'arena' ? names.length === 3 && names[1] === prod.shelf : names.includes(prod.games)), names.join(' > '));
+    check(`${key}: visible breadcrumb skips them too, with real links`, visibleText !== '' && !supplier.test(visibleText) && /<a [^>]*href="https?:\/\//.test(visible) && (key === 'only_supplier' ? visibleText.split(prod.name).length === 2 : visibleText.includes(key === 'arena' ? prod.shelf : prod.games)), visibleText);
     check(`${key}: no empty description in the Product data`, products.length === 1 && !(('description' in products[0]) && String(products[0].description).trim() === ''), JSON.stringify(products[0] && products[0].description));
     check(`${key}: title names the store once`, p.title.split(want.site_name).length - 1 <= 1, p.title);
     check(`${key}: name and price in the HTML as sent`, new RegExp('<h1[^>]*>\\s*' + esc(prod.name)).test(p.body) && /woocommerce-Price-amount|dnp-price|data-base-price="[^"]*\d/.test(p.body));
@@ -138,10 +140,17 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const loginAgain = await page(want.hidden.login);
   const testAgain = await get(want.redirected.test[0]);
   check('« Recommandé » goes back to the rules', /noindex/.test(loginAgain.robots) && testAgain.status === 301, `[${loginAgain.robots}] ${testAgain.status}`);
+  php('grow-copy');
+  const grown = await page(want.copy);
+  php('shrink-copy');
+  const shrunk = await get(want.copy);
+  check('a supplier sync that changes a category is followed at once (no stale redirect)', indexable(grown) && shrunk.status === 301, `${grown.status} [${grown.robots}] then ${shrunk.status}`);
   php('protect-front');
   const homeKept = await page(base + '/');
   const shopKept = await page(want.indexed.shop);
-  check('a choice can never redirect or hide the home page or the shop', indexable(homeKept) && indexable(shopKept), `${homeKept.status} ${shopKept.status} ${homeKept.location}`);
+  const cguKept = want.conditions ? await page(want.conditions) : { status: 0, robots: '' };
+  const sm3 = await sitemapUrls();
+  check('a choice can never redirect or hide the home page, the shop or a legal page', indexable(homeKept) && indexable(shopKept) && indexable(cguKept) && sm3.urls.has(norm(want.conditions)), `${homeKept.status} ${shopKept.status} ${cguKept.status} ${cguKept.location}`);
 
   php('restore');
   await api.dispose();

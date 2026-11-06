@@ -42,7 +42,7 @@ final class Delicat_Builder_V9_SEO_Index {
 	/** Top-level pages that are not real pages: sent to the home page. */
 	const FAKE_SLUGS = array( 'test', 'test-2', 'test-3', 'sample-page', 'page-exemple', 'accueil' );
 	/** Pages other plugins draw from their address with no content of their own: never « empty ». */
-	const PLUGIN_SLUGS = array( 'my-wallet', 'wallet', 'woo-wallet', 'mon-portefeuille', 'application', 'support', 'tutoriels', 'sondaj', 'rewards-program', 'program-bon-kliyan', 'echanges', 'free-fire-pin' );
+	const PLUGIN_SLUGS = array( 'my-wallet', 'wallet', 'woo-wallet', 'mon-portefeuille', 'portefeuille', 'application', 'support', 'tutoriels', 'sondaj', 'rewards-program', 'program-bon-kliyan', 'echanges', 'free-fire-pin' );
 	/** A page that prints the same screen as another: the second is the original. */
 	const DUPLICATES = array( 'rewards-program' => 'program-bon-kliyan' );
 	/** Supplier categories by slug (filterable); any other supplier is caught by the rules below. */
@@ -98,7 +98,8 @@ final class Delicat_Builder_V9_SEO_Index {
 			}
 		}
 		if ( $terms ) {
-			$found = get_terms( array( 'include' => array_keys( $terms ), 'hide_empty' => false, 'taxonomy' => array( 'product_cat', 'category', 'product_tag' ) ) );
+			$singles = self::single_products( array_keys( array_filter( $terms, static fn( $row ) => self::REDIRECT === $row[0] && 'product' === ( $row[2] ?? '' ) ) ) );
+			$found   = get_terms( array( 'include' => array_keys( $terms ), 'hide_empty' => false, 'taxonomy' => array( 'product_cat', 'category', 'product_tag' ) ) );
 			foreach ( is_array( $found ) ? $found : array() as $term ) {
 				$link = $term instanceof WP_Term ? get_term_link( $term ) : '';
 				if ( ! is_string( $link ) || '' === $link || ! isset( $terms[ (int) $term->term_id ] ) ) {
@@ -108,7 +109,7 @@ final class Delicat_Builder_V9_SEO_Index {
 				$path           = self::path( $link );
 				$paths[ $path ] = $row[0];
 				if ( self::REDIRECT === $row[0] ) {
-					$targets[ $path ] = self::resolve_target( $term, (string) $row[2], $terms );
+					$targets[ $path ] = self::resolve_target( $term, (string) $row[2], $terms, $singles );
 				}
 			}
 		}
@@ -152,6 +153,9 @@ final class Delicat_Builder_V9_SEO_Index {
 			foreach ( array( 'shop', 'cart', 'checkout', 'myaccount', 'terms' ) as $page ) {
 				$ids[] = (int) wc_get_page_id( $page );
 			}
+		}
+		if ( ! class_exists( 'Delicat_Builder_V9_Legal', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-legal.php' ); // not loaded in wp-admin
 		}
 		if ( class_exists( 'Delicat_Builder_V9_Legal', false ) ) {
 			foreach ( array_keys( Delicat_Builder_V9_Legal::documents() ) as $key ) {
@@ -213,13 +217,25 @@ final class Delicat_Builder_V9_SEO_Index {
 				}
 			}
 		}
+		/* WooCommerce rewrites category counts on the storefront (sub-categories included, visibility applied) but
+		 * not in wp-admin: the rules read the stored direct counts so they give the same answer everywhere. */
+		$count        = self::direct_counts( 'product_cat' );
 		$machine_kids = array();
-		foreach ( array_keys( $machine ) as $id ) {
-			$parent = (int) $by_id[ $id ]->parent;
-			if ( $parent > 0 ) {
+		$other_kids   = array();
+		foreach ( $by_id as $id => $term ) {
+			$parent = (int) $term->parent;
+			if ( $parent > 0 && isset( $machine[ $id ] ) ) {
 				$machine_kids[ $parent ] = ( $machine_kids[ $parent ] ?? 0 ) + 1;
+			} elseif ( $parent > 0 ) {
+				$other_kids[ $parent ] = true;
 			}
 		}
+		/* a group of supplier categories: two machine-made children or more, no real sub-shelf, and no more products
+		 * of its own than those children hold (a real shelf with two stray supplier categories keeps its address) */
+		$supplier_group = static function ( int $id ) use ( $machine_kids, $other_kids, $count ): bool {
+			$kids = (int) ( $machine_kids[ $id ] ?? 0 );
+			return $kids >= 2 && empty( $other_kids[ $id ] ) && (int) ( $count[ $id ] ?? 0 ) <= $kids;
+		};
 		$supplier_slugs = array_map( 'strval', (array) apply_filters( 'delicat_builder_v9_seo_supplier_categories', self::SUPPLIER_SLUGS ) );
 		$supplier_auto  = 0;
 		foreach ( $by_id as $id => $term ) {
@@ -227,7 +243,7 @@ final class Delicat_Builder_V9_SEO_Index {
 			if ( isset( $machine[ $id ] ) ) {
 				$terms[ $id ] = array( self::REDIRECT, 'catégorie créée par un fournisseur', 'product' );
 				$supplier_auto++;
-			} elseif ( in_array( $term->slug, $supplier_slugs, true ) || preg_match( self::SUPPLIER_NAME, $name . ' ' . $term->slug ) || ( $machine_kids[ $id ] ?? 0 ) >= 2 ) {
+			} elseif ( in_array( $term->slug, $supplier_slugs, true ) || preg_match( self::SUPPLIER_NAME, $name . ' ' . $term->slug ) || $supplier_group( (int) $id ) ) {
 				$terms[ $id ] = array( self::REDIRECT, 'nom d’un fournisseur, pas un rayon de la boutique', 'shop' );
 			}
 		}
@@ -235,20 +251,20 @@ final class Delicat_Builder_V9_SEO_Index {
 		if ( isset( $by_id[ $default ] ) && in_array( $by_id[ $default ]->slug, array( 'uncategorized', 'non-classe' ), true ) ) {
 			$terms[ $default ] = array( self::REDIRECT, 'catégorie par défaut de WooCommerce', 'shop' );
 		}
-		/* a category whose only product carries its name repeats that product */
+		/* a category whose only product carries its name repeats that product (not a parent: its sub-shelves stay) */
+		$singles = self::single_products( array_keys( array_filter( $count, static fn( $n ) => 1 === (int) $n ) ) );
 		foreach ( $by_id as $id => $term ) {
-			if ( isset( $terms[ $id ] ) || 1 !== (int) $term->count ) {
+			if ( isset( $terms[ $id ] ) || empty( $singles[ $id ] ) || ! empty( $other_kids[ $id ] ) || ! empty( $machine_kids[ $id ] ) ) {
 				continue;
 			}
-			$only = self::single_product( $id );
-			if ( $only && self::norm( get_the_title( $only ) ) === self::norm( $term->name ) ) {
+			if ( self::norm( get_the_title( $singles[ $id ] ) ) === self::norm( $term->name ) ) {
 				$terms[ $id ] = array( self::REDIRECT, 'répète le seul produit qu’elle contient', 'product' );
 			}
 		}
 		/* two categories (or two tags) with the same name: the busier, plainer one stays */
-		$terms += self::same_name_duplicates( array_diff_key( $by_id, $terms ) );
+		$terms += self::same_name_duplicates( array_diff_key( $by_id, $terms ), $count );
 		$tags   = get_terms( array( 'taxonomy' => 'product_tag', 'hide_empty' => false ) );
-		$terms += self::same_name_duplicates( is_array( $tags ) ? $tags : array() );
+		$terms += self::same_name_duplicates( is_array( $tags ) ? $tags : array(), self::direct_counts( 'product_tag' ) );
 		$blog   = get_term( (int) get_option( 'default_category' ), 'category' );
 		if ( $blog instanceof WP_Term && in_array( $blog->slug, array( 'uncategorized', 'non-classe' ), true ) ) {
 			$terms[ (int) $blog->term_id ] = array( self::REDIRECT, 'catégorie d’articles par défaut', 'home' );
@@ -256,12 +272,26 @@ final class Delicat_Builder_V9_SEO_Index {
 		return array( 'posts' => $posts, 'terms' => $terms, 'supplier_auto' => $supplier_auto );
 	}
 
-	/** @param WP_Term[] $terms @return array<int,array{0:string,1:string,2:string}> */
-	private static function same_name_duplicates( array $terms ): array {
+	/** @return array<int,int> term id => products directly in it, as stored (one query). */
+	private static function direct_counts( string $taxonomy ): array {
+		global $wpdb;
+		$out = array();
+		foreach ( (array) $wpdb->get_results( $wpdb->prepare( "SELECT term_id, count FROM {$wpdb->term_taxonomy} WHERE taxonomy = %s", $taxonomy ) ) as $row ) { // phpcs:ignore WordPress.DB.DirectDatabaseQuery
+			$out[ (int) $row->term_id ] = (int) $row->count;
+		}
+		return $out;
+	}
+
+	/**
+	 * @param WP_Term[]       $terms
+	 * @param array<int,int>  $count direct counts
+	 * @return array<int,array{0:string,1:string,2:string}>
+	 */
+	private static function same_name_duplicates( array $terms, array $count ): array {
 		$groups = array();
 		foreach ( $terms as $term ) {
 			if ( $term instanceof WP_Term && '' !== self::norm( $term->name ) ) {
-				$groups[ $term->taxonomy . '|' . self::norm( $term->name ) ][] = $term;
+				$groups[ $term->taxonomy . '|' . (int) $term->parent . '|' . self::norm( $term->name ) ][] = $term; // « iTunes › USA » and « PSN › USA » are two shelves
 			}
 		}
 		$out = array();
@@ -271,8 +301,8 @@ final class Delicat_Builder_V9_SEO_Index {
 			}
 			usort(
 				$group,
-				static function ( WP_Term $a, WP_Term $b ): int {
-					return array( (int) $b->count, strlen( $a->slug ), (int) $a->term_id ) <=> array( (int) $a->count, strlen( $b->slug ), (int) $b->term_id );
+				static function ( WP_Term $a, WP_Term $b ) use ( $count ): int {
+					return array( (int) ( $count[ (int) $b->term_id ] ?? 0 ), strlen( $a->slug ), (int) $a->term_id ) <=> array( (int) ( $count[ (int) $a->term_id ] ?? 0 ), strlen( $b->slug ), (int) $b->term_id );
 				}
 			);
 			$keeper = array_shift( $group );
@@ -287,6 +317,33 @@ final class Delicat_Builder_V9_SEO_Index {
 	private static function norm( string $text ): string {
 		$text = remove_accents( html_entity_decode( wp_strip_all_tags( $text ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ) );
 		return (string) preg_replace( '/[^a-z0-9]+/', '', strtolower( $text ) );
+	}
+
+	/**
+	 * One query for many categories: term id => its product, for those holding exactly one published product
+	 * directly. Only categories counted at 1 are asked.
+	 *
+	 * @param int[] $term_ids
+	 * @return array<int,int>
+	 */
+	private static function single_products( array $term_ids ): array {
+		global $wpdb;
+		$term_ids = array_values( array_filter( array_map( 'intval', $term_ids ) ) );
+		if ( empty( $term_ids ) ) {
+			return array();
+		}
+		$out = array();
+		foreach ( array_chunk( $term_ids, 500 ) as $chunk ) {
+			$in   = implode( ',', $chunk );
+			$rows = $wpdb->get_results( "SELECT tt.term_id, MIN(p.ID) AS pid, COUNT(*) AS n FROM {$wpdb->term_taxonomy} tt INNER JOIN {$wpdb->term_relationships} tr ON tr.term_taxonomy_id = tt.term_taxonomy_id INNER JOIN {$wpdb->posts} p ON p.ID = tr.object_id WHERE tt.taxonomy = 'product_cat' AND tt.term_id IN ({$in}) AND p.post_type = 'product' AND p.post_status = 'publish' GROUP BY tt.term_id HAVING n = 1" ); // phpcs:ignore WordPress.DB -- integers only.
+			foreach ( (array) $rows as $row ) {
+				$out[ (int) $row->term_id ] = (int) $row->pid;
+			}
+		}
+		if ( $out ) {
+			_prime_post_caches( array_values( $out ), false, false );
+		}
+		return $out;
 	}
 
 	private static function single_product( int $term_id ): int {
@@ -312,16 +369,14 @@ final class Delicat_Builder_V9_SEO_Index {
 		foreach ( $rows as $row ) {
 			$id      = (int) $row->ID;
 			$content = (string) $row->post_content;
-			if ( in_array( $id, $keep, true ) || '' !== trim( html_entity_decode( wp_strip_all_tags( $content ), ENT_QUOTES | ENT_HTML5, 'UTF-8' ), " \t\n\r\0\x0B\xC2\xA0" ) ) {
+			/* nothing at all once comments, empty paragraphs, line breaks and spaces are gone: any element left (a div
+			 * a script mounts on, a button, a canvas, an embed…) or any text or shortcode means the page shows something */
+			$bare = (string) preg_replace( array( '/<!--.*?-->/s', '~</?p\b[^>]*>|<br\s*/?>|&nbsp;|&#160;~i' ), '', $content );
+			if ( in_array( $id, $keep, true ) || '' !== trim( $bare, " \t\n\r\0\x0B\xC2\xA0" ) ) {
 				continue;
 			}
-			if ( preg_match( '/<(img|iframe|video|audio|embed|object|picture|svg|form)\b|\[[a-z]/i', $content ) ) {
-				continue;
-			}
-			foreach ( function_exists( 'parse_blocks' ) ? parse_blocks( $content ) : array() as $block ) {
-				if ( ! empty( $block['blockName'] ) && ! in_array( $block['blockName'], array( 'core/paragraph', 'core/freeform', 'core/spacer', 'core/separator', 'core/group' ), true ) ) {
-					continue 2;
-				}
+			if ( function_exists( 'parse_blocks' ) && self::has_real_block( parse_blocks( $content ) ) ) {
+				continue; // a dynamic block (« latest posts », a product grid…) writes nothing into the content
 			}
 			$template = (string) get_page_template_slug( $id );
 			if ( ( '' !== $template && 'default' !== $template ) || '' !== trim( (string) get_post_meta( $id, '_elementor_data', true ), " []\n\r\t" ) ) {
@@ -336,6 +391,19 @@ final class Delicat_Builder_V9_SEO_Index {
 			$out[] = $id;
 		}
 		return $out;
+	}
+
+	/** Any block, at any depth, other than a paragraph or classic text. */
+	private static function has_real_block( array $blocks ): bool {
+		foreach ( $blocks as $block ) {
+			if ( ! empty( $block['blockName'] ) && ! in_array( $block['blockName'], array( 'core/paragraph', 'core/freeform' ), true ) ) {
+				return true;
+			}
+			if ( ! empty( $block['innerBlocks'] ) && self::has_real_block( (array) $block['innerBlocks'] ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public static function flush(): void {
@@ -472,7 +540,7 @@ final class Delicat_Builder_V9_SEO_Index {
 	}
 
 	/** @param array<int,array> $terms the states being built or cached (an ancestor that is « show » can be the target). */
-	private static function resolve_target( WP_Term $object, string $hint, array $terms ): string {
+	private static function resolve_target( WP_Term $object, string $hint, array $terms, ?array $singles = null ): string {
 		if ( 0 === strpos( $hint, 'keeper:' ) ) {
 			$keeper = get_term( (int) substr( $hint, 7 ), $object->taxonomy );
 			$link   = $keeper instanceof WP_Term ? get_term_link( $keeper ) : '';
@@ -484,7 +552,7 @@ final class Delicat_Builder_V9_SEO_Index {
 			return home_url( '/' );
 		}
 		if ( 'product_cat' === $object->taxonomy && 'shop' !== $hint ) {
-			$only = self::single_product( (int) $object->term_id );
+			$only = null === $singles ? self::single_product( (int) $object->term_id ) : (int) ( $singles[ (int) $object->term_id ] ?? 0 );
 			if ( $only ) {
 				return (string) get_permalink( $only );
 			}
@@ -519,9 +587,13 @@ final class Delicat_Builder_V9_SEO_Index {
 		if ( self::REDIRECT !== $state ) {
 			return;
 		}
-		$to = self::target( $object );
+		$here = $object instanceof WP_Term ? get_term_link( $object ) : get_permalink( $object );
+		$to   = is_string( $here ) ? (string) ( self::map()['targets'][ self::path( $here ) ] ?? '' ) : '';
+		$to   = '' !== $to ? $to : self::target( $object );
 		if ( '' !== $to && self::path( $to ) !== self::path( (string) wp_unslash( $_SERVER['REQUEST_URI'] ?? '' ) ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- only compared.
+			/* the choice can change at any time: neither the browser, Cloudflare nor LiteSpeed keeps this answer */
 			nocache_headers();
+			do_action( 'litespeed_control_set_nocache', 'Delicat SEO redirect' );
 			wp_safe_redirect( $to, 301, 'Delicat SEO' );
 			exit;
 		}
@@ -573,24 +645,11 @@ final class Delicat_Builder_V9_SEO_Index {
 		add_filter( 'woocommerce_get_breadcrumb', array( __CLASS__, 'breadcrumb_trail' ), 20 );
 		add_filter( 'woocommerce_structured_data_breadcrumblist', array( __CLASS__, 'breadcrumb_markup' ), 20 );
 		add_action( 'template_redirect', array( __CLASS__, 'maybe_redirect' ), 1 );
-		foreach ( array( 'save_post_page', 'save_post_post', 'save_post_product', 'deleted_post', 'trashed_post', 'untrashed_post', 'created_product_cat', 'edited_product_cat', 'delete_product_cat', 'created_product_tag', 'edited_product_tag', 'delete_product_tag', 'created_category', 'edited_category', 'delete_category', 'set_object_terms' ) as $hook ) {
-			add_action( $hook, array( __CLASS__, 'flush' ) );
-		}
-		foreach ( array( 'page_on_front', 'page_for_posts', 'show_on_front', 'wp_page_for_privacy_policy', 'default_product_cat', 'default_category', 'woocommerce_shop_page_id', 'woocommerce_cart_page_id', 'woocommerce_checkout_page_id', 'woocommerce_myaccount_page_id', 'woocommerce_terms_page_id', 'permalink_structure' ) as $option ) {
-			add_action( 'update_option_' . $option, array( __CLASS__, 'flush' ) );
-		}
-		add_action( 'updated_post_meta', array( __CLASS__, 'meta_changed' ), 10, 3 );
-		add_action( 'added_post_meta', array( __CLASS__, 'meta_changed' ), 10, 3 );
-		add_action( 'deleted_post_meta', array( __CLASS__, 'meta_changed' ), 10, 3 );
+		/* The map starts over on content changes from hooks in the plugin's bootstrap
+		 * (delicat_builder_v9_seo_index_watch), which run in every request profile: Quick Edit, Elementor,
+		 * the importer and a supplier's REST sync do not load this module. */
 		add_action( 'update_option_' . Delicat_Builder_V9_SEO::OPTION, array( __CLASS__, 'settings_saved' ) );
 		add_action( 'add_option_' . Delicat_Builder_V9_SEO::OPTION, array( __CLASS__, 'settings_saved' ) );
-	}
-
-	/** A page builder or a Builder layout saved without a page save. */
-	public static function meta_changed( $meta_id, $post_id, $key ): void {
-		if ( in_array( (string) $key, array( '_elementor_data', '_wp_page_template', '_delicat_builder_v9_enabled', '_delicat_builder_v9_layout', self::META_CANONICAL ), true ) ) {
-			self::flush();
-		}
 	}
 
 	public static function sitemap_taxonomies( $taxonomies ) {

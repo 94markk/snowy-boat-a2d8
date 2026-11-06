@@ -866,8 +866,6 @@ final class Delicat_Builder_V9_Shell {
 				'number'     => 6,
 				'orderby'    => 'count',
 				'order'      => 'DESC',
-				/* 9.9.0: supplier names, « Uncategorized » and copies are not shelves (Delicat SEO redirects them). */
-				'exclude'    => class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && class_exists( 'Delicat_Builder_V9_SEO', false ) && Delicat_Builder_V9_SEO::active() ? Delicat_Builder_V9_SEO_Index::redirected_term_ids() : array(),
 			)
 		);
 		if ( is_wp_error( $terms ) || empty( $terms ) ) {

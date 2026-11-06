@@ -235,10 +235,15 @@ final class Delicat_Builder_V9_SEO {
 		/* 9.9.0: WordPress already ends every title with the store name; a suffix naming the store again
 		 * gave « FREE FIRE PIN Delicat Store – Delicat Store ». */
 		$bare = static fn( string $text ): string => (string) preg_replace( '/[^a-z0-9]+/', '', strtolower( remove_accents( html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) ) );
-		$site = $bare( self::site_name() );
-		$tail = $bare( $suffix );
-		if ( '' !== $site && '' !== $tail && ( $tail === $site || substr( $tail, -strlen( $site ) ) === $site ) ) {
-			$suffix = '';
+		$name = html_entity_decode( self::site_name(), ENT_QUOTES | ENT_HTML5, 'UTF-8' );
+		$site = $bare( $name );
+		if ( '' !== $site && '' !== $suffix ) {
+			if ( $bare( $suffix ) === $site ) {
+				$suffix = '';
+			} elseif ( '' !== $name ) {
+				/* « en Haïti – Delicat Store » keeps « en Haïti » */
+				$suffix = trim( (string) preg_replace( '/[\s\-–—|·:,]*' . preg_quote( $name, '/' ) . '\s*$/iu', '', $suffix ) );
+			}
 		}
 		if ( '' !== $suffix && isset( $parts['title'] ) && ( is_singular( 'product' ) || self::is_product_archive_term() ) ) {
 			$title = (string) $parts['title'];
@@ -509,7 +514,8 @@ final class Delicat_Builder_V9_SEO {
 		$out = array();
 		foreach ( array_reverse( get_ancestors( $term->term_id, $term->taxonomy, 'taxonomy' ) ) as $ancestor_id ) {
 			$ancestor = get_term( (int) $ancestor_id, $term->taxonomy );
-			if ( $ancestor instanceof WP_Term ) {
+			/* 9.9.0: the data sent to Google skips hidden or redirected parents, like the visible trail */
+			if ( $ancestor instanceof WP_Term && ! ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && Delicat_Builder_V9_SEO_Index::is_hidden_term( $ancestor ) ) ) {
 				$link  = get_term_link( $ancestor );
 				$out[] = array( $ancestor->name, is_wp_error( $link ) ? '' : (string) $link );
 			}
