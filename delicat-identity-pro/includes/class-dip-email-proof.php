@@ -124,10 +124,10 @@ final class DIP_Email_Proof {
         $user_id = absint($user_id);
         $source = sanitize_key((string) $source);
         if (!$user_id || !class_exists('DIP_Account_Sync')) return false;
-        // 6.17.6: refused only when the proof is about to reset the account (still waiting for its link, or
-        // younger than PRE_HIJACK_DAYS): credentials a reset cannot end would then outlive it. A long-standing
-        // customer is not reset (after_verified_registration()), so nothing of theirs is refused either.
-        if (in_array($source, self::FOREIGN_SOURCES, true) && DIP_Account_Sync::is_customer_account($user_id) && self::awaiting_verification($user_id)) {
+        // A foreign proof of an unproven account that carries credentials a proof cannot end (passkeys, TOTP,
+        // another provider identity) is refused, whatever the account's age (6.17.7, security review): whoever
+        // set them up may not own the mailbox. Only the reset itself follows awaiting_verification().
+        if (in_array($source, self::FOREIGN_SOURCES, true) && DIP_Account_Sync::is_customer_account($user_id) && self::is_unproven($user_id)) {
             $found = self::foreign_credentials($user_id, $provider, $sub);
             if ($found) {
                 if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user_id, ['method'=>$source, 'credentials'=>implode(',', $found)]);

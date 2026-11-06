@@ -2,10 +2,47 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.6
+Stable tag: 6.17.7
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.17.7 ==
+Correctif urgent : le bouton « Se connecter » ne faisait rien sur beaucoup de téléphones (Android, quelques iPhone).
+
+(1) Bouton « Se connecter » (menu latéral, barre du bas, en-tête, page produit)
+* Cause : sur le site, LiteSpeed Cache a l'option « Supprimer les chaînes de requête » (Remove Query Strings)
+  activée. Elle retire le « ?ver=… » qui change à chaque version de l'extension. Les fichiers de Delicat Identity
+  sont gardés 30 jours par les téléphones (« immutable ») : un client déjà venu avant la 6.17.5 gardait donc
+  l'ancien script de connexion. La 6.17.5 ne met plus la fenêtre de connexion dans chaque page (elle la charge au
+  premier appui) ; l'ancien script ne sait pas la charger, et sa présence désactivait le secours de la page :
+  l'appui ne faisait rien. Sur un téléphone neuf ou après avoir vidé le cache, tout marchait — d'où le problème
+  chez une partie des clients seulement.
+* Les fichiers de Delicat Identity gardent maintenant leur « ?ver=6.17.7 » même avec cette option LiteSpeed :
+  chaque téléphone télécharge le bon script dès la mise à jour (et à chaque version suivante).
+* Secours renforcé : si un téléphone exécute encore un ancien script qui ne sait pas ouvrir la fenêtre, l'appui
+  ouvre la page Mon compte (formulaire de connexion) au lieu de ne rien faire.
+
+(2) Sécurité (revue de la 6.17.6)
+* Google et un compte existant dont l'adresse n'a jamais été confirmée : si ce compte a déjà un autre moyen de
+  connexion (clé d'accès, validation en deux étapes, compte Microsoft ou autre relié), Google est de nouveau refusé
+  quel que soit l'âge du compte — la personne qui a mis ce moyen en place n'est peut-être pas le propriétaire de
+  la boîte Gmail. Rien n'est effacé et le message dit quoi faire : se connecter avec le moyen habituel ou avec un
+  code reçu par e-mail, puis ajouter Google dans Mon compte. Le client ancien qui n'a qu'un mot de passe se
+  connecte toujours avec Google sans rien perdre (correctif de la 6.17.6 conservé).
+* Application Delicat : l'ancien jeton n'est renouvelé une deuxième fois que dans la minute qui suit le
+  renouvellement (réponse perdue, deux renouvellements en même temps), depuis le même téléphone et la même
+  installation. La tolérance de 30 minutes de la 6.17.6 est supprimée : au-delà d'une minute, un ancien jeton est
+  traité comme un vol et ferme la session, comme en 6.17.5.
+
+(3) Technique
+* dip_versioned_asset_src() remet ver=DIP_VERSION sur les fichiers assets/ de l'extension (script_loader_src et
+  style_loader_src, priorité PHP_INT_MAX, après LiteSpeed à 999). auth-shell.js annonce
+  window.DIPAuthShellProtocol = 2 ; le secours en ligne de la page ne s'efface plus que devant ce script-là.
+* Journal : unverified_account_merge_refused (Google refusé, moyens trouvés), unverified_account_linked_long_standing
+  (« notice »), mobile_refresh_lost_answer_recovered (« info », session et délai).
+* Aucun changement de base de données ni de réglage. Après l'installation : LiteSpeed Cache → Purger tout, puis
+  Cloudflare → Purger tout le cache.
 
 == Version 6.17.6 ==
 Correctif urgent : des clients déconnectés qui ne pouvaient plus revenir avec Google.

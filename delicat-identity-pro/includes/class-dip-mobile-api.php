@@ -11,8 +11,6 @@ final class DIP_Mobile_API {
     const ROTATION_READY_OPTION = 'dip_mobile_rotation_ready';
     /** A rotated refresh token reused later than this ends its session (a retry right after is tolerated). */
     const REFRESH_REPLAY_GRACE = 60;
-    /** 6.17.6: how long after a rotation the previous token may still recover a lost answer, if the new pair shows no use. */
-    const LOST_ANSWER_WINDOW = 1800;
     const GOOGLE_NONCE_PREFIX = 'dip_mgn_';
     const GOOGLE_NONCE_TTL = 600;
     const BIOMETRIC_READY_OPTION = 'dip_mobile_biometric_keys_ready';
@@ -967,10 +965,10 @@ final class DIP_Mobile_API {
      * 6.17.6: the session row whose PREVIOUS refresh token this is, when that token may be renewed again: the
      * answer to the last renewal was lost (weak Digicel/Natcom connection, app closed before it saved the new
      * pair) or two renewals of the same app crossed. Allowed only from the same installation and device as the
-     * session, while the session is live, within REFRESH_REPLAY_GRACE of the rotation, or within
-     * LOST_ANSWER_WINDOW while the new pair shows no use (last_used_at not moved since the rotation; it is
-     * written at most once a minute, so this signal is bounded in time). Any other reuse of an old token stays
-     * a replay (refresh_replay_detected()). Each recovery is in the audit log with its session and delay.
+     * session, while the session is live, and within REFRESH_REPLAY_GRACE of the rotation (6.17.7, security
+     * review: last_used_at is written at most once a minute, so « the new pair was never used » is no reliable
+     * signal and is not used). Any other reuse of an old token stays a replay (refresh_replay_detected()). Each
+     * recovery is in the audit log with its session and delay.
      */
     private static function lost_rotation_row($hash, WP_REST_Request $request) {
         if (get_option(self::ROTATION_READY_OPTION) !== '1' || !self::valid_device_request($request)) return null;
@@ -982,17 +980,10 @@ final class DIP_Mobile_API {
         $d = self::request_device($request);
         if (!hash_equals((string) $row->installation_hash, (string) $d['installation_hash']) || !hash_equals((string) $row->device_hash, (string) $d['device_hash'])) return null;
         $rotated = strtotime((string) $row->rotated_at . ' UTC');
-        $used = $row->last_used_at ? strtotime((string) $row->last_used_at . ' UTC') : 0;
         if (!$rotated) return null;
         $age = max(0, time() - $rotated);
-        $branch = '';
-        if ($age <= self::REFRESH_REPLAY_GRACE) {
-            $branch = 'grace';
-        } elseif ($age <= self::LOST_ANSWER_WINDOW && $used <= $rotated + 2) {
-            $branch = 'unused';
-        }
-        if ($branch === '') return null;
-        if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_refresh_lost_answer_recovered', $branch === 'grace' ? 'info' : 'warning', (int) $row->user_id, ['session_id'=>(int) $row->id, 'age'=>$age, 'branch'=>$branch]);
+        if ($age > self::REFRESH_REPLAY_GRACE) return null;
+        if (class_exists('DIP_Audit')) DIP_Audit::record('mobile_refresh_lost_answer_recovered', 'info', (int) $row->user_id, ['session_id'=>(int) $row->id, 'age'=>$age]);
         return $row;
     }
 

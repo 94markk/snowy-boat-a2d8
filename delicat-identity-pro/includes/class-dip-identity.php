@@ -320,18 +320,22 @@ final class DIP_Identity {
      * customer with another sign-in method was refused (« I can't sign back in
      * with Google »). Same rule as an e-mail code or a magic link
      * (DIP_Email_Proof::awaiting_verification()).
+     *
+     * 6.17.7 (security review): an unproven account that carries another
+     * sign-in method (passkey, TOTP, another provider identity) is still
+     * refused, whatever its age: whoever set those up may not own the mailbox,
+     * and the proof would let them keep using the account. Its owner signs in
+     * with that usual method (or an e-mail code) and adds Google from My Account.
      */
     private function adopt_unproven_account($user_id, $provider, $sub) {
-        if (!DIP_Email_Proof::awaiting_verification($user_id)) {
-            // Accepted risk, recorded: other sign-in methods on such an account stay (the case 6.17.5 refused).
-            $kept = DIP_Email_Proof::foreign_credentials($user_id, $provider, $sub);
-            if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_linked_long_standing', $kept ? 'warning' : 'notice', $user_id, ['provider'=>$provider, 'credentials_kept'=>implode(',', array_unique($kept))]);
-            return true; // Google proves the address below (prove(…, 'oidc')); nothing is wiped
-        }
         $foreign = DIP_Email_Proof::foreign_credentials($user_id, $provider, $sub);
         if ($foreign) {
             if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_merge_refused', 'warning', $user_id, ['provider'=>$provider, 'credentials'=>implode(',', array_unique($foreign))]);
-            return new WP_Error('email_exists', 'Un compte dont l’adresse n’est pas encore confirmée utilise déjà cette adresse. Confirmez-la avec le lien reçu par e-mail ou connectez-vous à ce compte, puis reliez ce fournisseur.');
+            return new WP_Error('email_exists', 'Ce compte a déjà un autre moyen de connexion (clé d’accès, validation en deux étapes ou autre compte relié). Connectez-vous avec ce moyen habituel ou avec un code reçu par e-mail, puis ajoutez Google dans Mon compte.');
+        }
+        if (!DIP_Email_Proof::awaiting_verification($user_id)) {
+            if (class_exists('DIP_Audit')) DIP_Audit::record('unverified_account_linked_long_standing', 'notice', $user_id, ['provider'=>$provider]);
+            return true; // Google proves the address below (prove(…, 'oidc')); nothing is wiped
         }
         // A stale proof (or an 'unproven' address) is recorded as unverified
         // so the credential reset of after_verified_registration() applies.

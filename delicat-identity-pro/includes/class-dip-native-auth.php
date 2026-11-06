@@ -578,11 +578,13 @@ final class DIP_Native_Auth {
     /**
      * A tap on a sign-in button before auth-shell.js has loaded (slow phone,
      * slow network) opens the account page instead of doing nothing.
+     * 6.17.7: also when the shell that runs is outdated (a phone's cached copy older than the page, which
+     * cannot open the window this page does not print): only a shell declaring protocol 2 takes over.
      */
     public static function print_trigger_fallback() {
         if (is_admin() || is_user_logged_in() || !wp_script_is('dip-auth-shell', 'enqueued')) return;
         $url = self::account_page_url();
-        echo '<script data-no-optimize="1" data-no-defer="1" data-cfasync="false">(function(){var u=' . wp_json_encode(esc_url_raw($url)) . ';document.addEventListener("click",function(e){if(window.DIPAuthShell)return;var t=e.target&&e.target.closest&&e.target.closest("[data-dip-auth-open],[data-dl-open],.dsb-account-login,a[href$=\"#delicat-login\"],a[href$=\"#dip-identity-modal\"],[aria-controls=\"dip-identity-modal\"]");if(!t)return;e.preventDefault();var r=u;try{var x=new URL(u,location.href);x.searchParams.set("redirect_to",location.href);r=x.href;}catch(_){}location.href=r;},true);})();</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput -- JSON-encoded URL.
+        echo '<script data-no-optimize="1" data-no-defer="1" data-cfasync="false">(function(){var u=' . wp_json_encode(esc_url_raw($url)) . ';document.addEventListener("click",function(e){if(window.DIPAuthShell&&window.DIPAuthShellProtocol>=2)return;var t=e.target&&e.target.closest&&e.target.closest("[data-dip-auth-open],[data-dl-open],.dsb-account-login,a[href$=\"#delicat-login\"],a[href$=\"#dip-identity-modal\"],[aria-controls=\"dip-identity-modal\"]");if(!t)return;e.preventDefault();var r=u;try{var x=new URL(u,location.href);x.searchParams.set("redirect_to",location.href);r=x.href;}catch(_){}location.href=r;},true);})();</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput -- JSON-encoded URL.
     }
 
     public static function ajax_resend_verification() {

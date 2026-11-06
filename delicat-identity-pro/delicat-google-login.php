@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Identity Pro
  * Description: Unified secure identity, authentication, account lifecycle, and synchronized WordPress/WooCommerce transactional email studio.
- * Version:     6.17.6
+ * Version:     6.17.7
  * Author: Delicat Store
  * Text Domain: delicat-google-login
  * Requires at least: 6.2
@@ -13,7 +13,7 @@
 
 defined('ABSPATH') || exit;
 
-define('DIP_VERSION', '6.17.6');
+define('DIP_VERSION', '6.17.7');
 define('DIP_FILE', __FILE__);
 define('DIP_DIR', plugin_dir_path(__FILE__));
 define('DIP_URL', plugin_dir_url(__FILE__));
@@ -47,6 +47,23 @@ add_action('before_woocommerce_init', static function () {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
     }
 });
+
+/**
+ * 6.17.7: Identity scripts and styles always carry ?ver=. LiteSpeed's « Remove Query Strings » (script_loader_src at
+ * priority 999) printed auth-shell.js, session-router.js, account-theme.js… without it, and they are served
+ * immutable for 30 days: phones that had the pre-6.17.5 auth-shell.js kept running it against 6.17.5 pages, whose
+ * sign-in window is no longer in the page, so « Se connecter » did nothing. Re-added after LiteSpeed (the Builder
+ * does the same for its files).
+ */
+function dip_versioned_asset_src($src) {
+    if (!is_string($src) || $src === '' || strpos($src, '/delicat-identity-pro/assets/') === false) return $src;
+    $bare = preg_replace('#^https?:#i', '', $src);
+    $base = preg_replace('#^https?:#i', '', DIP_URL . 'assets/');
+    if (!is_string($bare) || !is_string($base) || strpos($bare, $base) !== 0) return $src;
+    return add_query_arg('ver', rawurlencode(DIP_VERSION), $src);
+}
+add_filter('script_loader_src', 'dip_versioned_asset_src', PHP_INT_MAX);
+add_filter('style_loader_src', 'dip_versioned_asset_src', PHP_INT_MAX);
 
 register_deactivation_hook(__FILE__, ['DIP_Plugin', 'deactivate']);
 register_deactivation_hook(__FILE__, ['DIP_Headless_Google', 'deactivate']);

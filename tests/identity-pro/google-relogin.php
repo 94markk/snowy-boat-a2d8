@@ -1,5 +1,5 @@
 <?php
-// php google-relogin.php <site-dir> — STAGING ONLY. Identity 6.17.6.
+// php google-relogin.php <site-dir> — STAGING ONLY. Identity 6.17.6 / 6.17.7.
 // Customers reported « my account was disconnected and I can't sign back in with Google ». A Google sign-in that
 // matches an existing customer by e-mail (first Google use, or after « Mot de passe oublié » removed a recent link)
 // went through adopt_unproven_account(), which marked the address « not confirmed » whatever the account's age, so
@@ -69,11 +69,12 @@ $check( 'long-standing customer: Google signs in', ! is_wp_error( $r ) && (int) 
 $check( 'long-standing customer: password and other sessions kept', $s['password_kept'] && 1 === $s['sessions'], $detail( $r, $s ) );
 $check( 'long-standing customer: address now proven, Google linked', 'proven' === $s['proof'] && '' !== (string) get_user_meta( $c['id'], DIP_Identity::META_SUB, true ), $detail( $r, $s ) );
 
-// 2. long-standing customer with another sign-in method (Microsoft) linked: not refused
+// 2. long-standing customer with another sign-in method (Microsoft) linked: refused (6.17.7, security review) —
+// whoever set that method up may not own the mailbox — but nothing is wiped and the message says how to get in
 $c = $customer( 'oldms', 400, 'yes', true );
 $r = $run( $c );
 $s = $state( $c );
-$check( 'long-standing customer with another linked sign-in: Google not refused, nothing wiped', ! is_wp_error( $r ) && (int) $r === $c['id'] && $s['password_kept'] && 1 === $s['sessions'], $detail( $r, $s ) );
+$check( 'long-standing customer with another linked sign-in: refused, nothing wiped, told how to get in', is_wp_error( $r ) && false !== strpos( $r->get_error_message(), 'Mon compte' ) && $s['password_kept'] && 1 === $s['sessions'], $detail( $r, $s ) );
 
 // 3. account created 2 days ago, never proven: the pre-registration protection still applies
 $c = $customer( 'young', 2, 'yes', false );

@@ -1,10 +1,10 @@
 <?php
-// php app-refresh.php <site-dir> — STAGING ONLY. Identity 6.17.6.
+// php app-refresh.php <site-dir> — STAGING ONLY. Identity 6.17.6 / 6.17.7.
 // App session renewal (POST delicat-identity/v1/mobile/refresh) on weak networks. Since 6.17.5 a refresh token that was
 // already rotated is a replay: refused, and after REFRESH_REPLAY_GRACE (60 s) the whole session ends. When the answer
 // to a renewal is lost (Digicel/Natcom connection drops, app closed before saving), the app only has the previous
-// token: the customer was signed out. 6.17.6 renews again from the same installation and device while the new pair
-// was never used; a copied old token used after the new pair, or from another device, stays a replay.
+// token: the customer was signed out. 6.17.7 renews again from the same installation and device within one minute
+// of the rotation (lost answer, crossing renewals); later, or from another device, it stays a replay.
 $site = $argv[1] ?? '';
 if ( '' === $site || ! is_file( $site . '/wp-load.php' ) ) { fwrite( STDERR, "usage: php app-refresh.php <site-dir>\n" ); exit( 2 ); }
 $_SERVER['HTTP_HOST'] = 'localhost:8980'; $_SERVER['REQUEST_URI'] = '/'; $_SERVER['SERVER_NAME'] = 'localhost';
@@ -73,20 +73,13 @@ $r2 = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $a ) )
 $c  = (string) ( $r2['refresh_token'] ?? '' );
 $check( 'lost answer, immediate retry with the previous token: renewed, not signed out', 200 === $r2['status'] && '' !== $c && $live( $c ), wp_json_encode( array_diff_key( $r2, array( 'access_token' => 1, 'refresh_token' => 1, 'user' => 1, 'device' => 1 ) ) ) );
 
-// 3. the answer (D) was lost again and the app comes back 10 minutes later, D never used → renewed
+// 3. the previous token comes back 10 minutes after its rotation: recovery is limited to one minute (6.17.7,
+// security review), so it is a replay — refused and the session ended, as in 6.17.5
 $r3 = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $c ) ) ) );
 $d  = (string) ( $r3['refresh_token'] ?? '' );
 $age_row( $d, 600, 600 );
 $r4 = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $c ) ) ) );
-$e  = (string) ( $r4['refresh_token'] ?? '' );
-$check( 'lost answer, app back 10 min later, new token never used: renewed', 200 === $r4['status'] && '' !== $e && $live( $e ), wp_json_encode( array_diff_key( $r4, array( 'access_token' => 1, 'refresh_token' => 1, 'user' => 1, 'device' => 1 ) ) ) );
-
-// 4. a copied old token comes back after the app used the new pair (5 min after rotation): replay, session ended
-$r5 = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $e ) ) ) );
-$f  = (string) ( $r5['refresh_token'] ?? '' );
-$age_row( $f, 600, 300 );
-$r6 = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $e ) ) ) );
-$check( 'old token reused after the new pair was used: refused and the session ended', 401 === $r6['status'] && ! $live( $f ), wp_json_encode( $r6 ) );
+$check( 'previous token 10 min after its rotation: refused and the session ended (recovery is one minute)', 401 === $r4['status'] && ! $live( $d ), wp_json_encode( $r4 ) );
 
 // 5. a fresh session; its previous token presented from another phone: refused (no renewal for another device)
 $again = $data( DIP_Mobile_API::issue_for_user( $uid, $request( array() ), 'google' ) );
@@ -95,15 +88,6 @@ $r7    = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $g 
 $h     = (string) ( $r7['refresh_token'] ?? '' );
 $r8    = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $g ), 'other-phone-9999' ) ) );
 $check( 'previous token from another phone: refused', 401 === $r8['status'] && $live( $h ), wp_json_encode( $r8 ) );
-
-// 6. the previous token comes back 45 minutes after its rotation (beyond the 30-minute recovery window): a replay
-$third = $data( DIP_Mobile_API::issue_for_user( $uid, $request( array(), 'third-phone-0003' ), 'google' ) );
-$i     = (string) ( $third['refresh_token'] ?? '' );
-$r9    = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $i ), 'third-phone-0003' ) ) );
-$j     = (string) ( $r9['refresh_token'] ?? '' );
-$age_row( $j, 45 * 60, 45 * 60 );
-$r10 = $data( DIP_Mobile_API::refresh( $request( array( 'refresh_token' => $i ), 'third-phone-0003' ) ) );
-$check( 'previous token 45 min after rotation: refused and the session ended (recovery is bounded)', 401 === $r10['status'] && ! $live( $j ), wp_json_encode( $r10 ) );
 
 require_once ABSPATH . 'wp-admin/includes/user.php';
 $wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE user_id = %d", $uid ) ); // phpcs:ignore -- test rows only

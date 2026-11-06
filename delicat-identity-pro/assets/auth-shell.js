@@ -187,6 +187,8 @@
     } catch(e) {}
   }
   window.DIPAuthShell = true;
+  // 6.17.7: this shell loads the sign-in window itself (lazy); the page's fallback only stands down for it.
+  window.DIPAuthShellProtocol = 2;
   window.DIPIdentityModalAPI = {open:open,close:closeModal,isOpen:function(){return opened;},resize:sizeTo};
   document.addEventListener('click',function(e){
     var trigger=e.target.closest && e.target.closest(selector); if(!trigger)return;
