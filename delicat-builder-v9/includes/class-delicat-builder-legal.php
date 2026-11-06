@@ -227,6 +227,7 @@ final class Delicat_Builder_V9_Legal {
 		add_action( 'init', array( __CLASS__, 'maybe_sync_after_upgrade' ), 30 );
 		add_action( 'admin_post_delicat_builder_v9_legal_sync', array( __CLASS__, 'handle_sync' ) );
 		add_filter( 'delicat_builder_v9_footer_legal_links', array( __CLASS__, 'footer_links' ) );
+		add_filter( 'the_content', array( __CLASS__, 'fix_reseller_link' ), 20 );
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -370,7 +371,27 @@ final class Delicat_Builder_V9_Legal {
 		foreach ( $map as $token => $key ) {
 			$tokens[ $token ] = esc_url( self::url( $key ) );
 		}
+		$tokens['{{URL_RESELLER}}'] = esc_url( self::reseller_url() );
 		return $tokens;
+	}
+
+	/** 9.9.0: the reseller programme page (Delicat Resellers), else the account page. « /programme-revendeur/ » never existed. */
+	public static function reseller_url(): string {
+		if ( function_exists( 'dlr_page_url' ) ) {
+			$url = (string) dlr_page_url();
+			if ( '' !== $url ) {
+				return $url;
+			}
+		}
+		return function_exists( 'wc_get_page_permalink' ) ? (string) wc_get_page_permalink( 'myaccount' ) : home_url( '/' );
+	}
+
+	/** 9.9.0: a conditions page the owner edited keeps the old link; point it at the real page when it is shown. */
+	public static function fix_reseller_link( $content ) {
+		if ( ! is_string( $content ) || false === strpos( $content, '/programme-revendeur/' ) || ! is_page( self::page_id( 'conditions' ) ) ) {
+			return $content;
+		}
+		return (string) preg_replace( '~href=(["\'])(?:https?://[^"\']*)?/programme-revendeur/\1~', 'href="' . esc_url( self::reseller_url() ) . '"', $content );
 	}
 
 	public static function render( string $key ): string {

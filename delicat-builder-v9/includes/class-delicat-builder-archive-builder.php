@@ -614,7 +614,9 @@ final class Delicat_Builder_V9_Archive_Builder {
 	/** A single cached term query; no guessed slugs or dead category links. */
 	public static function render_category_chips(): void {
 		if ( empty( self::active_config() ) ) { return; }
-		$terms = get_terms( array( 'taxonomy' => 'product_cat', 'hide_empty' => true, 'parent' => 0, 'number' => 8, 'orderby' => 'name' ) );
+		/* 9.9.0: supplier names, « Uncategorized » and copies are not shelves (Delicat SEO redirects them). */
+		$skip  = class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && Delicat_Builder_V9_SEO::active() ? Delicat_Builder_V9_SEO_Index::redirected_term_ids() : array();
+		$terms = get_terms( array( 'taxonomy' => 'product_cat', 'hide_empty' => true, 'parent' => 0, 'number' => 8, 'orderby' => 'name', 'exclude' => $skip ) );
 		if ( is_wp_error( $terms ) ) { return; }
 		$active = is_product_category() ? absint( get_queried_object_id() ) : 0;
 		$ancestors = $active ? get_ancestors( $active, 'product_cat', 'taxonomy' ) : array();

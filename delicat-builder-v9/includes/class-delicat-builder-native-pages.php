@@ -51,7 +51,7 @@ final class Delicat_Builder_V9_Native_Pages {
 	public static function enqueue(): void {
 		$type = self::type();
 		$post = is_singular( 'page' ) ? get_post( get_queried_object_id() ) : null;
-		$legacy_hero = $post instanceof WP_Post && has_shortcode( (string) $post->post_content, 'delicat_v8_hero' );
+		$legacy_hero = $post instanceof WP_Post && ( has_shortcode( (string) $post->post_content, 'delicat_v8_hero' ) || false !== strpos( (string) get_post_meta( $post->ID, '_elementor_data', true ), 'delicat_v8_hero' ) ); // 9.9.0: « sondaj » is an Elementor page
 		if ( ! $type && ! $legacy_hero ) {
 			return;
 		}

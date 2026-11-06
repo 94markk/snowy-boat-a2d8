@@ -1,8 +1,8 @@
 {
  "algorithm": "sha256",
- "built": "2026-11-06T00:34:30.926Z",
+ "built": "2026-11-06T00:54:46.198Z",
  "version": "9.9.0",
- "bytes": 7095661,
+ "bytes": 7118074,
  "count": 302,
  "files": {
   "README.txt": {
@@ -391,7 +391,7 @@
   },
   "assets/dist/manifest.json": {
    "bytes": 9789,
-   "sha256": "aafb0b97f302d880700b6f79c3f334952afc6886f9be5f756009723f25da5c27"
+   "sha256": "13ec50f3c925975184fb339d88c5af37c73d1ba3da8ec8c3f43ac16dbcd77f05"
   },
   "assets/dist/page.1ebc343d313f.css": {
    "bytes": 43594,
@@ -678,8 +678,8 @@
    "sha256": "0c03529d8babc0a0b42349a83382e3e67b6c1da0c417f730cfdf5dd0fa393eb0"
   },
   "includes/class-delicat-builder-archive-builder.php": {
-   "bytes": 56652,
-   "sha256": "1ff0fa0ac513d8830cc312c11a0f368a827ef5ae192aab6e23c8db06c21c4142"
+   "bytes": 56946,
+   "sha256": "1677899af25cbb7752e6729d8d08fca7abae65f924bb50c3230593c45322658c"
   },
   "includes/class-delicat-builder-assets.php": {
    "bytes": 33356,
@@ -730,8 +730,8 @@
    "sha256": "bef00c6eb852a9d637fba557fb6f539243ebc409440fa4a475adcde3dedcd189"
   },
   "includes/class-delicat-builder-drawer.php": {
-   "bytes": 26488,
-   "sha256": "157e71eab44f686963631920ab53a5e1fffe907a615391587a1a63a5d36607ee"
+   "bytes": 26824,
+   "sha256": "474a4ba0596de853ad4e978d635963f91c11ea248aaef754929696d1eac188d8"
   },
   "includes/class-delicat-builder-editor.php": {
    "bytes": 35191,
@@ -786,8 +786,8 @@
    "sha256": "04f312cff4927b532a150c76e81fadb7cde3bfe9e88741b1199ca1e4d9a124c4"
   },
   "includes/class-delicat-builder-legal.php": {
-   "bytes": 28774,
-   "sha256": "0e738bbacf5419d9687ca68cb0710ee861d1e6c2f5903ae1793e7cf85507ec9f"
+   "bytes": 29839,
+   "sha256": "b7d28151ff39721f1b1b66e36c7cd9327c1f7844f53e65b258db849361d64353"
   },
   "includes/class-delicat-builder-live-selling.php": {
    "bytes": 37540,
@@ -822,8 +822,8 @@
    "sha256": "f03a319274e59d6c95a30e7a0bdd91e89cd35b6bb61d771127d4efef25fd408f"
   },
   "includes/class-delicat-builder-native-pages.php": {
-   "bytes": 14475,
-   "sha256": "61287c6869c762797b59fcf0069d3f3d0d09baa76962fbafaaf524d849c83fb2"
+   "bytes": 14626,
+   "sha256": "e95de7d46dc6e011172b4c550ab3831101aa8009898baaa1201f0f0623decb4d"
   },
   "includes/class-delicat-builder-native-product.php": {
    "bytes": 57811,
@@ -914,8 +914,8 @@
    "sha256": "c15b8c0e319b88040fccaefe1e047aee078615439a28973de6967608f4273616"
   },
   "includes/class-delicat-builder-runtime-router.php": {
-   "bytes": 16353,
-   "sha256": "c1bbe8c145370087e38b4734dd32553c05e67289f44918c004b0fb399bb8594a"
+   "bytes": 16713,
+   "sha256": "28cba4fc50dcd1470b25e36a82bdf09ed45d90fb9d30f1ff150d2c40356562ee"
   },
   "includes/class-delicat-builder-schema.php": {
    "bytes": 55689,
@@ -934,12 +934,12 @@
    "sha256": "c72737c1b814838ecb91683d088ae68a811c75b201c1c4e2b792b605e4c4ac90"
   },
   "includes/class-delicat-builder-seo-index.php": {
-   "bytes": 18874,
-   "sha256": "071cc8fb2e3ae65d82c8fbab2af70c0ebea83d9b0cd338df54196c1ecbc7ad16"
+   "bytes": 38288,
+   "sha256": "640e941f99c7e09d38479279ed19224c3d55b0df05ce242e0bb5e3b7190ed191"
   },
   "includes/class-delicat-builder-seo.php": {
-   "bytes": 43559,
-   "sha256": "938355c933d2bc4911462f4e7642b62e8f10e93c4e3e3dac627ef58cb25b5630"
+   "bytes": 44021,
+   "sha256": "d5ba8273173d6732982e2fe0e0ef5a06fad7d2dd64eebac7ce9880b3d207943f"
   },
   "includes/class-delicat-builder-server-engine.php": {
    "bytes": 25503,
@@ -958,8 +958,8 @@
    "sha256": "d70706092b68554555d134aacd30073dc8f8d4463ed50eb7280e6e4ab109f051"
   },
   "includes/class-delicat-builder-shell.php": {
-   "bytes": 52586,
-   "sha256": "e27513a666adf7b74b35e8096f3d17d34a856b7256c65927b81a5e31f393933f"
+   "bytes": 52922,
+   "sha256": "dffce537ae0813774cfe7c092f8f2f957f0b262af0ea2cd72ae7c58aa53a4924"
   },
   "includes/class-delicat-builder-site-admin.php": {
    "bytes": 20489,
@@ -1114,8 +1114,8 @@
    "sha256": "6f6e328e037e7c0c28ff59146011938ecf5662528dbf1b3c0c2e65c98e948e3b"
   },
   "templates/legal/conditions-utilisation.html": {
-   "bytes": 14843,
-   "sha256": "4bc65a4065453d968c00d7f370fc70fc73ef34a0300a36f40b620baeaa366acb"
+   "bytes": 14838,
+   "sha256": "f6b7305868f2d412e23f0f552dfc523e0d2f4383d1e422cc33a492a0ff11ff44"
   },
   "templates/legal/livraison-garantie.html": {
    "bytes": 7352,

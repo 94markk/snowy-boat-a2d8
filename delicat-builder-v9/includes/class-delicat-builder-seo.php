@@ -55,9 +55,8 @@ final class Delicat_Builder_V9_SEO {
 			/* 9.7.8 (FE-11): what Google's product listings ask for. Empty = nothing is declared. */
 			'return_days'      => '',
 			'delivery_hours'   => '',
-			/* 9.9.0 (SEO-02/03): null = the recommended selection (Delicat_Builder_V9_SEO_Index). */
-			'hidden_posts'     => null,
-			'hidden_terms'     => null,
+			/* 9.9.0 (SEO-02/03): the owner's choice per page or category; null = follow the rules (Delicat_Builder_V9_SEO_Index). */
+			'seo_overrides'    => null,
 			'index_tags'       => 0,
 		);
 	}
@@ -70,7 +69,7 @@ final class Delicat_Builder_V9_SEO {
 		$s     = wp_parse_args( is_array( $saved ) ? $saved : array(), self::defaults() );
 		foreach ( self::defaults() as $key => $default ) {
 			if ( null === $default ) {
-				$s[ $key ] = is_array( $s[ $key ] ) ? array_values( array_filter( array_map( 'absint', $s[ $key ] ) ) ) : null;
+				$s[ $key ] = is_array( $s[ $key ] ) ? $s[ $key ] : null; // checked item by item where it is read
 				continue;
 			}
 			$s[ $key ] = is_int( $default ) ? ( empty( $s[ $key ] ) ? 0 : 1 ) : ( is_scalar( $s[ $key ] ) ? (string) $s[ $key ] : '' );
@@ -235,8 +234,10 @@ final class Delicat_Builder_V9_SEO {
 		$suffix = trim( $s['product_suffix'] );
 		/* 9.9.0: WordPress already ends every title with the store name; a suffix naming the store again
 		 * gave « FREE FIRE PIN Delicat Store – Delicat Store ». */
-		$site = self::site_name();
-		if ( '' !== $site && '' !== $suffix && ( false !== mb_stripos( $suffix, $site ) || false !== mb_stripos( $site, $suffix ) ) ) {
+		$bare = static fn( string $text ): string => (string) preg_replace( '/[^a-z0-9]+/', '', strtolower( remove_accents( html_entity_decode( $text, ENT_QUOTES | ENT_HTML5, 'UTF-8' ) ) ) );
+		$site = $bare( self::site_name() );
+		$tail = $bare( $suffix );
+		if ( '' !== $site && '' !== $tail && ( $tail === $site || substr( $tail, -strlen( $site ) ) === $site ) ) {
 			$suffix = '';
 		}
 		if ( '' !== $suffix && isset( $parts['title'] ) && ( is_singular( 'product' ) || self::is_product_archive_term() ) ) {
@@ -849,10 +850,11 @@ final class Delicat_Builder_V9_SEO {
 		'' !== $title ? update_post_meta( $post_id, self::META_TITLE, $title ) : delete_post_meta( $post_id, self::META_TITLE );
 		'' !== $desc ? update_post_meta( $post_id, self::META_DESC, $desc ) : delete_post_meta( $post_id, self::META_DESC );
 		if ( 'page' === $post->post_type && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && isset( $_POST['delicat_seo_canonical'] ) ) {
-			$original = esc_url_raw( trim( wp_unslash( (string) $_POST['delicat_seo_canonical'] ) ) );
-			/* this site only, and never the page itself */
-			$same_site = '' !== $original && wp_parse_url( $original, PHP_URL_HOST ) === wp_parse_url( home_url(), PHP_URL_HOST );
-			$same_site && untrailingslashit( $original ) !== untrailingslashit( (string) get_permalink( $post_id ) )
+			$typed    = trim( wp_unslash( (string) $_POST['delicat_seo_canonical'] ) );
+			$original = esc_url_raw( 0 === strpos( $typed, '/' ) && 0 !== strpos( $typed, '//' ) ? home_url( $typed ) : $typed );
+			/* this site only (with or without « www »), and never the page itself */
+			$same_site = '' !== $original && Delicat_Builder_V9_SEO_Index::bare_host( (string) wp_parse_url( $original, PHP_URL_HOST ) ) === Delicat_Builder_V9_SEO_Index::bare_host( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+			$same_site && Delicat_Builder_V9_SEO_Index::path( $original ) !== Delicat_Builder_V9_SEO_Index::path( (string) get_permalink( $post_id ) )
 				? update_post_meta( $post_id, Delicat_Builder_V9_SEO_Index::META_CANONICAL, $original )
 				: delete_post_meta( $post_id, Delicat_Builder_V9_SEO_Index::META_CANONICAL );
 		}

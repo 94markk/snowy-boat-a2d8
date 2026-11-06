@@ -216,6 +216,11 @@ final class Delicat_Builder_V9_Runtime_Router {
 				|| has_shortcode($content, 'delicat_native_privacy')
 				|| has_shortcode($content, 'delicat_v8_hero')
 			);
+			/* 9.9.0: « sondaj » is an Elementor page whose shortcode widget holds [delicat_v8_hero]: without
+			 * the module the visitor saw the raw « [delicat_v8_hero] » above the survey. */
+			if ( ! $native_shortcode && $id && false !== strpos( (string) get_post_meta( $id, '_elementor_data', true ), 'delicat_v8_hero' ) ) {
+				$native_shortcode = true;
+			}
 			if ( in_array($native_type, array('support','terms','privacy'), true) || $native_shortcode ) {
 				self::load('includes/class-delicat-builder-native-pages.php','Delicat_Builder_V9_Native_Pages');
 			}
