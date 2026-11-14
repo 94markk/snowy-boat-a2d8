@@ -79,6 +79,26 @@ final class DST2T_Scheduler {
 		return true;
 	}
 
+	/**
+	 * Whether this request should verify that the recurring jobs are armed.
+	 *
+	 * Each check is an Action Scheduler query plus an option read. v2.8 ran three
+	 * of them on every storefront request, including the uncached pages that
+	 * signed-in shoppers always get. wp-admin page loads, WP-Cron (also what a
+	 * server cron or a visitor-spawned cron runs) and WP-CLI are enough to re-arm
+	 * a missing schedule within minutes; admin-ajax calls from the storefront
+	 * (player verification, the detached fulfillment worker) skip it.
+	 */
+	public static function housekeeping_request() {
+		if ( ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
+			return true;
+		}
+		if ( function_exists( 'wp_doing_ajax' ) && wp_doing_ajax() ) {
+			return false;
+		}
+		return function_exists( 'is_admin' ) && is_admin();
+	}
+
 	public static function can_finish_response() {
 		return function_exists( 'fastcgi_finish_request' ) || function_exists( 'litespeed_finish_request' );
 	}

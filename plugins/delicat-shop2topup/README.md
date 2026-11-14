@@ -1,105 +1,88 @@
-# Delicat Shop2TopUp v2.6.1 — High-throughput instant fulfillment
+# Delicat – Top-Up Fulfillment for WooCommerce — 2.9.0
 
-This release uses a three-path fulfillment architecture: a detached single-use HTTPS loopback starts paid lines immediately, FastCGI post-response work provides a second local path when available, and Action Scheduler remains only the durable fallback. Signed supplier webhooks still settle completed orders synchronously. Supplier-side `pending` time cannot be eliminated locally, but WordPress queue starvation is removed from the normal path.
+White-label WooCommerce integration for the SHOP2TOPUP Reseller API v1, built for delicastoreha.com: signed webhooks, idempotent supplier orders, player validation, grouped variation catalog import, protected manual HTG pricing, balance monitoring, catalog/stock synchronization and vouchers encrypted at rest. WooCommerce stays the authority for payments and prices; the plugin only spends supplier balance for paid, attested order lines.
 
-## Update 2.6.1 — modern product fields
+Release history: `CHANGELOG.md`. Custom packages (Forfaits personnalisés): `CUSTOM-PACKAGES.md`. WordPress.org-style summary: `readme.txt`.
 
-The customer-facing game-account form now uses a premium Material-style UI with local inline SVG glyphs (no external font/CDN dependency). The large payment explanation banner has been removed from the product page; verification feedback appears only when the customer clicks **Vérifier votre compte**. This is a presentation-only update: WooCommerce payment approval, HMAC attestation, encrypted storage, idempotency and fast-lane fulfillment are unchanged.
+## How a paid order is fulfilled
 
-## Update 2.6.1 — purchase-response hotfix
+1. **Payment authority.** `woocommerce_payment_complete` records `_dst2t_wc_payment_approved` and an HMAC-SHA256 attestation over the order, customer, total, currency, transaction and every mapped line (supplier item, quantity, recipient fields). An edit after payment invalidates it and fulfillment fails closed. A manual switch to *processing* is not a payment; only legacy orders that carry WooCommerce's paid date are accepted without an attestation.
+2. **Idempotency.** One UUID per mapped line is stored (order item meta and `wp_dst2t_orders`) before any supplier request. Timeouts, retries and operator *Retry* always look that UUID up first; a line is never bought twice.
+3. **Fast lanes.** After the customer's response is flushed (`fastcgi_finish_request()` on PHP-FPM, `litespeed_finish_request()` on LiteSpeed/Hostinger), the same PHP worker submits up to two paid lines and re-reads their status twice in the first minute. Extra lines get a single-use detached worker (`admin-ajax.php?action=dst2t_fast_fulfill`, 256-bit token). Action Scheduler is the durable fallback; order jobs run at priority 0, before catalog and balance work.
+4. **Status.** A valid signed webhook settles the line immediately. If it loses the race for the order lock, it is settled right after its own 200 response instead of waiting for WP-Cron; the queued canonical re-read stays as fallback. Without webhooks, status reads keep the documented cadence (3 reads per 60 s per order) and a batch reconciliation runs every minute.
+5. **Price protection.** The live price is checked against the product's absolute maximum and the relative guard (*Maximum cost increase*, compared with the cached cost) before every purchase, and sent as `expected_unit_price`, which the supplier enforces. When the price endpoint is temporarily broken, the cached (or catalog) cost is used as that maximum, after the same guards. `PRICE_INCREASED` retries with the reported price once it passes the guards. Temporary supplier states (`OUT_OF_STOCK`, `PRODUCT_UNAVAILABLE`, `PRICING_UPDATING`, rate limits, 5xx, `retryable=true`) stay in recovery; anything else pauses the order on review without refunding automatically.
+6. **Completion.** When every mapped line is delivered, WooCommerce payment is confirmed and no unmapped line controls the order, the order is completed (setting *Complete WooCommerce orders automatically*). Cancelled and refunded orders are never changed back by a late supplier event.
 
-## v2.6.1 instant synchronization
+## Player validation
 
-This build adopts the low-latency pattern used in Delicat Digital Gateway while respecting SHOP2TOPUP's own contract:
-
-- WooCommerce remains the payment authority. Supplier fulfillment is released only after `woocommerce_payment_complete`.
-- A payment-complete HMAC attestation binds the exact paid order facts and mapped recipient data; post-payment edits fail closed.
-- A valid SHOP2TOPUP callback is verified over the **raw request body** with HMAC-SHA256 and its signed `data` order object is applied immediately. No scheduler or second API read is required for the normal completion path.
-- Status API reads are recovery only. A non-terminal order gets a bounded 20-second fallback check, while the signed webhook remains the primary real-time path.
-- `/orders/create` accepts the documented response plus safe live envelope variants, but every response must still match the UUID persisted before submission.
-- Secrets and voucher/customer data continue to use authenticated AES-256-GCM encryption at rest.
-
-
-Start with INSTALLATION-2.6.1.md. Audit findings and verified checks are in AUDIT-2.6.1.md.
-
-# Delicat Top-Up Fulfillment for WooCommerce — v2.4.5
-
-A white-label WooCommerce integration for the SHOP2TOPUP Reseller API v1. Version 2.3 adds grouped WooCommerce variation imports and protected manual HTG/store pricing while preserving supplier USD cost, stock, requirements, webhooks, and fulfillment synchronization.
-
-## v2.4.5 storefront UID visibility fix
-
-- Direct top-up items always expose **UID / Player ID** because `player_id` is a fixed player-validation field even when the category has no additional dynamic requirements.
-- Grouped variable products render the common account fields immediately, before a package is selected.
-- Switching package variations preserves typed UID/server/region values when the field keys are still valid.
-- Resetting the variation selector restores the default account form instead of removing it.
-- Voucher/code products still do not receive Player ID fields.
-
+* The **Vérifier votre compte** button (`admin-ajax.php?action=dst2t_verify_player`) checks the UID with the supplier and returns a signed token valid 15 minutes; the verified name then travels into the cart without a second lookup. Editing a field invalidates it.
+* Fields named `player_id`, `uid`, `user_id`, `userid` or `playerid` are the same identifier; `player_id` is always sent. Direct top-ups always show a UID field, vouchers never do.
+* In the default WooCommerce-first mode a supplier outage never blocks add-to-cart or checkout: unverified lines are validated after payment, before the supplier order.
+* A supplier answer for another account is rejected (`PLAYER_ID_MISMATCH`; IDs compared as strings, Free Fire UIDs exceed 32 bits). For Free Fire, a confirmed account region different from the product's (LATAM and NA are both *Americas*; Brazil and Europe are distinct) is refused, and the message names only the server the account is on. Unknown or ambiguous regions are not treated as a mismatch.
+* The nickname shown is the one the supplier returns. If it is outdated the supplier must refresh its lookup; the plugin does not substitute names.
+* Throttles: 20 checks per visitor and 300 per address per 5 minutes, and 120 per minute for the whole site (the address comes from forwarding headers a client can forge; the site ceiling protects the supplier key's own rate limit). Store managers are exempt.
+* Product pages stay in the LiteSpeed cache longer than a WordPress nonce lives. When the server rejects the page's nonce, the script fetches a fresh one (`dst2t_verify_nonce`) and retries once.
+* Signed-in customers can reuse their last five UID/server combinations per game: encrypted per user and category, loaded by authenticated AJAX, never printed in cacheable HTML.
 
 ## API contract used
 
-- Base URL: `https://shop2topup.com/api/endpoints/v1`
-- Authentication: `Authorization: Bearer <keyId>.<secret>`
-- Account/balance: `GET /account`
-- Catalog: big categories → categories → subcategories
-- Requirements: `GET /catalog/category/:categoryId/requirements`
-- Player validation: `POST /player/validate`
-- Price: `GET /catalog/subcategory/:itemId/price`
-- Create order: `POST /orders/create`
-- Status: `GET /orders/:orderId`
-- Batch reconciliation: `POST /orders/batch`
-- Webhook signature: `X-Shop2Topup-Signature: sha256=<hex>` over the exact raw request body using HMAC-SHA256.
+* Base URL: `https://shop2topup.com/api/endpoints/v1`, `Authorization: Bearer <keyId>.<secret>`
+* `GET /account` (balance), `GET /catalog/big-categories`, `/catalog/categories`, `/catalog/subcategories`, `GET /catalog/category/:id/requirements`, `GET /catalog/subcategory/:itemId/price`
+* `POST /player/validate`, `POST /orders/create`, `GET /orders/:orderId`, `POST /orders/batch`
+* Webhooks: `X-Shop2Topup-Signature: sha256=<hex>`, HMAC-SHA256 over the exact raw body.
 
-## v2.3 grouped variations + protected HTG pricing
+Harmless envelope variants (`data`/`result`/`payload`, flat objects, UTF-8 BOM) are accepted, but every order response must match the stored UUID and a recognised status; HTML is never success.
 
-- Recommended import structure is now **Variable product**: one game/service parent with each supplier denomination/package as a WooCommerce variation.
-- The variation carries the exact supplier item ID, category ID, requirement schema, product type, stock snapshot, and cached USD cost used for fulfillment.
-- The variable parent remains a WooCommerce draft until reviewed; importing additional supplier items later merges them into the same parent instead of creating duplicate product cards.
-- **Manual WooCommerce Pricing** is the default. Supplier USD cost and customer retail price are separate values. Supplier sync refreshes cost/stock/requirements without rewriting a manual retail price.
-- The Catalogue table has an independent selling-price field per supplier item. When WooCommerce currency is HTG, enter the customer price directly in gourdes before import.
-- Existing manual WooCommerce variation prices are preserved on re-import. Older draft simple imports are marked as superseded when their mapped variation is created.
-- Automatic USD conversion + markup remains available as an opt-in mode; selling-price synchronization only runs in that automatic mode.
-- Variation selector label is configurable (for example Package, Amount, Diamonds, Points).
+## Installation and upgrade
 
-## v2.2 catalog rebuild
+1. Back up the site and database. Upload the ZIP in *Plugins → Add New → Upload Plugin* and **replace** the installed version. Do not uninstall first: settings, UUIDs and the callback URL are kept.
+2. Purge the LiteSpeed (and CDN) cache, then reload a product page and the app.
+3. *WooCommerce → Top-Up Provider → Settings*: paste the complete `keyId.secret` credential (the secret is shown only once in the provider panel), save, then **Test connection**. `IP_NOT_ALLOWED` means the server's outbound IP must be allowed in the provider panel; the plugin never bypasses that allowlist.
+4. Keep **WooCommerce controls payment approval** and **Validate UID / Player ID** on.
+5. Pricing in gourdes: *Import structure* = Variable product, *Customer pricing* = Manual, WooCommerce currency = HTG. Import from *Catalog* (products arrive as drafts), set each variation price, review, publish.
+6. Place one small real order before selling broadly.
 
-- Catalog browsing follows the current three-level provider structure and uses `product_type` (`topup` / `voucher`) as the primary type field. If the provider returns an empty category index, the plugin derives categories from the documented unfiltered subcategory/product feed instead of showing an unusable empty selector.
-- Imports run as resumable small batches. While the catalog page is open, authenticated AJAX actively advances the queue; Action Scheduler/WP-Cron remains a fallback. This avoids the "queued forever" problem on hosts where loopback cron is blocked.
-- Import selected products, an entire category, or the complete supplier catalog in one click.
-- One failed item no longer cancels the rest of an import; progress and per-item failures are retained for review.
-- New products are Draft. Re-imported products also return to Draft by default so price/content changes can be reviewed before publishing.
-- Provider pagination is followed when the API returns a pagination envelope.
-- Requirement fields are fetched once per category batch and attached to top-up products; voucher products do not receive irrelevant Player ID fields. `NO_REQUIREMENTS_FOUND` no longer aborts the import: the product is kept as a draft and a later sync can retry the schema.
-- Product cost, type, requirements, provider availability, and supplier withdrawal/reappearance state are synchronized.
-- A confirmed supplier quantity of zero or explicit unavailable status blocks purchase. Missing/blank stock data is never guessed to mean zero.
-- When a previously withdrawn product reappears without a numeric stock value, stale plugin-owned zero stock is released so the product can become purchasable again.
-- Automatic catalog synchronization defaults to every 15 minutes and remains configurable/disableable by the store manager.
+### Callback (webhook) registration
 
-## Digital Gateway features added
+1. Dashboard → *Delivery callback*: copy the private URL with **Copy** (it contains a secret token: treat it like a password).
+2. **Test this URL from here** must report 200 for both the unsigned probe and the signed test. It requires the plugin's own JSON answer, so a maintenance or cache page that answers 200 is reported as unexpected.
+3. If the provider validates URLs before saving, click **Allow verification for 15 minutes**. Unsigned probes are then answered 2xx without processing anything; order events without a valid signature are always refused (HTTP 401).
+4. In the provider panel use *Update Webhook*, then *Send Test*. *Dernier test signé du fournisseur* must show a new date. On 401, compare the webhook HMAC secret on both sides; the API key and the URL token are different values.
+5. Delicat Builder maintenance mode: keep *allow payment callbacks* on. Only the exact callback route is opened through its filter.
+6. Once events arrive on the private URL, turn off *Keep the old callback URL working* to retire the provider-named route.
 
-- Signed-in customers can reuse their five most recent Player ID combinations for each game/category.
-- Player ID history stores the full relevant tuple (for example Player ID + server/region/zone), not only the main ID.
-- Saved identities are encrypted with context-bound AES-256-GCM storage and are never embedded in cacheable storefront HTML.
-- Selecting a saved identity fills the matching current requirement fields, but normal provider Player ID validation still runs before purchase where enabled.
-- Customers can clear their saved Player ID history.
-- Supplier details remain private from customer-facing product/order output.
-- Existing idempotent UUID fulfillment, strict webhook HMAC verification, queued signed-callback reconciliation, scheduled reconciliation, balance monitoring, cost guards, voucher encryption, HPOS support, and redacted logging remain active.
+### Scheduler
 
-## Important: IP allowlist
+Action Scheduler needs a trigger. With `DISABLE_WP_CRON`, configure a server cron that calls `wp-cron.php` (or `wp action-scheduler run`) every minute. While the dashboard is open it also processes at most one due order per minute. If *Next reconcile* stays in the past, check *WooCommerce → Status → Scheduled Actions*. Recurring jobs are re-armed from wp-admin, WP-Cron and WP-CLI requests (never from storefront requests).
 
-If the dashboard reports `IP_NOT_ALLOWED`, SHOP2TOPUP is rejecting requests from the WordPress server's outbound public IP. Catalog, balance, validation, and order endpoints cannot work until that IP is allowed in the reseller panel (or "Allow All IP Addresses" is enabled temporarily for testing). The plugin does not and should not bypass the provider's allowlist.
+### Stuck or old orders
 
-## Upgrade / setup
+Use **Sync** first. For a paid order still blocked, use **Retry** once: it keeps the UUID and looks the supplier order up before any purchase. Unpaid, completed or refunded lines are not retried. Never mark an unpaid order *processing* to force delivery.
 
-1. Back up the site, replace the old plugin with v2.4.5, and activate it.
-2. Keep the complete `keyId.secret` credential configured and confirm **Test connection** succeeds.
-3. Resolve any `IP_NOT_ALLOWED` error before attempting a catalog import.
-4. In Settings choose **Variable product** + **Manual WooCommerce pricing**. If customers pay in gourdes, confirm the WooCommerce store currency is HTG.
-5. Open **Catalogue**, choose a category, enter the customer-facing HTG price for the desired packages, and import them. Use **Import full catalog as drafts** only when you are comfortable pricing the new variations afterward.
-6. Leave the Catalogue page open for the fastest import because the browser actively advances each authenticated batch. If you navigate away, Action Scheduler/WP-Cron continues as a fallback when available.
-7. Review imported draft variable products and publish only after checking every variation price, required player fields, and availability.
-8. Keep the private callback URL and webhook HMAC secret configured, then send a signed provider test.
+### Diagnostics
 
-Never send API credentials, webhook HMAC secrets, voucher codes, or customer Player IDs through chat or expose them in storefront JavaScript/HTML.
+* *Dernière réponse API invalide* shows the endpoint, HTTP code, format and size of the last malformed answer, never its body. `INVALID_RESPONSE` alone does not prove a purchase happened or failed; Sync reads the truth by UUID.
+* The callback card counts callbacks that failed authentication (missing or wrong signature).
+* *Debug logging* writes request timing and error codes to WooCommerce logs (source `delicat-topup`); player data and secrets are never logged.
 
+## Security notes
 
-UID / Player ID verification: imported player-account fields named player_id, uid, user_id, userid, or playerid are recognized as the same player identifier for pre-purchase validation.
+* Prefer wp-config constants: `DELICAT_S2T_KEY_ID`, `DELICAT_S2T_KEY_SECRET`, `DELICAT_S2T_WEBHOOK_SECRET`, and `DELICAT_S2T_ENCRYPTION_KEY` (32+ random characters, set before storing secrets; `DELICAT_S2T_ENCRYPTION_KEY_PREVIOUS` lets you rotate). Without it the AES-256-GCM key derives from the WordPress salts; rotating salts then needs a re-save of the credentials (the dashboard warns).
+* Vouchers are encrypted at rest and shown only on completed orders: to the customer who owns the order, to a visitor holding the order key, in order emails and to store managers.
+* Every admin action checks `manage_woocommerce` and a nonce. Public endpoints: the webhook routes, `dst2t_verify_player`, `dst2t_verify_nonce` and the single-use `dst2t_fast_fulfill` worker.
+* White label (*Hide the provider from the storefront*): storefront assets are inlined with a neutral prefix, catalog copy is scrubbed, SKUs are keyed digests, the REST index hides the routes, and `.htaccess` denies the documentation, translation files and `tests/`. On nginx add the rule quoted in `.htaccess`. After deploying, `readme.txt` in this folder must answer 403.
+* Never map one WooCommerce product to two automatic supplier plugins.
+
+## WP-CLI
+
+`wp delicat-s2t test` · `balance [--refresh]` · `reconcile` · `sync [--batches=5] [--per-batch=20]` · `status` · `webhook [--rotate]`
+
+## Tests
+
+Offline suites with WordPress/WooCommerce/supplier doubles (no database, no network, no purchase):
+
+```
+for t in tests/*.php; do php "$t" || echo FAIL $t; done
+```
+
+They refuse to run outside the command line. They do not replace a staging test on the real site.

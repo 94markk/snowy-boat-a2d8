@@ -3,11 +3,11 @@
  * Plugin Name: Delicat Recharge Admin (HQ)
  * Plugin URI:  https://delicastoreha.com
  * Description: Système de recharge de wallet TeraWallet via MonCash (auto), Natcash (auto) et Manuel (proof upload).
- * Version:     6.6.5
+ * Version:     6.7.0
  * Author:      Delicat Store Haiti
  * Text Domain: delicat-recharge
  * Requires at least: 5.8
- * Requires PHP: 7.4
+ * Requires PHP: 8.0
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
@@ -22,12 +22,13 @@ if ( ! defined( 'DELICAT_VERSION' ) ) {
     // 6.5.2: schema change (indexed TransCode column + date indexes).
     // 6.6.4: schema change (bonus_done column on the recharges table).
     // 6.6.5: one-time data clean-up (retired nc_pin values blanked) + SMS table.
-    define( 'DELICAT_VERSION',  '6.6.5' );
+    // 6.7.0: no schema change; the idempotent self-heal (dbDelta) runs once.
+    define( 'DELICAT_VERSION',  '6.7.0' );
 }
 if ( ! defined( 'DELICAT_ASSET_VERSION' ) ) {
     // UI-only cache version. Keep DELICAT_VERSION unchanged so database/self-healing
     // version checks do not run just because presentation assets changed.
-    define( 'DELICAT_ASSET_VERSION', '6.6.5' );
+    define( 'DELICAT_ASSET_VERSION', '6.7.0' );
 }
 if ( ! function_exists( 'delicat_recharge_icon' ) ) {
     /**
@@ -70,6 +71,23 @@ if ( ! function_exists( 'delicat_recharge_finish_request' ) ) {
         } elseif ( function_exists( 'litespeed_finish_request' ) ) {
             litespeed_finish_request();
         }
+    }
+}
+if ( ! function_exists( 'delicat_recharge_asset_url' ) ) {
+    /**
+     * 6.7.0: URL of a front-end file, minified build first. assets/css/form.css and
+     * assets/js/form.js are the readable sources; tools/build-assets.sh writes
+     * form.min.css / form.min.js next to them (same rules, about half the bytes for
+     * the script). With SCRIPT_DEBUG, or if a .min file is missing, the source is used.
+     */
+    function delicat_recharge_asset_url( string $rel ): string {
+        if ( ! ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ) ) {
+            $min = preg_replace( '/\.(css|js)$/', '.min.$1', $rel );
+            if ( $min !== $rel && file_exists( DELICAT_PATH . $min ) ) {
+                return DELICAT_URL . $min;
+            }
+        }
+        return DELICAT_URL . $rel;
     }
 }
 if ( ! defined( 'DELICAT_API_SYNC_VERSION' ) ) {
@@ -254,7 +272,7 @@ add_action( 'wp_enqueue_scripts', function () {
     }
 
     if ( $should_load ) {
-        wp_enqueue_style( 'delicat-recharge', DELICAT_URL . 'assets/css/form.css', [], defined( 'DELICAT_ASSET_VERSION' ) ? DELICAT_ASSET_VERSION : DELICAT_VERSION );
+        wp_enqueue_style( 'delicat-recharge', delicat_recharge_asset_url( 'assets/css/form.css' ), [], defined( 'DELICAT_ASSET_VERSION' ) ? DELICAT_ASSET_VERSION : DELICAT_VERSION );
     }
 }, 9999 );
 

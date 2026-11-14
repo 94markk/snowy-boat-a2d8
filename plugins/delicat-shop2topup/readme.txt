@@ -3,7 +3,7 @@ Contributors: delicatstore
 Tags: woocommerce, game topup, digital delivery, reseller api, vouchers
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 2.8.3
+Stable tag: 2.9.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -83,7 +83,7 @@ Supplier catalog sync may update cost and availability without changing a manual
 
 == Recent Player IDs ==
 
-For signed-in customers, the plugin can remember up to five recent identity combinations per game/category after a successful add-to-cart. Relevant fields such as Player ID, server, region, or zone are stored together and encrypted with user/category context. They are loaded through authenticated AJAX rather than embedded in cacheable HTML. Selecting a saved identity does not bypass normal provider validation.
+For signed-in customers, the plugin can remember up to five recent identity combinations per game/category after a successful verification or add-to-cart. Relevant fields such as Player ID, server, region, or zone are stored together and encrypted with user/category context. They are loaded through authenticated AJAX rather than embedded in cacheable HTML. Selecting a saved identity does not bypass normal provider validation.
 
 == Fulfillment behavior ==
 
@@ -133,14 +133,31 @@ The plugin scrubs supplier-specific storefront copy/metadata and keeps operation
 
 == Changelog ==
 
+The complete history is in CHANGELOG.md.
+
+= 2.9.0 =
+* Supplier-confirmed deliveries complete the WooCommerce order within seconds: the post-response lane now runs on LiteSpeed, a signed callback that loses the order-lock race is settled right after its response, two extra status reads happen in the first minute, and order jobs outrank catalog jobs.
+* The "Vérifier votre compte" button recovers from expired nonces on cached pages, works on older Android WebViews, and shows readable French errors.
+* Player-verification throttles use fixed windows (shared mobile-carrier addresses no longer stay blocked) plus a site-wide ceiling against forged forwarding headers.
+* Cost-guard fix on the price fallback path; faster storefront and catalog admin; complete uninstall cleanup; test scripts refuse to run over HTTP.
+
+= 2.8.3 =
+Custom package values restored in the native WooCommerce variation selector.
+
+= 2.8.0 – 2.8.2 =
+Forfaits personnalisés (custom package recipes), product-editor access and a startup fix for the shared module. See CUSTOM-PACKAGES.md.
+
+= 2.7.0 – 2.7.4 =
+Non-blocking product saves, compact Player ID card, stricter player identity checks, Free Fire region/server checks and messages.
+
 = 2.6.1 =
 Modernize the customer product fields with dependency-free Material-style SVG glyphs, compact recent-ID controls, cleaner UID inputs and a premium verification button. Remove the large payment-explanation banner while preserving the WooCommerce payment gate and v2.6.0 fast-lane fulfillment architecture.
 
 = 2.6.0 =
-Fix private webhook registration after HMAC setup, maintenance callback routing, queue successor scheduling, safe paid-order recovery and API payload validation. See AUDIT-2.6.0.md.
+Fix private webhook registration after HMAC setup, maintenance callback routing, queue successor scheduling, safe paid-order recovery and API payload validation.
 
 = 2.4.6 =
-Recovery retry bounds, response compatibility and diagnostics, accepted-order safeguards, mobile table scrolling. See UPDATE-2.4.6.md.
+Recovery retry bounds, response compatibility and diagnostics, accepted-order safeguards, mobile table scrolling.
 
 = 2.4.5 =
 * Fixed UID / Player ID fields not appearing on grouped variable products before a package was selected.

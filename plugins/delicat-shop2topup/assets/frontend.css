@@ -113,7 +113,6 @@
 	display: flex;
 	min-height: 52px;
 	position: relative;
-	transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
 }
 
 .dst2t-history-control:focus-within,
@@ -297,7 +296,9 @@
 	padding: 0 16px !important;
 	text-align: center;
 	text-decoration: none !important;
-	transition: transform .16s ease, box-shadow .16s ease, filter .16s ease;
+	/* Compositor-only: box-shadow/filter transitions repaint on every frame,
+	 * which stutters on low-end Android WebViews. */
+	transition: transform .16s ease;
 	width: 100%;
 }
 
@@ -480,8 +481,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.dst2t-history-control,
-	.dst2t-field-control,
 	.dst2t-verify-button {
 		transition: none;
 	}

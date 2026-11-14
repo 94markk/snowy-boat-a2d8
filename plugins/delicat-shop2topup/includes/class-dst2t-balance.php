@@ -35,7 +35,9 @@ final class DST2T_Balance {
 	public function hooks() {
 		add_action( self::ACTION_REFRESH, array( $this, 'refresh' ) );
 		add_action( self::ACTION_NOW, array( $this, 'refresh_now' ) );
-		add_action( 'init', array( $this, 'ensure_schedule' ), 31 );
+		if ( DST2T_Scheduler::housekeeping_request() ) {
+			add_action( 'init', array( $this, 'ensure_schedule' ), 31 );
+		}
 		add_action( 'wp_ajax_dst2t_balance', array( $this, 'ajax_balance' ) );
 		add_action( 'admin_bar_menu', array( $this, 'admin_bar' ), 80 );
 	}

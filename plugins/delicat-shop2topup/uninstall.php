@@ -28,6 +28,7 @@ $product_meta_keys = array(
 	'_dst2t_supplier_stock_owned',
 	'_dst2t_supplier_missing',
 	'_dst2t_last_seen',
+	'_dst2t_supplier_last_seen',
 	'_dst2t_group_category_id',
 	'_dst2t_import_structure',
 	'_dst2t_variation_label',
@@ -47,6 +48,17 @@ $order_item_meta_keys = array(
 	'_dst2t_vouchers',
 	'_dst2t_player_name',
 	'_dst2t_returns_voucher',
+	'_dst2t_player_validated',
+);
+
+// WooCommerce order-level payment evidence written by this plugin.
+$order_meta_keys = array(
+	'_dst2t_wc_payment_approved',
+	'_dst2t_wc_payment_approved_at',
+	'_dst2t_wc_transaction_id',
+	'_dst2t_payment_attestation_v',
+	'_dst2t_payment_attestation_sig',
+	'_dst2t_paid_review_hold',
 );
 
 foreach ( $product_meta_keys as $meta_key ) {
@@ -61,8 +73,15 @@ foreach ( $order_item_meta_keys as $meta_key ) {
 // removed by prefix. Both the classic and the HPOS meta tables are covered.
 $wpdb->query( "DELETE FROM {$wpdb->postmeta} WHERE meta_key LIKE '\_dst2t\_note\_%'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 $hpos_meta = $wpdb->prefix . 'wc_orders_meta';
-if ( $hpos_meta === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $hpos_meta ) ) ) {
+$has_hpos  = $hpos_meta === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $hpos_meta ) );
+if ( $has_hpos ) {
 	$wpdb->query( "DELETE FROM {$hpos_meta} WHERE meta_key LIKE '\_dst2t\_note\_%'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+}
+foreach ( $order_meta_keys as $meta_key ) {
+	delete_post_meta_by_key( $meta_key );
+	if ( $has_hpos ) {
+		$wpdb->delete( $hpos_meta, array( 'meta_key' => $meta_key ), array( '%s' ) );
+	}
 }
 
 $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'dst2t\_lock\_%'" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
@@ -94,6 +113,7 @@ foreach (
 		'dst2t_batch_not_before',
 		'dst2t_recovery_step_at',
 		'dst2t_reconcile_state',
+		'dst2t_catalog_last_import',
 	) as $option
 ) {
 	delete_option( $option );

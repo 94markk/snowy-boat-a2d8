@@ -33,8 +33,12 @@ final class DST2T_Repository {
 			KEY due_status (status,next_check_at)
 		) {$charset};";
 
+		// dbDelta only adds what is missing (tables, columns, indexes) and never
+		// drops anything, so re-running it on every version change is safe.
 		dbDelta( $sql );
-		update_option( 'dst2t_db_version', DST2T_VERSION, false );
+		// Autoloaded: this flag is compared on every request, and a non-autoloaded
+		// option costs its own database query each time.
+		update_option( 'dst2t_db_version', DST2T_VERSION, true );
 	}
 
 	public function register_intent( $provider_order_id, $wc_order_id, $wc_item_id, $payload_hash ) {

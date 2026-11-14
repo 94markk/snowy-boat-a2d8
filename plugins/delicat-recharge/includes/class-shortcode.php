@@ -16,19 +16,21 @@ class Delicat_Shortcode {
      * where has_shortcode() on post_content would fail.
      */
     public function register_assets(): void {
+        // 6.7.0: minified builds (see delicat_recharge_asset_url()); the script is
+        // deferred so it never holds up the first paint of the wallet page.
         wp_register_style(
             'delicat-recharge',
-            DELICAT_URL . 'assets/css/form.css',
+            delicat_recharge_asset_url( 'assets/css/form.css' ),
             [],
             defined( 'DELICAT_ASSET_VERSION' ) ? DELICAT_ASSET_VERSION : DELICAT_VERSION
         );
 
         wp_register_script(
             'delicat-recharge',
-            DELICAT_URL . 'assets/js/form.js',
+            delicat_recharge_asset_url( 'assets/js/form.js' ),
             [ 'jquery' ],
             defined( 'DELICAT_ASSET_VERSION' ) ? DELICAT_ASSET_VERSION : DELICAT_VERSION,
-            true
+            [ 'in_footer' => true, 'strategy' => 'defer' ]
         );
 
         wp_localize_script( 'delicat-recharge', 'delicatData', $this->data() );
@@ -155,7 +157,8 @@ class Delicat_Shortcode {
                         <button type="button" class="dw12-qr-close delicat-qr-close" data-delicat-qr-close aria-label="Fermer">×</button>
                         <h3>Recevoir de l’argent</h3>
                         <p>Scannez ce QR code ou copiez votre code Delicat.</p>
-                        <img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=10&data=<?php echo esc_attr( $qr_data ); ?>" alt="QR code <?php echo esc_attr( $code ); ?>">
+                        <?php // 6.7.0: lazy — this legacy dialog stays hidden, so the remote QR image (and the customer's code) is no longer fetched on every wallet page view. ?>
+                        <img loading="lazy" decoding="async" width="160" height="160" src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=10&data=<?php echo esc_attr( $qr_data ); ?>" alt="QR code <?php echo esc_attr( $code ); ?>">
                         <div class="dw12-qr-code"><?php echo esc_html( $code ); ?></div>
                         <button type="button" class="dw12-qr-copy" data-dsm-copy="<?php echo esc_attr( $code ); ?>"><span class="dsm-copytxt">Copier mon code</span></button>
                     </div>

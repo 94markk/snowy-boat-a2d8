@@ -1,0 +1,8 @@
+# Offline test scripts: never served over HTTP (they also exit unless run from the CLI).
+<IfModule mod_authz_core.c>
+	Require all denied
+</IfModule>
+<IfModule !mod_authz_core.c>
+	Order allow,deny
+	Deny from all
+</IfModule>

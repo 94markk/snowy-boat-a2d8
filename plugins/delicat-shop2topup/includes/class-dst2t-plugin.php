@@ -84,7 +84,10 @@ final class DST2T_Plugin {
 		}
 
 		add_filter( 'cron_schedules', array( $this, 'cron_schedules' ) );
-		add_action( 'init', array( $this, 'ensure_recurring_action' ), 30 );
+		// Re-armed from wp-admin, WP-Cron and WP-CLI only, never on storefront requests.
+		if ( DST2T_Scheduler::housekeeping_request() ) {
+			add_action( 'init', array( $this, 'ensure_recurring_action' ), 30 );
+		}
 		add_filter( 'plugin_action_links_' . plugin_basename( DST2T_FILE ), array( $this, 'action_links' ) );
 
 		if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'DST2T_CLI' ) ) {

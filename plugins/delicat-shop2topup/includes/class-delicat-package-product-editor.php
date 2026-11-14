@@ -37,7 +37,12 @@ final class Delicat_Package_Product_Editor {
     }
     public static function banner($post) {
         if (!$post || $post->post_type !== 'product' || !self::allowed($post->ID)) { return; }
-        echo '<div style="margin:12px 0;padding:14px;border-left:4px solid #635bff;background:#fff"><strong>Forfaits personnalisés</strong><p>220 = 110 × 2 · 451 = 110 + 341</p><a class="button button-primary" href="' . esc_url(admin_url('edit.php?post_type=product&page=delicat-packages&product_id=' . absint($post->ID))) . '">Configurer les forfaits</a> <a class="button" href="#delicat_packages_editor">Voir le formulaire sur cette fiche</a><p style="margin-bottom:0">Module chargé · Shop2Topup ' . esc_html(defined('DST2T_VERSION') ? DST2T_VERSION : '2.8.3') . '</p></div>';
+        echo '<div style="margin:12px 0;padding:14px;border-left:4px solid #635bff;background:#fff"><strong>Forfaits personnalisés</strong><p>220 = 110 × 2 · 451 = 110 + 341</p><a class="button button-primary" href="' . esc_url(admin_url('edit.php?post_type=product&page=delicat-packages&product_id=' . absint($post->ID))) . '">Configurer les forfaits</a> <a class="button" href="#delicat_packages_editor">Voir le formulaire sur cette fiche</a><p style="margin-bottom:0">Module chargé · ' . esc_html(self::module_label()) . '</p></div>';
+    }
+    /** Neutral label: admin screens are shared and screenshotted, so the supplier is never named. */
+    private static function module_label() {
+        $label = class_exists('DST2T_Brand', false) ? DST2T_Brand::label() : 'Recharge';
+        return trim($label . ' ' . (defined('DST2T_VERSION') ? DST2T_VERSION : ''));
     }
     public static function panel() {
         global $post;

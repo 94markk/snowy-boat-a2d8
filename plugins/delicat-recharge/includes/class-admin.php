@@ -124,7 +124,7 @@ class Delicat_Admin {
         <div style="margin:30px auto 20px;max-width:680px;background:#fff;border:1px solid #e2e4ea;
                     border-radius:12px;padding:22px 26px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.04);">
             <?php if ( $logo ) : ?>
-                <img src="<?php echo esc_url( $logo ); ?>" alt="Délicat Store Haiti"
+                <img src="<?php echo esc_url( $logo ); ?>" alt="Délicat Store Haiti" width="220" height="105" loading="lazy" decoding="async"
                      style="max-width:220px;height:auto;margin-bottom:12px;">
             <?php endif; ?>
             <p style="font-size:13px;color:#444;line-height:1.6;margin:8px 0;">

@@ -13,6 +13,58 @@
 		info: '<path d="M11 17h2v-6h-2v6zm1-15a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-1-11h2V7h-2v2z"/>'
 	};
 
+	var GENERIC_ERROR = 'Impossible de vérifier le compte pour le moment. Vérifiez votre connexion puis réessayez.';
+	var historyCache = {};
+
+	function each(list, fn) {
+		Array.prototype.forEach.call(list || [], fn);
+	}
+
+	function emptyNode(node) {
+		while (node && node.firstChild) node.removeChild(node.firstChild);
+	}
+
+	function isAttached(node) {
+		return !!node && (typeof node.isConnected === 'boolean' ? node.isConnected : document.documentElement.contains(node));
+	}
+
+	function encodeForm(pairs) {
+		return pairs.map(function (pair) {
+			return encodeURIComponent(pair[0]) + '=' + encodeURIComponent(pair[1] == null ? '' : String(pair[1]));
+		}).join('&');
+	}
+
+	// POST to admin-ajax and always resolve with {ok, status, json}. A body that is
+	// not JSON (a host error page, WordPress's bare "-1") gives json === null or a
+	// number instead of a parse exception, so callers can show a readable message.
+	// Falls back to jQuery on WebViews without fetch().
+	function postForm(url, body) {
+		if (window.fetch) {
+			return window.fetch(url, {
+				method: 'POST',
+				credentials: 'same-origin',
+				cache: 'no-store',
+				headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
+				body: body
+			}).then(function (response) {
+				return response.text().then(function (text) {
+					var json = null;
+					try { json = JSON.parse(text); } catch (e) { json = null; }
+					return {ok: response.ok, status: response.status, json: json};
+				});
+			});
+		}
+		return new Promise(function (resolve, reject) {
+			$.ajax({url: url, type: 'POST', data: body, cache: false, dataType: 'text'}).always(function (a, textStatus, b) {
+				var xhr = textStatus === 'success' ? b : a;
+				if (!xhr || !xhr.status) { reject(new Error('network')); return; }
+				var json = null;
+				try { json = JSON.parse(xhr.responseText); } catch (e) { json = null; }
+				resolve({ok: xhr.status >= 200 && xhr.status < 300, status: xhr.status, json: json});
+			});
+		});
+	}
+
 	function materialIcon(name, extraClass) {
 		var span = document.createElement('span');
 		span.className = 'dst2t-material-icon ' + (extraClass || '');
@@ -25,56 +77,79 @@
 		if (!historyConfig || !historyConfig.ajax || !historyConfig.nonce) {
 			return Promise.reject(new Error('history unavailable'));
 		}
-		var data = Object.assign({
-			action: historyConfig.action || 'dst2t_player_history',
-			product_id: productId,
-			nonce: historyConfig.nonce
-		}, extra || {});
-		return fetch(historyConfig.ajax, {
-			method: 'POST',
-			credentials: 'same-origin',
-			cache: 'no-store',
-			headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
-			body: new URLSearchParams(data).toString()
-		}).then(function (response) {
-			return response.json();
-		}).then(function (result) {
-			if (!result || !result.success) throw new Error('history unavailable');
-			return result.data || {};
+		var key = String(productId);
+		// Picking package after package re-renders the form; reuse the answer for a
+		// product already asked about instead of another round trip each time.
+		if (!extra && historyCache[key]) return historyCache[key];
+		var pairs = [
+			['action', historyConfig.action || 'dst2t_player_history'],
+			['product_id', productId],
+			['nonce', historyConfig.nonce]
+		];
+		Object.keys(extra || {}).forEach(function (name) { pairs.push([name, extra[name]]); });
+		var request = postForm(historyConfig.ajax, encodeForm(pairs)).then(function (res) {
+			if (!res.json || !res.json.success) throw new Error('history unavailable');
+			return res.json.data || {};
+		});
+		if (extra) {
+			historyCache = {};
+		} else {
+			// Failures are remembered too: a product without saved-ID support used to
+			// be asked again after every DOM change. A verification or a clear resets it.
+			historyCache[key] = request;
+		}
+		return request;
+	}
+
+	// Cached product pages can carry a nonce WordPress no longer accepts (it lives
+	// 12-24 h, and for a guest with a cart it is tied to that cart's session).
+	function refreshVerifyNonce() {
+		if (!verifyConfig || !verifyConfig.refresh) return Promise.reject(new Error('refresh unavailable'));
+		return postForm(verifyConfig.ajax, encodeForm([['action', verifyConfig.refresh]])).then(function (res) {
+			if (res.json && res.json.success && res.json.data && res.json.data.nonce) {
+				verifyConfig.nonce = res.json.data.nonce;
+				return true;
+			}
+			throw new Error('refresh failed');
 		});
 	}
 
-	function verifyRequest(productId, requirements) {
+	function verifyRequest(productId, requirements, retried) {
 		if (!verifyConfig || !verifyConfig.ajax || !verifyConfig.nonce) {
-			return Promise.reject(new Error('verify unavailable'));
+			return Promise.reject(new Error(GENERIC_ERROR));
 		}
-		var params = new URLSearchParams();
-		params.set('action', verifyConfig.action || 'dst2t_verify_player');
-		params.set('nonce', verifyConfig.nonce);
-		params.set('product_id', String(productId || ''));
+		var pairs = [
+			['action', verifyConfig.action || 'dst2t_verify_player'],
+			['nonce', verifyConfig.nonce],
+			['product_id', String(productId || '')]
+		];
 		Object.keys(requirements || {}).forEach(function (key) {
 			var value = requirements[key];
 			if (Array.isArray(value)) {
-				value.forEach(function (entry) { params.append('requirements[' + key + '][]', entry); });
+				value.forEach(function (entry) { pairs.push(['requirements[' + key + '][]', entry]); });
 			} else {
-				params.append('requirements[' + key + ']', value == null ? '' : String(value));
+				pairs.push(['requirements[' + key + ']', value == null ? '' : String(value)]);
 			}
 		});
-		return fetch(verifyConfig.ajax, {
-			method: 'POST',
-			credentials: 'same-origin',
-			cache: 'no-store',
-			headers: {'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'},
-			body: params.toString()
-		}).then(function (response) {
-			return response.json().then(function (json) {
-				if (!response.ok || !json || !json.success) {
-					var err = new Error((json && json.data && json.data.message) || 'verify failed');
-					err.payload = json && json.data ? json.data : null;
-					throw err;
-				}
-				return json.data || {};
-			});
+		return postForm(verifyConfig.ajax, encodeForm(pairs)).then(function (res) {
+			var json = res.json;
+			var data = json && typeof json === 'object' && json.data ? json.data : null;
+			// WordPress answers a rejected nonce with a bare -1 (HTTP 403).
+			if (!retried && !data && (res.status === 403 || json === -1 || json === 0)) {
+				return refreshVerifyNonce().then(function () {
+					return verifyRequest(productId, requirements, true);
+				}, function () {
+					throw new Error(GENERIC_ERROR);
+				});
+			}
+			if (!res.ok || !json || !json.success) {
+				var err = new Error((data && data.message) || GENERIC_ERROR);
+				err.payload = data;
+				throw err;
+			}
+			return data || {};
+		}, function () {
+			throw new Error(GENERIC_ERROR);
 		});
 	}
 
@@ -129,7 +204,7 @@
 			select.addEventListener('change', function () {
 				if (select.value === '') return;
 				var item = items[Number(select.value)] || {fields: {}};
-				wrap.querySelectorAll('[data-dst2t-field-key]').forEach(function (input) {
+				each(wrap.querySelectorAll('[data-dst2t-field-key]'), function (input) {
 					var key = input.getAttribute('data-dst2t-field-key');
 					if (Object.prototype.hasOwnProperty.call(spec, key)) {
 						var value = Object.prototype.hasOwnProperty.call(item.fields || {}, key) ? item.fields[key] : '';
@@ -171,7 +246,8 @@
 			box.appendChild(note);
 			heading.appendChild(clear);
 			var firstField = wrap.querySelector('.dst2t-field');
-			if (firstField) firstField.before(box); else wrap.appendChild(box);
+			if (!isAttached(wrap)) return;
+			if (firstField && firstField.parentNode) firstField.parentNode.insertBefore(box, firstField); else wrap.appendChild(box);
 		}).catch(function () {
 			wrap.removeAttribute('data-dst2t-history-ready');
 		});
@@ -179,7 +255,7 @@
 
 	function getValues(wrap) {
 		var values = {};
-		wrap.querySelectorAll('[data-dst2t-field-key]').forEach(function (input) {
+		each(wrap.querySelectorAll('[data-dst2t-field-key]'), function (input) {
 			var key = input.getAttribute('data-dst2t-field-key');
 			if (!key) return;
 			if (input.multiple) {
@@ -194,13 +270,13 @@
 	function clearStatus(box) {
 		if (!box) return;
 		box.className = 'dst2t-verify-status';
-		box.replaceChildren();
+		emptyNode(box);
 	}
 
 	function renderStatus(box, type, message, meta) {
 		if (!box) return;
 		box.className = 'dst2t-verify-status is-' + type;
-		box.replaceChildren();
+		emptyNode(box);
 
 		var head = document.createElement('div');
 		head.className = 'dst2t-verify-head';
@@ -243,8 +319,7 @@
 			if (token) token.value = '';
 			clearStatus(status);
 		}
-		var inputs = wrap.querySelectorAll('[data-dst2t-field-key]');
-		inputs.forEach(function (input) {
+		each(wrap.querySelectorAll('[data-dst2t-field-key]'), function (input) {
 			input.addEventListener('input', invalidateVerification);
 			input.addEventListener('change', invalidateVerification);
 		});
@@ -269,7 +344,8 @@
 			renderStatus(status, 'loading', 'Vérification du compte en cours…', {});
 			verifyRequest(productId, values).then(function (data) {
 				// Never display a stale response as verification of edited fields.
-				if (!wrap.isConnected || requestRevision !== revision || JSON.stringify(getValues(wrap)) !== JSON.stringify(values)) return;
+				if (!isAttached(wrap) || requestRevision !== revision || JSON.stringify(getValues(wrap)) !== JSON.stringify(values)) return;
+				historyCache = {};
 				var previousHistory = wrap.querySelector('.dst2t-player-history');
 				if (previousHistory) previousHistory.remove();
 				wrap.removeAttribute('data-dst2t-history-ready');
@@ -283,9 +359,10 @@
 					zone_id: data.meta && data.meta.zone_id ? data.meta.zone_id : ''
 				});
 			}).catch(function (error) {
-				if (!wrap.isConnected || requestRevision !== revision) return;
-				renderStatus(status, 'error', (error && error.payload && error.payload.message) || error.message || 'Impossible de vérifier le compte.', {});
-			}).finally(function () {
+				if (!isAttached(wrap) || requestRevision !== revision) return;
+				renderStatus(status, 'error', (error && error.payload && error.payload.message) || (error && error.message) || GENERIC_ERROR, {});
+			}).then(function () {
+				// Not .finally(): it is missing from WebViews older than Chrome 63.
 				button.disabled = false;
 				button.classList.remove('is-loading');
 			});
@@ -293,7 +370,7 @@
 	}
 
 	function scanHistory() {
-		document.querySelectorAll('.dst2t-field-list[data-dst2t-history-product]').forEach(function (wrap) {
+		each(document.querySelectorAll('.dst2t-field-list[data-dst2t-history-product]'), function (wrap) {
 			initHistory(wrap);
 			initVerify(wrap);
 		});
@@ -359,10 +436,19 @@
 
 	if (window.MutationObserver) {
 		var scheduled = false;
-		new MutationObserver(function () {
-			if (!scheduled) {
-				scheduled = true;
-				setTimeout(function () { scheduled = false; scanHistory(); }, 100);
+		// Only element insertions can bring a new form in. Sliders, timers and
+		// text updates elsewhere on the page no longer trigger a document scan.
+		new MutationObserver(function (mutations) {
+			if (scheduled) return;
+			for (var i = 0; i < mutations.length; i++) {
+				var added = mutations[i].addedNodes;
+				for (var j = 0; j < added.length; j++) {
+					if (added[j].nodeType === 1) {
+						scheduled = true;
+						setTimeout(function () { scheduled = false; scanHistory(); }, 100);
+						return;
+					}
+				}
 			}
 		}).observe(document.documentElement, {childList: true, subtree: true});
 	}

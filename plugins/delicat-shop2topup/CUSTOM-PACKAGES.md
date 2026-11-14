@@ -27,7 +27,7 @@ Les versions 2.8.0 et 2.8.1 pouvaient déclarer leurs classes sans enregistrer l
 
 1. Remplacez le plugin installé par ce ZIP. Vérifiez **version 2.8.2** dans Extensions.
 2. Ouvrez **Produits → Free Fire LATAM → Modifier**.
-3. Sous le titre du produit, un encadré **Forfaits personnalisés** affiche **Module chargé · Shop2Topup 2.8.2** et le bouton **Configurer les forfaits**. Ce bouton ouvre directement le gestionnaire du produit, sans ID à saisir.
+3. Sous le titre du produit, un encadré **Forfaits personnalisés** affiche **Module chargé · <libellé fournisseur> <version>** (depuis 2.9.0 le libellé neutre des Réglages, jamais le nom du fournisseur) et le bouton **Configurer les forfaits**. Ce bouton ouvre directement le gestionnaire du produit, sans ID à saisir.
 4. La fiche comporte aussi un bloc indépendant **Forfaits personnalisés** avec le formulaire complet. Il reste accessible sans les petits onglets mobiles de Données produit.
 5. Le produit doit être un produit variable, déjà enregistré avec ses options fournisseur originales. Pour 220, choisissez 110 × 2. Pour 451, choisissez 110 × 1 et 341 × 1.
 6. Dans le formulaire de la fiche produit, saisissez le nom et le prix, cochez **Créer ce forfait lors de la mise à jour du produit**, puis cliquez sur **Mettre à jour**. Le forfait apparaît après rechargement.

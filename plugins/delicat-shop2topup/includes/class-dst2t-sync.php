@@ -35,7 +35,9 @@ final class DST2T_Sync {
 
 	public function hooks() {
 		add_action( self::ACTION, array( $this, 'run' ) );
-		add_action( 'init', array( $this, 'ensure_schedule' ), 32 );
+		if ( DST2T_Scheduler::housekeeping_request() ) {
+			add_action( 'init', array( $this, 'ensure_schedule' ), 32 );
+		}
 	}
 
 	public function interval_seconds() {
