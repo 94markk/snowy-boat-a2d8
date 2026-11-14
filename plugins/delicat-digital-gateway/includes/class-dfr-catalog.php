@@ -672,7 +672,7 @@ final class DFR_Catalog {
         // Every event of each hook, whatever its arguments (sync batches carry their round).
         // 4.19.0 scheduled the continue/balance events; clear them so an upgrade leaves nothing behind.
         foreach (array('dfr_catalog_sync_event', 'dfr_catalog_sync_batch', 'dfr_uid_validation_games_refresh', 'dfr_catalog_sync_continue', 'dfr_balance_sync_event', 'dfr_public_privacy_migration_batch') as $hook) {
-            DFR_Plugin::clear_wp_cron_hook($hook);
+            if (function_exists('wp_unschedule_hook')) { wp_unschedule_hook($hook); } else { wp_clear_scheduled_hook($hook); }
         }
         if (function_exists('as_unschedule_all_actions')) {
             foreach (array('dfr_catalog_sync_start', 'dfr_catalog_sync_batch', 'dfr_balance_sync_event') as $hook) {

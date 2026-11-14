@@ -68,7 +68,9 @@ foreach (array(
     'dfr_catalog_sync_groups_v1', 'dfr_catalog_sync_health_v1', 'dfr_catalog_schema_changes_v1',
     'dfr_margin_guard_v1', 'dfr_margin_alerts_v1', 'dfr_auto_terms_tagged_v1',
     'dfr_reseller_keyring_migration_v1',
-    'dfr_catalog_sync_cursor', 'dfr_catalog_last_batch_errors', 'dfr_live_sync_migrated_v417'
+    'dfr_catalog_sync_cursor', 'dfr_catalog_last_batch_errors', 'dfr_live_sync_migrated_v417',
+    // 4.15+ audit log, encryption health and key-ring migration state.
+    'dfr_admin_audit_log_v1', 'dfr_crypto_sentinel_v2', 'dfr_keyring_migration_v1'
 ) as $option) { delete_option($option); }
 
 // 4.19.0 remembers the last five Player IDs on the customer's account.
@@ -77,7 +79,7 @@ foreach (array('_dfr_recent_player_ids_v1') as $dfr_user_meta) {
 }
 
 global $wpdb;
-foreach (array('dfr_remote_', 'dfr_poll_attempt_', 'dfr_fast_worker_', 'dfr_supplier_poll_') as $prefix) {
+foreach (array('dfr_remote_', 'dfr_poll_attempt_', 'dfr_fast_worker_', 'dfr_supplier_poll_', 'dfr_order_lock_') as $prefix) {
     $like = $wpdb->esc_like($prefix) . '%';
     $wpdb->query($wpdb->prepare("DELETE FROM {$wpdb->options} WHERE option_name LIKE %s", $like));
 }

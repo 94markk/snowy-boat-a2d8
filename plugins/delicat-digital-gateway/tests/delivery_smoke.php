@@ -715,5 +715,34 @@ $body = json_encode(array('event' => 'order.status_changed', 'event_id' => 'evt-
 $plugin->handle_webhook(new WP_REST_Request(array('x-webhook-signature' => 'sha256=' . hash_hmac('sha256', $body, 'whsec_test')), $body));
 check(count(get_private('post_response_webhooks')) === 0, 'an unmapped supplier order is left to its own bridge');
 
+echo "\n== 4.24: storefront requests and deactivation\n";
+// Page views no longer query the Action Scheduler table for the watchdog.
+$GLOBALS['IS_ADMIN'] = false; $GLOBALS['RECURRING'] = array(); $GLOBALS['WP_EVENTS'] = array(); $GLOBALS['UNSCHEDULED_HOOKS'] = array(); $GLOBALS['AS_UNSCHEDULED_ALL'] = array();
+if (!function_exists('is_admin')) { function is_admin() { return !empty($GLOBALS['IS_ADMIN']); } }
+if (!function_exists('wp_schedule_event')) { function wp_schedule_event($ts, $rec, $h, $args = array()) { $GLOBALS['WP_EVENTS'][] = array($h, $args); return true; } }
+if (!function_exists('as_schedule_recurring_action')) { function as_schedule_recurring_action($ts, $interval, $h, $args = array(), $g = '', $unique = false, $priority = 10) { $GLOBALS['RECURRING'][] = array($h, $args, $priority); return 1; } }
+if (!function_exists('wp_unschedule_hook')) { function wp_unschedule_hook($h) { $GLOBALS['UNSCHEDULED_HOOKS'][] = $h; return 0; } }
+if (!function_exists('as_unschedule_all_actions')) { function as_unschedule_all_actions($h, $args = null, $g = '') { $GLOBALS['AS_UNSCHEDULED_ALL'][] = array($h, $args, $g); } }
+if (!function_exists('flush_rewrite_rules')) { function flush_rewrite_rules($hard = true) {} }
+if (!defined('DELICAT_FAZER_API_KEY')) { define('DELICAT_FAZER_API_KEY', 'fz_test_key'); }
+reset_world();
+update_option('dfr_reconcile_watchdog_version', DFR_VERSION);
+$plugin->ensure_reconcile_watchdog();
+check($GLOBALS['RECURRING'] === array(), 'a storefront page view does not look up the Action Scheduler watchdog');
+check(count($GLOBALS['WP_EVENTS']) === 1 && $GLOBALS['WP_EVENTS'][0][1] === array('wp_cron'), 'the WP-Cron watchdog entry is still kept on every request');
+$GLOBALS['IS_ADMIN'] = true;
+$plugin->ensure_reconcile_watchdog();
+check(count($GLOBALS['RECURRING']) === 1 && $GLOBALS['RECURRING'][0][2] === 0, 'admin and admin-ajax (the queue runner) re-arm it, at order priority');
+$GLOBALS['IS_ADMIN'] = false; $GLOBALS['RECURRING'] = array(); $AS = array();
+update_option('dfr_reconcile_watchdog_version', '4.23.2');
+$plugin->ensure_reconcile_watchdog();
+check(count($GLOBALS['RECURRING']) === 1 && get_option('dfr_reconcile_watchdog_version') === DFR_VERSION, 'and so does the first request after an update');
+// Deactivation removes WP-Cron events whatever their arguments, and AS jobs by hook only.
+DFR_Plugin::deactivate();
+check(in_array('dfr_reconcile_watchdog', $GLOBALS['UNSCHEDULED_HOOKS'], true) && in_array('dfr_retry_order_item', $GLOBALS['UNSCHEDULED_HOOKS'], true), 'deactivation clears every WP-Cron event of the order hooks (watchdog args: wp_cron)');
+$by_hook_only = true;
+foreach ($GLOBALS['AS_UNSCHEDULED_ALL'] as $row) { if ($row[1] !== null) { $by_hook_only = false; } }
+check($GLOBALS['AS_UNSCHEDULED_ALL'] && $by_hook_only, 'Action Scheduler jobs are removed by hook, never filtered to argument-less ones');
+
 echo "\n" . ($failures ? "$failures FAILURE(S)" : 'ALL CHECKS PASSED') . "\n";
 exit($failures ? 1 : 0);

@@ -633,5 +633,19 @@ check(is_array($response)&&$response['valid']===false&&$response['message']===De
 $notice=cat_call('app_uid_error',new WP_Error('dapi_uid_region_mismatch','unused',array('status'=>422,'account_region'=>'eu')));
 check(strpos($notice->get_error_message(),'Europe (EU)')!==false&&strpos($notice->get_error_message(),'effectuer votre transaction')!==false,'Cart/app error keeps known account server and transaction direction');
 check(Delicat_Player_Region_V2::message(array('region'=>'<script>unknown</script>'))===Delicat_Player_Region_V2::MESSAGE,'Unknown upstream labels are never echoed');
+// 4.24: deactivation removes WP-Cron events whatever their arguments (catalog batches carry
+// their round, reseller polls their order) and Action Scheduler jobs by hook only.
+section('deactivation leaves no scheduled job behind');
+$GLOBALS['UNSCHEDULED_HOOKS'] = array(); $GLOBALS['AS_UNSCHEDULED_ALL'] = array();
+function wp_unschedule_hook($h) { $GLOBALS['UNSCHEDULED_HOOKS'][] = $h; return 0; }
+function wp_clear_scheduled_hook($h, $a = array()) { return 0; }
+function as_unschedule_all_actions($h, $args = null, $g = '') { $GLOBALS['AS_UNSCHEDULED_ALL'][] = array($h, $args); }
+DFR_Catalog::deactivate();
+check(in_array('dfr_catalog_sync_batch', $GLOBALS['UNSCHEDULED_HOOKS'], true) && in_array('dfr_uid_validation_games_refresh', $GLOBALS['UNSCHEDULED_HOOKS'], true), 'catalog: every WP-Cron event of its hooks');
+DFR_Reseller_API::deactivate();
+check(in_array('dfr_reseller_poll_order', $GLOBALS['UNSCHEDULED_HOOKS'], true) && in_array('dfr_reseller_retry_supplier', $GLOBALS['UNSCHEDULED_HOOKS'], true), 'reseller API: every WP-Cron poll and retry');
+$hook_only = (bool) $GLOBALS['AS_UNSCHEDULED_ALL'];
+foreach ($GLOBALS['AS_UNSCHEDULED_ALL'] as $row) { if ($row[1] !== null) { $hook_only = false; } }
+check($hook_only, 'Action Scheduler jobs removed by hook, not only argument-less ones');
 echo $fail ? "\n{$fail} CHECK(S) FAILED\n" : "\nALL CHECKS PASSED\n";
 exit($fail ? 1 : 0);

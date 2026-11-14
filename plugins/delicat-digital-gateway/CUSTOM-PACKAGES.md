@@ -16,8 +16,8 @@ Ne recréez pas les forfaits existants et ne changez pas les identifiants fourni
 
 1. Sauvegardez votre site et testez les mises à jour sur une copie de préproduction.
 2. Dans Extensions → Ajouter une extension → Téléverser, remplacez la version correspondante par le nouveau ZIP :
-   - Delicat Top-Up Fulfillment : **2.8.0**.
-   - Delicat Digital Gateway : **4.23.2**.
+   - Delicat Top-Up Fulfillment : **2.8.0** ou plus récente.
+   - Delicat Digital Gateway : **4.23.2** ou plus récente.
 3. Si vous utilisez les deux passerelles, mettez les deux à jour. Le module commun se charge une seule fois.
 4. Videz le cache WooCommerce/LiteSpeed après la mise à jour.
 
