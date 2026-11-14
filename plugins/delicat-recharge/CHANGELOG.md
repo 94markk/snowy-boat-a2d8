@@ -20,7 +20,9 @@ Ce fichier remplace les notes par version (`README-v*.txt`, `API-SYNC-v6.2.0.md`
       l'affichage de la page ;
     - l'image QR cachée de la carte du solde n'est plus téléchargée à chaque visite (elle ne s'affichait
       jamais) ;
-    - le message d'une demande défile avec le défilement natif du téléphone, plus fluide.
+    - le message d'une demande défile avec le défilement natif du téléphone, plus fluide ;
+    - « Envoyer de l'argent » sur téléphone : le fond derrière la fenêtre est assombri sans flou (le flou
+      plein écran, recalculé à chaque image de l'ouverture, faisait saccader les petits Android).
 (2) **TransCode tapé avec des espaces ou des tirets** (« 2606 2687-398118 ») : la recharge est vérifiée et
     créditée tout de suite quand le SMS est déjà arrivé. Avant, ce code n'était jamais reconnu à l'envoi ;
     si le SMS était arrivé avant la demande, la recharge restait « en attente » jusqu'à une validation à la main.

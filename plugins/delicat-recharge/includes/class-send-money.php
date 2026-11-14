@@ -796,6 +796,13 @@ body.dsm-lock{overflow:hidden}
    force it hidden so it can never become an invisible click-catcher. */
 .dw12-qr-modal,.delicat-qr-modal{display:none!important}
 
+/* 6.7.0: on touch phones the full-screen blur behind the sheet becomes a slightly
+   darker plain scrim (like a native Android sheet). Re-blurring the whole page on
+   every frame of the opening animation made budget phones stutter. */
+@media (hover:none) and (pointer:coarse){
+  .dsm-backdrop{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(8,16,42,.7)}
+}
+
 @media (max-width:520px){
   .dsm-modal{padding:0;align-items:flex-end}
   .dsm-dialog{max-width:none;border-radius:26px 26px 0 0;max-height:92vh;padding:20px 17px calc(18px + env(safe-area-inset-bottom));touch-action:pan-y;overscroll-behavior:contain}

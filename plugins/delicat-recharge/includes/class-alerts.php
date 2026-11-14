@@ -47,7 +47,7 @@ class Delicat_Alerts {
         // site time; the flag keeps it from being moved again.
         if ( ! get_option( 'delicat_summary_local_time' ) ) {
             wp_clear_scheduled_hook( 'delicat_cron_daily_summary' );
-            update_option( 'delicat_summary_local_time', 1, false );
+            update_option( 'delicat_summary_local_time', 1, true ); // read on every request: keep it autoloaded (1 byte)
         }
         if ( ! wp_next_scheduled( 'delicat_cron_daily_summary' ) ) {
             // Next run ~20:00 local (site) time.
