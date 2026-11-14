@@ -114,7 +114,7 @@ final class DST2T_Plugin {
 
 		foreach ( $actions as $action ) {
 			if ( function_exists( 'as_unschedule_all_actions' ) ) {
-				as_unschedule_all_actions( $action, array(), DST2T_Fulfillment::ACTION_GROUP );
+				as_unschedule_all_actions( $action ); // hook only: array() args would skip jobs that carry arguments
 			}
 			wp_clear_scheduled_hook( $action );
 		}
@@ -176,7 +176,7 @@ final class DST2T_Plugin {
 	public function ensure_recurring_action() {
 		if ( function_exists( 'as_schedule_recurring_action' ) ) {
 			if ( ! function_exists( 'as_has_scheduled_action' ) || ! as_has_scheduled_action( DST2T_Fulfillment::ACTION_RECONCILE, array(), DST2T_Fulfillment::ACTION_GROUP ) ) {
-				as_schedule_recurring_action( time() + 30, 60, DST2T_Fulfillment::ACTION_RECONCILE, array(), DST2T_Fulfillment::ACTION_GROUP, true );
+				as_schedule_recurring_action( time() + 30, 60, DST2T_Fulfillment::ACTION_RECONCILE, array(), DST2T_Fulfillment::ACTION_GROUP, true, DST2T_Scheduler::priority( DST2T_Fulfillment::ACTION_RECONCILE ) );
 			}
 			return;
 		}

@@ -220,6 +220,9 @@ final class DST2T_Webhook {
 			// authenticated, but local settlement may have raced another order worker.
 		}
 
+		// Settle the same signed state in this worker once the response is sent, so
+		// a local lock race no longer waits for the next cron-driven queue run.
+		$this->fulfillment->defer_signed_webhook( $order_id, $payload['data'], $event_timestamp );
 		try {
 			$this->fulfillment->queue_webhook( $order_id, $event_timestamp );
 		} catch ( Throwable $error ) {

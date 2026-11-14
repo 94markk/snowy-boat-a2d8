@@ -77,7 +77,7 @@ final class DST2T_Sync {
 				return;
 			}
 			$this->unschedule();
-			as_schedule_recurring_action( time() + 120, $interval, self::ACTION, array(), DST2T_Fulfillment::ACTION_GROUP, true );
+			as_schedule_recurring_action( time() + 120, $interval, self::ACTION, array(), DST2T_Fulfillment::ACTION_GROUP, true, DST2T_Scheduler::priority( self::ACTION ) );
 			update_option( self::OPTION_SCHEDULE, $interval, false );
 			return;
 		}

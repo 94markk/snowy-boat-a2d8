@@ -135,7 +135,7 @@ final class DST2T_Balance {
 	/** Queues an out-of-band refresh, used right after wallet-spending activity. */
 	public static function queue_refresh() {
 		if ( function_exists( 'as_enqueue_async_action' ) ) {
-			as_enqueue_async_action( self::ACTION_NOW, array(), DST2T_Fulfillment::ACTION_GROUP );
+			as_enqueue_async_action( self::ACTION_NOW, array(), DST2T_Fulfillment::ACTION_GROUP, true, DST2T_Scheduler::priority( self::ACTION_NOW ) );
 			return;
 		}
 		if ( ! wp_next_scheduled( self::ACTION_NOW ) ) {
@@ -187,7 +187,7 @@ final class DST2T_Balance {
 				return;
 			}
 			$this->unschedule();
-			as_schedule_recurring_action( time() + 30, $interval, self::ACTION_REFRESH, array(), DST2T_Fulfillment::ACTION_GROUP, true );
+			as_schedule_recurring_action( time() + 30, $interval, self::ACTION_REFRESH, array(), DST2T_Fulfillment::ACTION_GROUP, true, DST2T_Scheduler::priority( self::ACTION_REFRESH ) );
 			update_option( self::OPTION_SCHEDULE, $interval, false );
 			return;
 		}

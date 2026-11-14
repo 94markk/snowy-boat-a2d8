@@ -83,6 +83,7 @@ final class DFR_Catalog {
         add_filter('cron_schedules', array($this, 'cron_schedules'));
         add_action('init', array($this, 'ensure_cron'));
         add_action('dfr_catalog_sync_event', array($this, 'cron_sync_imported'));
+        add_action('dfr_catalog_sync_start', array($this, 'run_sync_start'));
         // A sync cycle runs in small batches; this hook continues it.
         add_action('dfr_catalog_sync_batch', array($this, 'run_sync_batch'), 10, 1);
 
@@ -667,6 +668,12 @@ final class DFR_Catalog {
     public static function deactivate() {
         wp_clear_scheduled_hook('dfr_catalog_sync_event');
         wp_clear_scheduled_hook('dfr_catalog_sync_batch');
+        if (function_exists('as_unschedule_all_actions')) {
+            foreach (array('dfr_catalog_sync_start', 'dfr_catalog_sync_batch', 'dfr_balance_sync_event') as $hook) {
+                // Hook only: an args filter of array() would match argument-less jobs only.
+                as_unschedule_all_actions($hook);
+            }
+        }
         // 4.19.0 scheduled these; clear them so an upgrade leaves nothing behind.
         wp_clear_scheduled_hook('dfr_catalog_sync_continue');
         wp_clear_scheduled_hook('dfr_balance_sync_event');
@@ -742,6 +749,7 @@ final class DFR_Catalog {
 
     public function cron_schedules($schedules) {
         $schedules['dfr_30_seconds'] = array('interval' => 30, 'display' => __('Every 30 seconds', 'delicat-fazercards'));
+        $schedules['dfr_5_minutes'] = array('interval' => 5 * MINUTE_IN_SECONDS, 'display' => __('Every 5 minutes', 'delicat-fazercards'));
         if (!isset($schedules['dfr_15_minutes'])) {
             $schedules['dfr_15_minutes'] = array(
                 'interval' => 15 * MINUTE_IN_SECONDS,
@@ -756,8 +764,18 @@ final class DFR_Catalog {
         $enabled = !empty($settings['catalog_auto_sync']) && $settings['catalog_auto_sync'] === '1';
         $interval = !empty($settings['catalog_sync_interval']) && in_array($settings['catalog_sync_interval'], array('dfr_30_seconds', 'dfr_15_minutes', 'hourly', 'twicedaily', 'daily'), true)
             ? $settings['catalog_sync_interval'] : 'dfr_30_seconds';
-        if ($this->plugin()->api()->is_configured() && !wp_next_scheduled('dfr_balance_sync_event')) {
-            wp_schedule_event(time() + 5, 'dfr_30_seconds', 'dfr_balance_sync_event');
+        // The supplier balance is only displayed to administrators, refreshed on demand
+        // in Catalog Studio and after every signed supplier event. A 30-second WP-Cron
+        // poll (v4.23) added a supplier request to every cron run for nothing.
+        if ($this->plugin()->api()->is_configured()) {
+            $balance_next = wp_next_scheduled('dfr_balance_sync_event');
+            if ($balance_next && wp_get_schedule('dfr_balance_sync_event') !== 'dfr_5_minutes') {
+                wp_clear_scheduled_hook('dfr_balance_sync_event');
+                $balance_next = false;
+            }
+            if (!$balance_next) {
+                wp_schedule_event(time() + 60, 'dfr_5_minutes', 'dfr_balance_sync_event');
+            }
         }
         $scheduled = wp_next_scheduled('dfr_catalog_sync_event');
         $current_schedule = $scheduled ? wp_get_schedule('dfr_catalog_sync_event') : false;
@@ -811,7 +829,7 @@ final class DFR_Catalog {
         delete_transient('dfr_live_balance');
         delete_transient('dfr_balance_backoff');
         if (function_exists('as_enqueue_async_action')) {
-            as_enqueue_async_action('dfr_balance_sync_event', array(), 'delicat-fazercards', true);
+            as_enqueue_async_action('dfr_balance_sync_event', array(), 'delicat-fazercards', true, 150);
         } elseif (!wp_next_scheduled('dfr_balance_sync_event')) {
             wp_schedule_single_event(time(), 'dfr_balance_sync_event');
         }
@@ -1066,6 +1084,26 @@ final class DFR_Catalog {
     }
 
     public function cron_sync_imported() {
+        if (($this->settings()['catalog_auto_sync'] ?? '0') !== '1' || get_transient('dfr_catalog_backoff')) { return; }
+        // v4.24: hand the batch to Action Scheduler at low priority instead of running up
+        // to 20 s of supplier I/O inside WP-Cron. WP-Cron runs its events one after the
+        // other in a single request (including Action Scheduler's own queue runner and the
+        // delivery watchdog), so the inline sync delayed every order-status fallback.
+        if (function_exists('as_enqueue_async_action') && did_action('action_scheduler_init')) {
+            try {
+                if (function_exists('as_has_scheduled_action') && (as_has_scheduled_action('dfr_catalog_sync_start', array(), 'delicat-fazercards') || as_has_scheduled_action('dfr_catalog_sync_batch', null, 'delicat-fazercards'))) {
+                    return;
+                }
+                if ((int) as_enqueue_async_action('dfr_catalog_sync_start', array(), 'delicat-fazercards', true, 200) > 0) { return; }
+            } catch (Throwable $e) {
+                // Inline below.
+            }
+        }
+        $this->sync_imported_products(true);
+    }
+
+    /** Low-priority queue entry for one background sync batch. */
+    public function run_sync_start() {
         if (($this->settings()['catalog_auto_sync'] ?? '0') !== '1' || get_transient('dfr_catalog_backoff')) { return; }
         $this->sync_imported_products(true);
     }
@@ -2092,7 +2130,9 @@ final class DFR_Catalog {
 
         $round = absint($round);
         $started = microtime(true);
-        $budget = 20.0;
+        // Background batches stay short so the shared queue runner returns to paid
+        // orders quickly; manual runs from Catalog Studio keep the larger budget.
+        $budget = $cron ? 12.0 : 20.0;
         $timeout = $cron ? 8 : 20;
         $max_groups = $cron ? 5 : 8;
         $totals = array('groups' => 0, 'updated' => 0, 'missing' => 0, 'errors' => 0, 'cost_changes' => 0, 'pending_confirmation' => 0, 'schema_changes' => 0);
@@ -4494,7 +4534,7 @@ HTML;
             // Deduped on arguments only: the running batch must not suppress its successor.
             if (function_exists('as_has_scheduled_action') && as_has_scheduled_action('dfr_catalog_sync_batch', $args, 'delicat-fazercards')) { return; }
             try {
-                if ((int) as_schedule_single_action($when, 'dfr_catalog_sync_batch', $args, 'delicat-fazercards') > 0) { return; }
+                if ((int) as_schedule_single_action($when, 'dfr_catalog_sync_batch', $args, 'delicat-fazercards', false, 200) > 0) { return; }
             } catch (Throwable $e) {
                 // WP-Cron below.
             }

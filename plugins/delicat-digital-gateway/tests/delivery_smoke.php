@@ -103,7 +103,7 @@ function wp_next_scheduled($h, $args = array()) {
 }
 function wp_schedule_single_event($ts, $h, $args = array()) { global $SCHEDULED_WP; $SCHEDULED_WP[] = array($ts, $h, $args); return true; }
 function spawn_cron() { return true; }
-function wp_safe_remote_post($url, $args) { global $REMOTE_POSTS; $REMOTE_POSTS[] = $args['body']; return array('response' => array('code' => 200)); }
+function wp_safe_remote_post($url, $args) { global $REMOTE_POSTS; $REMOTE_POSTS[] = $args['body']; $GLOBALS['REMOTE_ARGS'][] = $args; return array('response' => array('code' => 200)); }
 
 // Action Scheduler, including its real `unique` semantics: hook + group only.
 function as_has_scheduled_action($h, $args = null, $g = '') {
@@ -111,14 +111,15 @@ function as_has_scheduled_action($h, $args = null, $g = '') {
     foreach ($AS as $row) { if ($row['hook'] === $h && ($args === null || $row['args'] == $args)) { return true; } }
     return false;
 }
-function as_schedule_single_action($ts, $h, $args = array(), $g = '', $unique = false) {
+function as_schedule_single_action($ts, $h, $args = array(), $g = '', $unique = false, $priority = 10) {
     global $AS, $AS_REFUSE;
     if (in_array($h, $AS_REFUSE, true)) { return 0; }
     if ($unique) { foreach ($AS as $row) { if ($row['hook'] === $h) { return 0; } } }
-    $AS[] = array('hook' => $h, 'args' => $args, 'ts' => $ts, 'unique' => $unique);
+    $AS[] = array('hook' => $h, 'args' => $args, 'ts' => $ts, 'unique' => $unique, 'priority' => $priority);
     return count($AS);
 }
-function as_enqueue_async_action($h, $args = array(), $g = '', $unique = false) { return as_schedule_single_action(time(), $h, $args, $g, $unique); }
+function as_enqueue_async_action($h, $args = array(), $g = '', $unique = false, $priority = 10) { return as_schedule_single_action(time(), $h, $args, $g, $unique, $priority); }
+function as_unschedule_action($h, $args = null, $g = '') { $GLOBALS['AS_UNSCHEDULED'][] = array($h, $args); return null; }
 
 class WPDB_Stub {
     public $base_prefix = 'wp_'; public $prefix = 'wp_'; public $ledger = array();
@@ -633,6 +634,85 @@ check($plugin->guard_mapping_meta_add(null, 500, '_dfr_offer_id', 'card-3', fals
 echo "\n== maintenance lock\n";
 check(in_array('/delicat-gateway/v1/webhook', $plugin->maintenance_open_rest_routes(array(), '/delicat-gateway/v1/webhook'), true), 'the supplier webhook stays open');
 check(in_array('dfr_internal_fulfill', $plugin->maintenance_allowed_ajax(array('heartbeat'), 'dfr_internal_fulfill'), true) && in_array('dfr_internal_reconcile', $plugin->maintenance_allowed_ajax(array(), ''), true), 'and so do the paid-order loopbacks');
+
+
+echo "\n== v4.24 supplier latency: queue priority, reliable loopbacks, late webhook settlement\n";
+reset_world();
+$GLOBALS['REMOTE_ARGS'] = array();
+call_private('schedule_action', 'dfr_reconcile_plan_tick', array(1, 2, 'ord-1', 1, 'p'), time() + 5);
+call_private('schedule_action', 'dfr_catalog_sync_batch', array(2), time() + 5);
+check($AS[0]['priority'] === 0 && $AS[1]['priority'] === 150, 'order status jobs run before catalog batches in the shared queue');
+check(DFR_Plugin::action_priority('dfr_process_verified_webhook') === 0 && DFR_Plugin::action_priority('dfr_keyring_migration_batch') === 150, 'webhook retries are urgent, migrations are not');
+
+// Host without fastcgi/litespeed_finish_request: the loopback leaves at once, with a
+// timeout long enough for TLS + WordPress bootstrap (v4.23: 0.5 s, silently lost).
+check(call_private('dispatch_reconcile_loopback', 7001, 71, 'ord-71', 1) === true, 'loopback dispatched without response flushing');
+check(count($GLOBALS['REMOTE_ARGS']) === 1 && $GLOBALS['REMOTE_ARGS'][0]['timeout'] >= 1.5, 'user-facing loopback waits at least 1.5 s for the worker to accept');
+
+// LiteSpeed host: loopbacks wait until this request's own response is flushed.
+$GLOBALS['FINISHED'] = 0;
+// Declared conditionally so PHP does not hoist it over the earlier scenarios.
+if (!function_exists('litespeed_finish_request')) { function litespeed_finish_request() { $GLOBALS['FINISHED']++; return true; } }
+function status_header($code) { $GLOBALS['STATUS'] = $code; }
+reset_world();
+$GLOBALS['REMOTE_ARGS'] = array(); $GLOBALS['AS_UNSCHEDULED'] = array();
+set_private('response_released', false); set_private('deferred_loopbacks', array()); set_private('post_response_webhooks', array());
+check(call_private('dispatch_reconcile_loopback', 7002, 72, 'ord-72', 1) === true && count($GLOBALS['REMOTE_ARGS']) === 0, 'during the customer request the loopback is deferred, not sent');
+check(count(get_private('deferred_loopbacks')) === 1, 'it is remembered for after the response');
+ob_start(function ($buffer) { return ''; }); $plugin->run_post_response_reconcile(); if (ob_get_level() > 0) { ob_end_clean(); }
+check($GLOBALS['FINISHED'] === 1, 'the response is flushed with litespeed_finish_request()');
+check(count($GLOBALS['REMOTE_ARGS']) === 1 && $GLOBALS['REMOTE_ARGS'][0]['timeout'] >= 3 && $GLOBALS['REMOTE_ARGS'][0]['body']['action'] === 'dfr_internal_reconcile', 'then the loopback leaves with a patient timeout');
+
+// A worker answers its caller before any supplier I/O.
+set_private('response_released', false);
+$GLOBALS['CAPTURED'] = '';
+ob_start(function ($buffer) { $GLOBALS['CAPTURED'] .= $buffer; return ''; });
+$released = call_private('release_loopback_caller');
+if (ob_get_level() > 0) { ob_end_clean(); }
+check($released === true && strpos($GLOBALS['CAPTURED'], '"accepted":true') !== false && get_private('response_released') === true, 'loopback worker acknowledges its caller before any supplier I/O');
+
+// Signed "completed" webhook while the supplier read still says processing (read lag).
+if (!defined('DELICAT_FAZER_WEBHOOK_SECRET')) { define('DELICAT_FAZER_WEBHOOK_SECRET', 'whsec_test'); }
+class WP_REST_Request {
+    private $headers; private $body;
+    function __construct($headers, $body) { $this->headers = array_change_key_case($headers); $this->body = $body; }
+    function get_header($k) { return $this->headers[strtolower($k)] ?? ''; }
+    function get_body() { return $this->body; }
+}
+class WP_REST_Response { public $data; public $status; function __construct($d = null, $s = 200) { $this->data = $d; $this->status = $s; } }
+reset_world();
+$GLOBALS['REMOTE_ARGS'] = array(); $GLOBALS['AS_UNSCHEDULED'] = array();
+set_private('response_released', false); set_private('deferred_loopbacks', array()); set_private('post_response_webhooks', array());
+$line = new Test_Item(81, 7081, 'Recharge Free Fire', array('_dfr_service_type' => 'topup', '_dfr_remote_order_id' => 'ord-81', '_dfr_remote_status' => 'processing'));
+$order = make_order(7081, 'processing', array($line));
+$ITEM_STORE[81] = $line->meta;
+update_option('dfr_remote_' . md5('ord-81'), array('remote' => 'ord-81', 'order_id' => 7081, 'item_id' => 81));
+$reads = 0;
+DFR_API::$handlers['get_order'] = function () use (&$reads) {
+    $reads++;
+    return array('order' => array('id' => 'ord-81', 'status' => $reads === 1 ? 'processing' : 'completed'));
+};
+$body = json_encode(array('event' => 'order.status_changed', 'event_id' => 'evt-81-000001', 'timestamp' => gmdate('c'), 'data' => array('order_id' => 'ord-81', 'status' => 'completed')));
+$req = new WP_REST_Request(array('x-webhook-signature' => 'sha256=' . hash_hmac('sha256', $body, 'whsec_test')), $body);
+$res = $plugin->handle_webhook($req);
+check($res->status === 200 && !empty($res->data['queued']), 'the supplier gets 200 at once, the canonical read lagged');
+check(count(get_private('post_response_webhooks')) === 1, 'the signed event is kept for after the response');
+check(count(jobs('dfr_process_verified_webhook')) === 1, 'and the durable queue job still exists');
+$t0 = microtime(true);
+ob_start(function ($buffer) { return ''; }); $plugin->run_post_response_reconcile(); if (ob_get_level() > 0) { ob_end_clean(); }
+$elapsed = microtime(true) - $t0;
+check(($ITEM_STORE[81]['_dfr_remote_status'] ?? '') === 'completed', 'the order line is completed by the late settlement, not by cron');
+check($reads === 2, 'with exactly one more supplier read');
+check($elapsed < 15, sprintf('within seconds of the webhook (%.1f s)', $elapsed));
+check(!empty($GLOBALS['AS_UNSCHEDULED']) && $GLOBALS['AS_UNSCHEDULED'][0][0] === 'dfr_process_verified_webhook', 'the redundant queued job is cancelled');
+
+// Reseller/unknown supplier orders never hold a worker for late settlement.
+reset_world();
+set_private('response_released', false); set_private('deferred_loopbacks', array()); set_private('post_response_webhooks', array());
+DFR_API::$handlers['get_order'] = function () { return new WP_Error('dfr_http', 'timeout', array('status' => 504)); };
+$body = json_encode(array('event' => 'order.status_changed', 'event_id' => 'evt-99-000001', 'timestamp' => gmdate('c'), 'data' => array('order_id' => 'ord-99', 'status' => 'completed')));
+$plugin->handle_webhook(new WP_REST_Request(array('x-webhook-signature' => 'sha256=' . hash_hmac('sha256', $body, 'whsec_test')), $body));
+check(count(get_private('post_response_webhooks')) === 0, 'an unmapped supplier order is left to its own bridge');
 
 echo "\n" . ($failures ? "$failures FAILURE(S)" : 'ALL CHECKS PASSED') . "\n";
 exit($failures ? 1 : 0);

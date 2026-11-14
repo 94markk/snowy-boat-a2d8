@@ -7,8 +7,15 @@ final class DST2T_Fulfillment {
 	const ACTION_FAST    = 'dst2t_fast_fulfill';
 	const ORDER_LOCK_TTL = 60;
 	const WEBHOOK_LOCK_WAIT_MS = 1500;
+	/** Longest wait for the order lock when a signed callback is settled after the response. */
+	const WEBHOOK_LATE_LOCK_WAIT_MS = 20000;
+	/** Seconds a released worker may keep polling one fresh line (2 reads, within 3 reads/60 s). */
+	const FOLLOW_UP_BUDGET = 45;
 	private $held_locks = array();
 	private $post_response_items = array();
+	private $post_response_webhooks = array();
+	private $deferred_loopbacks = array();
+	private $response_released = false;
 	private $internal_fast_active = false;
 	const ACTION_PROCESS   = 'dst2t_process_item';
 	const ACTION_RECONCILE = 'dst2t_reconcile';
@@ -365,12 +372,29 @@ final class DST2T_Fulfillment {
 	}
 
 	/** Apply a HMAC-authenticated supplier callback immediately, without a second API read. */
-	public function apply_signed_webhook( $provider_order_id, $payload, $event_timestamp = 0 ) {
+	public function apply_signed_webhook( $provider_order_id, $payload, $event_timestamp = 0, $lock_wait_ms = null ) {
 		$remote = $this->api->normalize_order_payload( $payload, $provider_order_id );
-		return $this->apply_provider_order( $provider_order_id, $remote, 'webhook-signed', absint( $event_timestamp ) );
+		return $this->apply_provider_order( $provider_order_id, $remote, 'webhook-signed', absint( $event_timestamp ), $lock_wait_ms );
 	}
 
-	public function apply_provider_order( $provider_order_id, $remote, $source = 'status', $event_timestamp = 0 ) {
+	/**
+	 * Settle a signed callback after its HTTP response has been sent.
+	 *
+	 * The fast path above waits 1.5 s for the order lock. When the create-order
+	 * worker still holds it (slow supplier create call), v2.8 handed the signed
+	 * state to Action Scheduler, which on a cached LiteSpeed site only runs when
+	 * WP-Cron is triggered: customers waited one to several minutes for a delivery
+	 * the supplier had already confirmed. The same signed payload is now applied in
+	 * this worker as soon as the lock frees (up to 20 s); the queued job stays as
+	 * the durable fallback and is cancelled once this path succeeds.
+	 */
+	public function defer_signed_webhook( $provider_order_id, $payload, $event_timestamp = 0 ) {
+		if ( ! DST2T_Scheduler::can_finish_response() || count( $this->post_response_webhooks ) >= 4 ) { return false; }
+		$this->post_response_webhooks[] = array( (string) $provider_order_id, is_array( $payload ) ? $payload : array(), absint( $event_timestamp ) );
+		return true;
+	}
+
+	public function apply_provider_order( $provider_order_id, $remote, $source = 'status', $event_timestamp = 0, $lock_wait_ms = null ) {
 		$row = $this->repository->get( $provider_order_id );
 		if ( ! $row ) { return false; }
 		$key = 'order-' . absint( $row['wc_order_id'] );
@@ -378,8 +402,11 @@ final class DST2T_Fulfillment {
 		// create-order worker has released its local order lock. Waiting briefly here
 		// prevents that authenticated callback from falling into a slow queue solely
 		// because of a local race. No supplier network I/O happens while waiting.
-		$lock = 'webhook-signed' === $source
-			? $this->acquire_lock_wait( $key, self::ORDER_LOCK_TTL, self::WEBHOOK_LOCK_WAIT_MS )
+		if ( null === $lock_wait_ms ) {
+			$lock_wait_ms = 'webhook-signed' === $source ? self::WEBHOOK_LOCK_WAIT_MS : 0;
+		}
+		$lock = $lock_wait_ms > 0
+			? $this->acquire_lock_wait( $key, self::ORDER_LOCK_TTL, $lock_wait_ms )
 			: $this->acquire_lock( $key, self::ORDER_LOCK_TTL );
 		if ( ! $lock ) { return false; }
 		try {
@@ -988,7 +1015,12 @@ final class DST2T_Fulfillment {
 		$item_id  = absint( $item_id );
 		if ( ! $order_id || ! $item_id ) { return false; }
 
-		$this->remember_post_response_item( $order_id, $item_id );
+		// When this worker can finish the HTTP response, it runs the line itself right
+		// after the customer's response is sent (see run_post_response_fastlane()).
+		// A second detached runner would only race it for the order lock.
+		if ( $this->remember_post_response_item( $order_id, $item_id ) && DST2T_Scheduler::can_finish_response() && ! $this->response_released ) {
+			return true;
+		}
 
 		// The payment-complete and processing hooks can fire back-to-back. Avoid
 		// fanning out duplicate loopbacks for the same line during that short window.
@@ -1031,19 +1063,14 @@ final class DST2T_Fulfillment {
 			return false;
 		}
 
-		$response = wp_safe_remote_post(
-			$url,
-			array(
-				'timeout'            => 0.5,
-				'blocking'           => false,
-				'redirection'        => 0,
-				'sslverify'          => true,
-				'reject_unsafe_urls' => true,
-				'headers'            => array( 'Cache-Control' => 'no-store' ),
-				'body'               => array( 'action' => self::ACTION_FAST, 'token' => $token ),
-			)
-		);
-		if ( is_wp_error( $response ) ) {
+		$body = array( 'action' => self::ACTION_FAST, 'token' => $token );
+		if ( DST2T_Scheduler::can_finish_response() && ! $this->response_released && ! ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) ) {
+			// Fired right after this request's own response is flushed, so the
+			// longer connect window below never delays the customer.
+			$this->deferred_loopbacks[] = array( $body, $claim_key, $debounce );
+			return true;
+		}
+		if ( ! $this->fire_loopback( $body ) ) {
 			delete_transient( $claim_key );
 			delete_transient( $debounce );
 			return false;
@@ -1051,33 +1078,151 @@ final class DST2T_Fulfillment {
 		return true;
 	}
 
+	/**
+	 * POST a detached internal worker request.
+	 *
+	 * v2.8 used a 0.5 s non-blocking request. Its failures are not reported
+	 * (WordPress returns no error for a non-blocking call), and on LiteSpeed a
+	 * caller that hangs up before the worker request has even loaded WordPress
+	 * gets that worker aborted. The worker now answers as soon as its claim is
+	 * consumed (release_caller()), so a few seconds only bound DNS/TLS/bootstrap.
+	 */
+	private function fire_loopback( array $body ) {
+		$url = admin_url( 'admin-ajax.php', 'https' );
+		if ( 0 !== strpos( (string) $url, 'https://' ) ) { return false; }
+		$patient = $this->response_released || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) || $this->internal_fast_active;
+		$response = wp_safe_remote_post(
+			$url,
+			array(
+				'timeout'            => $patient ? 4 : 1.5,
+				'blocking'           => false,
+				'redirection'        => 0,
+				'sslverify'          => true,
+				'reject_unsafe_urls' => true,
+				'headers'            => array( 'Cache-Control' => 'no-store' ),
+				'body'               => $body,
+			)
+		);
+		return ! is_wp_error( $response );
+	}
+
+	/** True when this worker will process the line after its response is sent. */
 	private function remember_post_response_item( $order_id, $item_id ) {
-		if ( $this->internal_fast_active || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) ) { return; }
-		if ( count( $this->post_response_items ) >= 4 ) { return; }
+		if ( $this->internal_fast_active || ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) ) { return false; }
 		$key = absint( $order_id ) . ':' . absint( $item_id );
+		if ( isset( $this->post_response_items[ $key ] ) ) { return true; }
+		if ( count( $this->post_response_items ) >= 2 ) { return false; }
 		$this->post_response_items[ $key ] = array( absint( $order_id ), absint( $item_id ) );
+		return true;
+	}
+
+	/** Drop this request's cached copy of an order written by another PHP worker. */
+	private function forget_cached_order( $order_id, $item_id = 0 ) {
+		$order_id = absint( $order_id );
+		if ( ! $order_id ) { return; }
+		if ( function_exists( 'clean_post_cache' ) ) { clean_post_cache( $order_id ); }
+		if ( function_exists( 'wp_cache_delete' ) ) {
+			wp_cache_delete( $order_id, 'orders' );
+			wp_cache_delete( 'order-items-' . $order_id, 'orders' );
+			if ( $item_id ) { wp_cache_delete( absint( $item_id ), 'order_item_meta' ); }
+		}
+		if ( function_exists( 'wc_get_container' ) && class_exists( '\Automattic\WooCommerce\Caches\OrderCache' ) ) {
+			try {
+				wc_get_container()->get( \Automattic\WooCommerce\Caches\OrderCache::class )->remove( $order_id );
+			} catch ( Throwable $error ) {
+				// The cache is optional; the repository row remains the source of truth.
+			}
+		}
 	}
 
 	/**
-	 * FastCGI fallback: finish the HTTP response first, then start at most two
-	 * paid line items. It never sleeps, so a busy store does not monopolize PHP
-	 * workers while waiting for supplier status changes.
+	 * After a released worker submitted a line, read the supplier status again when
+	 * it is due (the repository enforces the 20 s cadence of the published 3 reads
+	 * per 60 s limit), at most twice. Without a webhook this used to wait for the
+	 * next Action Scheduler run. Stops as soon as any path settles the line.
+	 */
+	private function follow_up_item( $order_id, $item_id, $budget ) {
+		$deadline = time() + max( 0, absint( $budget ) );
+		for ( $read = 0; $read < 2; $read++ ) {
+			$this->forget_cached_order( $order_id, $item_id );
+			$order = wc_get_order( absint( $order_id ) );
+			$item  = $order ? $order->get_item( absint( $item_id ) ) : false;
+			if ( ! $item instanceof WC_Order_Item_Product ) { return; }
+			$uuid = (string) $item->get_meta( '_dst2t_order_id', true );
+			$row  = '' !== $uuid ? $this->repository->get( $uuid ) : null;
+			if ( ! $row || ! in_array( sanitize_key( (string) $row['status'] ), array( 'intent', 'submitting', 'unknown', 'pending', 'processing', 'retrying', 'partial' ), true ) ) { return; }
+			$due = empty( $row['next_check_at'] ) ? time() : (int) strtotime( $row['next_check_at'] . ' UTC' );
+			if ( $due > $deadline ) { return; }
+			if ( $due > time() ) { sleep( min( 30, $due - time() ) ); }
+			$this->forget_cached_order( $order_id, $item_id );
+			$this->process_item( absint( $order_id ), absint( $item_id ) );
+		}
+	}
+
+	/**
+	 * Post-response lane (PHP-FPM or LiteSpeed): finish the HTTP response first,
+	 * then (1) start deferred detached workers, (2) settle signed callbacks that
+	 * lost the lock race, (3) run at most two paid lines and follow their status
+	 * for a bounded time. v2.8 only recognised fastcgi_finish_request(), so on
+	 * LiteSpeed hosting this lane never ran at all.
 	 */
 	public function run_post_response_fastlane() {
-		if ( ! $this->post_response_items || $this->internal_fast_active ) { return; }
+		if ( ( ! $this->post_response_items && ! $this->post_response_webhooks && ! $this->deferred_loopbacks ) || $this->internal_fast_active ) { return; }
 		if ( function_exists( 'wp_doing_cron' ) && wp_doing_cron() ) { return; }
-		if ( ! function_exists( 'fastcgi_finish_request' ) ) { return; }
-		ignore_user_abort( true );
-		@fastcgi_finish_request();
+		if ( ! DST2T_Scheduler::finish_response() ) { return; }
+		$this->response_released = true;
+
+		$loopbacks = $this->deferred_loopbacks;
+		$this->deferred_loopbacks = array();
+		foreach ( $loopbacks as $loopback ) {
+			if ( ! $this->fire_loopback( $loopback[0] ) ) {
+				delete_transient( $loopback[1] );
+				delete_transient( $loopback[2] );
+			}
+		}
+
+		$webhooks = $this->post_response_webhooks;
+		$this->post_response_webhooks = array();
+		foreach ( $webhooks as $webhook ) {
+			list( $uuid, $payload, $event_timestamp ) = $webhook;
+			try {
+				$row = $this->repository->get( $uuid );
+				if ( $row ) { $this->forget_cached_order( $row['wc_order_id'], $row['wc_item_id'] ); }
+				if ( $this->apply_signed_webhook( $uuid, $payload, $event_timestamp, self::WEBHOOK_LATE_LOCK_WAIT_MS ) ) {
+					DST2T_Scheduler::cancel( self::ACTION_WEBHOOK, array( (string) $uuid, absint( $event_timestamp ) ) );
+				}
+			} catch ( Throwable $error ) {
+				// The queued canonical re-read remains scheduled.
+				$this->log( 'warning', 'Late signed callback settlement deferred to the queue.', array( 'provider_order_id' => $uuid, 'type' => get_class( $error ) ) );
+			}
+		}
+
 		$items = array_slice( array_values( $this->post_response_items ), 0, 2 );
 		$this->post_response_items = array();
 		foreach ( $items as $candidate ) {
 			$this->process_item( absint( $candidate[0] ), absint( $candidate[1] ) );
 		}
+		$budget_end = time() + self::FOLLOW_UP_BUDGET;
+		foreach ( $items as $candidate ) {
+			$this->follow_up_item( $candidate[0], $candidate[1], max( 0, $budget_end - time() ) );
+		}
+	}
+
+	/** Answer the internal caller now so it can hang up without aborting this worker. */
+	private function release_caller() {
+		if ( ! DST2T_Scheduler::can_finish_response() ) { return false; }
+		if ( ! headers_sent() ) {
+			status_header( 202 );
+			header( 'Content-Type: application/json; charset=utf-8' );
+		}
+		echo '{"success":true,"data":{"accepted":true}}';
+		$this->response_released = DST2T_Scheduler::finish_response();
+		return $this->response_released;
 	}
 
 	/** Single-use authenticated internal worker. */
 	public function ajax_fast_fulfill() {
+		ignore_user_abort( true );
 		if ( function_exists( 'nocache_headers' ) && ! headers_sent() ) { nocache_headers(); }
 		$method = isset( $_SERVER['REQUEST_METHOD'] ) ? strtoupper( (string) $_SERVER['REQUEST_METHOD'] ) : '';
 		$length = isset( $_SERVER['CONTENT_LENGTH'] ) ? absint( $_SERVER['CONTENT_LENGTH'] ) : 0;
@@ -1115,9 +1260,13 @@ final class DST2T_Fulfillment {
 			wp_send_json_error( array( 'code' => 'invalid_claim' ), 403 );
 		}
 
+		$released = $this->release_caller();
 		$this->internal_fast_active = true;
 		try {
 			$this->process_item( $order_id, $item_id );
+			if ( $released ) {
+				$this->follow_up_item( $order_id, $item_id, self::FOLLOW_UP_BUDGET );
+			}
 		} finally {
 			$this->internal_fast_active = false;
 		}

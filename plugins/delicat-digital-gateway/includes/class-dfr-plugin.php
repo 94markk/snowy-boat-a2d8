@@ -9,7 +9,15 @@ final class DFR_Plugin {
     private $completion_candidates = array();
     private $post_response_reconcile = array();
     private $post_response_fulfill = array();
+    // v4.24: loopbacks fired only after this request's own response is flushed, and
+    // signed webhooks whose fast settlement lost a race (see handle_webhook()).
+    private $deferred_loopbacks = array();
+    private $post_response_webhooks = array();
+    private $response_released = false;
     private $internal_reconcile_active = false;
+    // Detached loopback rounds: 0 s, then 5 s x4, then 8/10/12 s (about a minute in
+    // total) before the durable Action Scheduler plan takes over. v4.23 stopped at 20 s.
+    const LOOPBACK_ROUNDS = 8;
     // True only while maybe_complete_woo_order() itself moves an order to Completed, so
     // the manual-completion guard can tell automatic completion from an admin action.
     private $internal_completion = false;
@@ -61,7 +69,7 @@ final class DFR_Plugin {
         ) as $hook) {
             wp_clear_scheduled_hook($hook);
             if (function_exists('as_unschedule_all_actions') && did_action('action_scheduler_init')) {
-                as_unschedule_all_actions($hook, array(), 'delicat-fazercards');
+                as_unschedule_all_actions($hook); // hook only: array() args would skip every job that has arguments
             }
         }
         if (class_exists('DFR_Catalog')) { DFR_Catalog::deactivate(); }
@@ -2533,7 +2541,7 @@ final class DFR_Plugin {
         $order_id = absint($order_id);
         $item_id = absint($item_id);
         $remote = sanitize_text_field((string) $remote);
-        $round = max(1, min(5, (int) $round));
+        $round = max(1, min(self::LOOPBACK_ROUNDS, (int) $round));
         if (!$order_id || !$item_id || !preg_match('/^ord-[0-9]+$/', $remote)) { return false; }
         // Arm every future canonical checkpoint before starting low-latency helpers.
         // Immediate paths may fail independently without losing the durable plan.
@@ -2575,7 +2583,7 @@ final class DFR_Plugin {
         $order_id = absint($order_id);
         $item_id = absint($item_id);
         $remote = sanitize_text_field((string) $remote);
-        $round = max(1, min(5, (int) $round));
+        $round = max(1, min(self::LOOPBACK_ROUNDS, (int) $round));
         if (!$order_id || !$item_id || !preg_match('/^ord-[0-9]+$/', $remote)) { return false; }
 
         // A round-specific debounce prevents duplicate fan-out while still allowing the
@@ -2614,19 +2622,10 @@ final class DFR_Plugin {
             if ($item) { $this->mark_item_timing($item, 'loopback_dispatched'); }
         }
 
-        $url = admin_url('admin-ajax.php');
-        $response = wp_safe_remote_post($url, array(
-            'timeout'            => 0.5,
-            'blocking'           => false,
-            'redirection'        => 0,
-            'sslverify'          => true,
-            'reject_unsafe_urls' => true,
-            'headers'            => array('Cache-Control' => 'no-store'),
-            'body'               => array(
-                'action' => 'dfr_internal_reconcile',
-                'token'  => $token,
-            ),
-        ));
+        $response = $this->fire_loopback(array(
+            'action' => 'dfr_internal_reconcile',
+            'token'  => $token,
+        ), array($claim_key, $debounce));
         if (is_wp_error($response)) {
             delete_transient($claim_key);
             delete_transient($debounce);
@@ -2643,6 +2642,106 @@ final class DFR_Plugin {
             return false;
         }
         return true;
+    }
+
+    /**
+     * POST a single-use internal loopback to admin-ajax.php.
+     *
+     * v4.23 used a 0.5 s non-blocking request. WordPress reports no error for a
+     * non-blocking call, and LiteSpeed (Hostinger) aborts a PHP request whose
+     * client has already hung up, so whenever DNS/TLS/WordPress bootstrap of the
+     * worker took longer than 0.5 s the fast lane died silently and the order
+     * waited for WP-Cron/Action Scheduler (one to several minutes on a cached site).
+     *
+     * Now: (1) inside a user-facing request that can flush its response, the call
+     * is deferred until after that flush, so the customer never waits for it;
+     * (2) the worker answers as soon as it has consumed its claim
+     * (release_loopback_caller()), so the longer timeout only bounds connect/TLS.
+     *
+     * @param array $body    POST body (action + token only).
+     * @param array $cleanup Transient keys to delete if a deferred call cannot be sent.
+     * @return true|WP_Error
+     */
+    private function fire_loopback(array $body, array $cleanup = array()) {
+        if (!$this->response_released && !wp_doing_cron() && !$this->internal_reconcile_active && $this->can_finish_response()) {
+            $this->deferred_loopbacks[] = array($body, $cleanup);
+            return true;
+        }
+        $patient = $this->response_released || wp_doing_cron() || $this->internal_reconcile_active;
+        $response = wp_safe_remote_post(admin_url('admin-ajax.php'), array(
+            'timeout'            => $patient ? 4 : 1.5,
+            'blocking'           => false,
+            'redirection'        => 0,
+            'sslverify'          => true,
+            'reject_unsafe_urls' => true,
+            'headers'            => array('Cache-Control' => 'no-store'),
+            'body'               => $body,
+        ));
+        return is_wp_error($response) ? $response : true;
+    }
+
+    private function can_finish_response() {
+        return function_exists('fastcgi_finish_request') || function_exists('litespeed_finish_request');
+    }
+
+    /** Flush this request's response and keep the PHP worker (PHP-FPM or LiteSpeed). */
+    private function finish_response() {
+        if ($this->response_released) { return true; }
+        $finish = function_exists('fastcgi_finish_request') ? 'fastcgi_finish_request'
+            : (function_exists('litespeed_finish_request') ? 'litespeed_finish_request' : '');
+        if ($finish === '') { return false; }
+        ignore_user_abort(true);
+        if (function_exists('set_time_limit')) { @set_time_limit(120); }
+        while (ob_get_level() > 0) {
+            if (!@ob_end_flush()) { break; }
+        }
+        @call_user_func($finish);
+        $this->response_released = true;
+        return true;
+    }
+
+    /** Answer an internal loopback caller before any supplier I/O (see fire_loopback()). */
+    private function release_loopback_caller() {
+        if (!$this->can_finish_response()) { return false; }
+        if (!headers_sent()) {
+            status_header(202);
+            header('Content-Type: application/json; charset=utf-8');
+        }
+        echo '{"success":true,"data":{"accepted":true}}';
+        return $this->finish_response();
+    }
+
+    /** Fire loopbacks that waited for this request's response to be flushed. */
+    private function flush_deferred_loopbacks() {
+        $pending = $this->deferred_loopbacks;
+        $this->deferred_loopbacks = array();
+        foreach ($pending as $entry) {
+            [$body, $cleanup] = $entry;
+            $sent = $this->fire_loopback($body, $cleanup);
+            if (is_wp_error($sent)) {
+                foreach ((array) $cleanup as $key) { delete_transient((string) $key); }
+                $this->log('warning', 'Deferred loopback could not be dispatched; durable fallback remains queued', array('error' => $sent->get_error_code()));
+            }
+        }
+    }
+
+    /** Drop this worker's cached copy of an order another PHP worker may have written. */
+    private function forget_cached_order($order_id, $item_id = 0) {
+        $order_id = absint($order_id);
+        if (!$order_id) { return; }
+        if (function_exists('clean_post_cache')) { clean_post_cache($order_id); }
+        if (function_exists('wp_cache_delete')) {
+            wp_cache_delete($order_id, 'orders');
+            wp_cache_delete('order-items-' . $order_id, 'orders');
+            if ($item_id) { wp_cache_delete(absint($item_id), 'order_item_meta'); }
+        }
+        if (function_exists('wc_get_container') && class_exists('\Automattic\WooCommerce\Caches\OrderCache')) {
+            try {
+                wc_get_container()->get(\Automattic\WooCommerce\Caches\OrderCache::class)->remove($order_id);
+            } catch (Throwable $e) {
+                // Optional cache layer.
+            }
+        }
     }
 
     private function internal_reconcile_request_allowed() {
@@ -2710,11 +2809,14 @@ final class DFR_Plugin {
         $order_id = absint($claim['order_id'] ?? 0);
         $item_id = absint($claim['item_id'] ?? 0);
         $remote = sanitize_text_field((string) ($claim['remote'] ?? ''));
-        $round = max(1, min(5, (int) ($claim['round'] ?? 1)));
+        $round = max(1, min(self::LOOPBACK_ROUNDS, (int) ($claim['round'] ?? 1)));
         if (!$issued || $issued < time() - 90 || !$order_id || !$item_id || !preg_match('/^ord-[0-9]+$/', $remote)) {
             wp_send_json_error(array('code' => 'invalid_claim'), 403);
         }
 
+        // Let the caller hang up now: on LiteSpeed a caller that disconnects first
+        // gets this worker aborted (see fire_loopback()).
+        $this->release_loopback_caller();
         $this->internal_reconcile_active = true;
         if (function_exists('wc_get_order')) {
             $timing_order = wc_get_order($order_id);
@@ -2736,6 +2838,9 @@ final class DFR_Plugin {
             3 => array(5000000),
             4 => array(5000000),
             5 => array(5000000),
+            6 => array(8000000),
+            7 => array(10000000),
+            8 => array(12000000),
         );
         $waits = $round_waits[$round];
         $terminal = false;
@@ -2756,7 +2861,7 @@ final class DFR_Plugin {
 
         if (!$terminal) {
             $chained = false;
-            if (!$hard_stop && $round < 5) {
+            if (!$hard_stop && $round < self::LOOPBACK_ROUNDS) {
                 $chained = $this->dispatch_reconcile_loopback($order_id, $item_id, $remote, $round + 1);
             }
             if ($hard_stop || !$chained) {
@@ -2774,6 +2879,9 @@ final class DFR_Plugin {
         $order_id = absint($order_id);
         $item_id = absint($item_id);
         $remote = sanitize_text_field((string) $remote);
+        // Long-lived workers (post-response, loopback rounds) must see what another
+        // worker or the webhook wrote since this request first loaded the order.
+        $this->forget_cached_order($order_id, $item_id);
         $order = wc_get_order($order_id);
         if (!$order || !$this->order_has_verified_wallet_payment($order)) { return 'blocked'; }
         $item = $order->get_item($item_id);
@@ -2862,14 +2970,13 @@ final class DFR_Plugin {
      * available, so it cannot turn checkout into a long blocking request.
      */
     public function run_post_response_reconcile() {
-        if ((!$this->post_response_reconcile && !$this->post_response_fulfill) || $this->internal_reconcile_active || wp_doing_cron()) { return; }
+        if ((!$this->post_response_reconcile && !$this->post_response_fulfill && !$this->deferred_loopbacks && !$this->post_response_webhooks) || $this->internal_reconcile_active || wp_doing_cron()) { return; }
         // Hostinger serves PHP through LiteSpeed (LSAPI), which provides
         // litespeed_finish_request() instead of PHP-FPM's fastcgi_finish_request().
-        $finish = function_exists('fastcgi_finish_request') ? 'fastcgi_finish_request'
-            : (function_exists('litespeed_finish_request') ? 'litespeed_finish_request' : '');
-        if ($finish === '') { return; }
-        ignore_user_abort(true);
-        @call_user_func($finish);
+        if (!$this->finish_response()) { return; }
+
+        // Detached workers first, so they run in parallel with the work below.
+        $this->flush_deferred_loopbacks();
 
         // Queued supplier passes first: they create the supplier orders the reconcile
         // candidates below would otherwise wait for.
@@ -2878,7 +2985,33 @@ final class DFR_Plugin {
         foreach ($fulfil as $fulfil_order_id) {
             $this->maybe_auto_fulfill_order(absint($fulfil_order_id));
         }
+        // A pass above may have queued loopbacks of its own.
+        $this->flush_deferred_loopbacks();
 
+        $deadline = microtime(true) + 25;
+
+        // Signed webhooks whose immediate settlement lost a race (supplier read
+        // cooldown, order lock, supplier read-after-write lag). Re-run the same
+        // canonical settlement here instead of waiting for the cron-driven queue.
+        $webhooks = $this->post_response_webhooks;
+        $this->post_response_webhooks = array();
+        foreach ($webhooks as $hook_args) {
+            [$remote, $status, $event_id] = $hook_args;
+            foreach (array(4200000, 5000000, 6000000, 8000000) as $pause) {
+                if (microtime(true) + ($pause / 1000000) > $deadline) { break; }
+                usleep($pause);
+                if ($this->process_verified_webhook($remote, $status, $event_id, 0, true)) {
+                    if (function_exists('as_unschedule_action') && did_action('action_scheduler_init')) {
+                        as_unschedule_action('dfr_process_verified_webhook', array($remote, $status, $event_id), 'delicat-fazercards');
+                    }
+                    break;
+                }
+            }
+        }
+
+        // Paced to the 4-second per-order supplier read slot (claim_canonical_poll_slot()):
+        // v4.23 retried after 0.35/0.7/1.2 s, inside that cooldown, so only the first of
+        // its three reads could ever reach the supplier.
         $candidates = array_slice(array_values($this->post_response_reconcile), 0, 2);
         $this->post_response_reconcile = array();
         foreach ($candidates as $candidate) {
@@ -2888,7 +3021,8 @@ final class DFR_Plugin {
                 $i = $o ? $o->get_item($item_id) : false;
                 if ($i) { $this->mark_item_timing($i, 'postresponse_started'); }
             }
-            foreach (array(350000, 700000, 1200000) as $pause) {
+            foreach (array(350000, 4200000, 4500000, 5000000, 6000000) as $pause) {
+                if (microtime(true) + ($pause / 1000000) > $deadline) { break; }
                 usleep($pause);
                 $state = $this->reconcile_remote_once($order_id, $item_id, $remote, 3, 'postresponse');
                 if (in_array($state, array('completed','delivered','failed','refunded','blocked'), true)) { break; }
@@ -2915,7 +3049,7 @@ final class DFR_Plugin {
                 ? (bool) as_has_scheduled_action('dfr_reconcile_watchdog', $as_args, 'delicat-fazercards')
                 : false;
             if (!$has_as) {
-                as_schedule_recurring_action(time() + 15, MINUTE_IN_SECONDS, 'dfr_reconcile_watchdog', $as_args, 'delicat-fazercards', true);
+                as_schedule_recurring_action(time() + 15, MINUTE_IN_SECONDS, 'dfr_reconcile_watchdog', $as_args, 'delicat-fazercards', true, self::action_priority('dfr_reconcile_watchdog'));
             }
         }
         $wp_args = array('wp_cron');
@@ -3102,7 +3236,7 @@ final class DFR_Plugin {
         $order_id = absint($order_id);
         $item_id = absint($item_id);
         $remote = sanitize_text_field((string) $remote);
-        $round = max(1, min(5, (int) $round));
+        $round = max(1, min(self::LOOPBACK_ROUNDS, (int) $round));
         if (!$order_id || !$item_id || !preg_match('/^ord-[0-9]+$/', $remote)) { return; }
 
         $timing_order = wc_get_order($order_id);
@@ -3316,6 +3450,13 @@ final class DFR_Plugin {
         // If the fast canonical read times out, queue only non-secret identifiers. The
         // worker retries safely; delivery codes never sit in Action Scheduler/WP-Cron args.
         $args = array($remote, $status, $event_id);
+        // v4.24: also retry in this worker right after the response is flushed (see
+        // run_post_response_reconcile()); the queued job is cancelled if that succeeds.
+        // Only for supplier orders bound to a local WooCommerce line: reseller API
+        // mirror orders have their own bridge and must not spend the shared read budget.
+        if ($this->can_finish_response() && count($this->post_response_webhooks) < 3 && $this->get_remote_map($remote)) {
+            $this->post_response_webhooks[] = $args;
+        }
         $scheduled = $this->schedule_action('dfr_process_verified_webhook', $args, 0);
         if (!$scheduled) {
             // Release the replay claim so the supplier's normal retry can recover.
@@ -4842,12 +4983,13 @@ JS;
             return true;
         }
         $action_id = 0;
+        $priority = self::action_priority($hook);
         if ($as) {
             try {
                 if ($timestamp <= time() && function_exists('as_enqueue_async_action')) {
-                    $action_id = (int) as_enqueue_async_action($hook, $args, $group, false);
+                    $action_id = (int) as_enqueue_async_action($hook, $args, $group, false, $priority);
                 } else {
-                    $action_id = (int) as_schedule_single_action(max(time(), $timestamp), $hook, $args, $group, false);
+                    $action_id = (int) as_schedule_single_action(max(time(), $timestamp), $hook, $args, $group, false, $priority);
                 }
             } catch (Throwable $e) {
                 $action_id = 0;
@@ -4859,6 +5001,23 @@ JS;
         $scheduled = (bool) wp_schedule_single_event($when, $hook, $args);
         if ($scheduled && $when <= time() + 5 && function_exists('spawn_cron')) { spawn_cron(); }
         return $scheduled;
+    }
+
+    /**
+     * Action Scheduler priority (0 runs first, default 10; older Action Scheduler
+     * releases ignore it). Paid-order delivery and supplier status jobs run before
+     * catalog, balance and migration batches, which used to occupy the single queue
+     * runner for up to 20 s per batch while a confirmed order waited behind them.
+     */
+    public static function action_priority($hook) {
+        $urgent = array(
+            'dfr_process_verified_webhook', 'dfr_fast_reconcile_remote_order', 'dfr_reconcile_plan_tick',
+            'dfr_retry_order_item', 'dfr_fulfill_paid_order', 'dfr_finalize_completed_order',
+            'dfr_reconcile_watchdog', 'dfr_poll_remote_order',
+        );
+        if (in_array((string) $hook, $urgent, true)) { return 0; }
+        if (in_array((string) $hook, array('dfr_send_delivery_failure_alert', 'dfr_send_attestation_refusal_alert'), true)) { return 5; }
+        return 150;
     }
 
     /** True when at least one line of the order is delivered by this gateway. */
@@ -4997,15 +5156,7 @@ JS;
             delete_transient($debounce);
             return false;
         }
-        $response = wp_safe_remote_post(admin_url('admin-ajax.php'), array(
-            'timeout'            => 0.5,
-            'blocking'           => false,
-            'redirection'        => 0,
-            'sslverify'          => true,
-            'reject_unsafe_urls' => true,
-            'headers'            => array('Cache-Control' => 'no-store'),
-            'body'               => array('action' => 'dfr_internal_fulfill', 'token' => $token),
-        ));
+        $response = $this->fire_loopback(array('action' => 'dfr_internal_fulfill', 'token' => $token), array($claim_key, $debounce));
         if (is_wp_error($response)) {
             delete_transient($claim_key);
             delete_transient($debounce);
@@ -5044,6 +5195,7 @@ JS;
         if (!$order_id || !$issued || $issued < time() - 90) {
             wp_send_json_error(array('code' => 'invalid_claim'), 403);
         }
+        $this->release_loopback_caller();
         $this->internal_reconcile_active = true;
         try {
             $this->maybe_auto_fulfill_order($order_id);
