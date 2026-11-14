@@ -3,9 +3,13 @@
     'use strict';
 
     // Wait until jQuery AND delicatData are both available, then boot.
+    // 6.7.0: the wait backs off (50 ms up to 1 s) instead of waking the phone
+    // 20 times a second while an optimiser delays jQuery until the first touch.
+    var bootDelay = 50;
     function boot() {
         if (typeof window.jQuery === 'undefined' || typeof window.delicatData === 'undefined') {
-            return setTimeout(boot, 50);
+            bootDelay = Math.min(1000, Math.round(bootDelay * 1.5));
+            return setTimeout(boot, bootDelay);
         }
         jQuery(function ($) {
             var d = window.delicatData;
@@ -193,8 +197,22 @@
                             showMsg((res && res.data && res.data.message) || 'Une erreur est survenue.', 'error');
                         }
                     },
-                    error: function () {
-                        showMsg(d.i18n.network_error, 'error');
+                    error: function (xhr) {
+                        // 6.7.0: a refused request is not a network error. An expired
+                        // page (nonce) or session answered 403/401 and the customer was
+                        // told « Erreur réseau » again and again, whatever they tried.
+                        var data = (xhr && xhr.responseJSON && xhr.responseJSON.data) ? xhr.responseJSON.data : null;
+                        var status = xhr ? xhr.status : 0;
+                        if (data && data.need_login && data.login_url) {
+                            showMsg(escapeHtml(data.message || 'Connectez-vous pour effectuer une recharge.') +
+                                ' <a href="' + escapeHtml(data.login_url) + '">Se connecter</a>', 'error');
+                        } else if (status === 401 || status === 403) {
+                            showMsg('Votre page a expiré. <a href="#" data-dr-reload>Rechargez la page</a>, puis envoyez de nouveau votre demande.', 'error');
+                        } else if (status === 429 && data && data.message) {
+                            showMsg(escapeHtml(data.message), 'error');
+                        } else {
+                            showMsg(d.i18n.network_error, 'error');
+                        }
                     },
                     complete: function () {
                         setLoading(false, $btn);
@@ -202,12 +220,28 @@
                 });
             });
 
+            function escapeHtml(v) {
+                return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+                    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+                });
+            }
+
+            $(document).on('click', '[data-dr-reload]', function (e) {
+                e.preventDefault();
+                window.location.reload();
+            });
+
             function showMsg(text, type, skipScroll) {
                 var $msg = $('.dr-message');
                 if (!$msg.length) { alert(text.replace(/<[^>]+>/g, '')); return; }
                 $msg.removeClass('dr-success dr-error dr-pending').addClass('dr-' + type).html(text).show();
                 if (!skipScroll) {
-                    $('html,body').animate({ scrollTop: $msg.offset().top - 100 }, 350);
+                    // 6.7.0: the browser's own smooth scroll (compositor) instead of a
+                    // jQuery scrollTop animation run frame by frame in JavaScript.
+                    var top = Math.max(0, $msg.offset().top - 100);
+                    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                    try { window.scrollTo({ top: top, behavior: reduce ? 'auto' : 'smooth' }); }
+                    catch (e) { window.scrollTo(0, top); }
                 }
             }
 
@@ -572,13 +606,16 @@
   /* ---- Copy code ------------------------------------------- */
   function copyCode(btn) {
     var code = btn.getAttribute('data-dsm-copy') || '';
-    var label = btn.querySelector('.dsm-copytxt');
-    var old = label ? label.textContent : '';
+    var inner = btn.querySelector('.dsm-copytxt');
+    var label = inner || btn; // a plain « Copier » button gets the feedback on itself
+    // 6.7.0: the label holds an icon (SVG) since 6.6.1. Its HTML is kept once and
+    // put back; restoring textContent ('') used to leave the button empty for good.
+    if (!label.hasAttribute('data-dr-label')) { label.setAttribute('data-dr-label', label.innerHTML); }
     function done() {
       if (label) {
-        label.textContent = '✓';
+        label.textContent = inner ? '✓' : 'Copié';
         btn.classList.add('ok');
-        setTimeout(function () { label.textContent = old; btn.classList.remove('ok'); }, 1300);
+        setTimeout(function () { label.innerHTML = label.getAttribute('data-dr-label') || ''; btn.classList.remove('ok'); }, 1300);
       }
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -314,11 +314,21 @@ class Delicat_App_Api {
         }
 
         // ATOMIC CLAIM to avoid any double-credit.
-        $claimed = $wpdb->query( $wpdb->prepare(
-            "UPDATE {$tbl} SET wallet_credited = 1, statut = 'approuve', trans_code = %s
-             WHERE id = %d AND wallet_credited = 0",
-            $code, $id
-        ) );
+        // 6.7.0: the indexed copy (code_norm) follows the new TransCode, otherwise the
+        // « already used » checks kept seeing the code the client had typed.
+        if ( 'code_norm' === Delicat_Database::code_sql() ) {
+            $claimed = $wpdb->query( $wpdb->prepare(
+                "UPDATE {$tbl} SET wallet_credited = 1, statut = 'approuve', trans_code = %s, code_norm = %s
+                 WHERE id = %d AND wallet_credited = 0",
+                $code, Delicat_Database::code_norm_value( $code ), $id
+            ) );
+        } else {
+            $claimed = $wpdb->query( $wpdb->prepare(
+                "UPDATE {$tbl} SET wallet_credited = 1, statut = 'approuve', trans_code = %s
+                 WHERE id = %d AND wallet_credited = 0",
+                $code, $id
+            ) );
+        }
         if ( $claimed !== 1 ) {
             Delicat_Database::release_code( $code );
             return rest_ensure_response( [ 'ok' => false, 'message' => 'Déjà traité.' ] );
@@ -692,6 +702,11 @@ class Delicat_App_Api {
         // reject
         if ( $record->statut === 'rejete' ) {
             return rest_ensure_response( [ 'ok' => true, 'message' => 'Déjà rejeté.', 'noop' => true ] );
+        }
+        // 6.7.0: never « reject » a request whose wallet was credited (the money would
+        // stay while the row said rejected). Same rule as the console; refund instead.
+        if ( (int) $record->wallet_credited === 1 ) {
+            return new WP_Error( 'already_credited', 'Cette demande a déjà été créditée : rien n\'a été rejeté. Utilisez « Rembourser » dans la console.', [ 'status' => 409 ] );
         }
         Delicat_Database::update( $p['id'], [
             'statut'     => 'rejete',

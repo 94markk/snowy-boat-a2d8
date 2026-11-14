@@ -863,10 +863,11 @@ class Delicat_Natcash_Auto {
             // Log the miss so an unvalidated payment is diagnosable instead of
             // silently disappearing. Shows what the SMS carried vs what is
             // actually waiting, which immediately reveals amount/code mismatches.
-            $pending = $wpdb->get_results( $wpdb->prepare(
+            // 6.7.0: constant SQL; wpdb::prepare() without a placeholder only raised a notice.
+            $pending = $wpdb->get_results(
                 "SELECT id, montant, trans_code FROM {$tbl}
                  WHERE tab = 'natcash_tc' AND statut = 'en_attente'
-                 ORDER BY created_at DESC LIMIT 5" ) );
+                 ORDER BY created_at DESC LIMIT 5" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- table name only.
             $hint = [];
             foreach ( (array) $pending as $pr ) {
                 $hint[] = sprintf( '#%d %.2f/%s', $pr->id, (float) $pr->montant, $pr->trans_code );
@@ -1064,6 +1065,9 @@ class Delicat_Natcash_Auto {
             "UPDATE {$tbl} SET wallet_credited = 1, statut = 'approuve'
              WHERE id = %d AND statut = 'en_attente' AND wallet_credited = 0", (int) $row->id ) );
         if ( $claimed !== 1 ) {
+            // 6.7.0: nothing was credited here: free the code (as the Natcash path does),
+            // otherwise the one-time ledger kept it and no later path could credit it.
+            Delicat_Database::release_code( $parsed['trans_code'] );
             $log( 'Déjà traité (course évitée) #' . (int) $row->id, $parsed );
             return rest_ensure_response( [ 'matched' => false, 'reason' => 'Déjà traité.' ] );
         }
@@ -1075,6 +1079,7 @@ class Delicat_Natcash_Auto {
         }
         if ( ! $user_id ) {
             $wpdb->query( $wpdb->prepare( "UPDATE {$tbl} SET wallet_credited=0, statut='en_attente' WHERE id=%d", (int) $row->id ) );
+            Delicat_Database::release_code( $parsed['trans_code'] ); // 6.7.0: not credited → free it
             return rest_ensure_response( [ 'matched' => false, 'reason' => 'Utilisateur introuvable.' ] );
         }
 
@@ -1083,6 +1088,7 @@ class Delicat_Natcash_Auto {
                 sprintf( 'Recharge MonCash auto #%d (SMS)', $row->id ), (int) $row->id );
             if ( is_wp_error( $res ) ) {
                 $wpdb->query( $wpdb->prepare( "UPDATE {$tbl} SET wallet_credited=0, statut='en_attente' WHERE id=%d", (int) $row->id ) );
+                Delicat_Database::release_code( $parsed['trans_code'] ); // 6.7.0: not credited → free it
                 return rest_ensure_response( [ 'matched' => false, 'reason' => 'Échec crédit: ' . $res->get_error_message() ] );
             }
         }
@@ -1402,8 +1408,14 @@ class Delicat_Natcash_Auto {
         // 'natcash_tc' rows carry provider 'natcash' SMS.
         if ( $provider === 'natcash_tc' ) $provider = 'natcash';
 
+        // 6.7.0: every comparison below uses the normalised code (no spaces or dashes,
+        // upper case), like the SMS matcher and the « already used » checks. The form
+        // accepts « 2607 2038-38458 »; comparing it raw with the SMS value never
+        // matched, so such a request was never verified on submit.
+        $code_norm = self::norm_code( $code );
+
         // 6.6.5: unexpired SMS rows with this TransCode (or none parsed), decrypted.
-        $entries = Delicat_SMS_Store::entries( [ 'code' => self::norm_code( $code ), 'with_body' => true, 'limit' => 300 ] );
+        $entries = Delicat_SMS_Store::entries( [ 'code' => $code_norm, 'with_body' => true, 'limit' => 300 ] );
 
         $amount_mismatch = null;
         $suspect_found   = false;
@@ -1416,7 +1428,7 @@ class Delicat_Natcash_Auto {
             // Otherwise a scammer could send the fake SMS first, then submit
             // a matching request and get credited instantly.
             if ( class_exists( 'Delicat_SMS_Guard' ) && ! Delicat_SMS_Guard::entry_trusted( $e ) ) {
-                if ( stripos( $sms, $code ) !== false ) $suspect_found = true;
+                if ( strpos( self::norm_code( $sms ), $code_norm ) !== false ) $suspect_found = true;
                 continue;
             }
 
@@ -1433,7 +1445,7 @@ class Delicat_Natcash_Auto {
             if ( ! $parsed || empty( $parsed['trans_code'] ) ) continue;
 
             // TransCode must match exactly (case-insensitive).
-            if ( strcasecmp( trim( (string) $parsed['trans_code'] ), $code ) !== 0 ) continue;
+            if ( self::norm_code( (string) $parsed['trans_code'] ) !== $code_norm ) continue;
 
             // Amount must match exactly.
             if ( abs( (float) $parsed['amount'] - $amount ) >= 0.01 ) {

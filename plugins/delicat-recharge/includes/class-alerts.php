@@ -42,11 +42,19 @@ class Delicat_Alerts {
         if ( ! wp_next_scheduled( 'delicat_cron_stock_check' ) ) {
             wp_schedule_event( time() + 120, 'hourly', 'delicat_cron_stock_check' );
         }
+        // 6.7.0: the summary was scheduled at 20:00 UTC (15:00 in Haiti), because
+        // strtotime() reads PHP's timezone (UTC under WordPress). Moved once to 20:00
+        // site time; the flag keeps it from being moved again.
+        if ( ! get_option( 'delicat_summary_local_time' ) ) {
+            wp_clear_scheduled_hook( 'delicat_cron_daily_summary' );
+            update_option( 'delicat_summary_local_time', 1, false );
+        }
         if ( ! wp_next_scheduled( 'delicat_cron_daily_summary' ) ) {
-            // Next run ~20:00 local time.
-            $ts = strtotime( 'today 20:00' );
-            if ( $ts < time() ) $ts = strtotime( 'tomorrow 20:00' );
-            wp_schedule_event( $ts, 'daily', 'delicat_cron_daily_summary' );
+            // Next run ~20:00 local (site) time.
+            $tz = function_exists( 'wp_timezone' ) ? wp_timezone() : new DateTimeZone( 'UTC' );
+            $at = new DateTime( 'today 20:00', $tz );
+            if ( $at->getTimestamp() < time() ) $at = new DateTime( 'tomorrow 20:00', $tz );
+            wp_schedule_event( $at->getTimestamp(), 'daily', 'delicat_cron_daily_summary' );
         }
     }
 
@@ -73,7 +81,20 @@ class Delicat_Alerts {
              ORDER BY created_at ASC LIMIT 20",
             'en_attente', $cutoff
         ) );
-        if ( empty( $rows ) ) return;
+        if ( empty( $rows ) ) {
+            delete_option( 'delicat_pending_alert_last' );
+            return;
+        }
+
+        // 6.7.0: the same waiting requests were pushed again every 15 minutes, day
+        // and night, for as long as one stayed pending. Now: a push when the list of
+        // late requests changes, then a reminder at most every 2 hours.
+        $sig  = md5( implode( ',', array_map( function ( $r ) { return (int) $r->id; }, $rows ) ) );
+        $prev = get_option( 'delicat_pending_alert_last', [] );
+        if ( is_array( $prev ) && ( $prev['sig'] ?? '' ) === $sig && time() - (int) ( $prev['at'] ?? 0 ) < 2 * HOUR_IN_SECONDS ) {
+            return;
+        }
+        update_option( 'delicat_pending_alert_last', [ 'sig' => $sig, 'at' => time() ], false );
 
         $pending_total = count( $rows );
         $oldest = $rows[0];
@@ -97,7 +118,12 @@ class Delicat_Alerts {
 
         global $wpdb;
         $table = $wpdb->prefix . 'delicat_recharges';
-        $since = gmdate( 'Y-m-d 00:00:00' );
+        // 6.7.0: « today » is the site's day (Haiti), turned into the UTC time the
+        // rows are stored in (created_at = database clock, the same assumption as
+        // the pending check above). It used to be UTC midnight (19:00/20:00 in Haiti).
+        $since = function_exists( 'get_gmt_from_date' ) && function_exists( 'wp_date' )
+            ? get_gmt_from_date( wp_date( 'Y-m-d 00:00:00' ) )
+            : gmdate( 'Y-m-d 00:00:00' );
 
         $approved = $wpdb->get_row( $wpdb->prepare(
             "SELECT COUNT(*) c, COALESCE(SUM(montant),0) s FROM {$table}

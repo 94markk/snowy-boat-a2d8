@@ -378,19 +378,24 @@ function delicat_rewards_app_delivery_shape( array $d ) {
 	);
 }
 
-/** A claim went through but its order could not be read back yet: never ask to claim again. */
+/**
+ * A claim went through but its order could not be read back yet: never ask to claim again. 4.1.0: bonuses
+ * are HTG credits since 4.0.0, so the answer speaks of the wallet (it still promised a PIN in diamonds).
+ */
 function delicat_rewards_app_pending_delivery( $order_id, $tier ) {
-	$tiers = delicat_tiers();
+	$tiers  = delicat_tiers();
+	$credit = isset( $tiers[ $tier ] ) ? (float) delicat_reward_value( (int) ( $tiers[ $tier ]['reward'] ?? 0 ) ) : 0.0;
 	return array(
 		'order_id'   => (int) $order_id,
 		'tier'       => (string) $tier,
-		'amount'     => isset( $tiers[ $tier ] ) ? delicat_rewards_app_diamonds( (int) ( $tiers[ $tier ]['reward'] ?? 0 ) ) : '',
+		'amount'     => $credit > 0 ? delicat_reward_money( $credit ) : '',
+		'reward_type' => 'wallet', 'credit_amount' => $credit, 'currency' => 'HTG',
 		'date'       => delicat_rewards_app_iso( time() ),
 		'status'     => 'pending',
 		'expected'   => 0,
 		'pins'       => array(),
-		'redeem_url' => delicat_rewards_app_redeem_url(),
-		'message'    => 'Récompense enregistrée. Votre PIN est en préparation. Actualisez ici dans quelques instants ; ne réclamez pas à nouveau ce bonus.',
+		'redeem_url' => home_url( '/my-wallet/' ),
+		'message'    => 'Récompense enregistrée. Le crédit HTG est en cours de vérification : consultez votre portefeuille dans quelques instants ; ne réclamez pas à nouveau ce bonus.',
 	);
 }
 

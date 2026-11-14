@@ -249,7 +249,9 @@ function delicat_bonus_boot() {
 		if ( $logged ) $out['winnerRewards'] = $get( '/winner-rewards' );
 		$out['winners'] = array();
 		if ( function_exists( 'delicat_recent_winners' ) ) {
-			foreach ( delicat_recent_winners( 5 ) as $w ) {
+			$recent = delicat_recent_winners( 5 );
+			if ( count( $recent ) > 1 && function_exists( 'cache_users' ) ) cache_users( array_map( 'intval', wp_list_pluck( $recent, 'uid' ) ) ); // 4.1.0: one query for the names
+			foreach ( $recent as $w ) {
 				$out['winners'][] = array( 'name' => delicat_display_name( $w['uid'], true ), 'end' => (int) $w['end'], 'prize' => (int) $w['prize'], 'amountHtg' => $w['amount_htg'] ?? null ); // masked, no id
 			}
 		}

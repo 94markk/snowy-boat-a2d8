@@ -290,6 +290,12 @@ class Delicat_SMS_Guard {
 	 */
 	public static function entry_trusted( array $e ): bool {
 		if ( isset( $e['trust'] ) ) return $e['trust'] === 'ok';
+		// 6.7.0: a row of the SMS table (6.6.5+) without a verdict never reached the
+		// SMS Guard (its processing stopped half-way, or the licence was expired). The
+		// stateless re-check below skips the balance chain, so such a row is not proof:
+		// the administrator can still confirm it (« Authentique »). Pre-6.3.0 entries
+		// (no table id) keep the old re-check.
+		if ( isset( $e['id'], $e['received_ts'] ) ) return false;
 		$raw = (string) ( $e['sms'] ?? '' );
 		if ( $raw === '' ) return false;
 		$is_mc    = ( stripos( $raw, 'moncash' ) !== false ) || preg_match( '/Txn\s*ID/i', $raw );

@@ -66,7 +66,8 @@ add_action( 'admin_post_delicat_competition', function () {
                 delicat_weekly_state_save( $all );
                 delicat_audit_add( 'Résultats de la semaine précédente figés pour réclamation en HTG.' );
             }
-            if ( ( $all[ $end ]['reason'] ?? '' ) !== 'reset' && (int) delicat_cfg( 'dry_run' ) !== 1 ) delicat_award_weekly_winner( (int) ( $all[ $end ]['start'] ?? delicat_closed_period_start( $end ) ), $end, $end );
+            // 4.1.0: a reset period is stored as 'reset_without_award' (the 'reset' test never matched).
+            if ( ! in_array( $all[ $end ]['reason'] ?? '', array( 'reset', 'reset_without_award' ), true ) && (int) delicat_cfg( 'dry_run' ) !== 1 ) delicat_award_weekly_winner( (int) ( $all[ $end ]['start'] ?? delicat_closed_period_start( $end ) ), $end, $end );
             $notes[] = 'Résultats disponibles dans l’historique. Les prix configurés sont à réclamer en HTG sous 5 jours.';
         } elseif ( 'manual' === $op ) {
             $key = (int) ( $in['period'] ?? 0 ); $rank = (int) ( $in['rank'] ?? 0 );
@@ -80,7 +81,7 @@ add_action( 'admin_post_delicat_competition', function () {
             $all[ $key ]['placements'][ $rank ] = $p;
             $all[ $key ]['complete'] = 1;
             foreach ( $all[ $key ]['placements'] as $placement ) {
-                if ( in_array( $placement['status'], array( 'pending_manual', 'failed_retryable' ), true ) ) $all[ $key ]['complete'] = 0;
+                if ( in_array( $placement['status'] ?? '', array( 'pending_manual', 'failed_retryable' ), true ) ) $all[ $key ]['complete'] = 0;
             }
             delicat_weekly_state_save( $all );
             delicat_audit_add( 'Récompense Meilleur client remise manuellement : période ' . $key . ', place ' . $rank . ', client #' . $p['uid'] . ', administrateur #' . get_current_user_id() );

@@ -32,10 +32,27 @@ function delicat_reward_value( $diamonds ) {
 }
 
 /** Bind the value, owner, deadline and program identity to the server's signing key. */
-function delicat_wallet_order_signature( $o ) {
+function delicat_wallet_order_payload( $o ) {
     $fields = array( $o->get_id(), $o->get_customer_id() );
     foreach ( array( '_delicat_reward', '_delicat_reward_kind', '_delicat_reward_amount', '_delicat_wallet_amount', '_delicat_reward_expires', '_delicat_reward_month', '_delicat_week_boundary', '_delicat_week_rank' ) as $k ) $fields[] = (string) $o->get_meta( $k );
-    return delicat_sign( 'wallet-order|' . implode( '|', $fields ) );
+    return 'wallet-order|' . implode( '|', $fields );
+}
+function delicat_wallet_order_signature( $o ) {
+    return delicat_sign( delicat_wallet_order_payload( $o ) );
+}
+/**
+ * 4.1.0: the stored signature is checked against every accepted signing key, as the ledgers are. Up to
+ * 4.0.0 only the current key was tried, so adding DELICAT_REWARDS_HMAC_KEY (as Diagnostics advises)
+ * made every reward still waiting to be claimed unclaimable.
+ */
+function delicat_wallet_order_sig_ok( $o ) {
+    $given = (string) $o->get_meta( '_delicat_wallet_sig' );
+    if ( '' === $given ) return false;
+    $payload = delicat_wallet_order_payload( $o );
+    foreach ( delicat_secret_ring() as $secret ) {
+        if ( hash_equals( hash_hmac( 'sha256', $payload, $secret ), $given ) ) return true;
+    }
+    return false;
 }
 function delicat_create_wallet_reward( $uid, $diamonds, $tag, array $meta, $expires ) {
     if ( ! function_exists( 'wc_create_order' ) || (int) delicat_cfg( 'dry_run' ) === 1 || ! get_userdata( (int) $uid ) || (int) $expires <= time() ) return 0;
@@ -90,7 +107,7 @@ function delicat_credit_wallet_reward( $oid, $uid ) {
     try {
         $o = wc_get_order( (int) $oid );
         if ( ! $o || (int) $o->get_customer_id() !== (int) $uid || 'wallet' !== $o->get_meta( '_delicat_reward_delivery' ) ) return false;
-        if ( ! delicat_sig_ok( delicat_wallet_order_signature( $o ), (string) $o->get_meta( '_delicat_wallet_sig' ) ) ) return false;
+        if ( ! delicat_wallet_order_sig_ok( $o ) ) return false;
         $state = delicat_wallet_payout_state( $oid );
         $tx = (int) ( $state['tx'] ?? $o->get_meta( '_delicat_wallet_tx' ) );
         if ( ! $tx && ! empty( $state ) && function_exists( 'woo_wallet' ) ) $tx = delicat_wallet_find_transaction( $o );
@@ -136,7 +153,10 @@ function delicat_credit_wallet_reward( $oid, $uid ) {
 function delicat_wallet_delivery( $o ) {
     $tx = (int) $o->get_meta( '_delicat_wallet_tx' );
     $expires = (int) $o->get_meta( '_delicat_reward_expires' );
-    $state = delicat_wallet_payout_state( $o->get_id() );
+    // 4.1.0: a confirmed credit needs no read of the payout record (one query less per history line);
+    // a credit recorded there but not yet on the order (interrupted save) shows as credited, not « review ».
+    $state = $tx ? array() : delicat_wallet_payout_state( $o->get_id() );
+    if ( ! $tx && 'credited' === ( $state['status'] ?? '' ) && (int) ( $state['tx'] ?? 0 ) > 0 ) $tx = (int) $state['tx'];
     $status = $tx ? 'credited' : ( ! empty( $state ) ? 'review' : ( time() >= $expires ? 'expired' : 'claimable' ) );
     if ( ! $tx && $o->has_status( array( 'cancelled', 'refunded', 'failed', 'trash' ) ) ) $status = 'unavailable';
     $amount = (float) $o->get_meta( '_delicat_wallet_amount' ); $date = $o->get_date_created();
@@ -159,12 +179,16 @@ function delicat_winner_token( $o ) {
 function delicat_winner_rewards( $uid ) {
     if ( ! function_exists( 'wc_get_orders' ) ) return array( 'items' => array(), 'error' => 'WooCommerce indisponible.' );
     if ( (int) $uid !== (int) get_current_user_id() || (int) $uid < 1 ) return array( 'items' => array() );
+    $all = delicat_weekly_state_get();
+    // 4.1.0: every podium prize order is recorded with its owner in the weekly record. A customer who
+    // never reached the podium (nearly everyone) is answered without an order query on each page view.
+    if ( $all && ! delicat_weekly_has_user( $all, $uid ) ) return array( 'items' => array(), 'serverTime' => time() );
     $args = array( 'customer_id' => (int) $uid, 'limit' => 30, 'orderby' => 'ID', 'order' => 'DESC', 'type' => 'shop_order' );
     $meta = array( array( 'key' => '_delicat_reward_kind', 'value' => 'weekly' ), array( 'key' => '_delicat_reward_delivery', 'value' => 'wallet' ) );
     if ( class_exists( '\Automattic\WooCommerce\Utilities\OrderUtil' ) && \Automattic\WooCommerce\Utilities\OrderUtil::custom_orders_table_usage_is_enabled() ) $args['meta_query'] = $meta;
     else $args['delicat_reward_meta'] = $meta;
     $orders = wc_get_orders( $args );
-    $items = array(); $all = delicat_weekly_state_get();
+    $items = array();
     foreach ( $orders as $o ) {
         if ( 'weekly' !== $o->get_meta( '_delicat_reward_kind' ) || 'wallet' !== $o->get_meta( '_delicat_reward_delivery' ) || (int) $o->get_customer_id() !== (int) $uid ) continue;
         $d = delicat_wallet_delivery( $o );
@@ -175,6 +199,16 @@ function delicat_winner_rewards( $uid ) {
         $items[] = $d;
     }
     return array( 'items' => $items, 'serverTime' => time() );
+}
+/** True when the customer holds or held a podium place in the weekly record (ranking or prize placement). */
+function delicat_weekly_has_user( array $all, $uid ) {
+    $uid = (int) $uid;
+    foreach ( $all as $week ) {
+        if ( ! is_array( $week ) ) continue;
+        foreach ( (array) ( $week['placements'] ?? array() ) as $p ) if ( is_array( $p ) && (int) ( $p['uid'] ?? 0 ) === $uid ) return true;
+        foreach ( (array) ( $week['ranking'] ?? array() ) as $r ) if ( (int) $r === $uid ) return true;
+    }
+    return false;
 }
 /** Serialized with closing, resetting, manual delivery and refund verification. */
 function delicat_winner_claim( $oid, $token ) {
@@ -213,7 +247,7 @@ function delicat_wallet_claim_email( $uid, $oid ) {
     if ( ! $o || 'wallet' !== $o->get_meta( '_delicat_reward_delivery' ) ) return false;
     if ( ! delicat_cfg( 'notify_client' ) || ! $o->get_meta( '_delicat_wallet_tx' ) || $o->get_meta( '_delicat_wallet_emailed' ) ) return true;
     $o->update_meta_data( '_delicat_wallet_emailed', 1 ); $o->save();
-    delicat_mail_user( $uid, 'Delicat Store — récompense créditée', 'Félicitations ! Vous avez gagné ' . delicat_reward_money( $o->get_meta( '_delicat_wallet_amount' ) ) . '. Ce montant a été ajouté à votre portefeuille Delicat Wallet.\n' . home_url( '/my-wallet/' ) );
+    delicat_mail_user( $uid, 'Delicat Store — récompense créditée', 'Félicitations ! Vous avez gagné ' . delicat_reward_money( $o->get_meta( '_delicat_wallet_amount' ) ) . '. Ce montant a été ajouté à votre portefeuille Delicat Wallet.' . "\n" . home_url( '/my-wallet/' ) );
     return true;
 }
 

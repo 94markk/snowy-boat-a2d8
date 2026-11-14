@@ -65,8 +65,12 @@ class Delicat_Client_License {
         $resp = wp_remote_get( $url, [ 'timeout' => 8 ] );
         if ( is_wp_error( $resp ) ) {
             // Network issue: keep last known good for a short grace, else deny.
-            $last = get_option( 'delicat_license_last_good', 0 );
-            return ( $last && ( time() - $last ) < DAY_IN_SECONDS );
+            $last  = get_option( 'delicat_license_last_good', 0 );
+            $grace = ( $last && ( time() - $last ) < DAY_IN_SECONDS );
+            // 6.7.0: remember this answer for 5 minutes. While HQ was unreachable,
+            // every app call and every SMS waited up to 8 s for the same failure.
+            set_transient( self::CACHE, [ 'valid' => $grace, 'until' => time() + 5 * MINUTE_IN_SECONDS ], 5 * MINUTE_IN_SECONDS );
+            return $grace;
         }
 
         $body  = json_decode( wp_remote_retrieve_body( $resp ), true );

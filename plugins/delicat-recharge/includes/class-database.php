@@ -114,8 +114,8 @@ class Delicat_Database {
         return '1' === (string) get_option( 'delicat_code_norm_ready', '0' ) ? 'code_norm' : self::CODE_EXPR;
     }
 
-    /** PHP twin of CODE_EXPR, used when a row's TransCode is written. */
-    private static function code_norm_value( string $trans_code ): string {
+    /** PHP twin of CODE_EXPR, used when a row's TransCode is written (public since 6.7.0). */
+    public static function code_norm_value( string $trans_code ): string {
         // ASCII upper-casing like the checks' own values; the column's _ci
         // collation already compares any other letters case-insensitively.
         return strtoupper( str_replace( [ ' ', '-' ], '', $trans_code ) );

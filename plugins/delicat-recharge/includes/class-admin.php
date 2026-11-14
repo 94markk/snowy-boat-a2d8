@@ -634,7 +634,7 @@ class Delicat_Admin {
                                 Approuver
                             </button>
                             <?php endif; ?>
-                            <?php if ( $r->statut !== 'rejete' ) : ?>
+                            <?php if ( $r->statut !== 'rejete' && ! (int) $r->wallet_credited ) : // 6.7.0: a credited row is refunded, not rejected ?>
                             <button class="button button-small dr-reject"
                                     data-id="<?php echo $r->id; ?>"
                                     data-nonce="<?php echo $nonce; ?>"

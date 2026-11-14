@@ -120,7 +120,8 @@ class Delicat_Send_Money {
 		return $code;
 	}
 
-	private static function code_taken( string $code ): bool {
+	/** Is this personal code already someone's? (public since 6.7.0, used by the balance card) */
+	public static function code_taken( string $code ): bool {
 		global $wpdb;
 		return (bool) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$wpdb->usermeta}
@@ -159,11 +160,19 @@ class Delicat_Send_Money {
 	private static function hourly_count( int $uid ): int {
 		global $wpdb;
 		$table = self::table();
+		// 6.7.0: rows are written with current_time( 'mysql' ) (site time, Haiti), so
+		// the window is computed in site time too. MySQL's NOW() is the database
+		// server's clock (UTC on Hostinger): « created_at > NOW() - 1 h » was never
+		// true for a row written 4-5 h « earlier » in site time, and the limit of
+		// 10 transfers per hour never applied.
+		$since = function_exists( 'wp_date' )
+			? wp_date( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS )
+			: gmdate( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS );
 		return (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(*) FROM {$table}
 			 WHERE sender_id = %d AND status = 'completed'
-			   AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)",
-			$uid
+			   AND created_at > %s",
+			$uid, $since
 		) );
 	}
 
@@ -969,11 +978,16 @@ DSM_CSS;
 
       var copy = up(e.target, '[data-dsm-copy]');
       if (copy) {
+        /* 6.7.0: the wallet script (form.js) already copied it and shows its own
+           tick; doing it twice replaced the button's icon with plain text. */
+        if (e.defaultPrevented) return;
         e.preventDefault();
         var val = copy.getAttribute('data-dsm-copy') || '';
         var done = function(){
-          var old = copy.textContent; copy.textContent = 'Copié';
-          setTimeout(function(){ copy.textContent = old; }, 1600);
+          var lbl = copy.querySelector('.dsm-copytxt') || copy;
+          if (!lbl.hasAttribute('data-dsm-label')) lbl.setAttribute('data-dsm-label', lbl.innerHTML);
+          lbl.textContent = 'Copié';
+          setTimeout(function(){ lbl.innerHTML = lbl.getAttribute('data-dsm-label') || ''; }, 1600);
         };
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(val).then(done, done);

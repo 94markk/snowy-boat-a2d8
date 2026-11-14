@@ -3,6 +3,8 @@
 defined( 'ABSPATH' ) || exit;
 
 function delicat_private_response( $data ) {
+    // LiteSpeed Cache can keep REST answers (« Cache REST API », private cache): never these personal ones.
+    do_action( 'litespeed_control_set_nocache', 'delicat rewards: private answer' );
     $response = rest_ensure_response( $data );
     $response->header( 'Cache-Control', 'no-store, private, max-age=0' );
     $response->header( 'Pragma', 'no-cache' );

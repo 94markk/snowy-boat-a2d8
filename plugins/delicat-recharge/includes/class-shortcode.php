@@ -170,7 +170,12 @@ class Delicat_Shortcode {
     private function delicat_user_code( int $uid ): string {
         $code = (string) get_user_meta( $uid, 'delicat_user_code', true );
         if ( $code === '' ) {
-            $code = 'DS' . strtoupper( wp_generate_password( 6, false, false ) );
+            // 6.7.0: never hand out a code another customer already has (transfers find
+            // the recipient by this code, first match wins). Same format as before.
+            $tries = 0;
+            do {
+                $code = 'DS' . strtoupper( wp_generate_password( 6, false, false ) );
+            } while ( class_exists( 'Delicat_Send_Money' ) && Delicat_Send_Money::code_taken( $code ) && ++$tries < 20 );
             update_user_meta( $uid, 'delicat_user_code', $code );
         }
         return $code;

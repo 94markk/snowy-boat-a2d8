@@ -35,6 +35,7 @@ add_filter( 'pre_update_option_delicat_config', function ( $value, $old ) {
 }, 10, 2 );
 
 add_action( 'init', function () {
+    if ( function_exists( 'delicat_upgrades_done' ) && delicat_upgrades_done() ) return; // 4.1.0: no option read once done
     if ( get_option( 'delicat_purchase_history_version', '' ) === '3.2.4' ) return;
     delicat_purchase_history_remember( delicat_cfg() );
     update_option( 'delicat_cfg_gen', delicat_cfg_gen() + 1 );

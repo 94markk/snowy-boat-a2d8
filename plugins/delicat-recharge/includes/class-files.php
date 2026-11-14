@@ -69,27 +69,31 @@ class Delicat_Files {
      * @return string|WP_Error  The stored filename (not a URL) on success.
      */
     public function store( array $file ): string|WP_Error {
-        if ( empty( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
+        if ( ! empty( $file['error'] ) || empty( $file['tmp_name'] ) || ! is_uploaded_file( $file['tmp_name'] ) ) {
             return new WP_Error( 'no_file', 'Aucun fichier valide reçu.' );
         }
-        if ( $file['size'] > self::MAX_SIZE ) {
+        if ( (int) ( $file['size'] ?? 0 ) > self::MAX_SIZE || (int) filesize( $file['tmp_name'] ) > self::MAX_SIZE ) {
             return new WP_Error( 'too_large', 'Fichier trop grand (max 8 Mo).' );
         }
 
-        // Verify the REAL file type from contents (not the spoofable client type).
-        $real_mime = '';
-        if ( function_exists( 'finfo_open' ) ) {
+        // 6.7.0: the type comes ONLY from the file's own first bytes (magic number).
+        // Before, a file the server could not recognise as an image fell back to its
+        // NAME (« preuve.jpg ») and was accepted: an HTML page named .jpg was stored,
+        // then served back to the administrator with the type the server sniffed
+        // (text/html), i.e. a script running inside wp-admin. Never again: no image
+        // or PDF signature, no upload. finfo, when present, must not disagree.
+        $real_mime = self::sniff_mime( $file['tmp_name'] );
+        if ( '' !== $real_mime && function_exists( 'finfo_open' ) ) {
             $finfo = finfo_open( FILEINFO_MIME_TYPE );
             if ( $finfo ) {
-                $real_mime = finfo_file( $finfo, $file['tmp_name'] );
+                $seen = (string) finfo_file( $finfo, $file['tmp_name'] );
                 finfo_close( $finfo );
-            }
-        }
-        // Fallback: use WordPress's own filetype check based on the filename.
-        if ( ! $real_mime || ! isset( self::ALLOWED[ $real_mime ] ) ) {
-            $check = wp_check_filetype( $file['name'] );
-            if ( $check['type'] && isset( self::ALLOWED[ $check['type'] ] ) ) {
-                $real_mime = $check['type'];
+                // finfo says "application/octet-stream" for a few valid WEBP/PDF
+                // variants; anything else must be the same family of type.
+                if ( '' !== $seen && 'application/octet-stream' !== $seen && $seen !== $real_mime
+                    && ! ( 0 === strpos( $seen, 'image/' ) && 0 === strpos( $real_mime, 'image/' ) ) ) {
+                    $real_mime = '';
+                }
             }
         }
 
@@ -122,6 +126,23 @@ class Delicat_Files {
 
         // Return the private filename only (view_url() builds the admin proxy URL).
         return $name;
+    }
+
+    /**
+     * 6.7.0: the type of a proof file from its first bytes only ('' when it is not
+     * a JPEG, PNG, GIF, WEBP or PDF). Independent of the file name and of finfo.
+     */
+    public static function sniff_mime( string $path ): string {
+        $head = @file_get_contents( $path, false, null, 0, 16 ); // phpcs:ignore WordPress.PHP.NoSilencedErrors -- unreadable = rejected.
+        if ( ! is_string( $head ) || strlen( $head ) < 12 ) {
+            return '';
+        }
+        if ( 0 === strncmp( $head, "\xFF\xD8\xFF", 3 ) ) return 'image/jpeg';
+        if ( 0 === strncmp( $head, "\x89PNG\r\n\x1A\n", 8 ) ) return 'image/png';
+        if ( 0 === strncmp( $head, 'GIF87a', 6 ) || 0 === strncmp( $head, 'GIF89a', 6 ) ) return 'image/gif';
+        if ( 0 === strncmp( $head, 'RIFF', 4 ) && 'WEBP' === substr( $head, 8, 4 ) ) return 'image/webp';
+        if ( 0 === strncmp( $head, '%PDF-', 5 ) ) return 'application/pdf';
+        return '';
     }
 
     /**
@@ -158,27 +179,26 @@ class Delicat_Files {
             wp_die( 'Fichier introuvable.', 'Not Found', [ 'response' => 404 ] );
         }
 
-        // Determine MIME type; fall back to extension map if finfo is unavailable.
-        $mime = '';
-        if ( function_exists( 'finfo_open' ) ) {
-            $finfo = finfo_open( FILEINFO_MIME_TYPE );
-            if ( $finfo ) {
-                $mime = finfo_file( $finfo, $path );
-                finfo_close( $finfo );
-            }
-        }
-        if ( ! $mime ) {
-            $ext_map = [ 'jpg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif',
-                         'webp' => 'image/webp', 'pdf' => 'application/pdf' ];
-            $ext  = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
-            $mime = $ext_map[ $ext ] ?? 'application/octet-stream';
-        }
+        // 6.7.0: the type is the one of the whitelisted extension, never what the
+        // server sniffs from the content: a file stored by an older version that is
+        // really HTML is then served as an image (inert), not as a page that runs
+        // inside wp-admin. A file whose bytes are not that type is offered as a
+        // download instead of being displayed.
+        $ext_map = [ 'jpg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif',
+                     'webp' => 'image/webp', 'pdf' => 'application/pdf' ];
+        $ext     = strtolower( pathinfo( $path, PATHINFO_EXTENSION ) );
+        $mime    = $ext_map[ $ext ] ?? 'application/octet-stream';
+        $inline  = ( self::sniff_mime( $path ) === $mime );
 
         nocache_headers();
-        header( 'Content-Type: ' . $mime );
+        header( 'Content-Type: ' . ( $inline ? $mime : 'application/octet-stream' ) );
         header( 'Content-Length: ' . filesize( $path ) );
-        header( 'Content-Disposition: inline; filename="preuve-' . $file . '"' );
+        header( 'Content-Disposition: ' . ( $inline ? 'inline' : 'attachment' ) . '; filename="preuve-' . $file . '"' );
         header( 'X-Content-Type-Options: nosniff' );
+        if ( 'application/pdf' !== $mime ) {
+            // An image never needs scripts (the PDF viewer would refuse a sandbox).
+            header( "Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox" );
+        }
         readfile( $path );
         exit;
     }

@@ -191,6 +191,9 @@ register_deactivation_hook( __FILE__, function () {
     if ( class_exists( 'Delicat_SMS_Store' ) ) {
         Delicat_SMS_Store::clear_schedules();
     }
+    if ( class_exists( 'Delicat_Watchdog' ) ) {
+        Delicat_Watchdog::deactivate(); // 6.7.0: its hourly check was left behind
+    }
 } );
 
 

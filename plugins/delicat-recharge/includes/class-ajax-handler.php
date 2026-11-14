@@ -416,6 +416,12 @@ class Delicat_Ajax_Handler {
             ] );
 
         } elseif ( $action === 'rejeter' ) {
+            // 6.7.0: a credited request is never « rejected »: the money would stay in
+            // the wallet while the row said « Rejeté » and the « Rembourser » button
+            // disappeared. Same rule as the bulk rejection. Use « Rembourser ».
+            if ( (int) $record->wallet_credited === 1 ) {
+                wp_send_json_error( [ 'message' => 'Cette demande a déjà été créditée : utilisez « Rembourser » pour reprendre le montant.' ] );
+            }
             Delicat_Database::update( $id, [ 'statut' => 'rejete' ] );
             $record = Delicat_Database::get( $id );
             $this->defer_notifications( $record );
@@ -659,7 +665,9 @@ class Delicat_Ajax_Handler {
             $claimed = $wpdb->query( $wpdb->prepare(
                 "UPDATE {$tbl} SET wallet_credited = 1, statut = 'approuve'
                  WHERE id = %d AND wallet_credited = 0", $id ) );
-            if ( $claimed === 1 ) {
+            if ( $claimed !== 1 ) {
+                Delicat_Database::release_code( $code ); // 6.7.0: not credited here → free it
+            } else {
                 $record  = Delicat_Database::get( $id );
                 $user_id = (int) $record->user_id;
                 if ( ! $user_id ) {
@@ -674,6 +682,10 @@ class Delicat_Ajax_Handler {
                     $ok = true;
                 } else {
                     $wpdb->query( $wpdb->prepare( "UPDATE {$tbl} SET wallet_credited = 0, statut = 'en_attente' WHERE id = %d", $id ) );
+                    // 6.7.0: the credit failed, so the code must not stay « spent »:
+                    // otherwise the SMS matcher, the app and the console all refused
+                    // it afterwards and the customer's payment was stuck for good.
+                    Delicat_Database::release_code( $code );
                 }
             }
         }
@@ -691,7 +703,8 @@ class Delicat_Ajax_Handler {
     private function credit_wallet( int $user_id, float $amount, int $recharge_id ): bool {
         if ( $user_id <= 0 ) return false;
 
-        $desc   = sprintf( 'Recharge #%d – Delicat Store (%s)', $recharge_id, date( 'd/m/Y H:i' ) );
+        // 6.7.0: the date the customer reads in the wallet history is site time (it was UTC).
+        $desc   = sprintf( 'Recharge #%d – Delicat Store (%s)', $recharge_id, function_exists( 'wp_date' ) ? wp_date( 'd/m/Y H:i' ) : date( 'd/m/Y H:i' ) );
         $result = Delicat_TeraWallet::credit( $user_id, $amount, $desc, $recharge_id );
 
         if ( is_wp_error( $result ) ) {

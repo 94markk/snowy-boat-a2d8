@@ -89,7 +89,7 @@ class Delicat_Clients {
                 if ( $amount <= 0 ) {
                     wp_send_json_error( [ 'message' => 'Montant invalide.' ] );
                 }
-                $note = sprintf( 'Ajustement admin (%s) – %s', $type, date( 'd/m/Y H:i' ) );
+                $note = sprintf( 'Ajustement admin (%s) – %s', $type, function_exists( 'wp_date' ) ? wp_date( 'd/m/Y H:i' ) : date( 'd/m/Y H:i' ) ); // 6.7.0: site time
                 if ( $type === 'credit' ) {
                     $res = Delicat_TeraWallet::credit( $user_id, $amount, $note );
                     $msg = sprintf( '%.2f HTG ajoutés au wallet de %s.', $amount, $user->user_email );
@@ -114,6 +114,13 @@ class Delicat_Clients {
         check_admin_referer( 'dr_export_nonce' );
 
         $what = sanitize_text_field( $_GET['dr_export'] );
+        // 6.7.0: a cell starting with = + - @ (or a tab / carriage return) is run as a
+        // formula by Excel / LibreOffice / Sheets. Names, e-mails and TransCodes are
+        // typed by customers, so such a cell is written as text (leading apostrophe).
+        $cell = static function ( $v ) {
+            $v = (string) $v;
+            return ( '' !== $v && false !== strpos( "=+-@\t\r", $v[0] ) ) ? "'" . $v : $v;
+        };
         header( 'Content-Type: text/csv; charset=utf-8' );
         header( 'Content-Disposition: attachment; filename=delicat-' . $what . '-' . date( 'Y-m-d' ) . '.csv' );
         $out = fopen( 'php://output', 'w' );
@@ -121,8 +128,8 @@ class Delicat_Clients {
         if ( $what === 'transactions' ) {
             fputcsv( $out, [ 'ID','Email','Méthode','Montant HTG','TransCode','Statut','Wallet crédité','Date' ] );
             foreach ( Delicat_Database::get_all( [ 'limit' => 100000 ] ) as $r ) {
-                fputcsv( $out, [ $r->id, $r->user_email, $r->tab . '/' . $r->methode,
-                    number_format( $r->montant, 2 ), $r->trans_code, $r->statut,
+                fputcsv( $out, [ $r->id, $cell( $r->user_email ), $cell( $r->tab . '/' . $r->methode ),
+                    number_format( (float) $r->montant, 2 ), $cell( $r->trans_code ), $cell( $r->statut ),
                     $r->wallet_credited ? 'Oui' : 'Non', $r->created_at ] );
             }
         } elseif ( $what === 'clients' ) {
@@ -130,7 +137,7 @@ class Delicat_Clients {
             foreach ( get_users( [ 'role__in' => [ 'customer', 'subscriber' ] ] ) as $u ) {
                 $bal    = Delicat_TeraWallet::get_balance( $u->ID );
                 $banned = get_user_meta( $u->ID, 'dr_banned_login', true ) ? 'BLOQUÉ' : 'OK';
-                fputcsv( $out, [ $u->ID, $u->display_name, $u->user_email,
+                fputcsv( $out, [ $u->ID, $cell( $u->display_name ), $cell( $u->user_email ),
                     number_format( $bal, 2 ), $banned,
                     Delicat_Database::count_for_user( $u->ID ), $u->user_registered ] );
             }
