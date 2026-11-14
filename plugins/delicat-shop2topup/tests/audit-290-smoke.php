@@ -13,11 +13,14 @@ if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
  *    before the guard runs;
  *  - the normal cached-price fallback still submits with the cached maximum;
  *  - player-verification throttles use fixed windows and include a site ceiling;
+ *  - a queued line whose order is no longer paid is parked once, then re-opened on payment;
+ *  - a full-catalog import batch reads only its own categories;
  *  - recurring-job checks only run on admin, cron and CLI requests.
  */
 
 define('ABSPATH', __DIR__ . '/');
 define('MINUTE_IN_SECONDS', 60);
+define('HOUR_IN_SECONDS', 3600);
 error_reporting(E_ALL);
 ini_set('display_errors', '1');
 
@@ -100,6 +103,7 @@ require_once dirname(__DIR__) . '/includes/class-dst2t-scheduler.php';
 class DST2T_Brand { static function label() { return 'Supplier'; } }
 require_once dirname(__DIR__) . '/includes/class-dst2t-fulfillment.php';
 require_once dirname(__DIR__) . '/includes/class-dst2t-product.php';
+require_once dirname(__DIR__) . '/includes/class-dst2t-catalog.php';
 
 $failures = 0;
 function check($cond, $label) { global $failures; echo ($cond ? '  ok   ' : '  FAIL ') . $label . "\n"; if (!$cond) { $failures++; } }
@@ -108,7 +112,12 @@ class Fake_Repo {
     public $rows = array();
     function get($id) { return $this->rows[$id] ?? null; }
     function register_intent($id, $o, $i, $h) { return true; }
-    function update($id, $status, $args = array()) { $this->rows[$id]['status'] = $status; if (array_key_exists('next_check_at', $args)) { $this->rows[$id]['next_check_at'] = $args['next_check_at'] ? gmdate('Y-m-d H:i:s', $args['next_check_at']) : null; } return true; }
+    function update($id, $status, $args = array()) {
+        $this->rows[$id]['status'] = $status;
+        if (array_key_exists('next_check_at', $args)) { $this->rows[$id]['next_check_at'] = $args['next_check_at'] ? gmdate('Y-m-d H:i:s', $args['next_check_at']) : null; }
+        if (array_key_exists('last_error_code', $args)) { $this->rows[$id]['last_error_code'] = $args['last_error_code']; }
+        return true;
+    }
 }
 class Fake_Api {
     public $created = array(); public $catalog = '2.000000';
@@ -140,7 +149,7 @@ function paid_line($order_id, $item_id, $uuid) {
     $order = new WC_Order($order_id);
     $order->items[$item_id] = new WC_Order_Item_Product($item_id, array('_dst2t_order_id' => $uuid, '_dst2t_item_id' => 555, '_dst2t_product_id' => 77, '_dst2t_category_id' => 9, '_dst2t_status' => 'intent', '_dst2t_returns_voucher' => 'no'));
     $ORDERS[$order_id] = $order;
-    $repo->rows[$uuid] = array('provider_order_id' => $uuid, 'wc_order_id' => $order_id, 'wc_item_id' => $item_id, 'status' => 'intent', 'attempt_count' => 0, 'next_check_at' => null, 'payload_hash' => '');
+    $repo->rows[$uuid] = array('provider_order_id' => $uuid, 'wc_order_id' => $order_id, 'wc_item_id' => $item_id, 'status' => 'intent', 'attempt_count' => 0, 'next_check_at' => null, 'payload_hash' => '', 'last_error_code' => '');
     return $order;
 }
 
@@ -174,6 +183,25 @@ $order = paid_line(804, 84, 'dddddddd-4444-4444-8444-444444444444');
 $f->process_item(804, 84);
 check($api->created === array('2.000000') && ($POST_META[77]['_dst2t_last_cost_usd'] ?? '') === '2.000000', 'the catalog price is used and remembered once it passed the guard');
 
+echo "\n== queued line of an order that is no longer paid\n";
+$uuid = 'eeeeeeee-5555-4555-8555-555555555555';
+$order = paid_line(805, 85, $uuid);
+$order->status = 'cancelled';
+$AS = array(); $api->created = array();
+$f->process_item(805, 85);
+$row = $repo->rows[$uuid];
+check($row['last_error_code'] === 'ORDER_NOT_PAYABLE' && strtotime($row['next_check_at'] . ' UTC') > time() + 3600, 'the line is parked instead of being re-queued every minute');
+check(count($order->notes) === 1 && $row['status'] === 'intent' && !$api->created, 'one order note, state kept, nothing bought');
+$f->process_item(805, 85);
+check(count($order->notes) === 1, 'no repeated note');
+$order->status = 'processing';
+$f->queue_order(805);
+$row = $repo->rows[$uuid];
+check($row['last_error_code'] === '' && strtotime($row['next_check_at'] . ' UTC') <= time(), 'paid again: the line is re-opened at once');
+check((bool) array_filter($AS, function ($a) { return $a[0] === 'dst2t_process_item' && $a[1] === array(805, 85); }), 'and queued for delivery');
+$order->status = 'trash';
+check($f->payment_confirmed($order) === false, 'a trashed order is never fulfilled');
+
 echo "\n== player verification throttle\n";
 $_SERVER['REMOTE_ADDR'] = '203.0.113.7';
 $pref = new ReflectionClass('DST2T_Product');
@@ -190,6 +218,30 @@ check($throttled->invoke($product) === false, 'the window ends on time even unde
 check($TTL['dst2t_pv_site'] <= 60 && $TTL['dst2t_pv_site'] >= 1, 'the expiry is the rest of the window, not refreshed by each attempt');
 $TRANSIENTS['dst2t_pv_a_' . md5('203.0.113.7')] = array('n' => DST2T_Product::ADDRESS_LIMIT, 't' => time() - 10);
 check($throttled->invoke($product) === true, 'a full address bucket still throttles inside its window');
+
+echo "\n== full-catalog import batch\n";
+class Fake_Catalog_Api {
+    public $reads = array();
+    function subcategories($category) {
+        $this->reads[] = $category;
+        $all = array(1 => array('item_id' => 1, 'category_id' => 10), 2 => array('item_id' => 2, 'category_id' => 10), 3 => array('item_id' => 3, 'category_id' => 20), 4 => array('item_id' => 4, 'category_id' => 30));
+        return array_values(array_filter($all, function ($row) use ($category) { return !$category || $row['category_id'] === $category; }));
+    }
+}
+$cref = new ReflectionClass('DST2T_Catalog');
+$catalog = $cref->newInstanceWithoutConstructor();
+$capi = new Fake_Catalog_Api();
+$p = $cref->getProperty('api'); $p->setValue($catalog, $capi);
+$batch = $cref->getMethod('batch_catalog_map');
+$job = array('mode' => 'full', 'category_id' => 0, 'item_categories' => array(1 => 10, 2 => 10, 3 => 20, 4 => 99));
+$map = $batch->invoke($catalog, $job, array(1, 2, 3));
+check(array_keys($map) == array(1, 2, 3) && $capi->reads === array(10, 20), 'two small category reads instead of the whole catalog');
+$capi->reads = array();
+$map = $batch->invoke($catalog, $job, array(4));
+check(isset($map[4]) && $capi->reads === array(99, 0), 'an item that moved category is still found with one full read');
+$capi->reads = array();
+$map = $batch->invoke($catalog, array('mode' => 'category', 'category_id' => 20, 'item_categories' => array()), array(3));
+check(isset($map[3]) && $capi->reads === array(20), 'category jobs read their category, as before');
 
 echo "\n== recurring-job checks\n";
 $IS_ADMIN = false; $DOING_AJAX = false; $DOING_CRON = false;

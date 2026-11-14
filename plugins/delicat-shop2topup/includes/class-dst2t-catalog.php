@@ -172,6 +172,16 @@ final class DST2T_Catalog {
 			'updated_at'          => time(),
 		);
 
+		// The user's previous job is about to lose its last reference. Once finished,
+		// its option (up to 5,000 item ids) would otherwise stay in wp_options forever.
+		$previous = $this->last_job_id( $user_id );
+		if ( '' !== $previous ) {
+			$previous_state = $this->load_state( $previous );
+			if ( $previous_state && in_array( $previous_state['status'], array( 'complete', 'complete_with_errors', 'failed' ), true ) ) {
+				delete_option( $this->job_key( $previous ) );
+			}
+		}
+
 		update_option( $this->job_key( $job_id ), $state, false );
 		update_option( self::USER_JOB_PREFIX . absint( $user_id ), $job_id, false );
 		$this->schedule( $job_id, 1 );
@@ -204,23 +214,16 @@ final class DST2T_Catalog {
 			$state['updated_at'] = time();
 			$this->save_state( $state );
 
-			try {
-				$items = $this->api->subcategories( 'full' === $state['mode'] ? 0 : $state['category_id'] );
-			} catch ( DST2T_API_Exception $error ) {
-				$this->fail_job( $state, $error->get_api_code() );
-				return;
-			}
-
-			$map = array();
-			foreach ( (array) $items as $item ) {
-				if ( is_array( $item ) && ! empty( $item['item_id'] ) ) {
-					$map[ absint( $item['item_id'] ) ] = $item;
-				}
-			}
-
 			$end_ids = array_slice( $state['item_ids'], (int) $state['cursor'], self::BATCH_SIZE );
 			if ( ! $end_ids ) {
 				$this->finish_job( $state );
+				return;
+			}
+
+			try {
+				$map = $this->batch_catalog_map( $state, $end_ids );
+			} catch ( DST2T_API_Exception $error ) {
+				$this->fail_job( $state, $error->get_api_code() );
 				return;
 			}
 
@@ -296,6 +299,53 @@ final class DST2T_Catalog {
 		} finally {
 			delete_option( $lock_key );
 		}
+	}
+
+	/**
+	 * Supplier rows for one batch.
+	 *
+	 * A full-catalog job used to download the complete supplier catalog (every
+	 * page of it) for each batch of six products. It now reads only the categories
+	 * of the batch, recorded when the job was created, and falls back to one full
+	 * read when an item is not found there (or its category was unknown).
+	 *
+	 * @return array item_id => normalized catalog row.
+	 */
+	private function batch_catalog_map( $state, $item_ids ) {
+		$categories = array();
+		if ( 'full' === $state['mode'] ) {
+			foreach ( $item_ids as $item_id ) {
+				$category = isset( $state['item_categories'][ $item_id ] ) ? absint( $state['item_categories'][ $item_id ] ) : 0;
+				if ( ! $category ) {
+					$categories = array( 0 );
+					break;
+				}
+				$categories[ $category ] = $category;
+			}
+		} else {
+			$categories = array( absint( $state['category_id'] ) );
+		}
+
+		$map  = array();
+		$read = function ( $category ) use ( &$map ) {
+			foreach ( (array) $this->api->subcategories( $category ) as $item ) {
+				if ( is_array( $item ) && ! empty( $item['item_id'] ) ) {
+					$map[ absint( $item['item_id'] ) ] = $item;
+				}
+			}
+		};
+		foreach ( $categories as $category ) {
+			$read( $category );
+		}
+		if ( 'full' === $state['mode'] && ! in_array( 0, $categories, true ) ) {
+			foreach ( $item_ids as $item_id ) {
+				if ( ! isset( $map[ absint( $item_id ) ] ) ) {
+					$read( 0 );
+					break;
+				}
+			}
+		}
+		return $map;
 	}
 
 	/** Return a sanitized job state. */

@@ -139,7 +139,7 @@ The complete history is in CHANGELOG.md.
 * Supplier-confirmed deliveries complete the WooCommerce order within seconds: the post-response lane now runs on LiteSpeed, a signed callback that loses the order-lock race is settled right after its response, two extra status reads happen in the first minute, and order jobs outrank catalog jobs.
 * The "Vérifier votre compte" button recovers from expired nonces on cached pages, works on older Android WebViews, and shows readable French errors.
 * Player-verification throttles use fixed windows (shared mobile-carrier addresses no longer stay blocked) plus a site-wide ceiling against forged forwarding headers.
-* Cost-guard fix on the price fallback path; faster storefront and catalog admin; complete uninstall cleanup; test scripts refuse to run over HTTP.
+* Cost-guard fix on the price fallback path; queued lines of orders that are no longer paid are parked instead of re-queued every minute; faster storefront and catalog admin; complete uninstall cleanup; test scripts refuse to run over HTTP.
 
 = 2.8.3 =
 Custom package values restored in the native WooCommerce variation selector.

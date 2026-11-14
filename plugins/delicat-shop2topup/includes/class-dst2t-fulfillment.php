@@ -94,6 +94,17 @@ final class DST2T_Fulfillment {
 			return;
 		}
 
+		// Re-read under the lock. The copy loaded above may predate a concurrent
+		// request that already stored this line's UUID; reusing it would give the
+		// line a second UUID and an orphan intent row re-queued every minute.
+		$order_id = $order->get_id();
+		$this->forget_cached_order( $order_id );
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			$this->release_lock( 'order-' . $order_id, $lock );
+			return;
+		}
+
 		$fast_items = array();
 		try {
 			$has_mapped        = false;
@@ -121,6 +132,7 @@ final class DST2T_Fulfillment {
 				$status = sanitize_key( (string) $item->get_meta( '_dst2t_status', true ) );
 				if ( ! in_array( $status, $this->terminal_statuses(), true ) ) {
 					$all_mapped_done = false;
+					$this->unpark_line( $provider_order_id );
 					// Action Scheduler remains the durable safety net, but it is no longer
 					// the first-line runner. The fast lane is dispatched after this order
 					// lock is released so concurrent customers are not serialized behind it.
@@ -132,7 +144,7 @@ final class DST2T_Fulfillment {
 				$order->update_status( 'processing', sprintf( /* translators: %s: neutral provider label. */ __( 'Paid order is waiting for verified %s delivery.', 'delicat-shop2topup' ), DST2T_Brand::label() ) );
 			}
 		} finally {
-			$this->release_lock( 'order-' . $order->get_id(), $lock );
+			$this->release_lock( 'order-' . $order_id, $lock );
 		}
 
 		// Start each line independently after the local order lock is free. This
@@ -176,7 +188,11 @@ final class DST2T_Fulfillment {
 		try {
 			$order = wc_get_order( $order_id );
 			$item  = $order ? $order->get_item( $item_id ) : false;
-			if ( ! $order || ! $item instanceof WC_Order_Item_Product || ! $this->payment_confirmed( $order ) ) {
+			if ( ! $order || ! $item instanceof WC_Order_Item_Product ) {
+				return;
+			}
+			if ( ! $this->payment_confirmed( $order ) ) {
+				$this->park_line( $order, $item );
 				return;
 			}
 
@@ -737,6 +753,36 @@ final class DST2T_Fulfillment {
 		}
 	}
 
+	/**
+	 * A queued line whose order is no longer payable (cancelled, refunded, failed,
+	 * trashed, or edited after payment) stayed "due": the minute reconciliation
+	 * queued a new job for it forever (one Action Scheduler row per minute) and
+	 * nobody was told. It is now parked for six hours with a single order note.
+	 * queue_order() un-parks it as soon as the order is paid again, and Retry
+	 * re-opens it explicitly. Nothing is bought or cancelled here.
+	 */
+	private function park_line( $order, $item ) {
+		$uuid = (string) $item->get_meta( '_dst2t_order_id', true );
+		$row  = '' !== $uuid ? $this->repository->get( $uuid ) : null;
+		if ( ! $row || in_array( sanitize_key( (string) $row['status'] ), $this->terminal_statuses(), true ) ) {
+			return;
+		}
+		$this->repository->update( $uuid, sanitize_key( (string) $row['status'] ), array( 'next_check_at' => time() + 6 * HOUR_IN_SECONDS, 'last_error_code' => 'ORDER_NOT_PAYABLE' ) );
+		$this->order_note_once(
+			$order,
+			'not-payable-' . $item->get_id(),
+			sprintf( /* translators: %s: neutral provider label. */ __( '%s delivery paused: WooCommerce no longer reports this order as paid (or it was edited after payment). No supplier order was created by this check. It resumes when the order is paid again or a store manager uses Retry.', 'delicat-shop2topup' ), DST2T_Brand::label() )
+		);
+	}
+
+	/** Re-opens a line parked by park_line() once WooCommerce reports payment again. */
+	private function unpark_line( $uuid ) {
+		$row = '' !== (string) $uuid ? $this->repository->get( $uuid ) : null;
+		if ( $row && 'ORDER_NOT_PAYABLE' === (string) $row['last_error_code'] ) {
+			$this->repository->update( $uuid, sanitize_key( (string) $row['status'] ), array( 'next_check_at' => time() - 1, 'last_error_code' => '' ) );
+		}
+	}
+
 	/** Cancels any pending worker job for one line item, then queues a fresh one. */
 	public function reschedule_item( $order_id, $item_id, $delay = 0 ) {
 		$args = array( absint( $order_id ), absint( $item_id ) );
@@ -889,7 +935,8 @@ final class DST2T_Fulfillment {
 	}
 
 	public function payment_confirmed( $order ) {
-		if ( ! $order instanceof WC_Order || $order->has_status( array( 'pending', 'failed', 'cancelled', 'refunded' ) ) ) {
+		// A trashed order is never fulfilled either, even with a valid attestation.
+		if ( ! $order instanceof WC_Order || $order->has_status( array( 'pending', 'failed', 'cancelled', 'refunded', 'trash' ) ) ) {
 			return false;
 		}
 		if ( ! $this->settings->enabled( 'woocommerce_payment_gate' ) ) {

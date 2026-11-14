@@ -59,6 +59,8 @@ Action Scheduler needs a trigger. With `DISABLE_WP_CRON`, configure a server cro
 
 Use **Sync** first. For a paid order still blocked, use **Retry** once: it keeps the UUID and looks the supplier order up before any purchase. Unpaid, completed or refunded lines are not retried. Never mark an unpaid order *processing* to force delivery.
 
+A queued line whose order stops being paid (cancelled, refunded, failed, trashed, or edited after payment) is parked with one order note and error code `ORDER_NOT_PAYABLE`; it resumes as soon as the order is paid again, or on Retry.
+
 ### Diagnostics
 
 * *Dernière réponse API invalide* shows the endpoint, HTTP code, format and size of the last malformed answer, never its body. `INVALID_RESPONSE` alone does not prove a purchase happened or failed; Sync reads the truth by UUID.
