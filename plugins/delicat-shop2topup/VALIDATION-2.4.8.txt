@@ -1,0 +1,211 @@
+PASS Exact micro-unit comparison
+PASS Exact cost guard
+PASS Voucher encryption round trip
+PASS Tampered ciphertext rejected
+PASS Context-bound Player ID encryption round trip
+PASS Encrypted Player ID history cannot be decrypted in another customer context
+PASS Player ID history deduplicates and moves reused IDs to the front
+PASS Empty voucher requirements encoded as object
+PASS Price sent as decimal string
+PASS Missing success rejected
+PASS Top-level retry_after respected
+PASS Alternate documented player envelope
+PASS UID alias is preserved and canonicalized to player_id for provider verification
+PASS UID and user-id aliases are recognised as player identifiers
+PASS Direct top-up with no dynamic requirements still exposes the fixed UID / Player ID field
+PASS Voucher products do not receive a synthetic Player ID field
+PASS Existing UID aliases are not duplicated by the canonical fallback
+PASS Unit completion with pending aggregate queued
+PASS Webhook does not prematurely complete order
+PASS Forged webhook is rejected with provider-compatible 401 in stealth mode
+PASS Forged webhook rejected
+PASS Pending worker only reads existing order
+PASS Verified complete order completes WooCommerce
+PASS Late pending result cannot downgrade completed item
+PASS Late delivery preserves cancellation
+PASS Late delivery preserves customer refund
+PASS Unpaid order never auto-completes
+PASS Mixed orders retain WooCommerce control
+PASS Partial delivery held and still reconciled
+PASS Failed submission persistence prevents purchase
+PASS Unpaid order never submitted
+PASS Timeout recovery looks up original UUID
+PASS Repeated jobs do not create duplicate orders
+PASS Malformed voucher cannot complete delivery
+PASS Supplier name scrubbed from catalog copy
+PASS Supplier URL scrubbed from catalog copy
+PASS Scrubbing is opt-out
+PASS Identifier masked to its last characters, not its first
+PASS Dashboard never prints an identifier in its visible text while masking is on
+PASS The masked identifier carries a reveal control
+PASS Masking can be turned off
+PASS Neutral SKU prefix by default
+PASS Internal fulfillment metadata never reaches the customer order view
+PASS Supplier attribution never reaches the customer order view
+PASS Customer still sees their own game details
+PASS Shop managers still see the full item metadata in wp-admin
+PASS An order email rendered from wp-admin is still scrubbed
+PASS Metadata filtering follows the stealth setting
+PASS Namespace ownership is recognised for both routes and nothing else
+PASS The public REST index lists neither callback namespace
+PASS REST index hiding follows the stealth setting
+PASS An OPTIONS probe cannot discover the callback route
+PASS OPTIONS on unrelated routes is left alone
+PASS Any order lifecycle event triggers authoritative reconciliation
+PASS A callback without a timestamp is still accepted
+PASS Undocumented alternate signature header is rejected
+PASS Alternate header does not weaken signature verification
+PASS Unrelated events are acknowledged, not rejected
+PASS A mismatched event header is still rejected
+PASS A future-dated callback is rejected
+PASS A private callback token is generated on demand
+PASS Rotating the callback token produces a different, unpredictable value
+PASS A correctly signed callback on the private URL is accepted
+PASS Private registration probe succeeds even with a configured signing secret
+PASS The unsigned callback is never processed
+PASS A registration probe does not create a false signature warning
+PASS A verified callback clears the warning
+PASS The same unsigned probe on the compatibility URL is refused by default
+PASS An open verification window lets the compatibility URL be validated too
+PASS The verification window closes again
+PASS Private registration remains separate from the configured signing secret
+PASS The private callback rejects a wrong token even when the signature is valid
+PASS The active callback URL is unbranded
+PASS The private callback is the secure default while the legacy URL remains available for explicit migration
+PASS The provider-named route can be retired once migration is confirmed
+PASS Retiring the old route cannot leave the site with no callback at all
+PASS Wallet balance is read from an alternate field name
+PASS Account flags are cached alongside the balance
+PASS Cached balance is served without any network call
+PASS Low balance threshold raises a warning
+PASS Sufficient balance clears the warning
+PASS Automatic refresh is on by default every ten minutes
+PASS Enabling automatic refresh actually schedules the recurring job
+PASS Turning automatic refresh off unschedules it
+PASS A one-off refresh uses its own hook so the recurring job cannot swallow it
+PASS A failed check records the error and keeps the last known balance
+PASS Provider label is trimmed and stored
+PASS SKU prefix is reduced to safe characters
+PASS An out-of-range refresh interval falls back to the default
+PASS Catalog sync interval is stored
+PASS Unchecked boxes are saved as off
+PASS A missing stock field is never read as zero stock
+PASS Reported unavailability takes the product out of stock
+PASS A reported quantity is mirrored onto the product
+PASS A supplier-withdrawn item is blocked without deleting its WooCommerce product
+PASS A reappearing item with blank stock becomes buyable instead of inheriting stale zero stock
+PASS Selling price applies the exchange rate and markup
+PASS Manual HTG/store retail price is never overwritten by supplier price refresh
+PASS Supplier USD cost still refreshes while manual retail price stays unchanged
+PASS A cost spike beyond the guard blocks the purchase
+PASS A zero cached cost fails closed instead of buying at any price
+PASS An imported product is saved as a draft
+PASS Imported copy never names the supplier
+PASS Imported SKU is opaque and never embeds the provider item id
+PASS Opaque SKUs are stable per item and distinct between items
+PASS Import prices with the configured markup
+PASS Re-importing returns a published product to draft for review
+PASS Operators can opt out of forcing re-imports back to draft
+PASS SKU collision refuses to overwrite an unrelated product
+PASS Catalog import creates a durable background job instead of processing the whole request synchronously
+PASS Background catalog import completes individual products without a page-request timeout
+PASS Background catalog import groups supplier items into one draft variable product
+PASS Variation retail prices are stored independently in WooCommerce
+PASS Supplier USD costs stay separate from manual retail prices
+PASS Catalog import uses the documented product_type field for top-up versus voucher products
+PASS Catalog client follows an explicit provider pagination envelope
+PASS Catalog pagination keeps documented filters and requests later pages only when announced
+PASS Catalog parser accepts a harmless nested data envelope without changing the documented endpoint
+PASS Empty category indexes fall back to deriving categories from the unfiltered product catalog
+PASS An empty filtered product response falls back to the documented unfiltered catalog and filters locally
+PASS NO_REQUIREMENTS_FOUND no longer aborts a draft catalog import
+PASS One-click full catalog import queues every supplier product as one resumable job
+PASS The documented keyId.secret pair is always sent as one Bearer credential
+PASS Undocumented auth-mode input cannot change the wire format
+PASS The only supported credential format is the documented Bearer pair
+PASS The documented Bearer pair is what actually goes on the wire
+PASS A provider IP allowlist refusal is surfaced without trying undocumented auth shapes
+PASS The sync cycle sees every mapped product
+PASS A sync batch processes exactly its batch size
+PASS Catalog sync refreshes the cached cost
+PASS Catalog sync mirrors a reported quantity
+PASS The cursor advances so the next batch resumes where this one stopped
+PASS Requirements and the catalog list are each fetched once per category, while live price stays per item
+PASS Finishing the catalog resets the cursor for the next cycle
+PASS A rate limit stops the run early and keeps the unprocessed products queued
+PASS A withdrawn item goes out of stock instead of disappearing
+PASS Every state-changing endpoint refuses a user without manage_woocommerce
+PASS Every state-changing endpoint verifies its nonce
+PASS The live balance endpoint refuses a user without manage_woocommerce
+PASS The live balance endpoint verifies its nonce
+PASS Nested price envelope preserves exact cost
+PASS Nested account payload exposes account state
+PASS UTF-8 BOM is tolerated without accepting HTML
+PASS HTML access denial is not endlessly retried
+PASS Diagnostic does not retain response body
+PASS Unknown row with zero attempts is looked up before any purchase
+PASS Malformed recovery lookup increments attempts and never purchases
+PASS Repeated malformed lookups stop for review
+PASS Invalid price retries safely without a purchase or uncaught exception
+PASS Unsigned private probe is acknowledged without any settlement or API call
+PASS Unsigned private probe is acknowledged without any settlement or API call
+PASS Unsigned private probe is acknowledged without any settlement or API call
+PASS Unsigned private probe is acknowledged without any settlement or API call
+PASS Unsigned order event cannot exploit registration acknowledgement
+PASS Bad signatures remain rejected during registration window
+PASS Registration requires the correct private URL token
+PASS Registration preserves the body size limit
+PASS Exact private callback survives Delicat maintenance
+PASS Maintenance exception cannot open neighboring or WooCommerce routes
+PASS Explicit maintenance setting to block callbacks is respected
+PASS Signed callback queues work and responds before supplier calls or emails
+PASS Queued signed callback completes only after authoritative API confirmation
+PASS Failed Action Scheduler enqueue falls back to WP-Cron
+PASS No false success when both queues fail
+PASS Running item worker can schedule its successor
+PASS An already pending successor is not duplicated
+PASS Catalog batches can schedule their successor
+PASS Local self-test does not pretend supplier test succeeded
+PASS Supplier signed test has its own timestamp
+PASS HTTP 200 maintenance page cannot pass callback self-test
+PASS Expected JSON registration response passes self-test
+PASS Plugin review hold retains prior paid-state evidence
+PASS Verified delivery completes a paid order previously held by this plugin
+PASS Unpaid on-hold order is not considered paid
+PASS Unpaid hold cannot auto-complete
+PASS Retry cannot reopen an unpaid hold for purchase
+PASS Previously accepted order never recreated after a not-found lookup
+PASS Batch not-found preserves an accepted state
+PASS Repeated manual reconciliation respects batch cooldown
+PASS Unknown orders return to recovery worker rather than looping in batch queries
+PASS Authenticated dashboard assist can advance a due item without cron
+PASS Incomplete batch rejected
+PASS Wrong order identity rejected before changing WooCommerce
+PASS Malformed catalog cannot masquerade as an empty supplier inventory
+PASS Explicitly empty catalog remains valid
+PASS Unexpected purchase currency fails closed
+PASS Stale event checked again under the settlement lock
+PASS Dashboard recovery rejects non-managers
+PASS Dashboard recovery checks its nonce
+PASS Local self-test does not erase an upstream signature failure
+PASS Legacy accepted failure remains read-only after manual retry
+PASS Completed row cannot be reopened by manual retry
+PASS Manual retry respects the running fulfillment lock
+PASS Legacy review hold with recorded payment can be retried
+PASS Contradictory batch result cannot settle an order
+PASS Invalid catalog item cannot silently remove supplier stock
+PASS Different WooCommerce products with same supplier mapping retain separate prices
+PASS Same WooCommerce product and same player still merge quantities
+PASS WooCommerce-first mode never calls supplier during add-to-cart validation
+PASS Signed storefront verification token preserves a verified player without a second supplier call
+PASS Tampered storefront verification token is rejected
+PASS Processing status alone cannot release an unpaid order to the supplier
+PASS WooCommerce payment_complete creates the supplier release marker
+PASS Paid fulfillment validates the player before creating the supplier order
+PASS Post-payment validation result is stored on the WooCommerce line item
+PASS Malformed live price response falls back to cached cost only as a supplier-enforced maximum
+PASS PRICE_INCREASED uses the documented current price for a protected retry with the same UUID
+PASS Documented OUT_OF_STOCK is retried instead of permanently failing a paid order
+PASS Documented PRICING_UPDATING remains retryable
+PASS Provider retryable=true is honored for future error codes
+210 tests passed.

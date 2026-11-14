@@ -1,0 +1,44 @@
+DELICAT STORE — CORRECTION DE LA CONNEXION
+Date : 10 novembre 2026
+Delicat Identity Pro 6.17.7 + Delicat Builder V9 9.12.3
+
+INSTALLATION
+1. Faites une sauvegarde du site et de la base de données. Si vous disposez d’une copie de test, installez-y les deux mises à jour en premier.
+2. WordPress > Extensions > Ajouter une extension > Téléverser : installez delicat-identity-pro-6.17.7-login-recovery.zip et choisissez de remplacer la version actuelle.
+3. Installez de la même manière delicat-builder-v9-9.12.3-login-taps.zip. Gardez une seule copie active de chaque extension.
+4. LiteSpeed Cache > Boîte à outils > Purger tout, puis purgez le cache Cloudflare du site. Fermez et rouvrez l’application PWA pour charger la nouvelle version.
+5. Vérifiez les numéros de version affichés dans Extensions. Testez déconnecté et en navigation privée.
+
+CAUSES IDENTIFIÉES DANS LES FICHIERS FOURNIS
+- Le menu capturait le pointeur tactile dès le premier contact, avant toute détection de glissement. Les événements suivants pouvaient alors viser le panneau plutôt que le bouton Se connecter.
+- Un geste d’ouverture abandonné pouvait absorber l’activation suivante pendant 700 ms, même si cette activation appartenait à un autre geste.
+- Le chargement du formulaire conservait une promesse réseau bloquée après son délai visuel. Fermer et rouvrir réutilisait cette même requête.
+- Le menu historique rendait son verrouillage de défilement après que la fenêtre de connexion avait enregistré son propre état. La fermeture pouvait donc rétablir un overflow:hidden périmé.
+
+CORRECTIONS
+Builder : la capture commence seulement après un déplacement horizontal significatif ; une nouvelle interaction réinitialise la suppression de clic de l’ancien geste ; le clavier fonctionne dans cette fenêtre de temps ; le verrouillage du menu historique est libéré avant celui de la connexion. La correction du menu tactile figure dans le fichier source ET dans le moteur compilé effectivement livré.
+Identity : délai réseau explicite avec abandon lorsque le navigateur le permet ; bouton Réessayer et lien vers la page Compte ; nouvelle requête après échec ; réponses tardives ignorées ; nouveau contexte iframe à chaque reconstruction ; prise en charge de la configuration tardive, des liens absolus et du changement de fragment ; réinitialisation des formulaires/challenges après restauration arrière/avant.
+La première réponse fournit déjà des nonces liés au navigateur : ils sont réutilisés pour éviter une deuxième préparation WordPress immédiate. Un nonce refusé conserve son renouvellement unique avant nouvelle tentative.
+L’étape 2FA est révélée et reçoit le focus. Une inscription en attente de vérification peut être corrigée en modifiant les champs. Les scripts de connexion et leur dépendance de thème sont protégés du retard JavaScript de LiteSpeed.
+Les versions des ressources, le nom du moteur compilé et son manifeste d’intégrité sont actualisés.
+
+VALIDATION RÉALISÉE
+24 scénarios de régression réussis dans un environnement JavaScript isolé avec DOM/réseau/horloge simulés : geste tactile sans capture, vraie capture après seuil, moteur compilé, geste abandonné, clavier, timeout réseau, réessai, réponse tardive, échec de script, fermeture d’erreur, configuration tardive, liens de connexion, restauration arrière/avant, dialogue de repli, nonces initiaux/expirés, double envoi, 2FA, réponse HTML invalide, réinitialisation et redirection externe refusée, correction de l’inscription et transfert de verrouillage du menu.
+Les tests de capture tactile, du moteur compilé, du chargement bloqué et du verrouillage échouent avec les fichiers d’origine et réussissent avec les fichiers corrigés.
+Vérification syntaxique Node.js des six fichiers JavaScript modifiés ; contrôle des ZIP, des imports du moteur, des versions d’actifs et des empreintes du manifeste.
+
+LIMITES DE LA VALIDATION
+Le site WordPress de production n’a pas été modifié. Les tests isolés ne remplacent pas une connexion réelle sur le site. Le navigateur de test et le binaire PHP CLI n’étaient pas disponibles pour exécuter les essais navigateur et php -l dans cet environnement. La validation complète WordPress/PHP, Google et WebAuthn reste à faire sur votre hébergement.
+
+VÉRIFICATIONS APRÈS INSTALLATION
+- iPhone Safari/PWA et Android Chrome : ouvrir le menu, toucher Se connecter, fermer et rouvrir ; confirmer le défilement de la page après fermeture.
+- Ouvrir le menu par un geste abandonné, puis toucher immédiatement Se connecter ; tester aussi un clavier.
+- E-mail/mot de passe : vérifier une erreur de mot de passe, puis la réussite ; confirmer le compte réellement connecté et le portefeuille associé.
+- Google : annuler, recommencer, puis terminer la connexion ; confirmer le retour au bon compte.
+- Passkey : Face ID/Touch ID, annulation puis autre méthode. Les icônes biométriques existantes sont conservées.
+- Compte avec 2FA : vérifier l’apparition du champ, un code refusé, puis un code valide.
+- Revenir par les boutons arrière/avant après une connexion ou un changement de page ; aucune commande ne doit rester bloquée.
+- En connexion lente/interrompue : confirmer l’apparition de Réessayer ; rétablir le réseau et réessayer.
+
+SÉCURITÉ ET DONNÉES
+Aucune suppression de comptes, commandes ou données de portefeuille. Aucun changement de mot de passe ni migration de base de données. Les vérifications serveur, les nonces liés au navigateur, les restrictions de compte et les protections OAuth/WebAuthn restent en place. Aucun renvoi automatique d’une création de compte ou d’un identifiant WebAuthn après restauration de page.

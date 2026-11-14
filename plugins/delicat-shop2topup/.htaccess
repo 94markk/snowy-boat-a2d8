@@ -1,0 +1,16 @@
+# Blocks direct HTTP reads of the plugin's documentation and translation files.
+# Those files name the upstream provider; nothing on the site links to them, but
+# a determined visitor could otherwise fetch them by guessing this folder name.
+# Apache and LiteSpeed honour this file. On nginx add the equivalent:
+#   location ~* /wp-content/plugins/[^/]+/.*\.(md|txt|po|pot|mo)$ { deny all; }
+<IfModule mod_authz_core.c>
+	<FilesMatch "\.(md|txt|po|pot|mo)$">
+		Require all denied
+	</FilesMatch>
+</IfModule>
+<IfModule !mod_authz_core.c>
+	<FilesMatch "\.(md|txt|po|pot|mo)$">
+		Order allow,deny
+		Deny from all
+	</FilesMatch>
+</IfModule>
