@@ -91,7 +91,8 @@ function delicat_reward_delivery( $order_id, $user_id ) {
     $user_id = (int) $user_id;
     // Even internal callers cannot reveal another customer's keys.
     if ( $user_id < 1 || $user_id !== (int) get_current_user_id() ) return new WP_Error( 'not_found', 'Récompense introuvable.', array( 'status' => 404 ) );
-    $order = wc_get_order( (int) $order_id );
+    // 4.1.0: a list that already holds the order passes it (no second read of each order); the same checks apply.
+    $order = is_object( $order_id ) && is_a( $order_id, 'WC_Order' ) ? $order_id : wc_get_order( (int) $order_id );
     if ( ! $order || ! is_a( $order, 'WC_Order' ) || (int) $order->get_customer_id() !== $user_id || ! $order->get_meta( '_delicat_reward' ) ) {
         return new WP_Error( 'not_found', 'Récompense introuvable.', array( 'status' => 404 ) );
     }
@@ -212,7 +213,7 @@ function delicat_reward_pins_page( $uid, $page ) {
     $result = delicat_reward_query( $uid, $page );
     $items = array();
     foreach ( $result->orders as $order ) {
-        $delivery = delicat_reward_delivery( $order->get_id(), $uid );
+        $delivery = delicat_reward_delivery( $order, $uid );
         if ( is_wp_error( $delivery ) ) continue;
         // History is an index, not a bulk PIN dump. Reveal one order on explicit request.
         unset( $delivery['pins'] );

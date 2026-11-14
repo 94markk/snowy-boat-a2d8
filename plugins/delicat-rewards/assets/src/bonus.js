@@ -4,6 +4,22 @@
  * automatic second POST). PINs never go into a URL, storage or analytics. */
 (function (w, d) {
   'use strict';
+  /* 4.1.0: Android WebViews that no longer update (Chrome before 86) lack replaceChildren() and, older still,
+     Promise.prototype.finally: without them every panel stopped drawing. Same behaviour, only where missing. */
+  if (w.Promise && !w.Promise.prototype.finally) {
+    w.Promise.prototype.finally = function (f) {
+      var P = this.constructor || w.Promise;
+      return this.then(function (v) { return P.resolve(f()).then(function () { return v; }); }, function (e) { return P.resolve(f()).then(function () { throw e; }); });
+    };
+  }
+  [w.Element, w.DocumentFragment].forEach(function (C) {
+    if (C && C.prototype && !C.prototype.replaceChildren) {
+      C.prototype.replaceChildren = function () {
+        while (this.lastChild) this.removeChild(this.lastChild);
+        for (var i = 0; i < arguments.length; i++) { var a = arguments[i]; this.appendChild(typeof a === 'string' ? d.createTextNode(a) : a); }
+      };
+    }
+  });
   var ICONS = {workspace_premium:"m480-483-76 57q-5 3-9 0t-3-8l29-93-78-61q-5-3-2-8t7-5h94l31-96q2-5 7-5t7 5l30 96h95q5 0 8 5t-3 8l-78 61 28 93q2 5-2 8t-9 0zm0 364L284-53q-14 5-27-4t-13-25v-262q-45-47-64-103t-20-113q0-136 92-228t228-92 228 92 92 228q0 57-19 113t-65 103v262q0 15-13 25t-27 4zm185-256q75-76 75-185t-75-184-185-76-184 76-76 184 76 185 184 75 185-75M304-124l176-55 176 55v-171q-40 29-86 42t-90 13-90-13-86-42zm176-86",diamond:"M455-159q-12-5-21-16L105-570q-7-8-10-17t-4-21q0-7 2-13t5-14l85-172q8-15 23-24t31-9h486q17 0 32 9t22 24l85 172 5 14 2 13q0 11-3 21t-11 17L526-175q-9 11-21 16t-25 5-25-5m-87-471h224l-75-150h-74zm82 381v-321H183zm60 0 267-321H510zm149-381h136l-75-150H584zm-494 0h136l75-150H240z",trophy:"M450-180v-148q-54-11-96-46t-58-89q-74-8-125-60t-51-125v-44q0-25 18-42 17-18 42-18h104v-28q0-25 18-42 17-18 42-18h272q25 0 42 18 18 17 18 42v28h104q25 0 42 18 18 17 18 42v44q0 73-51 125t-125 60q-16 53-58 89t-96 46v148h122q13 0 21 9 9 8 9 21t-9 22-21 8H328q-13 0-21-9-9-8-9-21t9-22 21-8zM284-526v-166H180v44q0 45 30 79t74 43m293 101q39-40 39-97v-258H344v258q0 57 40 97 39 40 96 40t97-40m99-101q45-10 75-43t29-79v-44H676zm-196-57",redeem:"M140-277v97h680v-97zm0-443h125q-5-9-8-22t-3-25q0-47 33-80t79-33q31 0 57 16t41 39l16 26 17-26q16-25 41-40t54-15q48 0 81 33t33 80l-2 22q-2 11-8 25h124q24 0 42 18t18 42v480q0 24-18 42t-42 18H140q-24 0-42-18t-18-42v-480q0-24 18-42t42-18m0 336h680v-276H571l83 115q8 10 6 22t-13 20-22 6-20-13L480-683 355-510q-8 11-19 13t-23-6q-10-8-12-20t5-22l83-115H140zm265-345q15-16 15-38t-15-37-38-16-37 16-16 37 16 38 37 15 38-15m187 15q23 0 39-15t15-38-15-37-39-16q-21 0-36 16t-16 37 16 38 36 15",check_circle:"m421-389-98-98q-9-9-22-9t-23 10q-9 9-9 22t9 22l122 123q9 9 21 9t21-9l239-239q10-10 10-23t-10-23q-10-9-23-8t-23 9zm59 309q-82 0-155-31t-127-86-86-128-32-155q0-83 32-156t86-127 127-85 155-32q83 0 156 32t127 85 86 127 31 156q0 82-31 155t-86 128-127 86-156 31m0-60q142 0 241-99t99-241q0-142-99-241t-241-99q-141 0-240 99T140-480q0 141 100 241t240 99m0-340",hourglass_top:"M308-140h344v-127q0-72-50-121t-122-50-122 50-50 121zM190-80q-13 0-21-8t-9-22 9-21 21-9h58v-127q0-71 40-129t106-84q-66-27-106-85t-40-129v-126h-58q-13 0-21-8t-9-22 9-21 21-9h580q13 0 22 9t8 21-8 22-22 8h-58v126q0 71-40 129t-106 85q66 26 106 84t40 129v127h58q13 0 22 9t8 21-8 22-22 8z",content_copy:"M300-200q-24 0-42-18t-18-42v-560q0-24 18-42t42-18h440q24 0 42 18t18 42v560q0 24-18 42t-42 18zm0-60h440v-560H300zM180-80q-24 0-42-18t-18-42v-590q0-13 9-21 8-9 21-9t22 9 8 21v590h470q13 0 21 9 9 8 9 21t-9 22-21 8zm120-180v-560z",timer:"M390-860q-13 0-21-8t-9-22 9-21 21-9h180q13 0 22 9t8 21-8 22-22 8zm112 439q8-9 8-22v-170q0-13-8-21t-22-9-21 9-9 21v170q0 13 9 22t21 8 22-8M341-109q-66-29-115-78t-77-114-29-140 29-139 77-115 115-77 139-29q67 0 126 23t105 62l30-30q9-9 21-9t21 9 9 21-9 21l-30 30q36 40 62 97t25 136q0 74-28 140t-78 114-114 78-140 28-139-28m352-119q87-88 87-213t-87-212-213-88-212 88-88 212 88 213 212 87 213-87M480-440",flag:"M260-429v279q0 13-9 21-8 9-21 9t-22-9-8-21v-620q0-13 9-21 8-9 21-9h289q11 0 19 7t10 17l14 62h208q13 0 21 9 9 8 9 21v310q0 13-9 21-8 9-21 9H568q-10 0-19-6t-10-17l-14-62zm335 25h145v-250H535q-10 0-19-6t-10-18l-14-62H260v251h292q11 0 19 6t10 17zm-95-168",lock:"M220-80q-25 0-42-18-18-17-18-42v-434q0-25 18-42 17-18 42-18h70v-96q0-79 56-134 55-56 134-56t135 56 55 134v96h70q25 0 42 18 18 17 18 42v434q0 25-18 42-17 18-42 18zm0-60h520v-434H220zm315-162q22-22 22-53 0-30-23-54t-54-25-54 25-23 55 23 52 54 22 55-22M350-634h260v-96q0-54-38-92t-92-38-92 38-38 92zM220-140v-434z",close:"M480-438 270-228q-9 9-21 9t-21-9-9-21 9-21l210-210-210-210q-9-9-9-21t9-21 21-9 21 9l210 210 210-210q9-9 21-9t21 9 9 21-9 21L522-480l210 210q9 9 9 21t-9 21-21 9-21-9z",celebration:"m181-181 314-112-203-204zm744-505q-7 7-17 7t-17-7l-2-2q-19-19-44-19t-45 19L574-462q-7 7-17 7t-17-7-7-17 7-17l223-223q32-32 81-32t81 31q7 7 7 17t-7 17M383-811q7-7 17-7t17 7l9 9q35 35 35 88t-36 87l-10 10q-7 7-17 7t-17-7-7-17 7-17l13-13q23-23 22-52t-22-50l-11-11q-7-7-7-17t7-17m169-73q7-7 17-7t17 7l46 46q31 32 32 81t-31 80L496-540q-7 7-17 7t-17-7-7-17 7-17l135-135q19-19 19-48t-20-49l-44-44q-7-7-7-17t7-17m300 505q-7 7-17 7t-17-7l-35-35q-23-23-48-23t-48 23l-33 33q-7 7-17 7t-17-7-7-17 7-17l30-30q35-35 84-36t84 34l34 34q7 7 7 17t-7 17M101-140l149-416q4-10 12-15t16-5l11 2q6 2 10 7l270 266q5 5 7 11t2 11q0 9-5 17t-15 11L140-101q-9 3-17 1t-15-8-8-14 1-18",share:"M686-80q-47 0-81-33t-33-81q0-8 5-34L278-403q-16 17-38 27-21 10-46 10-47 0-81-33t-33-81 33-81 81-33q24 0 45 9 21 10 37 26l301-173-3-16-2-18q0-47 33-81t81-33 81 33 33 81-33 81-81 33q-23 0-44-9-20-9-36-24L302-516l5 18q2 10 1 18l-1 16-3 15 303 173q16-15 36-23 20-9 43-9 48 0 81 33t33 81-33 81-81 33m0-60q23 0 38-16 16-15 16-38t-16-38q-15-16-38-16t-38 16q-16 15-16 38t16 38q15 16 38 16M194-426q23 0 38-16 16-15 16-38t-16-39-38-15-39 16q-15 15-15 38t16 38q15 16 38 16m531-302q15-15 15-38t-16-38q-15-16-38-16t-38 16q-16 15-16 38t16 38q15 16 38 16t38-16m-39-38",link:"M280-280q-83 0-141-58T80-480t59-141 141-59h140q13 0 21 9 9 8 9 21t-9 21q-8 9-21 9H280q-58 0-99 41t-41 99 41 99 99 41h140q13 0 21 9 9 8 9 21t-9 22-21 8zm75-170q-13 0-21-9-9-8-9-21t9-22 21-8h250q13 0 21 9 9 8 9 21t-9 22-21 8zm185 170q-13 0-21-9-9-8-9-21t9-22 21-8h140q58 0 99-41t41-99-41-99-99-41H540q-13 0-21-9-9-8-9-21t9-21q8-9 21-9h140q83 0 142 59t58 141-58 142-142 58z",sms:"M240-240 131-131q-14 14-32 6-19-7-19-27v-668q0-24 18-42t42-18h680q24 0 42 18t18 42v520q0 24-18 42t-42 18zm-26-60h606v-520H140v600zm-74 0v-520zm195-234q11-12 11-29t-11-28-29-12-28 12-12 28 12 29 28 11 29-11m177 0q11-12 11-29t-11-28-29-12-28 12-12 28 12 29 28 11 29-11m170 0q11-12 11-29t-11-28-29-12-28 12-12 28 12 29 28 11 29-11",person_add:"M730-530H630q-13 0-21-9-9-8-9-21t9-21q8-9 21-9h100v-100q0-13 9-21 8-9 21-9t21 9q9 8 9 21v100h100q13 0 21 9 9 8 9 21t-9 21q-8 9-21 9H790v100q0 13-9 21-8 9-21 9t-21-9q-9-8-9-21zm-478 7q-42-42-42-108t42-108 108-42 108 42 42 108-42 108-108 42-108-42M40-220v-34q0-35 18-63t50-43q75-33 133-46t119-14 118 14 133 46q33 15 51 43t18 63v34q0 25-18 42-17 18-42 18H100q-25 0-42-18-18-17-18-42m60 0h520v-34q0-16-9-30t-24-22q-71-33-120-43t-107-11-107 11-121 43q-15 7-23 22t-9 30zm325-346q25-26 25-65t-25-64-65-26-64 26-26 64 26 65 64 25 65-25m-65 346",account_balance_wallet:"M180-233v53-600zm0 113q-25 0-42-18-18-17-18-42v-600q0-25 18-42 17-18 42-18h600q25 0 42 18 18 17 18 42v134h-60v-134H180v600h600v-133h60v133q0 25-18 42-17 18-42 18zm358-173q-31 0-52-21-22-22-22-52v-227q0-30 22-52 21-21 52-21h270q31 0 52 21 22 22 22 52v227q0 30-22 52-21 21-52 21zm284-60v-253H524v253zm-124-82q18-19 18-46 0-26-19-45-19-18-45-18t-45 18-19 45q0 27 19 46 18 19 45 19t46-19",schedule:"M513-492v-171q0-13-8-21t-22-9-21 9-9 21v183q0 6 2 11t6 10l144 149q9 10 23 10t22-10 9-22-9-22zM480-80q-82 0-155-31t-127-86-86-128-32-155 32-155 86-127 127-86 155-32 155 32 128 86 86 127 31 155-31 155-86 128-128 86-155 31m0-60q140 0 240-100t100-240-100-240-240-100-240 100-100 240 100 240 240 100",block:"M324-111q-73-32-127-86t-85-127-32-156 32-156 85-127 127-85 156-32 156 32 127 85 86 127 31 156-31 156-86 127-127 86-156 31-156-31m156-29q61 0 118-20 56-21 101-60L220-699q-38 46-59 102t-21 117q0 142 99 241t241 99m259-121q37-45 59-101 22-57 22-118 0-142-99-241t-241-99q-61 0-117 21t-102 60zM480-480",verified:"m437-433-73-76q-9-10-22-10t-23 9q-10 10-10 23t10 23l97 96q9 9 21 9t21-9l183-182q9-9 9-22t-10-22q-9-8-21-7t-21 8zM332-84l-62-106-124-25q-11-2-18-12t-6-21l14-120-79-92q-8-8-8-20t8-20l79-91-14-120q-2-11 6-21t18-12l124-25 62-107q6-10 17-14t22 1l109 51 109-51q11-5 22-1t17 13l63 108 123 25q11 2 19 12t5 21l-14 120 79 91q8 8 8 20t-8 20l-79 92 14 120q2 11-5 21t-19 12l-123 25-63 107q-6 10-17 14t-22-2l-109-51-109 51q-11 5-22 1t-17-14m41-55 107-45 110 45 67-100 117-30-12-119 81-92-81-94 12-119-117-28-69-100-108 45-110-45-67 100-117 28 12 119-81 94 81 92-12 121 117 28zm107-341",group_add:"M474-486q26-32 39-66t12-79-12-79-39-66q76-17 134 23t57 122-57 122-134 23m202 326 10-29q5-14 4-31v-34q0-51-26-95t-90-74q173 22 237 64t63 105v34q0 25-18 42-17 18-42 18zm124-389h-70q-13 0-21-9-9-8-9-21t9-21q8-9 21-9h70v-70q0-13 9-21 8-9 21-9t21 9q9 8 9 21v70h70q13 0 21 9 9 8 9 21t-9 21q-8 9-21 9h-70v70q0 13-9 21-8 9-21 9t-21-9q-9-8-9-21zm-593 26q-42-42-42-108t42-108 108-42 108 42 42 108-42 108-108 42-108-42M0-220v-34q0-35 19-63t49-43q72-32 129-46t118-14 118 14 128 46q31 14 50 43t19 63v34q0 25-18 42-17 18-42 18H60q-25 0-42-18-18-17-18-42m315-321q39 0 65-25t25-65-25-64-65-26-64 26-26 64 26 65 64 25M60-220h510v-34q0-16-8-30t-25-22q-69-32-117-43t-105-11-104 11-119 43q-15 7-23 22t-9 30zm255 0",info:"M505-289q8-8 8-21v-180q0-13-9-21-8-9-21-9t-22 9-8 21v180q0 13 9 21 8 9 21 9t22-9m-1-314q9-9 9-23t-9-24-24-10-24 10q-9 10-9 24t9 23 24 9 24-9M480-80q-82 0-155-31-73-32-127-86t-86-128-32-155 32-156 86-127 127-85 156-32 155 32 127 85 86 127 31 156q0 82-31 155-32 73-86 127-54 55-127 86-73 32-156 32m0-60q142 0 241-99t99-241-99-241-241-99-240 99-100 241q0 141 100 241t241 99m0-340"};
   /* One run per page shown: at load, and again after Builder's instant navigation brings the page in. */
   function start(root) {
@@ -54,22 +70,24 @@
   }
   function span(ms) { // "2 j 05 h", "3 h 12 min", "27 min", "45 s"
     var s = Math.max(0, Math.floor(ms / 1000)), dd = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
-    if (dd) return dd + ' j ' + String(h).padStart(2, '0') + ' h';
-    if (h) return h + ' h ' + String(m).padStart(2, '0') + ' min';
+    if (dd) return dd + ' j ' + (h < 10 ? '0' : '') + h + ' h';
+    if (h) return h + ' h ' + (m < 10 ? '0' : '') + m + ' min';
     if (m) return m + ' min';
     return s + ' s';
   }
 
   /* ------------------------------------------------------------------ celebration */
   function confetti(big) {
-    if (reduced || !w.requestAnimationFrame) return;
+    // 4.1.0: none in the site's low-power mode; half as many pieces on phones with 2 GB of memory or less.
+    if (reduced || !w.requestAnimationFrame || d.documentElement.classList.contains('delicat-low-power')) return;
     var cv = node('canvas', 'dbf-confetti'); cv.setAttribute('aria-hidden', 'true');
     var W = w.innerWidth, H = w.innerHeight, dpr = Math.min(2, w.devicePixelRatio || 1);
     cv.width = W * dpr; cv.height = H * dpr; d.body.appendChild(cv);
-    var g = cv.getContext('2d'); if (!g) { cv.remove(); return; } g.scale(dpr, dpr);
+    var g = cv.getContext('2d'); if (!g) { cv.remove(); return; }
     var pri = getComputedStyle(root).getPropertyValue('--dbf-pri').trim() || '#2563eb';
     var colors = [pri, '#f59e0b', '#ec4899', '#22c55e', '#38bdf8', '#a855f7', '#facc15'];
     var parts = [], n = big ? 170 : 70;
+    if ((navigator.deviceMemory || 4) <= 2) n = Math.round(n / 2);
     for (var i = 0; i < n; i++) {
       var left = big ? i % 2 === 0 : true, x0 = big ? (left ? W * 0.12 : W * 0.88) : W / 2;
       parts.push({ x: x0, y: big ? H * 0.7 : H * 0.35, vx: big ? (left ? 1 : -1) * (3 + Math.random() * 7) : (Math.random() - 0.5) * 12,
@@ -80,15 +98,16 @@
     function frame(t) {
       if (!t0) t0 = t;
       var age = t - t0, alive = false;
-      g.clearRect(0, 0, W, H);
+      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
       g.globalAlpha = Math.max(0, Math.min(1, (3000 - age) / 700));
       for (var k = 0; k < parts.length; k++) {
         var p = parts[k];
         p.vy += 0.32; p.vx *= 0.985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
         if (p.y < H + 30) alive = true;
-        g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c;
+        // One matrix per piece (no save/restore of the whole context): same drawing, less work per frame.
+        var cos = Math.cos(p.r) * dpr, sin = Math.sin(p.r) * dpr;
+        g.setTransform(cos, sin, -sin, cos, p.x * dpr, p.y * dpr); g.fillStyle = p.c;
         g.fillRect(-p.w / 2, -p.h / 2, p.w, Math.max(2, p.h * Math.abs(Math.cos(p.r * 1.7))));
-        g.restore();
       }
       if (alive && age < 3000) w.requestAnimationFrame(frame); else cv.remove();
     }
@@ -115,8 +134,9 @@
     return S.session;
   }
   function transport(path, options, useAjax) {
-    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 30000);
-    var url = C.rest + path, req = { method: options.method || 'GET', body: options.body, credentials: 'same-origin', cache: 'no-store', signal: ctl.signal, headers: { 'X-WP-Nonce': S.nonce, 'Content-Type': 'application/json' } };
+    // Without AbortController (old WebViews) the request simply has no 30 s cut-off.
+    var ctl = w.AbortController ? new w.AbortController() : null, timer = setTimeout(function () { if (ctl) ctl.abort(); }, 30000);
+    var url = C.rest + path, req = { method: options.method || 'GET', body: options.body, credentials: 'same-origin', cache: 'no-store', signal: ctl ? ctl.signal : undefined, headers: { 'X-WP-Nonce': S.nonce, 'Content-Type': 'application/json' } };
     if (useAjax) {
       var parts = path.split('?'), params = options.body ? JSON.parse(options.body) : {};
       new URLSearchParams(parts[1] || '').forEach(function (v, k) { params[k] = v; });
@@ -845,11 +865,13 @@
     if (winnerState) (winnerState.items || []).forEach(function (r) { var b = $('dbf-winner-' + r.orderId); if (b && r.expiresAt * 1000 <= Date.now() + S.skew) { b.disabled = true; b.textContent = 'Récompense expirée'; } });
     if (S.monthAt) {
       var m = S.monthLeft - (Date.now() - S.monthAt);
-      if (m <= 0 && S.state) { Object.keys(S.state.tiers || {}).forEach(function (k) { S.state.tiers[k].claimable = false; var b = $('dbf-claim-' + k); if (b) { b.disabled = true; b.textContent = 'Bonus expiré · actualisez'; } }); }
+      // Once per state (4.1.0): the buttons were rewritten every second after the month's end.
+      if (m <= 0 && S.state && !S.state.expiredShown) { S.state.expiredShown = true; Object.keys(S.state.tiers || {}).forEach(function (k) { S.state.tiers[k].claimable = false; var b = $('dbf-claim-' + k); if (b) { b.disabled = true; b.textContent = 'Bonus expiré · actualisez'; } }); }
       setOnce('dbf-month-clock', m > 0 ? 'Bonus à réclamer avant la fin du mois · ' + span(m) : 'Nouveau mois : actualisez votre progression.');
     }
   }
-  function every() { if (!root.isConnected) { clearInterval(clock); return; } if (!d.hidden) tick(); } // stops once the page is gone
+  function attached() { return d.documentElement.contains(root); } // root.isConnected, also on old WebViews
+  function every() { if (!attached()) { clearInterval(clock); return; } if (!d.hidden) tick(); } // stops once the page is gone
   var clock = setInterval(every, 1000);
   $('dbf-refresh').addEventListener('click', function () { notice(''); boot(); });
   if ($('dbf-history-refresh')) {
@@ -858,7 +880,7 @@
     $('dbf-next').addEventListener('click', function () { S.page++; loadHistory().catch(function (e) { notice(e.message); }); });
   }
   w.addEventListener('pagehide', function () { S.suspended = true; clearSecrets(); clearTimeout(toastTimer); clearInterval(clock); if (dialog.open) dialog.close(); });
-  w.addEventListener('pageshow', function (e) { if (e.persisted && root.isConnected) { S.suspended = false; clearInterval(clock); clock = setInterval(every, 1000); boot(); } });
+  w.addEventListener('pageshow', function (e) { if (e.persisted && attached()) { S.suspended = false; clearInterval(clock); clock = setInterval(every, 1000); boot(); } });
   d.addEventListener('visibilitychange', function () { if (d.hidden) clearTimeout(S.pinTimer); else if (dialog.open && S.activeOrder) fetchDelivery(); });
 
   fillIcons(root); fillIcons(dialog);

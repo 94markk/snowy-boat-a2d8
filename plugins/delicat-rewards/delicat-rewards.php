@@ -2758,7 +2758,7 @@ add_action( 'rest_api_init', function () {
 } );
 
 /* Dashboard screens, forms and notices: only in wp-admin (admin-post.php included), never on the storefront,
-   in REST, AJAX or cron requests. 4.1.0: about 100 KB less code for every customer request. */
+   in REST, AJAX or cron requests. 4.1.0: about 115 KB less code for every customer request. */
 if ( ( is_admin() && ! wp_doing_ajax() ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 	require_once __DIR__ . '/rewards-admin.php';
 	require_once __DIR__ . '/referral-admin.php';
