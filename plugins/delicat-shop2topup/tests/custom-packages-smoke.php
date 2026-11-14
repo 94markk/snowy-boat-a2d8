@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /** Offline orchestration regression test; no WordPress database or supplier calls. */
 define('ABSPATH', __DIR__ . '/');
 $meta = array(); $products = array(); $hooks = array(); $notices = array();

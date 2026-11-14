@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
  * Catalog and reseller smoke test, against stubbed WordPress and WooCommerce. No database,
  * no network.
@@ -103,7 +104,7 @@ function do_action($h, ...$args) { global $FIRED; $FIRED[] = array($h, $args); }
 function rest_ensure_response($v) { return $v; }
 function did_action($h) { return 0; }
 function wp_next_scheduled($h, $a = array()) { return false; }
-function wp_schedule_single_event($t, $h, $a = array()) { return true; }
+function wp_schedule_single_event($t, $h, $a = array()) { $GLOBALS['SCHEDULED'][] = $h; return true; }
 function woo_wallet() {
     static $wallet;
     if (!$wallet) {
@@ -477,6 +478,25 @@ check(cat_call('uid_validation_context', 700) === false, 'validation list down: 
 cat_reset_memos();
 cat_call('uid_validation_context', 700);
 check(calls_of('topup_validation_games') === 1, 'a failed validation list is not asked again for a minute');
+
+// 4.24: the product page only decides which button to show. It never waits for the
+// supplier's validation list when a good copy exists; checks keep their own fetch.
+section('product page uses the last good validation list');
+$TRANSIENTS = array(); cat_reset_memos(); DFR_API::$calls = array(); $GLOBALS['SCHEDULED'] = array();
+DFR_API::$handlers['topup_validation_games'] = static function ($timeout = 20) {
+    DFR_API::$handlers['_games_timeout'] = $timeout;
+    return array('ok' => true, 'items' => array(array('category_id' => 'free_fire', 'name' => 'Free Fire', 'fields' => array(array('key' => 'player_id', 'label' => 'Player ID', 'type' => 'text', 'required' => true)))));
+};
+check(is_array(cat_call('uid_validation_context', 700)) && !empty($TRANSIENTS['dfr_uid_validation_games_stale_v3']), 'a good list is also kept as the last good copy');
+unset($TRANSIENTS['dfr_uid_validation_games_v3']); cat_reset_memos(); DFR_API::$calls = array();
+check(is_array(cat_call('uid_validation_context', 700, false, 5, true)) && calls_of('topup_validation_games') === 0, 'expired list: the page shows the button from the last good copy, no supplier call');
+check(in_array('dfr_uid_validation_games_refresh', $GLOBALS['SCHEDULED'], true), 'and queues a background refresh');
+check(is_array(cat_call('uid_validation_context', 700)) && calls_of('topup_validation_games') === 1, 'a verification in the same request still reads a fresh list');
+$catalog->refresh_uid_validation_games();
+check(calls_of('topup_validation_games') === 1, 'the background refresh does nothing once the list is fresh');
+$TRANSIENTS = array(); cat_reset_memos(); DFR_API::$calls = array();
+cat_call('uid_validation_context', 700, false, 5, true);
+check(calls_of('topup_validation_games') === 1 && (int) DFR_API::$handlers['_games_timeout'] === 5, 'no saved list at all: one fetch bounded to 5 s (was 20 s)');
 
 // ======================================================================================
 section('catalog sync batches');

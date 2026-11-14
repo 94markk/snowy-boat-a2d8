@@ -67,13 +67,27 @@ final class DFR_Plugin {
             'dfr_send_attestation_refusal_alert',
             'dfr_keyring_migration_batch',
         ) as $hook) {
-            wp_clear_scheduled_hook($hook);
+            self::clear_wp_cron_hook($hook);
             if (function_exists('as_unschedule_all_actions') && did_action('action_scheduler_init')) {
                 as_unschedule_all_actions($hook); // hook only: array() args would skip every job that has arguments
             }
         }
         if (class_exists('DFR_Catalog')) { DFR_Catalog::deactivate(); }
         flush_rewrite_rules(false);
+    }
+
+    /**
+     * Remove every WP-Cron event of a hook, whatever its arguments. wp_clear_scheduled_hook()
+     * only removes the events whose arguments equal its second parameter (none by default),
+     * so the per-order fallbacks and the every-minute watchdog (args: wp_cron) outlived
+     * deactivation and kept waking WP-Cron with no handler.
+     */
+    public static function clear_wp_cron_hook($hook) {
+        if (function_exists('wp_unschedule_hook')) {
+            wp_unschedule_hook((string) $hook);
+            return;
+        }
+        wp_clear_scheduled_hook((string) $hook);
     }
 
     private static function defaults() {
@@ -149,7 +163,11 @@ final class DFR_Plugin {
             $stored['uid_validation_required'] = '1';
             update_option('dfr_settings', wp_parse_args($stored, self::defaults()), false);
         }
-        delete_transient('dfr_uid_validation_games_v1');
+        // v4.24: the obsolete v1 list is dropped once per version change. Deleting it on
+        // every request cost an uncached SELECT on each page view.
+        if ((string) get_option('dfr_plugin_version', '') !== DFR_VERSION) {
+            delete_transient('dfr_uid_validation_games_v1');
+        }
 
         // v3.3 makes code delivery customer-facing by default. Previously the code display
         // toggle could remain disabled after a successful supplier fulfillment, leaving the
@@ -356,7 +374,29 @@ final class DFR_Plugin {
         }
     }
 
+    /**
+     * Options this plugin reads on every request (settings, one-time migration and
+     * repair flags). Most are stored with autoload off, so without a persistent object
+     * cache each one cost its own SELECT on every page view, about fifteen in all.
+     */
+    private static function per_request_option_names() {
+        return array(
+            'dfr_settings', 'dfr_plugin_version', 'dfr_wallet_attestation_required_after',
+            'dfr_wallet_attestation_legacy_max_order_id', 'dfr_live_sync_migrated_v417',
+            'dfr_reconcile_watchdog_version', 'dfr_completion_repair_pending_v492',
+            'dfr_completion_repair_pending_v491', 'dfr_reconcile_repair_pending_v414',
+            'dfr_reconcile_repair_pending_v4131', 'dfr_reconcile_repair_pending_v413',
+            'dfr_reconcile_repair_pending_v410', 'dfr_public_privacy_migrated_v393',
+            'dfr_auto_terms_tagged_v1', 'dfr_reseller_schema_version',
+        );
+    }
+
     public function boot() {
+        // One query instead of one per option (WordPress 6.4+; a no-op with an object cache
+        // that already holds them). Missing options are remembered as missing too.
+        if (function_exists('wp_prime_option_caches')) {
+            wp_prime_option_caches(self::per_request_option_names());
+        }
         $this->maybe_upgrade_settings();
         $this->settings = wp_parse_args((array) get_option('dfr_settings', array()), self::defaults());
         $this->initialize_wallet_attestation_boundary();
@@ -3044,7 +3084,12 @@ final class DFR_Plugin {
     public function ensure_reconcile_watchdog() {
         if (!$this->has_api_key()) { return; }
         $as_args = array('action_scheduler');
-        if (function_exists('as_schedule_recurring_action') && did_action('action_scheduler_init')) {
+        // v4.24: the Action Scheduler lookup is a query on its actions table. It ran on every
+        // storefront page view; it now runs where the queue itself runs (WP-Cron, admin and
+        // admin-ajax, which includes Action Scheduler's async runner), every minute or so on
+        // a live store. The WP-Cron entry below is an in-memory check and stays everywhere.
+        $check_queue = wp_doing_cron() || is_admin() || (string) get_option('dfr_reconcile_watchdog_version', '') !== DFR_VERSION;
+        if ($check_queue && function_exists('as_schedule_recurring_action') && did_action('action_scheduler_init')) {
             $has_as = function_exists('as_has_scheduled_action')
                 ? (bool) as_has_scheduled_action('dfr_reconcile_watchdog', $as_args, 'delicat-fazercards')
                 : false;
@@ -3056,7 +3101,9 @@ final class DFR_Plugin {
         if (!wp_next_scheduled('dfr_reconcile_watchdog', $wp_args)) {
             wp_schedule_event(time() + 30, 'dfr_every_minute', 'dfr_reconcile_watchdog', $wp_args);
         }
-        update_option('dfr_reconcile_watchdog_version', DFR_VERSION, false);
+        if ((string) get_option('dfr_reconcile_watchdog_version', '') !== DFR_VERSION) {
+            update_option('dfr_reconcile_watchdog_version', DFR_VERSION, false);
+        }
     }
 
     /** GET-only safety net. It is intentionally small and rate-bounded: each run scans

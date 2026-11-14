@@ -30,13 +30,21 @@ $dfr_hooks = array(
     // 4.17-4.19 fast supplier synchronization.
     'dfr_catalog_sync_continue',
     'dfr_balance_sync_event',
+    // 4.15+ fulfilment queue and alerts, 4.24 background jobs.
+    'dfr_fulfill_paid_order',
+    'dfr_send_delivery_failure_alert',
+    'dfr_send_attestation_refusal_alert',
+    'dfr_catalog_sync_start',
+    'dfr_uid_validation_games_refresh',
 );
 foreach ($dfr_hooks as $hook) {
-    wp_clear_scheduled_hook($hook);
+    // Every WP-Cron event of the hook, whatever its arguments: wp_clear_scheduled_hook()
+    // alone left the per-order events and the every-minute watchdog (args: wp_cron).
+    if (function_exists('wp_unschedule_hook')) { wp_unschedule_hook($hook); } else { wp_clear_scheduled_hook($hook); }
     if (function_exists('as_unschedule_all_actions') && did_action('action_scheduler_init')) {
-        foreach (array('delicat-fazercards', 'delicat-digital-gateway') as $group) {
-            as_unschedule_all_actions($hook, array(), $group);
-        }
+        // Hook only (every group, every argument list): an args filter of array() matched
+        // argument-less jobs only and left every per-order job queued.
+        as_unschedule_all_actions($hook);
     }
 }
 

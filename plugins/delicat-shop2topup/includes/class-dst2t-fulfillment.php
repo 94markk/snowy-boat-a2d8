@@ -275,32 +275,44 @@ final class DST2T_Fulfillment {
 				$price = $this->api->price( $supplier_item_id );
 				$this->assert_cost_guard( $item, $price['unit_price'] );
 			} catch ( DST2T_API_Exception $price_error ) {
-				$cached_cost = $this->cached_expected_cost( $item );
+				$can_fallback    = $this->can_fallback_to_cached_price( $price_error );
+				$cached_cost     = $this->cached_expected_cost( $item );
 				$fallback_source = 'cached';
-				if ( ! $cached_cost && $this->can_fallback_to_cached_price( $price_error ) ) {
+				if ( ! $cached_cost && $can_fallback ) {
 					try {
-						$category_id = absint( $item->get_meta( '_dst2t_category_id', true ) );
-						$cached_cost = $this->api->catalog_price( $supplier_item_id, $category_id );
+						$category_id     = absint( $item->get_meta( '_dst2t_category_id', true ) );
+						$cached_cost     = $this->api->catalog_price( $supplier_item_id, $category_id );
 						$fallback_source = 'catalog';
-						$this->remember_supplier_cost( $item, $cached_cost );
 					} catch ( Throwable $catalog_error ) {
 						$cached_cost = '';
 					}
 				}
-				if ( $cached_cost && $this->can_fallback_to_cached_price( $price_error ) ) {
-					// expected_unit_price is a supplier-side upper bound. Using the last
-					// known/catalog cost is safe: if the live cost rose, /orders/create refuses
-					// with PRICE_INCREASED and tells us the current price; it cannot overcharge.
-					$price = array( 'unit_price' => $cached_cost );
-					$this->assert_cost_guard( $item, $cached_cost );
-					$note = 'catalog' === $fallback_source
-						? __( 'The dedicated supplier price response was temporarily incompatible. Fulfillment used the current catalog price as a strict maximum; the supplier cannot charge above it.', 'delicat-shop2topup' )
-						: __( 'Live supplier price lookup was temporarily unavailable. Fulfillment continued with the last known price as a strict maximum; the supplier cannot charge above it.', 'delicat-shop2topup' );
-					$this->order_note_once( $order, 'cached-price-' . $item_id, $note );
-				} else {
+				if ( ! $cached_cost || ! $can_fallback ) {
 					$this->handle_preflight_failure( $order, $item, $provider_order_id, $price_error, $attempts );
 					return;
 				}
+				// 2.9.0: the guard is checked here, against the baseline that existed
+				// before this fallback. v2.8 stored the catalog price as the new baseline
+				// first (so the relative guard compared the price with itself), and a
+				// guard refusal thrown inside this catch block skipped the sibling catch
+				// below: the line was never put on review and was re-priced every minute.
+				try {
+					$this->assert_cost_guard( $item, $cached_cost );
+				} catch ( RuntimeException $guard_error ) {
+					$this->mark_manual_review( $order, $item, $provider_order_id, 'price_blocked', 'PRICE_GUARD', $guard_error->getMessage() );
+					return;
+				}
+				if ( 'catalog' === $fallback_source ) {
+					$this->remember_supplier_cost( $item, $cached_cost );
+				}
+				// expected_unit_price is a supplier-side upper bound. Using the last
+				// known/catalog cost is safe: if the live cost rose, /orders/create refuses
+				// with PRICE_INCREASED and tells us the current price; it cannot overcharge.
+				$price = array( 'unit_price' => $cached_cost );
+				$note  = 'catalog' === $fallback_source
+					? __( 'The dedicated supplier price response was temporarily incompatible. Fulfillment used the current catalog price as a strict maximum; the supplier cannot charge above it.', 'delicat-shop2topup' )
+					: __( 'Live supplier price lookup was temporarily unavailable. Fulfillment continued with the last known price as a strict maximum; the supplier cannot charge above it.', 'delicat-shop2topup' );
+				$this->order_note_once( $order, 'cached-price-' . $item_id, $note );
 			} catch ( RuntimeException $guard_error ) {
 				$this->mark_manual_review( $order, $item, $provider_order_id, 'price_blocked', 'PRICE_GUARD', $guard_error->getMessage() );
 				return;
@@ -660,7 +672,10 @@ final class DST2T_Fulfillment {
 			return;
 		}
 		$vouchers = json_decode( $this->vault->decrypt( $encrypted ), true );
-		if ( ! is_array( $vouchers ) || ! $vouchers ) {
+		// Normalise every entry so a partial record never raises undefined-index
+		// warnings inside a customer email or the order page.
+		$vouchers = is_array( $vouchers ) ? $this->sanitize_vouchers( $vouchers ) : array();
+		if ( ! $vouchers ) {
 			return;
 		}
 

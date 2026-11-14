@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 // Exercise the real API client without network access or account credentials.
 define('ABSPATH',__DIR__);define('DFR_VERSION','4.22.1');
 class WP_Error { public $code; function __construct($c,$m='',$d=null){$this->code=$c;} }

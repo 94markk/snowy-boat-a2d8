@@ -75,8 +75,10 @@ final class DST2T_Privacy {
 			$prefix . '_verify',
 			array(
 				'ajax'   => admin_url( 'admin-ajax.php' ),
-				'nonce'  => wp_create_nonce( 'dst2t_verify_player' ),
-				'action' => 'dst2t_verify_player',
+				'nonce'   => wp_create_nonce( 'dst2t_verify_player' ),
+				'action'  => 'dst2t_verify_player',
+				// Used once to recover when the cached page's nonce has expired.
+				'refresh' => DST2T_Product::AJAX_VERIFY_NONCE,
 			)
 		);
 

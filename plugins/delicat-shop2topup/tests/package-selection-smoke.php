@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /** Regression for the real missing-option symptom: a purchasable custom
  * variation was in data-product_variations but absent from attribute_package. */
 define('ABSPATH',__DIR__);$objects=array();$meta=array();$options=array();$hooks=array();$invalidations=array();$caps=true;

@@ -197,38 +197,6 @@ final class DST2T_Admin {
 		$this->redirect_with_notice( 'dashboard', 'success', sprintf( __( 'Connection successful. Wallet balance: %s.', 'delicat-shop2topup' ), '' !== $state['formatted'] ? $state['formatted'] : __( 'unavailable', 'delicat-shop2topup' ) ) );
 	}
 
-	/**
-	 * Finds a credential shape the provider accepts.
-	 *
-	 * Only GET /account is used, which is read-only, so nothing can be spent.
-	 *
-	 * @return array {mode, tried, blocked}
-	 */
-	private function detect_auth_mode() {
-		$tried = array();
-
-		foreach ( DST2T_API_Client::AUTH_MODES as $mode ) {
-			if ( ! $this->api->auth_headers( $mode ) ) {
-				continue; // The saved fields cannot form this shape.
-			}
-			$tried[] = $mode;
-
-			try {
-				$this->api->probe( $mode );
-				return array( 'mode' => $mode, 'tried' => $tried, 'blocked' => '' );
-			} catch ( DST2T_API_Exception $error ) {
-				if ( ! in_array( $error->get_api_code(), DST2T_API_Client::AUTH_ERRORS, true ) ) {
-					// Not a credential-shape problem: stop and report the real one.
-					return array( 'mode' => '', 'tried' => $tried, 'blocked' => $error->get_api_code() );
-				}
-			} catch ( Throwable $error ) {
-				return array( 'mode' => '', 'tried' => $tried, 'blocked' => 'UNEXPECTED_ERROR' );
-			}
-		}
-
-		return array( 'mode' => '', 'tried' => $tried, 'blocked' => '' );
-	}
-
 	private function auth_mode_label( $mode ) {
 		$labels = array(
 			'auto'          => __( 'Automatic', 'delicat-shop2topup' ),
@@ -328,14 +296,6 @@ final class DST2T_Admin {
 		$this->redirect_with_notice( $tab, 'success', __( 'Relance enregistrée avec la même référence. Les livraisons déjà acceptées seront uniquement synchronisées.', 'delicat-shop2topup' ) );
 	}
 
-	/**
-	 * Replaces provider-derived SKUs left behind by earlier versions.
-	 *
-	 * Before 1.2.0 the SKU was the provider's own item id with a recognisable
-	 * prefix, and WooCommerce publishes SKUs to customers, to JSON-LD, and to the
-	 * unauthenticated Store API. Rewriting is an explicit operator decision
-	 * because a SKU may already appear on invoices and in external systems.
-	 */
 	/** Opens the window in which the provider may validate the callback URL. */
 	public function open_verification() {
 		$this->authorize( 'dst2t_open_verification' );
@@ -423,6 +383,14 @@ final class DST2T_Admin {
 		return (string) $status;
 	}
 
+	/**
+	 * Replaces provider-derived SKUs left behind by earlier versions.
+	 *
+	 * Before 1.2.0 the SKU was the provider's own item id with a recognisable
+	 * prefix, and WooCommerce publishes SKUs to customers, to JSON-LD, and to the
+	 * unauthenticated Store API. Rewriting is an explicit operator decision
+	 * because a SKU may already appear on invoices and in external systems.
+	 */
 	public function rewrite_skus() {
 		$this->authorize( 'dst2t_rewrite_skus' );
 
@@ -595,6 +563,7 @@ final class DST2T_Admin {
 		$sync      = $this->sync->state();
 		$webhook   = DST2T_Webhook::last_event();
 		$scheduler = function_exists( 'as_schedule_recurring_action' ) ? __( 'Action Scheduler', 'delicat-shop2topup' ) : __( 'WP-Cron fallback', 'delicat-shop2topup' );
+		$next_reconcile = $this->fulfillment->next_reconcile();
 		?>
 		<div class="dst2t-grid">
 			<section class="dst2t-card dst2t-card-balance<?php echo $state['low'] ? ' is-low' : ''; ?>">
@@ -656,12 +625,12 @@ final class DST2T_Admin {
 				<h2><?php esc_html_e( 'Automation health', 'delicat-shop2topup' ); ?></h2>
 				<ul class="dst2t-list">
 					<li><span><?php esc_html_e( 'Scheduler', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $scheduler ); ?></strong></li>
-					<li><span><?php esc_html_e( 'Next reconcile', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $this->when( $this->fulfillment->next_reconcile() ) ); ?></strong></li>
+					<li><span><?php esc_html_e( 'Next reconcile', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $this->when( $next_reconcile ) ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Next balance check', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $this->when( $this->balance->next_run() ) ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Next catalog sync', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $this->sync->interval_seconds() ? $this->when( $this->sync->next_run() ) : __( 'off', 'delicat-shop2topup' ) ); ?></strong></li>
 					<li><span><?php esc_html_e( 'Mapped products', 'delicat-shop2topup' ); ?></span><strong><?php echo esc_html( $this->sync->mapped_count() ); ?></strong></li>
 				</ul>
-				<?php $next_reconcile = $this->fulfillment->next_reconcile(); if ( $next_reconcile && $next_reconcile < time() - 120 ) : ?>
+				<?php if ( $next_reconcile && $next_reconcile < time() - 120 ) : ?>
 				<p class="dst2t-error">Planificateur en retard. La récupération ci-dessous traite au maximum une commande échue par minute pendant que cette page reste ouverte. Vérifiez WooCommerce → État → Actions planifiées et le cron serveur.</p>
 				<?php endif; ?>
 				<p class="description" data-dst2t-recovery-status>Assistance de récupération active sur ce tableau de bord.</p>
@@ -727,21 +696,6 @@ final class DST2T_Admin {
 		$total    = $this->repository->count_matching( $filter );
 		$counts   = $this->counts();
 		?>
-		<section class="dst2t-card dst2t-card-wide dst2t-catalog-import-all">
-			<h2><?php esc_html_e( 'Import supplier catalog', 'delicat-shop2topup' ); ?></h2>
-			<p><?php esc_html_e( 'Import the complete live supplier catalog into WooCommerce. New products are created as drafts so you can review them before publishing.', 'delicat-shop2topup' ); ?></p>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-dst2t-confirm="<?php esc_attr_e( 'Queue the complete supplier catalog for import as WooCommerce drafts?', 'delicat-shop2topup' ); ?>">
-				<input type="hidden" name="action" value="dst2t_import_full_catalog" />
-				<?php wp_nonce_field( 'dst2t_import_full_catalog' ); ?>
-				<?php submit_button( __( 'Import full catalog as drafts', 'delicat-shop2topup' ), 'primary', 'submit', false ); ?>
-			</form>
-			<p class="description"><?php esc_html_e( 'The import advances from this browser and also has a background scheduler fallback, so hosts with blocked WP-Cron no longer leave the job permanently queued.', 'delicat-shop2topup' ); ?></p>
-		</section>
-
-		<?php if ( ! $categories ) : ?>
-			<div class="notice notice-warning inline"><p><?php esc_html_e( 'The provider returned no category index. The importer will still try the documented unfiltered product catalog and derive categories from product rows.', 'delicat-shop2topup' ); ?></p></div>
-		<?php endif; ?>
-
 		<form method="get" class="dst2t-filter">
 			<input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE ); ?>" />
 			<input type="hidden" name="tab" value="orders" />
@@ -1010,7 +964,24 @@ final class DST2T_Admin {
 				$category_name = isset( $category['name'] ) ? (string) $category['name'] : '';
 			}
 		}
+		// One query for every row of the table instead of one per catalog item.
+		$existing_ids = $items ? $this->find_products_by_item_ids( array_map( static function ( $row ) { return is_array( $row ) && isset( $row['item_id'] ) ? $row['item_id'] : 0; }, $items ) ) : array();
 		?>
+		<section class="dst2t-card dst2t-card-wide dst2t-catalog-import-all">
+			<h2><?php esc_html_e( 'Import supplier catalog', 'delicat-shop2topup' ); ?></h2>
+			<p><?php esc_html_e( 'Import the complete live supplier catalog into WooCommerce. New products are created as drafts so you can review them before publishing.', 'delicat-shop2topup' ); ?></p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" data-dst2t-confirm="<?php esc_attr_e( 'Queue the complete supplier catalog for import as WooCommerce drafts?', 'delicat-shop2topup' ); ?>">
+				<input type="hidden" name="action" value="dst2t_import_full_catalog" />
+				<?php wp_nonce_field( 'dst2t_import_full_catalog' ); ?>
+				<?php submit_button( __( 'Import full catalog as drafts', 'delicat-shop2topup' ), 'primary', 'submit', false ); ?>
+			</form>
+			<p class="description"><?php esc_html_e( 'The import advances from this browser and also has a background scheduler fallback, so hosts with blocked WP-Cron no longer leave the job permanently queued.', 'delicat-shop2topup' ); ?></p>
+		</section>
+
+		<?php if ( ! $categories ) : ?>
+			<div class="notice notice-warning inline"><p><?php esc_html_e( 'The provider returned no category index. The importer will still try the documented unfiltered product catalog and derive categories from product rows.', 'delicat-shop2topup' ); ?></p></div>
+		<?php endif; ?>
+
 		<form method="get" class="dst2t-filter">
 			<input type="hidden" name="page" value="<?php echo esc_attr( self::PAGE ); ?>" />
 			<input type="hidden" name="tab" value="catalog" />
@@ -1081,7 +1052,7 @@ final class DST2T_Admin {
 					<?php foreach ( $items as $catalog_item ) : ?>
 						<?php
 						$item_id  = isset( $catalog_item['item_id'] ) ? absint( $catalog_item['item_id'] ) : 0;
-						$existing = $item_id ? $this->find_product_by_item_id( $item_id ) : 0;
+						$existing = $item_id && isset( $existing_ids[ $item_id ] ) ? $existing_ids[ $item_id ] : 0;
 						$cost     = isset( $catalog_item['price'] ) ? (string) $catalog_item['price'] : '';
 						?>
 						<tr>
@@ -1210,136 +1181,41 @@ final class DST2T_Admin {
 
 	/* ------------------------------------------------------------- imports */
 
-	private function import_item( $category_id, $catalog_item, $schema, $category_name = '' ) {
-		$item_id = absint( $catalog_item['item_id'] );
-		$sku     = DST2T_Brand::sku_for_item( $item_id );
-		$id      = wc_get_product_id_by_sku( $sku );
-
-		if ( $id && absint( get_post_meta( $id, DST2T_Product::META_ITEM_ID, true ) ) !== $item_id ) {
-			throw new RuntimeException( 'SKU collision for ' . $sku );
-		}
-		if ( ! $id ) {
-			// Catches products imported under an older SKU prefix.
-			$id = $this->find_product_by_item_id( $item_id );
-		}
-
-		$product = $id ? wc_get_product( $id ) : new WC_Product_Simple();
-		if ( ! $product instanceof WC_Product ) {
-			throw new RuntimeException( 'WooCommerce product could not be created.' );
-		}
-
-		$is_new = ! $product->get_id();
-		$product->set_name( sanitize_text_field( DST2T_Brand::scrub( isset( $catalog_item['name'] ) ? $catalog_item['name'] : '' ) ) );
-		$product->set_description( wp_kses_post( DST2T_Brand::scrub( isset( $catalog_item['description'] ) ? $catalog_item['description'] : '' ) ) );
-		$product->set_virtual( true );
-
-		if ( $is_new ) {
-			$product->set_sku( $sku );
-		}
-		// The operator reviews every import before it can be sold.
-		if ( $is_new || $this->settings->enabled( 'import_force_draft' ) ) {
-			$product->set_status( 'draft' );
-		}
-
-		$cost = isset( $catalog_item['price'] ) ? DST2T_Decimal::normalize( $catalog_item['price'] ) : '';
-		// A listing price of zero means the catalog did not carry one, not that the
-		// item is free, so fall back to the live price endpoint.
-		if ( '' === $cost || 0 === DST2T_Decimal::compare( $cost, '0' ) ) {
-			$price = $this->api->price( $item_id );
-			$cost  = $price['unit_price'];
-		}
-		$priceable = 0 !== DST2T_Decimal::compare( $cost, '0' );
-		if ( $priceable && 'automatic' === $this->settings->get( 'catalog_pricing_mode', 'manual' ) && ( $is_new || $this->settings->enabled( 'sync_catalog_prices' ) ) ) {
-			$selling_price = $this->products->selling_price( $cost );
-			if ( '' !== $selling_price ) {
-				$product->set_regular_price( $selling_price );
-				if ( '' === (string) $product->get_sale_price() ) {
-					$product->set_price( $selling_price );
-				}
-			}
-		}
-		$product_id = $product->save();
-
-		$this->products->save_mapping(
-			$product_id,
-			'yes',
-			$item_id,
-			$category_id,
-			$is_new ? '' : get_post_meta( $product_id, DST2T_Product::META_MAX_COST, true ),
-			isset( $catalog_item['name'] ) ? DST2T_Brand::scrub( $catalog_item['name'] ) : '',
-			! empty( $catalog_item['returns_voucher'] ),
-			$schema,
-			$cost
-		);
-
-		if ( ! $priceable ) {
-			// Left unpriced on purpose: the draft cannot be sold for nothing.
-			update_post_meta( $product_id, DST2T_Product::META_SYNC_ERROR, 'ZERO_COST' );
-		}
-
-		$this->import_image( $product_id, $catalog_item );
-		$this->assign_category( $product_id, $category_name );
-	}
-
-	/** Copies the catalog image into the media library; provider URLs never reach the storefront. */
-	private function import_image( $product_id, $catalog_item ) {
-		if ( ! $this->settings->enabled( 'import_images' ) || has_post_thumbnail( $product_id ) ) {
-			return;
-		}
-		$url = '';
-		foreach ( array( 'image', 'image_url', 'icon', 'thumbnail', 'logo', 'picture' ) as $key ) {
-			if ( ! empty( $catalog_item[ $key ] ) && is_string( $catalog_item[ $key ] ) ) {
-				$url = trim( $catalog_item[ $key ] );
-				break;
-			}
-		}
-		if ( '' === $url || ! wp_http_validate_url( $url ) ) {
-			return;
-		}
-
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-		require_once ABSPATH . 'wp-admin/includes/media.php';
-		require_once ABSPATH . 'wp-admin/includes/image.php';
-
-		$attachment_id = media_sideload_image( $url, $product_id, null, 'id' );
-		if ( is_wp_error( $attachment_id ) ) {
-			return;
-		}
-		set_post_thumbnail( $product_id, $attachment_id );
-	}
-
-	private function assign_category( $product_id, $category_name ) {
-		$category_name = trim( DST2T_Brand::scrub( (string) $category_name ) );
-		if ( ! $this->settings->enabled( 'import_categories' ) || '' === $category_name ) {
-			return;
-		}
-		$term = get_term_by( 'name', $category_name, 'product_cat' );
-		if ( $term && ! is_wp_error( $term ) ) {
-			$term_id = (int) $term->term_id;
-		} else {
-			$created = wp_insert_term( $category_name, 'product_cat' );
-			if ( is_wp_error( $created ) ) {
-				return;
-			}
-			$term_id = (int) $created['term_id'];
-		}
-		wp_set_object_terms( $product_id, array( $term_id ), 'product_cat', true );
-	}
-
-	private function find_product_by_item_id( $item_id ) {
+	/**
+	 * Maps supplier item ids to the WooCommerce product or variation that carries
+	 * them, in one query. Variations win over simple products, then the oldest id,
+	 * exactly like the per-item lookup this replaces.
+	 *
+	 * @param array $item_ids Supplier item ids.
+	 * @return array item_id => post id.
+	 */
+	private function find_products_by_item_ids( $item_ids ) {
 		global $wpdb;
-		return (int) $wpdb->get_var(
+		$item_ids = array_values( array_unique( array_filter( array_map( 'absint', (array) $item_ids ) ) ) );
+		if ( ! $item_ids ) {
+			return array();
+		}
+		$placeholders = implode( ',', array_fill( 0, count( $item_ids ), '%s' ) );
+		$rows         = $wpdb->get_results(
 			$wpdb->prepare(
-				"SELECT m.post_id FROM {$wpdb->postmeta} m
+				"SELECT m.post_id, m.meta_value FROM {$wpdb->postmeta} m
 				 INNER JOIN {$wpdb->posts} p ON p.ID = m.post_id
-				 WHERE m.meta_key = %s AND m.meta_value = %s
+				 WHERE m.meta_key = %s AND m.meta_value IN ({$placeholders})
 				 AND p.post_type IN ('product','product_variation')
 				 AND p.post_status NOT IN ('trash','auto-draft')
-				 ORDER BY CASE WHEN p.post_type='product_variation' THEN 0 ELSE 1 END, m.post_id ASC LIMIT 1",
-				DST2T_Product::META_ITEM_ID,
-				(string) absint( $item_id )
-			)
+				 ORDER BY CASE WHEN p.post_type='product_variation' THEN 0 ELSE 1 END, m.post_id ASC", // phpcs:ignore WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+				array_merge( array( DST2T_Product::META_ITEM_ID ), array_map( 'strval', $item_ids ) )
+			),
+			ARRAY_A
 		);
+		$out = array();
+		foreach ( (array) $rows as $row ) {
+			$item = absint( $row['meta_value'] );
+			if ( $item && ! isset( $out[ $item ] ) ) {
+				$out[ $item ] = absint( $row['post_id'] );
+			}
+		}
+		return $out;
 	}
 
 	/* --------------------------------------------------- order list column */

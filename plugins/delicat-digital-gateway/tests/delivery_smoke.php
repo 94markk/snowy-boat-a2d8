@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /**
  * Delivery smoke test for Delicat Digital Gateway 4.15, against stubbed WordPress and
  * WooCommerce. No database, no network.

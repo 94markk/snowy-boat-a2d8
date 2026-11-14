@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /** Fresh-process regression: load real module files, then fire plugins_loaded. */
 define('ABSPATH', __DIR__ . '/');
 $hooks = array();

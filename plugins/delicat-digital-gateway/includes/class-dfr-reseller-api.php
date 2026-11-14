@@ -119,9 +119,12 @@ final class DFR_Reseller_API {
 
     public static function deactivate() {
         foreach (array('dfr_gold_plan_renewal','dfr_reseller_poll_order','dfr_reseller_retry_supplier','dfr_reseller_keyring_migration_batch') as $hook) {
-            wp_clear_scheduled_hook($hook);
+            // Every WP-Cron event of the hook, whatever its arguments (polls carry dbid, attempt).
+            if (function_exists('wp_unschedule_hook')) { wp_unschedule_hook($hook); } else { wp_clear_scheduled_hook($hook); }
             if (function_exists('as_unschedule_all_actions') && did_action('action_scheduler_init')) {
-                as_unschedule_all_actions($hook, array(), 'delicat-fazercards');
+                // Hook only: an args filter of array() matched argument-less jobs only, so the
+                // per-order polls and retries (dbid, attempt) survived deactivation.
+                as_unschedule_all_actions($hook);
             }
         }
     }

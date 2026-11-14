@@ -1,4 +1,5 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 /** Product editor smoke test, with a legacy shared-package module already loaded. */
 define('ABSPATH', __DIR__); $hooks = array(); $caps = true; $transients = array(); $objects = array(); $next = 1000; $synced = array();
 function add_action($name,$cb,$priority=10,$argc=1) { global $hooks; $hooks[$name][] = array($cb,$priority); }

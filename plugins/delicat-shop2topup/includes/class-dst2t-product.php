@@ -25,11 +25,17 @@ final class DST2T_Product {
 	const META_VARIATION_ATTRIBUTE = '_dst2t_variation_attribute';
 	const META_SUPERSEDED_BY = '_dst2t_superseded_by_variable_product';
 
+	/** Hands a page that came from the full-page cache a current verification nonce. */
+	const AJAX_VERIFY_NONCE = 'dst2t_verify_nonce';
+
 	/** Player validations allowed per visitor per five minutes. */
 	const VALIDATION_LIMIT  = 20;
 
 	/** Player validations allowed per client address per five minutes. */
 	const ADDRESS_LIMIT     = 300;
+
+	/** Storefront player validations allowed for the whole site per minute. */
+	const SITE_LIMIT        = 120;
 	const META_LAST_SYNC    = '_dst2t_last_sync';
 
 	/** @var DST2T_API_Client */
@@ -85,6 +91,8 @@ final class DST2T_Product {
 		add_action( 'wp_enqueue_scripts', array( $this, 'frontend_assets' ) );
 		add_action( 'wp_ajax_dst2t_verify_player', array( $this, 'ajax_verify_player' ) );
 		add_action( 'wp_ajax_nopriv_dst2t_verify_player', array( $this, 'ajax_verify_player' ) );
+		add_action( 'wp_ajax_' . self::AJAX_VERIFY_NONCE, array( $this, 'ajax_verify_nonce' ) );
+		add_action( 'wp_ajax_nopriv_' . self::AJAX_VERIFY_NONCE, array( $this, 'ajax_verify_nonce' ) );
 		add_action( 'woocommerce_add_to_cart', array( $this, 'merge_duplicate_cart_rows' ), 20, 6 );
 		add_action( 'woocommerce_cart_loaded_from_session', array( $this, 'clean_stale_cart_rows' ), 20 );
 	}
@@ -808,8 +816,9 @@ final class DST2T_Product {
 			if ( empty( $row['dst2t'] ) || ! is_array( $row['dst2t'] ) || ! $this->is_mapped( $mapped_id ) ) {
 				continue;
 			}
-			$mapping = $this->mapping( $mapped_id );
-			if ( ! empty( $mapping['returns_voucher'] ) ) {
+			// Only the voucher flag is needed here; mapping() would also decode and
+			// rebuild the requirement schema for every cart row on every request.
+			if ( 'yes' === get_post_meta( $mapped_id, self::META_VOUCHER, true ) ) {
 				continue;
 			}
 			$requirements = isset( $row['dst2t']['requirements'] ) && is_array( $row['dst2t']['requirements'] ) ? $row['dst2t']['requirements'] : array();
@@ -902,6 +911,26 @@ final class DST2T_Product {
 			$out[ $name ] = $value;
 		}
 		return $out;
+	}
+
+	/**
+	 * Fresh nonce for the "Vérifier votre compte" button.
+	 *
+	 * Product pages are served from LiteSpeed's page cache for days, while a
+	 * WordPress nonce lives 12-24 hours and, for a guest with a cart, is tied to
+	 * that guest's WooCommerce session. A cached page therefore often carries a
+	 * nonce the server no longer accepts, and the button failed with a bare "-1".
+	 * The script asks here once and retries. This hands out nothing a visitor
+	 * cannot already get by loading an uncached product page.
+	 */
+	public function ajax_verify_nonce() {
+		if ( function_exists( 'nocache_headers' ) && ! headers_sent() ) {
+			nocache_headers();
+		}
+		if ( ! $this->settings->enabled( 'validate_player' ) ) {
+			wp_send_json_error( array( 'message' => __( 'La vérification du compte est actuellement désactivée.', 'delicat-shop2topup' ) ), 400 );
+		}
+		wp_send_json_success( array( 'nonce' => wp_create_nonce( 'dst2t_verify_player' ) ) );
 	}
 
 	public function ajax_verify_player() {
@@ -1187,11 +1216,12 @@ final class DST2T_Product {
 			return false;
 		}
 
+		$window  = 5 * MINUTE_IN_SECONDS;
 		$buckets = array();
 
 		$visitor = $this->visitor_id();
 		if ( '' !== $visitor ) {
-			$buckets[] = array( 'dst2t_pv_v_' . md5( $visitor ), self::VALIDATION_LIMIT );
+			$buckets[] = array( 'dst2t_pv_v_' . md5( $visitor ), self::VALIDATION_LIMIT, $window );
 		}
 
 		$ip = class_exists( 'WC_Geolocation' ) ? (string) WC_Geolocation::get_ip_address() : '';
@@ -1199,30 +1229,54 @@ final class DST2T_Product {
 			$ip = sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) );
 		}
 		if ( '' !== $ip ) {
-			$buckets[] = array( 'dst2t_pv_a_' . md5( $ip ), self::ADDRESS_LIMIT );
+			$buckets[] = array( 'dst2t_pv_a_' . md5( $ip ), self::ADDRESS_LIMIT, $window );
 		}
 
+		// The address above comes from forwarding headers a client can forge, and a
+		// visitor without a session cookie gets a new id on every request. This
+		// site-wide ceiling is the one bucket a script cannot side-step, so it is
+		// what protects the supplier API key's own rate limit (which paid orders
+		// need after checkout). Normal shoppers stay far below it.
+		$buckets[] = array( 'dst2t_pv_site', self::SITE_LIMIT, MINUTE_IN_SECONDS );
+
 		foreach ( $buckets as $bucket ) {
-			list( $key, $limit ) = $bucket;
-			$count               = (int) get_transient( $key );
-			if ( $count >= $limit ) {
+			list( $key, $limit, $length ) = $bucket;
+			// Fixed windows: v2.8 refreshed the expiry on every attempt, so a busy
+			// shared address (mobile carrier NAT) never got its counter back.
+			$state = get_transient( $key );
+			$now   = time();
+			if ( ! is_array( $state ) || ! isset( $state['n'], $state['t'] ) || (int) $state['t'] + $length <= $now ) {
+				$state = array( 'n' => 0, 't' => $now );
+			}
+			if ( (int) $state['n'] >= $limit ) {
 				return true;
 			}
-			set_transient( $key, $count + 1, 5 * MINUTE_IN_SECONDS );
+			$state['n'] = (int) $state['n'] + 1;
+			set_transient( $key, $state, max( 1, (int) $state['t'] + $length - $now ) );
 		}
 
 		return false;
 	}
 
-	/** Stable-per-visitor identifier from the WooCommerce session, when there is one. */
+	/**
+	 * Stable-per-visitor identifier, only when the visitor really has one: without a
+	 * session cookie WooCommerce invents a new customer id on every request, which
+	 * used to create a fresh, useless rate-limit row per call.
+	 */
 	private function visitor_id() {
-		if ( function_exists( 'WC' ) && WC() && isset( WC()->session ) && is_object( WC()->session ) && method_exists( WC()->session, 'get_customer_id' ) ) {
+		$user_id = get_current_user_id();
+		if ( $user_id ) {
+			return 'u' . $user_id;
+		}
+		if ( function_exists( 'WC' ) && WC() && isset( WC()->session ) && is_object( WC()->session )
+			&& method_exists( WC()->session, 'has_session' ) && WC()->session->has_session()
+			&& method_exists( WC()->session, 'get_customer_id' ) ) {
 			$id = (string) WC()->session->get_customer_id();
 			if ( '' !== $id ) {
-				return $id;
+				return 's' . $id;
 			}
 		}
-		return (string) get_current_user_id();
+		return '';
 	}
 
 	private function posted_verification_token() {

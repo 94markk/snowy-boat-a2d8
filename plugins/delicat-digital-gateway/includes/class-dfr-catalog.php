@@ -71,6 +71,8 @@ final class DFR_Catalog {
         add_action('wp_ajax_dfr_catalog_sync_imported', array($this, 'ajax_sync_imported'));
         add_action('wp_ajax_dfr_verify_player_uid', array($this, 'ajax_verify_player_uid'));
         add_action('wp_ajax_nopriv_dfr_verify_player_uid', array($this, 'ajax_verify_player_uid'));
+        add_action('wp_ajax_dfr_uid_nonce', array($this, 'ajax_uid_nonce'));
+        add_action('wp_ajax_nopriv_dfr_uid_nonce', array($this, 'ajax_uid_nonce'));
         add_action('wp_ajax_dfr_clear_recent_player_ids', array($this, 'ajax_clear_recent_player_ids'));
 
         // Headless storefront bridge. WooCommerce and this gateway remain the
@@ -84,6 +86,7 @@ final class DFR_Catalog {
         add_action('init', array($this, 'ensure_cron'));
         add_action('dfr_catalog_sync_event', array($this, 'cron_sync_imported'));
         add_action('dfr_catalog_sync_start', array($this, 'run_sync_start'));
+        add_action('dfr_uid_validation_games_refresh', array($this, 'refresh_uid_validation_games'));
         // A sync cycle runs in small batches; this hook continues it.
         add_action('dfr_catalog_sync_batch', array($this, 'run_sync_batch'), 10, 1);
 
@@ -666,18 +669,17 @@ final class DFR_Catalog {
     }
 
     public static function deactivate() {
-        wp_clear_scheduled_hook('dfr_catalog_sync_event');
-        wp_clear_scheduled_hook('dfr_catalog_sync_batch');
+        // Every event of each hook, whatever its arguments (sync batches carry their round).
+        // 4.19.0 scheduled the continue/balance events; clear them so an upgrade leaves nothing behind.
+        foreach (array('dfr_catalog_sync_event', 'dfr_catalog_sync_batch', 'dfr_uid_validation_games_refresh', 'dfr_catalog_sync_continue', 'dfr_balance_sync_event', 'dfr_public_privacy_migration_batch') as $hook) {
+            DFR_Plugin::clear_wp_cron_hook($hook);
+        }
         if (function_exists('as_unschedule_all_actions')) {
             foreach (array('dfr_catalog_sync_start', 'dfr_catalog_sync_batch', 'dfr_balance_sync_event') as $hook) {
                 // Hook only: an args filter of array() would match argument-less jobs only.
                 as_unschedule_all_actions($hook);
             }
         }
-        // 4.19.0 scheduled these; clear them so an upgrade leaves nothing behind.
-        wp_clear_scheduled_hook('dfr_catalog_sync_continue');
-        wp_clear_scheduled_hook('dfr_balance_sync_event');
-        wp_clear_scheduled_hook('dfr_public_privacy_migration_batch');
     }
 
     private function plugin() {
@@ -2287,7 +2289,13 @@ final class DFR_Catalog {
         return false;
     }
 
-    private function uid_validation_games($force_refresh = false, $timeout = 20) {
+    /**
+     * @param bool $allow_stale Product page display only (v4.24): when the 10-minute copy
+     *                          has expired, answer with the last good list (kept a day) and
+     *                          refresh it in the background, so no page view waits for the
+     *                          supplier. Verification, cart and fulfilment never pass it.
+     */
+    private function uid_validation_games($force_refresh = false, $timeout = 20, $allow_stale = false) {
         if (!$this->uid_validation_enabled() || !$this->plugin()->has_api_key()) {
             return array();
         }
@@ -2297,6 +2305,15 @@ final class DFR_Catalog {
         $cached = get_transient('dfr_uid_validation_games_v3');
         if (!$force_refresh && is_array($cached)) {
             return $cached;
+        }
+        if ($allow_stale && !$force_refresh) {
+            $stale = get_transient('dfr_uid_validation_games_stale_v3');
+            if (is_array($stale) && $stale) {
+                if (!wp_next_scheduled('dfr_uid_validation_games_refresh')) {
+                    wp_schedule_single_event(time(), 'dfr_uid_validation_games_refresh');
+                }
+                return $stale;
+            }
         }
         // A failed list is not asked again for a minute (it used to be fetched twice per app
         // add, 20 s each). Verification is skipped while this lasts (fail open), so it stays
@@ -2324,7 +2341,13 @@ final class DFR_Catalog {
         // FazerCards documents this list as dynamic. Keep it fresh but never fetch
         // it on every product-page request.
         set_transient('dfr_uid_validation_games_v3', $items, 10 * MINUTE_IN_SECONDS);
+        if ($items) { set_transient('dfr_uid_validation_games_stale_v3', $items, DAY_IN_SECONDS); }
         return $items;
+    }
+
+    /** Background refresh queued by a product page that displayed the last good list. */
+    public function refresh_uid_validation_games() {
+        $this->uid_validation_games(false, 10);
     }
 
     /**
@@ -2567,28 +2590,29 @@ final class DFR_Catalog {
      * finally a high-confidence unique token match. The sellable regional ID is
      * never replaced and required validation fields must map safely.
      */
-    private function uid_validation_context($product_id, $force_refresh = false, $timeout = 20) {
+    private function uid_validation_context($product_id, $force_refresh = false, $timeout = 20, $allow_stale = false) {
         $product_id = absint($product_id);
         // Once per product per request: an app add resolved it twice (validation, then cart
         // data). A forced refresh (schema recovery) always resolves again and replaces the memo.
         // Only a resolved context is memoized, so a caller with a longer budget can still
-        // succeed after a short-timeout caller came back empty.
+        // succeed after a short-timeout caller came back empty. A context built from the
+        // stale display list is never memoized for the checks that follow.
         if (!$force_refresh && array_key_exists($product_id, $this->uid_context_memo)) {
             return $this->uid_context_memo[$product_id];
         }
-        $context = $this->resolve_uid_validation_context($product_id, $force_refresh, $timeout);
-        if (is_array($context)) { $this->uid_context_memo[$product_id] = $context; }
+        $context = $this->resolve_uid_validation_context($product_id, $force_refresh, $timeout, $allow_stale);
+        if (is_array($context) && !$allow_stale) { $this->uid_context_memo[$product_id] = $context; }
         return $context;
     }
 
-    private function resolve_uid_validation_context($product_id, $force_refresh = false, $timeout = 20) {
+    private function resolve_uid_validation_context($product_id, $force_refresh = false, $timeout = 20, $allow_stale = false) {
         if (!$this->uid_validation_enabled()) { return false; }
         $product_id = absint($product_id);
         if (!$product_id || get_post_meta($product_id, '_dfr_service_type', true) !== 'topup') { return false; }
 
         $order_category_id = substr(sanitize_text_field((string) get_post_meta($product_id, '_dfr_category_id', true)), 0, 190);
         if ($order_category_id === '') { return false; }
-        $games = $this->uid_validation_games($force_refresh, $timeout);
+        $games = $this->uid_validation_games($force_refresh, $timeout, $allow_stale);
         if (!$games) { return false; }
 
         $make_context = function ($validation_id, array $game, $match) use ($product_id, $order_category_id) {
@@ -3558,6 +3582,23 @@ final class DFR_Catalog {
         return $values;
     }
 
+    /**
+     * Fresh Player ID verification nonce (v4.24). A product page served from the LiteSpeed
+     * cache can be days old while a nonce lives 12-24 h, so « Vérifier » kept answering
+     * « session expired » and reloading served the same cached page. The storefront script
+     * asks here once after a nonce refusal. It grants nothing a visitor cannot already get
+     * by loading the page: same-origin only, never cached, and verification keeps its own
+     * per-visitor and site-wide limits.
+     */
+    public function ajax_uid_nonce() {
+        if (function_exists('nocache_headers') && !headers_sent()) { nocache_headers(); }
+        if (!headers_sent()) { header('X-LiteSpeed-Cache-Control: no-cache, no-store'); }
+        if (!$this->uid_validation_enabled() || !$this->uid_same_origin_request()) {
+            wp_send_json_error(array('code' => 'forbidden'), 403);
+        }
+        wp_send_json_success(array('nonce' => wp_create_nonce('dfr_uid_verify')));
+    }
+
     public function ajax_verify_player_uid() {
         if (!$this->uid_validation_enabled()) {
             wp_send_json_error(array('message' => __('Player verification is disabled.', 'delicat-fazercards'), 'code' => 'disabled'), 403);
@@ -3784,7 +3825,9 @@ final class DFR_Catalog {
         if (!$fields) {
             return;
         }
-        $uid_context = $this->uid_validation_enabled() && $this->plugin()->has_api_key() ? $this->uid_validation_context($product_id) : false;
+        // Display only (which button to show): never hold the page for the supplier's list.
+        // Without any saved list the fetch is bounded to 5 s instead of 20 s.
+        $uid_context = $this->uid_validation_enabled() && $this->plugin()->has_api_key() ? $this->uid_validation_context($product_id, false, 5, true) : false;
         $can_verify = is_array($uid_context);
         $nonce = $can_verify ? wp_create_nonce('dfr_uid_verify') : '';
         $recent = $this->recent_player_ids();
@@ -3867,8 +3910,10 @@ HTML;
     Object.keys(fields).forEach(function(k){body.append('fields['+k+']',fields[k]);});
     var controller=window.AbortController?new AbortController():null;
     var abortMs=parseInt(box.dataset.abortMs||'22000',10)||22000; var timeout=controller?setTimeout(function(){controller.abort();},abortMs):null;
-    fetch(box.dataset.ajax,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body.toString(),signal:controller?controller.signal:undefined})
-      .then(function(r){return r.json().catch(function(){return null;}).then(function(j){return {r:r,j:j};});})
+    function post(b){return fetch(box.dataset.ajax,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:b.toString(),signal:controller?controller.signal:undefined}).then(function(r){return r.json().catch(function(){return null;}).then(function(j){return {r:r,j:j};});});}
+    var renewed=false;
+    function renew(x){var d=x&&x.j&&!x.j.success&&x.j.data;if(renewed||!d||d.code!=='nonce')return x;renewed=true;var nb=new URLSearchParams();nb.set('action','dfr_uid_nonce');return post(nb).then(function(n){var nd=n&&n.j&&n.j.success&&n.j.data;if(!nd||!nd.nonce)return x;box.dataset.nonce=nd.nonce;body.set('nonce',nd.nonce);return post(body);});}
+    post(body).then(renew)
       .then(function(x){
         if(!isCurrent())return;
         var d=x.j&&x.j.data?x.j.data:{};
