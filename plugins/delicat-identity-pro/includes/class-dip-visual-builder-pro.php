@@ -271,7 +271,12 @@ final class DIP_Visual_Builder_Pro {
         static $done = false;
         if ($done) return;
         $done = true;
-        wp_add_inline_style('dip-builder-front', '.dip-auth-shell{' . self::css_vars(self::settings()) . '}');
+        $settings = self::settings();
+        $css = '.dip-auth-shell{' . self::css_vars($settings) . '}';
+        // 6.18.0: blur(0px) still made budget Android GPUs composite the card
+        // as a backdrop layer on every scroll frame. No blur, no backdrop filter.
+        if (absint($settings['card_blur'] ?? 0) === 0) $css .= '.dip-auth-shell .dip-auth-card{-webkit-backdrop-filter:none;backdrop-filter:none}';
+        wp_add_inline_style('dip-builder-front', $css);
     }
 
     private static function range_field($s, $key, $label, $min, $max, $unit = 'px') {

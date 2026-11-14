@@ -48,13 +48,23 @@ final class DIP_Identity {
             return new WP_Error('link_session_mismatch', 'La session utilisée pour relier ce fournisseur n’est plus valide.');
         }
 
+        // 6.18.0: one winner per provider identity. The transient read-then-write
+        // let two simultaneous callbacks (double tap, web + app at once) both
+        // pass and both link or create; an object cache made the gap wider.
+        // DIP_Lockout's row mutex is atomic and frees itself after 30 s.
         $lock = 'dip_identity_' . substr(hash('sha256', $provider . '|' . $sub), 0, 40);
-        if (get_transient($lock)) return new WP_Error('identity_busy', 'Une connexion pour ce compte est déjà en cours.');
-        set_transient($lock, 1, 30);
+        $atomic = class_exists('DIP_Lockout') && method_exists('DIP_Lockout', 'mutex_acquire');
+        if ($atomic) {
+            if (!DIP_Lockout::mutex_acquire($lock, 30)) return new WP_Error('identity_busy', 'Une connexion pour ce compte est déjà en cours.');
+        } else {
+            if (get_transient($lock)) return new WP_Error('identity_busy', 'Une connexion pour ce compte est déjà en cours.');
+            set_transient($lock, 1, 30);
+        }
         try {
             return $this->resolve_locked($profile, $provider, $sub, $email, $link_user);
         } finally {
-            delete_transient($lock);
+            if ($atomic) DIP_Lockout::mutex_release($lock);
+            else delete_transient($lock);
         }
     }
 

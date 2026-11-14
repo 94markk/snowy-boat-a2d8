@@ -2,10 +2,58 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.17.7
+Stable tag: 6.18.0
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.18.0 — Audit sécurité, vitesse et nettoyage ==
+Audit complet du 14 novembre 2026. Aucune donnée, aucun réglage, aucune route de l’application ni aucun
+nom d’action ne change ; les comptes, commandes et portefeuilles sont conservés.
+
+(1) Clients — confirmation des retraits et échanges sur les anciens téléphones Android
+* Sur un téléphone dont le navigateur intégré (Facebook, TikTok, application Delicat) date d’avant 2020,
+  le lien « Confirmer mon identité et la transaction » n’apparaissait pas (une boîte blanche vide s’affichait) :
+  le formulaire de retrait ou d’échange restait bloqué sans explication. Le lien s’affiche maintenant sur tous les téléphones.
+* Ce script n’est plus chargé en priorité : il ne retarde plus l’affichage des pages du client connecté.
+
+(2) Clients — pages du compte plus fluides
+* Le suivi du thème clair/sombre ne recalcule plus la page à chaque petit changement fait par le site
+  (menu, défilement bloqué, carrousel) : au plus une fois par image affichée. Défilement plus régulier sur
+  les téléphones modestes.
+* Écran de connexion du Visual Builder ([delicat_auth_panel]) : quand le flou de la carte est réglé sur 0,
+  le navigateur ne prépare plus d’effet de flou invisible (coûteux pour la carte graphique des petits
+  téléphones). Avec un flou choisi, rien ne change.
+* Anciens navigateurs Android (avant 2021) : les icônes des statistiques du compte, l’anneau du score de
+  sécurité, les icônes des Passkeys et le contour de la carte Portefeuille gardent leur taille et leur place
+  (ils disparaissaient ou se déformaient). Rendu identique sur les navigateurs récents.
+
+(3) Sécurité
+* Connexion Google / Microsoft : deux retours simultanés pour la même identité (double toucher, site et
+  application en même temps) ne peuvent plus être traités ensemble. Le verrou passe d’un transient
+  (lecture puis écriture, contournable avec un cache objet) au verrou atomique de la base déjà utilisé par la
+  2FA et les codes e-mail (DIP_Lockout::mutex_acquire, libéré automatiquement après 30 secondes).
+* Audit des routes REST publiques (appairage, Google mobile, renouvellement, connexion rapide, Passkeys),
+  des actions AJAX et admin-post (nonce, droits, méthode POST), des redirections, des requêtes SQL et des
+  sorties HTML : aucune autre faille exploitable trouvée. Points restants listés plus bas (Exploitation).
+
+(4) Technique
+* DIP_Account_Control::upgrade() enregistre les réglages principaux (dglp_settings) en autoload, comme les
+  autres modules ; il les écrivait sans autoload (réparé à la requête suivante, au prix de requêtes en plus).
+* assets/financial-confirmation.js : plus d’Element.replaceChildren() (Chrome/WebView < 86) ; chargé en
+  « defer ».
+* assets/account-theme.js : MutationObserver regroupé par requestAnimationFrame.
+* CSS (customer-dashboard, my-account-modern, passkeys, visual-builder-front, style de la fenêtre de
+  connexion dans auth-shell.js) : « inset » remplacé par top/right/bottom/left (WebView < 87), sans
+  changement visuel.
+* Fichiers de notes par version retirés (CONNEXION-6.17.7-9.12.3.txt, SECURITY-REVIEW-6.15.0.md) : ce qui
+  sert encore est repris dans la section « Exploitation » ci-dessous.
+* Version 6.18.0 (en-tête, DIP_VERSION, marqueur data-dip-engine). Vérification : php -l sur tous les
+  fichiers PHP, node --check sur tous les scripts.
+
+(5) Installation
+* Extensions → Ajouter → Téléverser une extension → delicat-identity-pro-6.18.0.zip → « Remplacer la
+  version actuelle ». Puis LiteSpeed Cache → Boîte à outils → Purger tout, et purger Cloudflare.
 
 == Version 6.17.7 — Fiabilité de la connexion ==
 * Réessai immédiat après un chargement interrompu ; abandon des requêtes bloquées et des réponses trop tardives.
@@ -219,4 +267,39 @@ HTTPS, OpenSSL, API REST et envoi d’e-mails fonctionnels requis pour les méth
 
 La sauvegarde externe et sa restauration réelle se configurent chez l’hébergeur ; le registre du plugin enregistre des déclarations d’administrateur. Aucun déploiement, essai sur iPhone/Android réel ni restauration Hostinger n’a été exécuté dans la préparation de ce ZIP.
 
-Consulter SECURITY-REVIEW-6.15.0.md pour le périmètre, les validations et les limites.
+== Exploitation ==
+
+Après chaque mise à jour
+* Garder une seule copie active de l’extension. Purger LiteSpeed Cache (Boîte à outils → Purger tout) et
+  Cloudflare, fermer puis rouvrir l’application / la PWA, vérifier le numéro de version dans Extensions.
+* Tester déconnecté et en navigation privée, sur iPhone (Safari) et Android (Chrome) : ouvrir le menu,
+  toucher « Se connecter », fermer et rouvrir ; e-mail/mot de passe (une erreur puis la réussite, avec le
+  bon portefeuille) ; Google (annuler puis réussir) ; Passkey (annuler puis autre méthode) ; compte avec
+  2FA (code refusé puis code valide) ; retour arrière/avant après une connexion ; réseau lent ou coupé
+  (le bouton « Réessayer » doit apparaître).
+* Delicat Builder V9 9.12.3 ou plus récent corrige les gestes tactiles du menu qui ouvre la connexion.
+
+Urgence et support
+* Administrateur sans téléphone Authenticator : utiliser un code de récupération hors ligne. Sinon, depuis
+  un accès serveur de confiance : wp delicat identity-2fa-reset <id-utilisateur> (sessions révoquées,
+  nouvel enrôlement obligatoire). Passkeys : wp delicat identity-passkeys-reset <id-utilisateur>. Aucun
+  paramètre public de contournement n’existe.
+* Changement d’e-mail d’un client : le code envoyé à la nouvelle adresse expire après 24 heures, 5 essais
+  au plus, 3 demandes par heure et par client. Il prouve seulement la possession de la nouvelle adresse :
+  le dossier d’identité du support reste obligatoire.
+* Le succès de wp_mail() veut dire que le transport a accepté le message, pas qu’il est arrivé : seul le
+  code reçu lors du test de réception (Protection Identity) le prouve. SPF, DKIM et DMARC se vérifient chez
+  le fournisseur d’envoi.
+* Sauvegardes : fichiers, base de données ET clés/sels de wp-config.php. Sans les mêmes sels, les secrets
+  chiffrés (OAuth, demandes d’e-mail, transactions en attente) ne peuvent pas être restaurés.
+* Trustpilot n’est pas raccordé : les avis affichés par la boutique ne sont pas des avis Trustpilot.
+
+Points connus, non modifiés (6.18.0)
+* wp-login.php : après un mauvais mot de passe, un compte client est renvoyé vers la boutique alors qu’un
+  compte de l’équipe reste sur wp-login.php. Cela révèle qu’un identifiant appartient à l’équipe ; WordPress
+  révèle déjà, sur ce même écran, si un identifiant existe. Masquer la différence changerait le parcours de
+  l’équipe : à décider, avec un renommage ou une protection de wp-login.php côté hébergeur.
+* Quelques règles d’habillage du compte (titres, mode sombre) utilisent :is() et :has(), ignorés par les
+  navigateurs Android d’avant 2021 : la page reste utilisable, avec les couleurs par défaut.
+* La connexion Google de l’application accepte encore un jeton sans « nonce » (applications publiées
+  avant 6.17.5). Rendre le nonce obligatoire demande que toutes les versions en circulation l’envoient.

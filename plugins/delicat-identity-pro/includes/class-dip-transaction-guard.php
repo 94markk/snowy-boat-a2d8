@@ -90,7 +90,8 @@ final class DIP_Transaction_Guard {
         $s['approved']=true;if(!set_transient(self::key($id),$s,max(1,$s['expires']-time())))wp_die('Impossible de sauvegarder la confirmation.','',['response'=>503]);
         wp_safe_redirect(add_query_arg('dip_confirm_transaction',$id,home_url('/')));exit;
     }
-    public static function assets() { if(is_user_logged_in()&&class_exists('DES_Ajax'))wp_enqueue_script('dip-financial-confirmation',DIP_URL.'assets/financial-confirmation.js',[],DIP_VERSION,true); }
+    /** Deferred: it only wraps fetch() for a later form submit, so it never needs to block parsing. */
+    public static function assets() { if(is_user_logged_in()&&class_exists('DES_Ajax'))wp_enqueue_script('dip-financial-confirmation',DIP_URL.'assets/financial-confirmation.js',[],DIP_VERSION,['in_footer'=>true,'strategy'=>'defer']); }
     public static function cleanup() {
         global $wpdb;
         $names=$wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s AND CAST(SUBSTRING_INDEX(option_name,'_',-1) AS UNSIGNED) < %d ORDER BY option_id ASC LIMIT 1000",$wpdb->esc_like('dip_tx_used_').'%',time()));

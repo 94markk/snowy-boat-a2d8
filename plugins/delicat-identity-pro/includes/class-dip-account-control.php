@@ -59,7 +59,8 @@ final class DIP_Account_Control {
         update_option(DIP_Passwordless_Registration::OPTION, $settings, true);
         $security=(array)get_option(DIP_Plugin::OPTION,[]);
         $security['new_device_email']='yes'; $security['trusted_devices_enabled']='yes';
-        update_option(DIP_Plugin::OPTION,$security,false);
+        // Autoloaded like every other writer of the settings (read on each request).
+        update_option(DIP_Plugin::OPTION,$security,true);
         flush_rewrite_rules(false);
         update_option('dip_account_control_revision', self::REVISION, true);
     }

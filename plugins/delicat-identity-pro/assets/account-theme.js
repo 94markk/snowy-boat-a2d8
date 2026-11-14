@@ -91,10 +91,20 @@
   // Called from the head: explicit site <html> flags/known storage work before paint.
   update();
 
+  // 6.18.0: one update per frame. Scroll locks, sliders and menus rewrite the
+  // html/body style attribute many times a second; each mutation used to run
+  // resolve() (26 storage reads, getComputedStyle) on the spot.
+  var queued = 0;
+  function queueUpdate() {
+    if (queued) return;
+    if (typeof window.requestAnimationFrame !== 'function') { update(); return; }
+    queued = window.requestAnimationFrame(function () { queued = 0; update(); });
+  }
+
   function observe() {
     update(); // body classes can be read now
     if (!window.MutationObserver) return;
-    var observer = new MutationObserver(update);
+    var observer = new MutationObserver(queueUpdate);
     var watch = {attributes:true, attributeFilter: ['class', 'style'].concat(themeAttributes)};
     observer.observe(root, watch);
     if (document.body) observer.observe(document.body, watch);
