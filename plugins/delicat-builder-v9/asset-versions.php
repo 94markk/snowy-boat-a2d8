@@ -34,7 +34,7 @@ return array(
  'assets/css/blocks/checkout.css' => '1456f3cb084f',
  'assets/css/blocks/product-collection.css' => '27aefa399e9f',
  'assets/css/bottom-nav.css' => '472c709ad767',
- 'assets/css/chrome-fixes.css' => 'c5a2206b70c3',
+ 'assets/css/chrome-fixes.css' => '5cdddf32edbe',
  'assets/css/currency.css' => '898bacd9b961',
  'assets/css/dark-glass.css' => '6cf7bb430acf',
  'assets/css/dark-mode.css' => 'fe378f156470',

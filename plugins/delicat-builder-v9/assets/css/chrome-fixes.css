@@ -376,3 +376,25 @@ body .wc-block-grid__product-add-to-cart .wp-block-button__link {
 .dsb8-header__row > .dsb8-header__logo .custom-logo-link {
   min-width: 0;
 }
+/* 9.14.4 — Still too wide on iPhone with 9.14.3 (diagnostics: page 1402 px on a 440 px
+   screen, no element box past the edge). What remains is drawn against the window
+   itself: an absolutely positioned element or ::before/::after whose nearest positioned
+   ancestor is the page (another plugin's widget, a decorative layer). body's clip does
+   not reach those. Making body their containing block brings them under body's clip.
+   Customers: body starts at the top-left corner, so nothing moves. Staff on phones: the
+   WordPress toolbar (absolute below 601 px, 46 px margin on html) keeps its place. */
+@supports (overflow: clip) {
+  html body,
+  html body.delicat-native-document,
+  html body.delicat-native-product-document,
+  html body.delicat-native-archive-document {
+    position: relative;
+  }
+}
+@media screen and (max-width: 600px) {
+  @supports (overflow: clip) {
+    html body.admin-bar #wpadminbar {
+      top: -46px;
+    }
+  }
+}

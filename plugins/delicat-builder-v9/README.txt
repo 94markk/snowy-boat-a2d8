@@ -1,3 +1,14 @@
+9.14.4 — Page encore trop large sur iPhone : correctif renforcé + diagnostic précis (15 novembre 2026)
+(1) Le diagnostic de la 9.14.3 a montré la vraie cause : la page mesurait 1402 px sur un écran de 440 px, alors
+qu’aucun élément visible ne dépassait. Ce qui dépasse est donc dessiné « contre la fenêtre » (un élément positionné
+ou un décor ::before/::after d’une extension, par exemple la bulle d’assistance), hors de portée de la protection
+de la 9.14.3. La 9.14.4 fait du corps de la page le cadre de ces éléments : ils sont coupés au bord et Safari ne
+peut plus dézoomer la page. Pour les clients rien ne bouge ; pour l’équipe, la barre WordPress reste à sa place.
+(2) Diagnostic (administrateurs, ?dbv9_turbo_diag=1) : il retire un instant la protection, mesure la largeur réelle
+et suit pas à pas l’élément responsable (cadre, ::before/::after, texte, extension) ; la ligne « Cause » le nomme.
+Technique : chrome-fixes.css, body position:relative (avec le clip de la 9.14.3) et #wpadminbar top:-46px sous
+601 px. Seule la feuille « chrome » change. Après installation : Purge All (LiteSpeed) et CDN.
+
 9.14.3 — Page Compte sur iPhone : plus de page rétrécie (15 novembre 2026)
 (1) Sur iPhone, la page Compte pouvait s’afficher rétrécie : tout le contenu tassé dans le tiers gauche de l’écran,
 le reste vide, et la barre du bas posée sur le pied de page. Cause : un élément qui dépasse le bord droit de l’écran
