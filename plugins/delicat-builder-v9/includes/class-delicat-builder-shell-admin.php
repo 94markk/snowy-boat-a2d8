@@ -441,7 +441,7 @@ final class Delicat_Builder_V9_Shell_Admin {
 			<div class="delicat-shell-admin__shortcodes">
 				<strong><?php esc_html_e( 'Manual header integration', 'delicat-builder-v9' ); ?></strong>
 				<code>[delicat_app_header]</code>
-				<p><?php esc_html_e( 'Use this with a blank/full-width template when you want exact header placement. The universal footer is always placed automatically at the document boundary.', 'delicat-builder-v9' ); ?></p>
+				<p><?php esc_html_e( 'Retired: the native header (Header Studio) and the universal footer are placed automatically at the document boundary. A [delicat_app_header] left in page content prints nothing.', 'delicat-builder-v9' ); ?></p>
 			</div>
 		</div>
 		<?php

@@ -97,6 +97,14 @@ final class Delicat_Builder_V9_SEO {
 		return '';
 	}
 
+	/** V10: the hidden / redirected index (class-delicat-builder-seo-index.php), loaded on first use. */
+	public static function index(): bool {
+		if ( ! class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-seo-index.php' );
+		}
+		return class_exists( 'Delicat_Builder_V9_SEO_Index', false );
+	}
+
 	public static function active(): bool {
 		return (bool) apply_filters( 'delicat_builder_v9_seo_enabled', ! empty( self::settings()['enabled'] ) && '' === self::other_seo_plugin() );
 	}
@@ -110,11 +118,22 @@ final class Delicat_Builder_V9_SEO {
 		/* Sitemaps are built on `init`; these callbacks check active() lazily. */
 		add_filter( 'wp_sitemaps_add_provider', array( __CLASS__, 'sitemap_provider' ), 10, 2 );
 		add_filter( 'wp_sitemaps_posts_query_args', array( __CLASS__, 'sitemap_posts_args' ), 10, 2 );
-		/* 9.9.0 (SEO-02/03/05): hidden pages and categories, duplicates, clean breadcrumbs. */
-		if ( ! class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
-			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-seo-index.php' );
-		}
-		if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
+		/* 9.9.0 (SEO-02/03/05): hidden pages and categories, duplicates, clean breadcrumbs.
+		 * V10: wp-admin only reads the index on the Delicat SEO screen, its save and the page editor's box; every
+		 * other admin request skips its 47 KB. Its front-end hooks (redirects, canonical, breadcrumbs, sitemaps)
+		 * do not apply there; the settings-saved hook does, and loads it then. */
+		if ( is_admin() ) {
+			foreach ( array( 'update_option_', 'add_option_' ) as $prefix ) {
+				add_action(
+					$prefix . self::OPTION,
+					static function (): void {
+						if ( self::index() ) {
+							Delicat_Builder_V9_SEO_Index::settings_saved();
+						}
+					}
+				);
+			}
+		} elseif ( self::index() ) {
 			Delicat_Builder_V9_SEO_Index::boot();
 		}
 		/* 9.10.0: Google title and description per category, and a title pattern for its products. */
@@ -805,7 +824,7 @@ final class Delicat_Builder_V9_SEO {
 			'email'            => sanitize_email( (string) ( $input['email'] ?? '' ) ),
 			'return_days'      => '' === trim( (string) ( $input['return_days'] ?? '' ) ) ? '' : (string) min( 365, absint( $input['return_days'] ) ),
 			'delivery_hours'   => '' === trim( (string) ( $input['delivery_hours'] ?? '' ) ) ? '' : (string) max( 1, min( 720, absint( $input['delivery_hours'] ) ) ),
-		) + ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ? Delicat_Builder_V9_SEO_Index::sanitize( $input, (array) get_option( self::OPTION, array() ) ) : array() );
+		) + ( self::index() ? Delicat_Builder_V9_SEO_Index::sanitize( $input, (array) get_option( self::OPTION, array() ) ) : array() );
 	}
 
 	public static function page(): void {
@@ -838,7 +857,7 @@ final class Delicat_Builder_V9_SEO {
 		$field( 'Retours (fiches produits Google)', '<input type="number" min="0" max="365" step="1" class="small-text" name="' . esc_attr( $opt ) . '[return_days]" value="' . esc_attr( $s['return_days'] ) . '"> jours', 'Indiquez seulement ce que disent vos conditions de vente. Vide : rien n’est déclaré à Google. 0 : pas de retour possible (produits numériques livrés). 7 : retour possible sous 7 jours.' );
 		$field( 'Délai de livraison maximal', '<input type="number" min="1" max="720" step="1" class="small-text" name="' . esc_attr( $opt ) . '[delivery_hours]" value="' . esc_attr( $s['delivery_hours'] ) . '"> heures', 'Livraison numérique en Haïti, sans frais d’envoi. Vide : rien n’est déclaré. Mettez le délai que vous tenez vraiment (ex. 1 pour « en moins d’une heure »).' );
 		echo '</table>';
-		if ( '' === $other && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
+		if ( '' === $other && self::index() ) {
 			Delicat_Builder_V9_SEO_Index::render_settings( $opt );
 		}
 		submit_button();
@@ -861,7 +880,7 @@ final class Delicat_Builder_V9_SEO {
 		echo '<p><label for="delicat-seo-title"><strong>Titre Google</strong> <span class="description">(utilisé tel quel, environ 60 caractères ; vide : titre automatique)</span></label><br><input id="delicat-seo-title" class="widefat" type="text" maxlength="70" name="delicat_seo_title" value="' . esc_attr( $title ) . '" placeholder="Ex. Diamants Free Fire LATAM en Haïti – Livraison rapide"></p>';
 		echo '<p><label for="delicat-seo-desc"><strong>Description Google</strong> <span class="description">(140 à 160 caractères ; vide : description courte du produit)</span></label><br><textarea id="delicat-seo-desc" class="widefat" rows="3" maxlength="300" name="delicat_seo_description" placeholder="Ex. Recharge Free Fire LATAM livrée en quelques minutes en Haïti. Paiement sécurisé, support WhatsApp.">' . esc_textarea( $desc ) . '</textarea></p>';
 		echo '<p class="description" data-delicat-seo-count></p>';
-		if ( 'page' === $post->post_type && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
+		if ( 'page' === $post->post_type && self::index() ) {
 			$original = (string) get_post_meta( $post->ID, Delicat_Builder_V9_SEO_Index::META_CANONICAL, true );
 			echo '<p><label for="delicat-seo-canonical"><strong>Page originale</strong> <span class="description">(seulement si cette page en répète une autre : Google sera renvoyé vers l’originale)</span></label><br><input id="delicat-seo-canonical" class="widefat" type="url" name="delicat_seo_canonical" value="' . esc_attr( $original ) . '" placeholder="' . esc_attr( home_url( '/…/' ) ) . '"></p>';
 		}
@@ -882,7 +901,7 @@ final class Delicat_Builder_V9_SEO {
 		$desc  = isset( $_POST['delicat_seo_description'] ) ? sanitize_textarea_field( wp_unslash( (string) $_POST['delicat_seo_description'] ) ) : '';
 		'' !== $title ? update_post_meta( $post_id, self::META_TITLE, $title ) : delete_post_meta( $post_id, self::META_TITLE );
 		'' !== $desc ? update_post_meta( $post_id, self::META_DESC, $desc ) : delete_post_meta( $post_id, self::META_DESC );
-		if ( 'page' === $post->post_type && class_exists( 'Delicat_Builder_V9_SEO_Index', false ) && isset( $_POST['delicat_seo_canonical'] ) ) {
+		if ( 'page' === $post->post_type && isset( $_POST['delicat_seo_canonical'] ) && self::index() ) {
 			$typed    = trim( wp_unslash( (string) $_POST['delicat_seo_canonical'] ) );
 			$original = esc_url_raw( 0 === strpos( $typed, '/' ) && 0 !== strpos( $typed, '//' ) ? home_url( $typed ) : $typed );
 			/* this site only (with or without « www »), and never the page itself */

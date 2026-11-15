@@ -151,7 +151,7 @@ final class Delicat_Builder_V9_App_Tuning {
 			return;
 		}
 		?>
-<script id="delicat-builder-v9-app-tuning-boot">
+<script id="delicat-builder-v9-app-tuning-boot" data-no-optimize="1" data-no-delay="1" data-cfasync="false"><?php /* V10: never delayed by LiteSpeed / Cloudflare; see Audit_Fixes::buffer(). */ ?>
 (function(){
 var r=document.documentElement,n=navigator||{},
 c=n.connection||n.mozConnection||n.webkitConnection||null,

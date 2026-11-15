@@ -22,6 +22,8 @@ final class Delicat_Builder_V9_Event_Promos {
 
 	public const OPTION = 'delicat_builder_v9_event_promos';
 	public const PAGE   = 'delicat-builder-v9-promos';
+	/** V10: LiteSpeed tag of the public /promos JSON, purged whenever the owner changes an event. */
+	public const CACHE_TAG = 'dbv9_promos';
 
 	public static function boot(): void {
 		add_filter( 'woocommerce_coupon_is_valid', array( __CLASS__, 'coupon_is_valid' ), 20, 3 );
@@ -46,6 +48,8 @@ final class Delicat_Builder_V9_Event_Promos {
 		$before = self::storefront_needed();
 		update_option( self::OPTION, $events, false );
 		update_option( self::UNTIL, self::until( $events ), true );
+		/* V10 (security review #3): an event saved, disabled or re-enabled is in the public JSON at once. */
+		do_action( 'litespeed_purge', self::CACHE_TAG );
 		/* 9.14.0 (J-M4): the first scheduled event puts the promo files on every page: pages cached without them
 		 * are purged once. Disabling or ending events purges nothing (the JSON simply lists nothing). */
 		if ( ! $before && self::storefront_needed() ) {
@@ -154,6 +158,12 @@ final class Delicat_Builder_V9_Event_Promos {
 		$response = new WP_REST_Response( array( 'promos' => self::running() ) );
 		/* a short public cache: a banner appears or goes within a minute of its dates */
 		$response->header( 'Cache-Control', 'public, max-age=60' );
+		/* V10 (security review #3): LiteSpeed keeps REST answers for its own REST TTL (7 days by
+		 * default) unless told, so an ended or disabled code stayed advertised and a starting
+		 * event's banner never came. Held to the same minute, and tagged for the purge in store():
+		 * a start, an end or a used-up code shows within 60 s without any scheduled purge. */
+		do_action( 'litespeed_control_set_ttl', 60 );
+		do_action( 'litespeed_tag_add', self::CACHE_TAG );
 		return $response;
 	}
 

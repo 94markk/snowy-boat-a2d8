@@ -22,6 +22,8 @@ final class Delicat_Builder_V9_Multi_Currency {
 
 	private static ?self $instance = null;
 	private bool $booted = false;
+	/** V10: the per-price converters are attached (attach_converters()). */
+	private bool $converters = false;
 	private ?string $choice = null;
 	private ?string $current = null;
 	private bool $switcher_assets_enqueued = false;
@@ -133,23 +135,36 @@ final class Delicat_Builder_V9_Multi_Currency {
 		add_action( 'update_option_woocommerce_currency', array( $this, 'reset_option_caches' ), 1, 0 );
 		add_action( 'update_option_woocommerce_currency', array( $this, 'sync_base' ), 10, 0 );
 
-		add_filter( 'woocommerce_currency', array( $this, 'filter_currency' ), 99 );
+		$converting = $this->conversion_possible();
+		if ( 'off' !== $converting ) {
+			add_filter( 'woocommerce_currency', array( $this, 'filter_currency' ), 99 );
+		}
+		/* The symbol filter is not gated by the switch: the stored symbol of the store currency applies either way. */
 		add_filter( 'woocommerce_currency_symbol', array( $this, 'filter_symbol' ), 99, 2 );
-		add_filter( 'wc_get_price_decimals', array( $this, 'filter_decimals' ), 99 );
-		add_filter( 'woocommerce_price_format', array( $this, 'filter_price_format' ), 99, 2 );
+		if ( 'off' !== $converting ) {
+			add_filter( 'wc_get_price_decimals', array( $this, 'filter_decimals' ), 99 );
+			add_filter( 'woocommerce_price_format', array( $this, 'filter_price_format' ), 99, 2 );
+		}
 
-		add_filter( 'woocommerce_product_get_price', array( $this, 'convert_product_price' ), 99, 2 );
-		add_filter( 'woocommerce_product_get_regular_price', array( $this, 'convert_product_price' ), 99, 2 );
-		add_filter( 'woocommerce_product_get_sale_price', array( $this, 'convert_product_price' ), 99, 2 );
-		add_filter( 'woocommerce_product_variation_get_price', array( $this, 'convert_product_price' ), 99, 2 );
-		add_filter( 'woocommerce_product_variation_get_regular_price', array( $this, 'convert_product_price' ), 99, 2 );
-		add_filter( 'woocommerce_product_variation_get_sale_price', array( $this, 'convert_product_price' ), 99, 2 );
-		add_filter( 'woocommerce_variation_prices_price', array( $this, 'convert_variation_price' ), 99, 3 );
-		add_filter( 'woocommerce_variation_prices_regular_price', array( $this, 'convert_variation_price' ), 99, 3 );
-		add_filter( 'woocommerce_variation_prices_sale_price', array( $this, 'convert_variation_price' ), 99, 3 );
-		add_filter( 'woocommerce_get_variation_prices_hash', array( $this, 'variation_prices_hash' ), 99 );
-		add_filter( 'woocommerce_package_rates', array( $this, 'convert_shipping' ), 99 );
-		add_filter( 'woocommerce_coupon_get_amount', array( $this, 'convert_coupon' ), 99, 2 );
+		/* V10: the price converters run on every price read of every product. They change nothing when the module
+		 * is switched off (each returns its input when conversion_active() is false) or when the store currency is
+		 * the only one enabled (each returns its input when the shown currency is the store's), so they are not
+		 * attached then. A plugin that hooks dmc_current_currency after this boot still gets them, at the end of
+		 * init, before WooCommerce loads the cart (wp_loaded). The checkout guards and the order stamp below stay
+		 * attached in every case. */
+		if ( 'on' === $converting ) {
+			$this->attach_converters();
+		} elseif ( 'base' === $converting ) {
+			add_action(
+				'init',
+				function (): void {
+					if ( has_filter( 'dmc_current_currency' ) ) {
+						$this->attach_converters();
+					}
+				},
+				PHP_INT_MAX
+			);
+		}
 
 		add_action( 'woocommerce_review_order_before_payment', array( $this, 'settlement_notice' ) );
 		add_action( 'wp', array( $this, 'settle_page' ), 1 );
@@ -176,6 +191,42 @@ final class Delicat_Builder_V9_Multi_Currency {
 		add_action( 'init', array( $this, 'ensure_cron' ), 20 );
 		add_action( 'update_option_' . self::SETTINGS_OPTION, array( $this, 'reschedule' ), 10, 2 );
 		add_action( 'admin_post_delicat_builder_v9_dmc_update_rates', array( $this, 'admin_update_rates' ) );
+	}
+
+	/**
+	 * V10: 'off' when the module is switched off (no conversion anywhere), 'base' when the store currency is the
+	 * only one enabled and nothing else can choose the shown currency, 'on' otherwise. Settings are re-read on the
+	 * next request after a save, so enabling a second currency attaches the converters from then on.
+	 */
+	private function conversion_possible(): string {
+		if ( 'yes' !== ( $this->settings()['enabled'] ?? 'yes' ) ) {
+			return 'off';
+		}
+		$enabled = array_map( 'strtoupper', array_map( 'strval', array_keys( $this->enabled_currencies() ) ) );
+		if ( array( $this->base_code() ) === $enabled && ! has_filter( 'dmc_current_currency' ) ) {
+			return 'base';
+		}
+		return 'on';
+	}
+
+	/** V10: the per-price converters (see init()); attached once. */
+	private function attach_converters(): void {
+		if ( $this->converters ) {
+			return;
+		}
+		$this->converters = true;
+		add_filter( 'woocommerce_product_get_price', array( $this, 'convert_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_product_get_regular_price', array( $this, 'convert_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_product_get_sale_price', array( $this, 'convert_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_product_variation_get_price', array( $this, 'convert_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_product_variation_get_regular_price', array( $this, 'convert_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_product_variation_get_sale_price', array( $this, 'convert_product_price' ), 99, 2 );
+		add_filter( 'woocommerce_variation_prices_price', array( $this, 'convert_variation_price' ), 99, 3 );
+		add_filter( 'woocommerce_variation_prices_regular_price', array( $this, 'convert_variation_price' ), 99, 3 );
+		add_filter( 'woocommerce_variation_prices_sale_price', array( $this, 'convert_variation_price' ), 99, 3 );
+		add_filter( 'woocommerce_get_variation_prices_hash', array( $this, 'variation_prices_hash' ), 99 );
+		add_filter( 'woocommerce_package_rates', array( $this, 'convert_shipping' ), 99 );
+		add_filter( 'woocommerce_coupon_get_amount', array( $this, 'convert_coupon' ), 99, 2 );
 	}
 
 	public static function default_settings(): array {

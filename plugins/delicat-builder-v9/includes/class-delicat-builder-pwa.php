@@ -23,11 +23,6 @@ final class Delicat_Builder_V9_PWA {
 		return wp_parse_args( is_array( $saved ) ? $saved : array(), self::defaults() );
 	}
 
-	public static function is_booted(): bool {
-		$s = self::settings();
-		return self::$booted && ! empty( $s['enabled'] );
-	}
-
 	public static function boot(): void {
 		if ( self::$booted ) { return; }
 		self::$booted = true;

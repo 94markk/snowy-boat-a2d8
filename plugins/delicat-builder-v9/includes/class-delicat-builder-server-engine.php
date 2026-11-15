@@ -17,13 +17,17 @@ if ( ! defined( 'ABSPATH' ) ) {
 final class Delicat_Builder_V9_Server_Engine {
 	private static bool $native_request = false;
 	private static string $cache_state = 'BYPASS';
+	/** V10: the owner of this request, worked out once the main query has run (it was recomputed ~5 times). */
+	private static ?int $page_target = null;
+	private static ?int $product_target = null;
 
 	public static function boot(): void {
 		add_filter( 'template_include', array( __CLASS__, 'template_include' ), 99990 );
 		add_action( 'template_redirect', array( __CLASS__, 'prepare_cache_policy' ), 3 );
 		add_filter( 'body_class', array( __CLASS__, 'body_class' ), 90 );
 		add_action( 'wp_head', array( __CLASS__, 'print_shell_css' ), 0 );
-		add_action( 'send_headers', array( __CLASS__, 'send_runtime_headers' ), 50 );
+		/* V10: send_runtime_headers() is gone. WordPress fires send_headers before the main query, so it never
+		 * found a target and never sent anything; had it run, X-Delicat-V9-Object-Cache told anyone the cache stack. */
 	}
 
 	private static function settings(): array {
@@ -53,6 +57,17 @@ final class Delicat_Builder_V9_Server_Engine {
 	}
 
 	public static function current_page_id(): int {
+		if ( null !== self::$page_target ) {
+			return self::$page_target;
+		}
+		$page_id = self::resolve_page_id();
+		if ( did_action( 'wp' ) ) {
+			self::$page_target = $page_id;
+		}
+		return $page_id;
+	}
+
+	private static function resolve_page_id(): int {
 		if ( ! self::request_allowed() || ! is_singular( 'page' ) ) {
 			return 0;
 		}
@@ -72,6 +87,17 @@ final class Delicat_Builder_V9_Server_Engine {
 	 * ride the same native fast path as managed pages.
 	 */
 	public static function current_product_id(): int {
+		if ( null !== self::$product_target ) {
+			return self::$product_target;
+		}
+		$product_id = self::resolve_product_id();
+		if ( did_action( 'wp' ) ) {
+			self::$product_target = $product_id;
+		}
+		return $product_id;
+	}
+
+	private static function resolve_product_id(): int {
 		if ( ! self::request_allowed() || ! is_singular( 'product' ) ) {
 			return 0;
 		}
@@ -135,97 +161,16 @@ final class Delicat_Builder_V9_Server_Engine {
 		}
 	}
 
-	/** Template entry point: renders whichever surface owns this request. */
-	public static function render_current(): string {
-		if ( self::current_page_id() > 0 ) {
-			return self::render_current_page();
-		}
-		if ( self::current_product_id() > 0 ) {
-			return self::render_current_product();
-		}
-		return '';
-	}
-
 	/**
-	 * RC51.37: native Product Builder 74 render with an anonymous fragment
-	 * cache. The cache key embeds price, stock status and the product's
-	 * modified time, so a price/stock edit rotates the key on the very next
-	 * request — no manual purge needed. As defense-in-depth, any fragment
-	 * whose markup contains a nonce-like token is never cached: whatever a
-	 * checkout bridge injects into the form can never leak between visitors.
+	 * Template entry point: renders whichever surface owns this request.
+	 *
+	 * V10: only managed pages. Product documents belong to Native Product, whose template_include runs at
+	 * PHP_INT_MAX and replaces this engine's template; the product branch that used to sit here built a cache key,
+	 * read the object cache and then returned '' because the renderer it called (delicat_builder_v9_spb_render)
+	 * exists nowhere. Products keep their page-cache hint and body classes (current_product_id()).
 	 */
-	public static function render_current_product(): string {
-		$product_id = self::current_product_id();
-		if ( $product_id <= 0 || ! function_exists( 'wc_get_product' ) ) {
-			return '';
-		}
-		$product = wc_get_product( $product_id );
-		if ( ! $product ) {
-			return '';
-		}
-
-		$cacheable = self::fragment_cache_allowed();
-		$key = '';
-		if ( $cacheable ) {
-			$spb_settings = function_exists( 'delicat_builder_v9_spb_effective' ) ? delicat_builder_v9_spb_effective( $product_id ) : array();
-			$currency = function_exists( 'get_woocommerce_currency' ) ? (string) get_woocommerce_currency() : '';
-			$modified = $product->get_date_modified();
-			$payload = array(
-				'product'  => $product_id,
-				'modified' => $modified ? $modified->getTimestamp() : 0,
-				'price'    => (string) $product->get_price(),
-				'stock'    => (string) $product->get_stock_status(),
-				/* RC65: the fragment shows the product's reviews (RC63 block +
-				 * Product JSON-LD). Approval changes the review count; the
-				 * reviews module stamps `_dlc_reviews_stamp` on every approval,
-				 * edit or insert, so an edited review misses the cache too. */
-				'reviews'  => (string) $product->get_review_count() . ':' . (string) $product->get_average_rating() . ':' . (string) get_post_meta( $product_id, '_dlc_reviews_stamp', true ),
-				'spb'      => hash( 'sha256', (string) wp_json_encode( $spb_settings ) ),
-				'locale'   => determine_locale(),
-				'currency' => $currency,
-				'version'  => defined( 'DELICAT_BUILDER_V9_VERSION' ) ? DELICAT_BUILDER_V9_VERSION : '',
-			) + self::fragment_vary();
-			$key = class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'key' ) )
-				? Delicat_Builder_V9_Cache::key( 'server_product', $payload )
-				: 'dbv9_srvp_' . substr( hash( 'sha256', (string) wp_json_encode( $payload ) ), 0, 40 );
-
-			$cached = wp_cache_get( $key, 'delicat_builder_v9_server' );
-			if ( false === $cached && ( ! function_exists( 'wp_using_ext_object_cache' ) || ! wp_using_ext_object_cache() ) ) {
-				$cached = get_transient( $key );
-			}
-			if ( is_string( $cached ) && '' !== $cached ) {
-				self::$cache_state = 'HIT';
-				return $cached;
-			}
-		}
-
-		if ( ! function_exists( 'delicat_builder_v9_spb_render' ) ) {
-			/* 9.3: there is no server-engine product renderer; Native_Product owns
-			 * product documents. Returning '' hands the request to the template. */
-			return '';
-		}
-		try {
-			$html = (string) delicat_builder_v9_spb_render( array( 'product_id' => $product_id ) );
-		} catch ( Throwable $error ) {
-			self::record_failure( 'render_product', $error );
-			return '';
-		}
-		if ( '' === $html ) {
-			return '';
-		}
-
-		if ( $cacheable && '' !== $key && self::fragment_is_shareable( $html ) ) {
-			$ttl = self::fragment_ttl();
-			wp_cache_set( $key, $html, 'delicat_builder_v9_server', $ttl );
-			if ( ! function_exists( 'wp_using_ext_object_cache' ) || ! wp_using_ext_object_cache() ) {
-				set_transient( $key, $html, $ttl );
-			}
-			self::$cache_state = 'MISS';
-		} else {
-			self::$cache_state = 'BYPASS';
-		}
-
-		return $html;
+	public static function render_current(): string {
+		return self::current_page_id() > 0 ? self::render_current_page() : '';
 	}
 
 	/**
@@ -566,18 +511,6 @@ final class Delicat_Builder_V9_Server_Engine {
 		}
 	}
 
-
-	public static function send_runtime_headers(): void {
-		if ( headers_sent() || self::current_target_id() <= 0 ) {
-			return;
-		}
-		header( 'X-Delicat-V9-SSR: 1' );
-		$s = self::settings();
-		header( 'X-Delicat-V9-Shell: ' . ( ( isset( $s['server_shell_mode'] ) && 'v9' === $s['server_shell_mode'] ) ? 'native' : 'theme' ) );
-		header( 'X-Delicat-V9-Islands: ' . ( ! empty( $s['islands_mode'] ) ? '1' : '0' ) );
-		$object_cache = function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() ? 'persistent' : 'transient';
-		header( 'X-Delicat-V9-Object-Cache: ' . $object_cache );
-	}
 
 	public static function print_shell_css(): void {
 		if ( self::current_target_id() <= 0 ) {

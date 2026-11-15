@@ -531,7 +531,6 @@ html:where(:not([data-delicat-theme="dark"])) body.dbp-type {
    hand-written greys were already aiming. */
 html body.dbp-type .delicat-process__card p,
 html body.dbp-type .delicat-why__card p,
-html body.dbp-type .delicat-testimonials__copy,
 html body.dbp-type .delicat-faq__answer,
 html body.dbp-type .woocommerce-result-count,
 html body.dbp-type .woocommerce-breadcrumb,
@@ -547,7 +546,6 @@ html body.dbp-type .delicat-category-tile__copy small {
 html body.dbp-type .delicat-product-card,
 html body.dbp-type .delicat-process__card,
 html body.dbp-type .delicat-why__card,
-html body.dbp-type .delicat-testimonials__card,
 html body.dbp-type .delicat-faq__item,
 html body.dbp-type .woocommerce ul.products li.product {
   border-radius: var(--dr-lg) !important;
@@ -610,13 +608,11 @@ html.delicat-save-data body.dbp-type .delicat-product-card,
 html.delicat-save-data body.dbp-type .delicat-category-tile,
 html.delicat-save-data body.dbp-type .delicat-process__card,
 html.delicat-save-data body.dbp-type .delicat-why__card,
-html.delicat-save-data body.dbp-type .delicat-testimonials__card,
 html.delicat-save-data body.dbp-type .dsb8-header,
 html.delicat-low-power body.dbp-type .delicat-product-card,
 html.delicat-low-power body.dbp-type .delicat-category-tile,
 html.delicat-low-power body.dbp-type .delicat-process__card,
 html.delicat-low-power body.dbp-type .delicat-why__card,
-html.delicat-low-power body.dbp-type .delicat-testimonials__card,
 html.delicat-low-power body.dbp-type .dsb8-header {
   box-shadow: none !important;
 }

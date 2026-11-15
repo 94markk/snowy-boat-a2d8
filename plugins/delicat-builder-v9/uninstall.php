@@ -14,6 +14,43 @@ if ( defined( 'WPMU_PLUGIN_DIR' ) && is_file( WPMU_PLUGIN_DIR . '/delicat-guard.
 }
 
 /*
+ * V10 (security review #6): credentials and personal push data, only on explicit request.
+ * Like Delicat Digital Gateway (DELICAT_DIGITAL_PURGE_ON_UNINSTALL), uninstall stays
+ * non-destructive unless wp-config.php says:
+ *
+ *     define( 'DELICAT_BUILDER_V9_PURGE_ON_UNINSTALL', true );
+ *
+ * Then the sealed secrets (they open with wp-config's salts, so a database copy plus
+ * wp-config would still read them after the plugin is gone) and the Web Push subscriptions
+ * (endpoints, keys, account ids) are deleted. Layout, design and every other setting stay
+ * for a rollback or reinstall; payment intents and review votes are not touched.
+ */
+if ( defined( 'DELICAT_BUILDER_V9_PURGE_ON_UNINSTALL' ) && true === DELICAT_BUILDER_V9_PURGE_ON_UNINSTALL ) {
+	foreach ( array(
+		'delicat_builder_v9_vapid_private_enc',                 // Web Push VAPID private key (sealed)
+		'delicat_builder_v9_vapid_public',                      // its public half: useless alone, and blocks a fresh pair
+		'delicat_builder_v9_web_push_db_version',               // the table below is dropped
+		'delicat_builder_v9_notification_service_account_enc',  // Firebase service account (sealed)
+		'dsb_notification_service_account',                     // legacy plaintext copy
+		'dsb_notification_fcm_server_key',                      // legacy FCM server key
+		'dsb_notification_app_key',                             // app shared key
+		'dsb_notification_devices',                             // FCM device tokens
+	) as $delicat_builder_v9_option ) {
+		delete_option( $delicat_builder_v9_option );
+	}
+	delete_transient( 'dbv9_notification_google_access_token' );
+	/* Cloudflare: the API token goes, the zone and switches stay. */
+	$delicat_builder_v9_cf = get_option( 'delicat_builder_v9_cloudflare', null );
+	if ( is_array( $delicat_builder_v9_cf ) && ( isset( $delicat_builder_v9_cf['api_token'] ) || isset( $delicat_builder_v9_cf['api_token_encrypted'] ) ) ) {
+		unset( $delicat_builder_v9_cf['api_token'], $delicat_builder_v9_cf['api_token_encrypted'] );
+		update_option( 'delicat_builder_v9_cloudflare', $delicat_builder_v9_cf, false );
+	}
+	global $wpdb;
+	$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}delicat_push_subscriptions" ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared,WordPress.DB.DirectDatabaseQuery.SchemaChange -- fixed table name.
+	unset( $delicat_builder_v9_option, $delicat_builder_v9_cf );
+}
+
+/*
  * Beta 1 intentionally preserves settings on uninstall to support rollback/reinstall.
  * To remove data manually, delete:
  * - delicat_builder_v9_settings

@@ -68,9 +68,122 @@ final class Delicat_Builder_V9_SEO_Index {
 		/* the stamp the plugin's bootstrap renews on every change (delicat_builder_v9_seo_index_stale) */
 		$gen    = function_exists( 'delicat_builder_v9_seo_index_generation' ) ? delicat_builder_v9_seo_index_generation() : '';
 		$cached = get_transient( self::CACHE );
-		if ( is_array( $cached ) && isset( $cached['posts'], $cached['terms'], $cached['paths'], $cached['targets'], $cached['supplier_auto'] ) && ( $cached['gen'] ?? null ) === $gen ) {
+		$usable = is_array( $cached ) && isset( $cached['posts'], $cached['terms'], $cached['paths'], $cached['targets'], $cached['supplier_auto'] );
+		if ( $usable && ( $cached['gen'] ?? null ) === $gen && ( time() - (int) ( $cached['built'] ?? 0 ) ) < self::FRESH ) {
 			return self::$map = $cached;
 		}
+		/*
+		 * V10: a change (or a map older than FRESH) no longer rebuilds on the shopper's request, once per concurrent
+		 * shopper. The map that was valid until the change keeps being served while one background job (Action
+		 * Scheduler) rebuilds it. When there is no map at all, when no queue is available, or when the queued job has
+		 * not run within QUEUE_GRACE, ONE request rebuilds it here under a lock.
+		 */
+		if ( $usable && self::queue_rebuild( $gen ) ) {
+			return self::$map = $cached;
+		}
+		if ( ! self::lock() ) {
+			if ( $usable ) {
+				return self::$map = $cached; // the request holding the lock is rebuilding it
+			}
+			/* Nothing to serve yet: this request answers without hidden or redirected items, and its page must
+			 * not be kept by any cache. The next request reads the map the lock holder stores. */
+			if ( function_exists( 'delicat_builder_v9_no_store' ) ) {
+				delicat_builder_v9_no_store( 'seo index building' );
+			}
+			return self::$map = array( 'posts' => array(), 'terms' => array(), 'paths' => array(), 'targets' => array(), 'supplier_auto' => 0, 'gen' => $gen, 'built' => 0 );
+		}
+		try {
+			return self::build( $gen );
+		} finally {
+			self::unlock();
+		}
+	}
+
+	/** Seconds a stored map counts as fresh when nothing changed (it used to expire after 12 hours). */
+	const FRESH = 12 * HOUR_IN_SECONDS;
+	/** Seconds a queued rebuild may wait before a request rebuilds the map itself. */
+	const QUEUE_GRACE = 10 * MINUTE_IN_SECONDS;
+	/** Action Scheduler hook and group of the background rebuild (the bootstrap maps the hook to this file). */
+	const REBUILD_HOOK  = 'delicat_builder_v9_seo_index_rebuild';
+	const REBUILD_GROUP = 'delicat-builder-v9';
+	const LOCK          = 'dlc_seo_index_lock';
+
+	/**
+	 * Queue one background rebuild for this stamp. True while a rebuild is queued and still within its grace time.
+	 */
+	private static function queue_rebuild( string $gen ): bool {
+		if ( ! function_exists( 'as_enqueue_async_action' ) || ! did_action( 'action_scheduler_init' ) ) {
+			return false;
+		}
+		$queued = get_transient( self::CACHE . '_queued' );
+		if ( is_array( $queued ) && ( $queued['gen'] ?? null ) === $gen ) {
+			return ( time() - (int) ( $queued['at'] ?? 0 ) ) < self::QUEUE_GRACE;
+		}
+		try {
+			$pending = function_exists( 'as_has_scheduled_action' ) && as_has_scheduled_action( self::REBUILD_HOOK, array(), self::REBUILD_GROUP );
+			if ( ! $pending && (int) as_enqueue_async_action( self::REBUILD_HOOK, array(), self::REBUILD_GROUP ) <= 0 ) {
+				return false;
+			}
+		} catch ( Throwable $error ) {
+			unset( $error );
+			return false;
+		}
+		set_transient( self::CACHE . '_queued', array( 'gen' => $gen, 'at' => time() ), DAY_IN_SECONDS );
+		return true;
+	}
+
+	/** The background job: rebuild the map for the current stamp, unless another request is already doing it. */
+	public static function rebuild_job(): void {
+		if ( ! class_exists( 'Delicat_Builder_V9_SEO', false ) ) {
+			return;
+		}
+		$gen    = function_exists( 'delicat_builder_v9_seo_index_generation' ) ? delicat_builder_v9_seo_index_generation() : '';
+		$cached = get_transient( self::CACHE );
+		if ( is_array( $cached ) && ( $cached['gen'] ?? null ) === $gen && ( time() - (int) ( $cached['built'] ?? 0 ) ) < self::FRESH ) {
+			delete_transient( self::CACHE . '_queued' );
+			return; // a request already rebuilt it
+		}
+		if ( ! self::lock() ) {
+			return;
+		}
+		try {
+			self::forget();
+			self::build( $gen );
+		} finally {
+			self::unlock();
+		}
+	}
+
+	/**
+	 * One rebuild at a time across requests: INSERT IGNORE on the unique option name is atomic in MySQL (add_option()
+	 * is not: it ends in ON DUPLICATE KEY UPDATE). A lock older than two minutes is a crashed build and is taken over.
+	 * The row is never read through the options API, so no option cache is involved.
+	 */
+	private static function lock(): bool {
+		global $wpdb;
+		if ( ! isset( $wpdb ) || ! is_object( $wpdb ) ) {
+			return true;
+		}
+		$now = (string) time();
+		if ( 1 === (int) $wpdb->query( $wpdb->prepare( "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", self::LOCK, $now ) ) ) {
+			return true;
+		}
+		$since = (string) $wpdb->get_var( $wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::LOCK ) );
+		if ( '' !== $since && ( time() - (int) $since ) < 120 ) {
+			return false;
+		}
+		return 1 === (int) $wpdb->query( $wpdb->prepare( "UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s", $now, self::LOCK, $since ) );
+	}
+
+	private static function unlock(): void {
+		global $wpdb;
+		if ( isset( $wpdb ) && is_object( $wpdb ) ) {
+			$wpdb->query( $wpdb->prepare( "DELETE FROM {$wpdb->options} WHERE option_name = %s", self::LOCK ) );
+		}
+	}
+
+	/** Compute the map for stamp $gen, keep it for this request and store it. */
+	private static function build( string $gen ): array {
 		$reco      = self::recommend();
 		$overrides = self::overrides();
 		$protected = self::protected_ids();
@@ -117,8 +230,10 @@ final class Delicat_Builder_V9_SEO_Index {
 			}
 		}
 		unset( $paths[''], $paths['/'], $targets[''], $targets['/'] );
-		self::$map = array( 'posts' => $posts, 'terms' => $terms, 'paths' => $paths, 'targets' => $targets, 'supplier_auto' => (int) $reco['supplier_auto'], 'gen' => $gen );
-		set_transient( self::CACHE, self::$map, 12 * HOUR_IN_SECONDS );
+		self::$map = array( 'posts' => $posts, 'terms' => $terms, 'paths' => $paths, 'targets' => $targets, 'supplier_auto' => (int) $reco['supplier_auto'], 'gen' => $gen, 'built' => time() );
+		/* V10: kept a week; FRESH (12 h) decides when it is rebuilt, so an older map is served while the job runs. */
+		set_transient( self::CACHE, self::$map, WEEK_IN_SECONDS );
+		delete_transient( self::CACHE . '_queued' );
 		return self::$map;
 	}
 
@@ -425,6 +540,7 @@ final class Delicat_Builder_V9_SEO_Index {
 	public static function flush(): void {
 		self::forget();
 		delete_transient( self::CACHE );
+		delete_transient( self::CACHE . '_queued' );
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -775,6 +891,12 @@ final class Delicat_Builder_V9_SEO_Index {
 	/** New choices change robots tags, menus and redirects inside cached pages: start them over. */
 	public static function settings_saved(): void {
 		self::flush();
+		/* V10: the owner's new choices are built here, on the saving request, so the storefront never starts cold. */
+		try {
+			self::map();
+		} catch ( Throwable $error ) {
+			unset( $error );
+		}
 		if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'bump_version' ) ) ) {
 			Delicat_Builder_V9_Cache::bump_version();
 		}

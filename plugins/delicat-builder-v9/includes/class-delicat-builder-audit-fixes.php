@@ -180,14 +180,32 @@ final class Delicat_Builder_V9_Audit_Fixes {
  }
  public static function buffer(): void {
   if ( is_admin() || wp_doing_ajax() || is_feed() || is_embed() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) || isset( $_GET['wc-ajax'] ) || isset( $_GET['dbp_fragment'] ) ) { return; }
+  /* V10: one pass per page. When LiteSpeed's output buffer runs (Hostinger), it hands the finished document to
+   * litespeed_buffer_after once its optimizer is done, and that is the pass that can correct what the optimizer
+   * did; this inner buffer walked the same document a second time just before. It now runs only when LiteSpeed's
+   * buffer is absent (LiteSpeed off, or bypassed for this request). What the early walk did BEFORE the optimizer
+   * now comes from the markup itself: every boot script carries data-no-optimize / data-no-delay where it is
+   * printed (wp_inline_script_attributes below, and the two hand-written boots in Header Runtime and App Tuning),
+   * and eager / high-priority attachment images carry data-no-lazy (image_attributes()). */
+  if ( self::litespeed_buffer_active() ) { return; }
   ob_start( array( __CLASS__, 'document' ) );
  }
+ /** Is LiteSpeed Cache's own output buffer (Core::send_headers_force, which applies litespeed_buffer_after) open? */
+ private static function litespeed_buffer_active(): bool {
+  if ( ! defined( 'LSCWP_V' ) && ! class_exists( 'LiteSpeed\\Core', false ) ) { return false; }
+  foreach ( (array) ob_list_handlers() as $handler ) {
+   if ( false !== stripos( (string) $handler, 'litespeed' ) ) { return true; }
+  }
+  return false;
+ }
+ /** Boot scripts that must run at once: never delayed, combined or retyped by LiteSpeed. */
+ const BOOTS = array( 'delicat-builder-v9-session-js-before', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dip-identity-modal-v4-js-extra', 'dbp-nav-js-before', 'dbp-state-js-before', 'delicat-engine-js-before', 'delicat-engine-footer-js-before', 'delicat-engine-js' );
  /** Only known storefront tags are touched; scripts, JSON and user content remain intact. */
  public static function document( $html ) {
   if ( ! is_string( $html ) || false === stripos( $html, '<body' ) || false === stripos( $html, '</html>' ) ) { return $html; }
   $wallet = function_exists( 'is_page' ) && is_page( array( 'my-wallet', 'wallet' ) );
   $wallet = $wallet || ( function_exists( 'is_wc_endpoint_url' ) && is_wc_endpoint_url( 'woo-wallet' ) );
-  if ( ! $wallet ) {
+  if ( ! $wallet && false !== strpos( $html, 'delicat-wallet-tour-' ) ) {
    // The audited tour prints directly instead of using a dequeuable script handle.
    $html = preg_replace( '~<(script|style)\b(?=[^>]*\bid=["\']delicat-wallet-tour-(?:js|css)["\'])[^>]*>.*?</\1\s*>~is', '', $html ) ?? $html;
   }
@@ -197,13 +215,13 @@ final class Delicat_Builder_V9_Audit_Fixes {
   }
   if ( ! class_exists( 'WP_HTML_Tag_Processor' ) ) { return $html; }
   $litespeed = defined( 'LSCWP_V' ) || class_exists( 'LiteSpeed\\Core', false );
+  $head_end  = stripos( $html, '</head>' );
   if ( ! $litespeed && class_exists( 'Delicat_Builder_V9_Engine', false ) && is_callable( array( 'Delicat_Builder_V9_Engine', 'active' ) ) && Delicat_Builder_V9_Engine::active() ) {
    /* 9.3: no LiteSpeed means no combined artefact, no delayed boot script and
     * no lazy-loader to correct, and the engine's own files are content
     * addressed. Walking 900 tags for nothing cost ~7 ms per page; the head is
     * the only place a plugin URL can still be printed outside the enqueue
     * system (preloads), so that part alone is rewritten. */
-   $head_end = stripos( $html, '</head>' );
    if ( false === $head_end ) { return $html; }
    $head = new WP_HTML_Tag_Processor( substr( $html, 0, $head_end ) );
    while ( $head->next_tag() ) {
@@ -214,12 +232,20 @@ final class Delicat_Builder_V9_Audit_Fixes {
    }
    return $head->get_updated_html() . substr( $html, $head_end );
   }
+  if ( false === $head_end ) { return self::walk( $html ); }
+  /* V10: the head is walked tag by tag as before (it is small: ~60 tags). In the body, only the tags the walk
+   * can change are visited: a <script>/<link> naming a plugin asset, a boot <script> by its id, and an <img>
+   * marked fetchpriority="high" or loading="eager" (the LCP picture LiteSpeed must not lazy-load). The body used
+   * to cost a full tag walk (~700 tags, ~7 ms by this file's own measure) for a handful of tags. */
+  return self::walk( substr( $html, 0, $head_end ) ) . self::patch_body( substr( $html, $head_end ) );
+ }
+ /** The per-tag corrections, over every tag of $html. */
+ private static function walk( string $html ): string {
   $p = new WP_HTML_Tag_Processor( $html );
-  $boots = array( 'delicat-builder-v9-session-js-before', 'delicat-builder-v9-global-theme-boot', 'delicat-builder-v9-app-tuning-boot', 'dip-identity-modal-v4-js-extra', 'dbp-nav-js-before', 'dbp-state-js-before', 'delicat-engine-js-before', 'delicat-engine-footer-js-before', 'delicat-engine-js' );
   while ( $p->next_tag() ) {
    $tag = $p->get_tag();
    if ( 'SCRIPT' === $tag || 'LINK' === $tag ) {
-    if ( 'SCRIPT' === $tag && in_array( $p->get_attribute( 'id' ), $boots, true ) ) {
+    if ( 'SCRIPT' === $tag && in_array( $p->get_attribute( 'id' ), self::BOOTS, true ) ) {
      if ( 'litespeed/javascript' === $p->get_attribute( 'type' ) ) { $p->remove_attribute( 'type' ); }
      $p->set_attribute( 'data-no-optimize', '1' ); $p->set_attribute( 'data-no-delay', '1' );
     }
@@ -236,6 +262,59 @@ final class Delicat_Builder_V9_Audit_Fixes {
    }
   }
   return $p->get_updated_html();
+ }
+ /**
+  * V10: the walk applied to the body's candidate tags only. Each candidate is found from a marker it must carry
+  * (the plugin's asset path, a boot id, fetchpriority / eager), cut out as one whole tag (a <script> with its body,
+  * so the processor sees a complete element) and walked on its own; every other tag is left byte for byte.
+  */
+ private static function patch_body( string $html ): string {
+  $path    = (string) wp_parse_url( DELICAT_BUILDER_V9_URL, PHP_URL_PATH );
+  $markers = array( 'fetchpriority' => array( 'img' ), 'eager' => array( 'img' ) );
+  if ( '' !== $path ) { $markers[ $path ] = array( 'script', 'link' ); }
+  foreach ( self::BOOTS as $id ) { $markers[ $id ] = array( 'script' ); }
+  $length = strlen( $html );
+  $found  = array();
+  foreach ( $markers as $marker => $names ) {
+   $at = 0;
+   while ( false !== ( $at = stripos( $html, (string) $marker, $at ) ) ) {
+    $start = $at > 0 ? strrpos( $html, '<', $at - $length - 1 ) : false; // the last '<' before the marker
+    $at   += strlen( (string) $marker );
+    if ( false === $start || isset( $found[ $start ] ) ) { continue; }
+    if ( ! preg_match( '~\G<(img|link|script)\b~i', $html, $m, 0, $start ) || ! in_array( strtolower( $m[1] ), $names, true ) ) { continue; }
+    $pattern = 'script' === strtolower( $m[1] )
+     ? '~\G<script\b(?>[^>"\']++|"[^"]*+"|\'[^\']*+\')*+>.*?</script\s*>~is'
+     : '~\G<(?:img|link)\b(?>[^>"\']++|"[^"]*+"|\'[^\']*+\')*+>~i';
+    if ( preg_match( $pattern, $html, $tag, 0, $start ) && $start + strlen( $tag[0] ) >= $at ) {
+     $found[ $start ] = $tag[0];
+    }
+   }
+  }
+  if ( ! $found ) { return $html; }
+  /* What the processor treats as text is never touched here either: a marker inside a comment, a <script>,
+   * <style>, <textarea>, <title>, <noscript>, <iframe>, <noembed>, <noframes> or <xmp> body (an <img> written in a
+   * JavaScript string, LiteSpeed's <noscript> fallback picture) is not a tag. */
+  $raw = array();
+  if ( preg_match_all( '~<!--.*?-->|<(script|style|textarea|title|noscript|iframe|noembed|noframes|xmp)\b(?>[^>"\']++|"[^"]*+"|\'[^\']*+\')*+>.*?</\1\s*>~is', $html, $ranges, PREG_OFFSET_CAPTURE | PREG_SET_ORDER ) ) {
+   foreach ( $ranges as $range ) { $raw[] = array( (int) $range[0][1], (int) $range[0][1] + strlen( $range[0][0] ) ); }
+  }
+  ksort( $found );
+  $keep = array();
+  $end  = -1;
+  foreach ( $found as $start => $tag ) {
+   if ( $start < $end ) { continue; } // inside a candidate already kept
+   foreach ( $raw as $range ) {
+    if ( $range[0] < $start && $start < $range[1] ) { continue 2; }
+   }
+   $keep[ $start ] = $tag;
+   $end            = $start + strlen( $tag );
+  }
+  krsort( $keep );
+  foreach ( $keep as $start => $tag ) {
+   $fixed = self::walk( $tag );
+   if ( $fixed !== $tag ) { $html = substr_replace( $html, $fixed, $start, strlen( $tag ) ); }
+  }
+  return $html;
  }
 }
 Delicat_Builder_V9_Audit_Fixes::boot();

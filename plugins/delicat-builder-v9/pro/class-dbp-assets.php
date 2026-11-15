@@ -317,6 +317,13 @@ final class DBP_Assets {
 		if ( ! DBP_Kernel::on( 'critical_css' ) ) {
 			return;
 		}
+		/* V10: while the engine delivers the page, the hashed chrome bundle starts with
+		 * this file (manifest: chrome sources). That sheet is render-blocking, so first
+		 * paint is unchanged, and the 2.9 KB are cached once instead of being re-sent in
+		 * every HTML response and soft navigation. */
+		if ( class_exists( 'Delicat_Builder_V9_Engine', false ) && Delicat_Builder_V9_Engine::chrome_carries( 'pro/assets/dbp-critical.css' ) ) {
+			return;
+		}
 
 		$relative = 'pro/assets/dbp-critical.css';
 

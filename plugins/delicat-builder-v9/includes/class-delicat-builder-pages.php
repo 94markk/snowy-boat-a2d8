@@ -173,10 +173,6 @@ final class Delicat_Builder_V9_Pages {
 		return self::$layout_cache[ $page_id ];
 	}
 
-	public static function page_needs_carousel( int $page_id ): bool {
-		return self::is_enabled_for_page( $page_id ) && Delicat_Builder_V9_Renderer::layout_needs_carousel( self::get_layout( $page_id ) );
-	}
-
 	public static function page_needs_product_data( int $page_id ): bool {
 		if ( ! self::is_enabled_for_page( $page_id ) ) {
 			return false;

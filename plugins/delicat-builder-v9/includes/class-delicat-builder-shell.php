@@ -18,7 +18,6 @@ final class Delicat_Builder_V9_Shell {
 	public const OPTION = 'delicat_builder_v9_shell';
 
 	private static bool $header_rendered = false;
-	private static bool $header_shortcode_present = false;
 	private static bool $mobile_nav_rendered = false;
 	private static bool $late_mobile_fallback = false;
 	private static ?array $settings_cache = null;
@@ -27,11 +26,9 @@ final class Delicat_Builder_V9_Shell {
 		add_shortcode( 'delicat_app_header', array( __CLASS__, 'header_shortcode' ) );
 		add_shortcode( 'delicat_app_footer', array( __CLASS__, 'footer_shortcode' ) );
 
-		add_action( 'wp', array( __CLASS__, 'detect_shortcodes' ), 5 );
 		add_action( 'wp_body_open', array( __CLASS__, 'auto_header' ), 20 );
 		add_action( 'wp_footer', array( __CLASS__, 'auto_mobile_fallback' ), 2 );
 		add_action( 'wp_head', array( __CLASS__, 'theme_boot' ), 1 );
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'frontend_config' ), 35 );
 		add_action( 'wp_ajax_delicat_builder_v9_product_search', array( __CLASS__, 'ajax_product_search' ) );
 		add_action( 'wp_ajax_nopriv_delicat_builder_v9_product_search', array( __CLASS__, 'ajax_product_search' ) );
 		add_action( 'wp_ajax_delicat_builder_v9_cart_snapshot', array( __CLASS__, 'ajax_cart_snapshot' ) );
@@ -84,40 +81,15 @@ final class Delicat_Builder_V9_Shell {
 	/**
 	 * Header Studio v8 is the primary Delicat header runtime. The optional V9
 	 * application shell must never auto-inject a second header around it.
-	 * The header shortcode remains compatible; the retired footer shortcode is
-	 * a no-op because the universal owner renders at the document boundary.
+	 * Both shortcodes are retired no-ops (footer since RC14, header since V10):
+	 * the native owners render at the document boundary.
 	 */
 	private static function header_v8_main_engine(): bool {
 		return class_exists( 'Delicat_Builder_V9_Header_Studio_8', false );
 	}
 
-	public static function detect_shortcodes(): void {
-		if ( is_admin() ) {
-			return;
-		}
-
-		global $post;
-		if ( ! $post instanceof WP_Post ) {
-			return;
-		}
-
-		$content = (string) $post->post_content;
-		self::$header_shortcode_present = has_shortcode( $content, 'delicat_app_header' ) && ! self::native_header_renders();
-	}
-
-	/**
-	 * 9.7.0: one header. The native header (header-runtime) prints on every storefront page, so a
-	 * [delicat_app_header] left in page content must not add a second header with its own search
-	 * sheet, cart drawer and assets.
-	 */
-	private static function native_header_renders(): bool {
-		return class_exists( 'Delicat_Builder_V9_Header_Studio_8', false )
-			&& is_callable( array( 'Delicat_Builder_V9_Header_Studio_8', 'should_auto_render' ) )
-			&& Delicat_Builder_V9_Header_Studio_8::should_auto_render();
-	}
-
 	public static function header_expected(): bool {
-		return Delicat_Builder_V9_Core::is_enabled() && ( self::$header_shortcode_present || self::will_render_header() || self::mobile_nav_expected() );
+		return Delicat_Builder_V9_Core::is_enabled() && ( self::will_render_header() || self::mobile_nav_expected() );
 	}
 
 	/**
@@ -212,86 +184,6 @@ final class Delicat_Builder_V9_Shell {
 		return Delicat_Builder_V9_Core::is_enabled() && ! is_admin();
 	}
 
-	public static function needs_theme(): bool {
-		$settings = self::settings();
-		return ( self::$header_shortcode_present || self::will_render_header() ) && ! empty( $settings['show_theme_toggle'] );
-	}
-
-	public static function needs_shell_js(): bool {
-		$settings = self::settings();
-		$full_header_surface = self::$header_shortcode_present || self::will_render_header();
-		if ( ! $full_header_surface ) {
-			return false;
-		}
-
-		/*
-		 * RC39.5 Safe Search: Safe Mode still quarantines cart/Identity/full shell,
-		 * but the read-only product finder is deliberately allowed to run. This
-		 * keeps the storefront usable while a separate module is being diagnosed.
-		 */
-		if ( Delicat_Builder_V9_Core::is_safe_mode() ) {
-			return self::mobile_nav_expected() && ! empty( $settings['show_search'] );
-		}
-
-		return ! empty( $settings['menu_id'] )
-			|| ! empty( $settings['show_search'] )
-			|| ( ! empty( $settings['show_cart'] ) && ! empty( $settings['cart_drawer'] ) );
-	}
-
-	/**
-	 * Header Studio v8 + the standalone mobile dock do not need the 27 KB Shell
-	 * stylesheet. Load it only for an explicit/full V9 shell surface.
-	 */
-	public static function needs_full_shell_css(): bool {
-		return self::$header_shortcode_present
-			|| self::will_render_header()
-			|| self::needs_shell_js();
-	}
-
-	public static function frontend_config(): void {
-		if ( is_admin() || ! self::header_expected() || ! self::needs_shell_js() ) {
-			return;
-		}
-
-		$handle = 'delicat-builder-v9-shell';
-		if ( ! wp_script_is( $handle, 'enqueued' ) && ! wp_script_is( $handle, 'registered' ) ) {
-			return;
-		}
-
-		$settings = self::settings();
-		$cache_version = class_exists( 'Delicat_Builder_V9_Cache' ) ? Delicat_Builder_V9_Cache::version() : 1;
-		$config = array(
-			'ajaxUrl'             => admin_url( 'admin-ajax.php' ),
-			'nonce'               => wp_create_nonce( 'delicat_builder_v9_shell_interaction' ),
-			'searchSuggestions'   => ! empty( $settings['show_search'] ) && ! empty( $settings['search_suggestions'] ),
-			'searchLimit'         => min( 8, max( 4, absint( $settings['search_limit'] ?? 6 ) ) ),
-			'cartDrawer'          => ! Delicat_Builder_V9_Core::is_safe_mode() && ! empty( $settings['show_cart'] ) && ! empty( $settings['cart_drawer'] ) && class_exists( 'WooCommerce' ),
-			'safeSearchMode'      => Delicat_Builder_V9_Core::is_safe_mode(),
-			'minQuery'            => 2,
-			'recentKey'           => 'delicat-builder-v9-recent-searches',
-			// Include the plugin build so browser session caches are invalidated on
-			// search-format hotfixes even when the product cache version is unchanged.
-			'searchCacheKey'      => 'delicat-builder-v9-search-cache-' . $cache_version . '-' . DELICAT_BUILDER_V9_VERSION,
-			'cacheVersion'        => $cache_version,
-			'requestTimeout'      => 4500,
-			'strings'             => array(
-				'loading'       => __( 'Chargement…', 'delicat-builder-v9' ),
-				'noResults'     => __( 'Aucun produit trouvé.', 'delicat-builder-v9' ),
-				'searchError'   => __( 'Recherche temporairement indisponible. Vous pouvez toujours lancer la recherche complète.', 'delicat-builder-v9' ),
-				'cartError'     => __( 'Impossible de charger le panier maintenant.', 'delicat-builder-v9' ),
-				'emptyCart'     => __( 'Votre panier est vide.', 'delicat-builder-v9' ),
-				'quantity'      => __( 'Qté', 'delicat-builder-v9' ),
-				'recent'        => __( 'Recherches récentes', 'delicat-builder-v9' ),
-			),
-		);
-
-		wp_add_inline_script(
-			$handle,
-			'window.DelicaShellV9=' . wp_json_encode( $config ) . ';',
-			'before'
-		);
-	}
-
 	private static function rate_limit_allowed( string $bucket, int $limit, int $window ): bool {
 		$limit  = max( 10, min( 240, $limit ) );
 		$window = max( 10, min( 300, $window ) );
@@ -302,7 +194,7 @@ final class Delicat_Builder_V9_Shell {
 		}
 		$user_id = get_current_user_id();
 		/* 9.4.3: the visitor's address as Security resolves it (Cloudflare-aware), not the proxy's. */
-		$remote = ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ) ? Delicat_Builder_V9_Security::client_ip() : ( isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown' );
+		$remote = ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_bucket' ) ) ) ? Delicat_Builder_V9_Security::client_bucket() : ( isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown' );
 		$actor = $user_id > 0 ? 'u:' . $user_id : 'ip:' . $remote;
 		$key = 'dbv9rl_' . substr( hash_hmac( 'sha256', $bucket . '|' . $actor, wp_salt( 'nonce' ) ), 0, 30 );
 		$now = time();
@@ -649,10 +541,10 @@ final class Delicat_Builder_V9_Shell {
 	}
 
 	public static function header_shortcode(): string {
-		if ( self::native_header_renders() ) {
-			return '';
-		}
-		return self::safe_header_markup( 'header_shortcode' );
+		/* V10: retired like [delicat_app_footer]. The native header (header-runtime) owns the page, and the
+		 * legacy shell.css/shell.js this markup needed are gone; it rendered only where the native header
+		 * stays off (Customizer preview, a theme filtering delicat_builder_v9_native_header_should_render). */
+		return '';
 	}
 
 	public static function footer_shortcode(): string {

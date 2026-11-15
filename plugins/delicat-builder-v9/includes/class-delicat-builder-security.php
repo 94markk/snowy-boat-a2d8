@@ -18,12 +18,20 @@ final class Delicat_Builder_V9_Security {
 	private const LOGIN_WINDOW = 900;
 
 	/**
-	 * Client address for the throttle bucket. The App API resolves it with its
+	 * V10 (security review #2): failures against one account from every address together
+	 * before password sign-in to it is refused, and their fixed window (1 hour). The
+	 * per-address bucket alone let a botnet guess one password without limit.
+	 */
+	private const ACCOUNT_MAX_FAILURES = 30;
+	private const ACCOUNT_WINDOW = 3600;
+
+	/**
+	 * Client bucket for the throttle. The App API resolves the address with its
 	 * trusted-proxy rule (CF-Connecting-IP only when explicitly trusted); Builder
 	 * must not depend on that plugin, so REMOTE_ADDR is the fallback.
 	 */
 	private static function login_client_ip(): string {
-		return self::client_ip();
+		return self::client_bucket();
 	}
 
 	/**
@@ -74,6 +82,38 @@ final class Delicat_Builder_V9_Security {
 		return $resolved;
 	}
 
+	/**
+	 * V10 (security review #2): the identity of every per-address throttle and rate limit.
+	 * IPv4 keeps the whole address. IPv6 is cut to its /64: every IPv6 client (a phone on
+	 * Digicel/Natcom, a home line) controls at least a /64, so keying on the full address
+	 * gave a fresh bucket to each request. An IPv4-mapped IPv6 address counts as its IPv4.
+	 * client_ip() stays the exact address for logs and the maintenance allowlist.
+	 */
+	public static function client_bucket(): string {
+		static $bucket = null;
+		if ( null === $bucket ) {
+			$bucket = self::bucket_for_ip( self::client_ip() );
+		}
+		return $bucket;
+	}
+
+	/** Throttle bucket of one address (see client_bucket()). */
+	public static function bucket_for_ip( string $ip ): string {
+		if ( ! filter_var( $ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6 ) ) {
+			return $ip;
+		}
+		$packed = @inet_pton( $ip ); // phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged -- validated above.
+		if ( false === $packed || 16 !== strlen( $packed ) ) {
+			return $ip;
+		}
+		if ( str_repeat( "\0", 10 ) . "\xff\xff" === substr( $packed, 0, 12 ) ) {
+			$v4 = inet_ntop( substr( $packed, 12 ) );
+			return false !== $v4 ? $v4 : $ip;
+		}
+		$prefix = inet_ntop( substr( $packed, 0, 8 ) . str_repeat( "\0", 8 ) );
+		return false !== $prefix ? $prefix . '/64' : $ip;
+	}
+
 	private static function peer_is_trusted_proxy( string $ip ): bool {
 		if ( '' === $ip ) {
 			return false;
@@ -115,19 +155,58 @@ final class Delicat_Builder_V9_Security {
 		return 'dlcv9_lf_' . substr( hash_hmac( 'sha256', $ip . '|' . strtolower( trim( $username ) ), (string) wp_salt( 'auth' ) ), 0, 32 );
 	}
 
+	/** Account of an identifier: e-mail and user_login of one account share one bucket. */
+	private static function account_user( string $username ): ?WP_User {
+		$login = strtolower( trim( $username ) );
+		if ( '' === $login || ! function_exists( 'get_user_by' ) ) {
+			return null;
+		}
+		$user = is_email( $login ) ? get_user_by( 'email', $login ) : get_user_by( 'login', $login );
+		return $user instanceof WP_User ? $user : null;
+	}
+
+	/** V10: IP-independent bucket of one account (unknown identifiers get one of their own). */
+	private static function account_bucket( string $username ): string {
+		$user     = self::account_user( $username );
+		$identity = $user ? 'uid:' . (int) $user->ID : 'login:' . strtolower( trim( $username ) );
+		return 'dlcv9_la_' . substr( hash_hmac( 'sha256', $identity, (string) wp_salt( 'auth' ) ), 0, 32 );
+	}
+
+	/**
+	 * The account cap never applies to a browser Identity Pro has already seen signed in to
+	 * that account, so a stranger who knows a customer's e-mail cannot keep them out of
+	 * their own phone. Elsewhere the customer can still sign in through Identity Pro without
+	 * a password (Google, passkey) or reset the password: none of these runs this filter.
+	 */
+	private static function known_browser( string $username ): bool {
+		if ( ! class_exists( 'DIP_Devices', false ) || ! is_callable( array( 'DIP_Devices', 'is_known_browser' ) ) ) {
+			return false;
+		}
+		$user = self::account_user( $username );
+		if ( ! $user ) {
+			return false;
+		}
+		try {
+			return (bool) DIP_Devices::is_known_browser( (int) $user->ID );
+		} catch ( Throwable $error ) {
+			unset( $error );
+			return false;
+		}
+	}
+
 	/**
 	 * Current window of a bucket. Counters written by older builds are plain
 	 * integers without a start time: they keep their own transient expiry.
 	 *
 	 * @return array{count:int,started:int}
 	 */
-	private static function login_state( string $key ): array {
+	private static function login_state( string $key, int $window = self::LOGIN_WINDOW ): array {
 		$raw = get_transient( $key );
 		$now = time();
 		if ( is_array( $raw ) ) {
 			$count   = absint( $raw['count'] ?? 0 );
 			$started = absint( $raw['started'] ?? 0 );
-			if ( $started <= 0 || $started > $now || $now - $started >= self::LOGIN_WINDOW ) {
+			if ( $started <= 0 || $started > $now || $now - $started >= $window ) {
 				return array( 'count' => 0, 'started' => 0 );
 			}
 			return array( 'count' => $count, 'started' => $started );
@@ -144,18 +223,25 @@ final class Delicat_Builder_V9_Security {
 		if ( $error instanceof WP_Error && in_array( 'delicat_builder_v9_login_throttled', $error->get_error_codes(), true ) ) {
 			return;
 		}
-		$key     = self::login_bucket( is_string( $username ) ? $username : '' );
-		$state   = self::login_state( $key );
+		$username = is_string( $username ) ? $username : '';
+		self::count_failure( self::login_bucket( $username ), self::LOGIN_WINDOW );
+		if ( '' !== trim( $username ) ) {
+			self::count_failure( self::account_bucket( $username ), self::ACCOUNT_WINDOW );
+		}
+	}
+
+	/** One failure in a fixed window: the expiry follows the first failure, never the latest one. */
+	private static function count_failure( string $key, int $window ): void {
+		$state   = self::login_state( $key, $window );
 		$now     = time();
 		$started = $state['started'] > 0 ? $state['started'] : $now;
-		/* Fixed window: the expiry follows the first failure, never the latest one. */
 		set_transient(
 			$key,
 			array(
 				'count'   => $state['count'] + 1,
 				'started' => $started,
 			),
-			max( 1, self::LOGIN_WINDOW - ( $now - $started ) )
+			max( 1, $window - ( $now - $started ) )
 		);
 	}
 
@@ -168,6 +254,13 @@ final class Delicat_Builder_V9_Security {
 		if ( $state['count'] >= self::LOGIN_MAX_FAILURES ) {
 			/* A correct password is refused too until the window ends. */
 			return new WP_Error( 'delicat_builder_v9_login_throttled', __( 'Trop de tentatives. Réessayez dans quelques minutes.', 'delicat-builder-v9' ) );
+		}
+		/* V10: the account cap counts every address together. Same error code, so the refusal
+		 * is not counted again and wp-login.php shows the same neutral text (unknown
+		 * identifiers have a bucket too: the answer reveals nothing about the account). */
+		$account = self::login_state( self::account_bucket( $username ), self::ACCOUNT_WINDOW );
+		if ( $account['count'] >= self::ACCOUNT_MAX_FAILURES && ! self::known_browser( $username ) ) {
+			return new WP_Error( 'delicat_builder_v9_login_throttled', __( 'Trop de tentatives. Réessayez plus tard ou réinitialisez votre mot de passe.', 'delicat-builder-v9' ) );
 		}
 		if ( $user instanceof WP_User && $state['count'] > 0 ) {
 			/* Proven credentials end the window. The App API signs in through
@@ -641,7 +734,7 @@ final class Delicat_Builder_V9_Security {
 
 		// Guest cookies are attacker-controlled; never use them as rate-limit identity.
 		if ( '' === $actor ) {
-			$actor = 'ip:' . self::client_ip();
+			$actor = 'ip:' . self::client_bucket();
 		}
 		/* 9.11.0 (owner rule « customers never hit a usage throttle », audit O-1): guests share
 		 * one carrier address (CGNAT), so the per-address USAGE buckets allow 20 times more.

@@ -1,0 +1,14 @@
+# Delicat Builder V9 (V10, security review #7): release metadata is read by PHP only.
+# README.txt (exact version, changelog of past fixes), integrity-manifest.json (every file
+# with its size and SHA-256) and CHANGESET files are not served over HTTP. PHP reads them
+# from disk (integrity scan, release checks), so nothing else changes. Apache and LiteSpeed
+# (Hostinger) both honour this file; every other file keeps its normal handling.
+<FilesMatch "^(README\.txt|readme\.txt|integrity-manifest\.json|CHANGESET.*|changeset.*)$">
+	<IfModule mod_authz_core.c>
+		Require all denied
+	</IfModule>
+	<IfModule !mod_authz_core.c>
+		Order Allow,Deny
+		Deny from all
+	</IfModule>
+</FilesMatch>

@@ -83,10 +83,6 @@ final class DBP_Admin {
 				__( 'Defer scripts (leave off)', 'delicat-builder-v9' ),
 				__( 'Defers only scripts with no dependencies. WooCommerce and V9 print inline jQuery blocks that run before a deferred file, so this is off by default. Turn it on one deploy at a time and test checkout.', 'delicat-builder-v9' ),
 			),
-			'state'          => array(
-				__( 'Single session store', 'delicat-builder-v9' ),
-				__( 'Cart count, wallet balance and alerts come from one request, and cached pages get fresh nonces.', 'delicat-builder-v9' ),
-			),
 			'security'       => array(
 				__( 'Security headers', 'delicat-builder-v9' ),
 				__( 'Frame, referrer, sniffing and permissions policies, plus author-enumeration and REST user-listing blocks.', 'delicat-builder-v9' ),
@@ -99,17 +95,9 @@ final class DBP_Admin {
 				__( 'Page transitions', 'delicat-builder-v9' ),
 				__( 'Animated screen changes where the browser supports them. Respects reduced-motion.', 'delicat-builder-v9' ),
 			),
-			'low_data_mode'  => array(
-				__( 'Slow-connection mode', 'delicat-builder-v9' ),
-				__( 'On 2G/3G and Save-Data, drops shadows, autoplay and animation so the content arrives first.', 'delicat-builder-v9' ),
-			),
 			'legacy_nav_off' => array(
 				__( 'Retire the old navigation layers', 'delicat-builder-v9' ),
 				__( 'Removes shell-nav, prefetch and navigation scripts. Leave this on — running them beside Pro recreates the original conflict.', 'delicat-builder-v9' ),
-			),
-			'legacy_slim_off' => array(
-				__( 'Retire Front Slim', 'delicat-builder-v9' ),
-				__( 'Stops the old dequeue pass from fighting the Pro pipeline for ownership of the same handles.', 'delicat-builder-v9' ),
 			),
 			'diagnostics'    => array(
 				__( 'Diagnostics', 'delicat-builder-v9' ),

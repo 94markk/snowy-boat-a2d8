@@ -268,10 +268,6 @@ final class Delicat_Builder_V9_Purchase_Native {
 		self::$checkout_request = true;
 	}
 
-	public static function express_active(): bool {
-		return self::$express;
-	}
-
 	public static function express_supported(): bool {
 		return self::studio_enabled() && ! empty( self::settings()['native_checkout'] );
 	}

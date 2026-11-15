@@ -62,8 +62,7 @@ body.dbp-app .delicat-bottom-nav {
    review marquee is no longer stopped here (it loops, and pauses off screen). */
 @media (max-width: 782px) {
   body.dbp-app .delicat-carousel__track,
-  body.dbp-app .delicat-category-chips__track,
-  body.dbp-app .delicat-testimonials__track {
+  body.dbp-app .delicat-category-chips__track {
     animation: none !important;
     transform: none !important;
     overflow-x: auto;
@@ -73,14 +72,12 @@ body.dbp-app .delicat-bottom-nav {
   }
 
   body.dbp-app .delicat-carousel__track::-webkit-scrollbar,
-  body.dbp-app .delicat-category-chips__track::-webkit-scrollbar,
-  body.dbp-app .delicat-testimonials__track::-webkit-scrollbar {
+  body.dbp-app .delicat-category-chips__track::-webkit-scrollbar {
     display: none;
   }
 
   body.dbp-app .delicat-carousel__track > *,
-  body.dbp-app .delicat-category-chips__track > *,
-  body.dbp-app .delicat-testimonials__track > * {
+  body.dbp-app .delicat-category-chips__track > * {
     scroll-snap-align: start;
   }
 }

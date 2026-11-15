@@ -979,7 +979,6 @@ private static function migrate_rc20_mobile_info_defaults(): int {
 			'assets/js/islands.js',
 			'assets/js/carousel.js',
 			'assets/js/prefetch.js',
-			'assets/js/shell.js',
 			'assets/js/purchase.js',
 			'assets/css/woo-ui.css',
 			'assets/css/purchase-ui.css',

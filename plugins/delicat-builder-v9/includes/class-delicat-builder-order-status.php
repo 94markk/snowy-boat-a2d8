@@ -699,11 +699,6 @@ final class Delicat_Builder_V9_Order_Status {
 		return ( $negative ? '-' : '' ) . $number . "\u{00A0}" . $currency;
 	}
 
-	/** money() in a span that never wraps. */
-	public static function money_html( $amount, string $currency = '' ): string {
-		return '<span class="dlc-oc-money">' . esc_html( self::money( $amount, $currency ) ) . '</span>';
-	}
-
 	/** The order's currency code. */
 	public static function currency( $order ): string {
 		$code = is_callable( array( $order, 'get_currency' ) ) ? (string) $order->get_currency() : '';

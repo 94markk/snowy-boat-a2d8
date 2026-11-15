@@ -231,4 +231,4 @@ final class Delicat_Builder_V9_App_Download {
 }
 Delicat_Builder_V9_App_Download::boot();
 
-if ( is_admin() ) { require_once __DIR__ . '/class-delicat-builder-apk-upload.php'; }
+if ( is_admin() && ! wp_doing_ajax() ) { require_once __DIR__ . '/class-delicat-builder-apk-upload.php'; } // V10: its screen and admin-post actions, not admin-ajax

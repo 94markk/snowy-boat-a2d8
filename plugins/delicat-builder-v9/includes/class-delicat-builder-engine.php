@@ -49,13 +49,13 @@ final class Delicat_Builder_V9_Engine {
 	/** Legacy script handles whose behaviour now lives inside the engine module. */
 	const SCRIPTS = array(
 		'delicat-builder-v9-core', 'delicat-builder-v9-carousel', 'delicat-builder-v9-islands', 'delicat-builder-v9-heart',
-		'delicat-builder-v9-hero-search', 'delicat-builder-v9-prefetch', 'delicat-builder-v9-shell',
+		'delicat-builder-v9-hero-search', 'delicat-builder-v9-prefetch',
 		'delicat-builder-v9-theme', 'delicat-builder-v9-motion', 'delicat-builder-v9-header-studio-8', 'delicat-builder-v9-drawer',
-		'delicat-builder-v9-session', 'delicat-builder-v9-shell-nav', 'delicat-builder-v9-purchase-native',
+		'delicat-builder-v9-session', 'delicat-builder-v9-purchase-native',
 		'delicat-builder-v9-purchase', 'delicat-builder-v9-express', 'delicat-builder-v9-wallet-guard', 'delicat-v9-native-product',
 		'delicat-builder-v9-design-product', 'delicat-builder-v9-pwa-runtime', 'delicat-builder-v9-notifications', 'delicat-builder-v9-currency',
 		'delicat-builder-v9-live-selling', 'delicat-builder-v9-announcement', 'delicat-builder-v9-reviews', 'delicat-builder-v9-storefront-commerce',
-		'delicat-builder-v9-wallet-live', 'delicat-product-switcher', 'dmc-calc', 'delicat-android-app-link', 'dbp-nav', 'dbp-state',
+		'delicat-builder-v9-wallet-live', 'delicat-product-switcher', 'dmc-calc', 'delicat-android-app-link',
 		'delicat-app-polish-pull-refresh',
 	);
 
@@ -204,6 +204,19 @@ final class Delicat_Builder_V9_Engine {
 		}
 		self::$manifest = $data;
 		return $data;
+	}
+
+	/**
+	 * V10: does the engine deliver this page with a chrome bundle built from $source
+	 * (plugin-relative path, as listed in the manifest)? Inline printers use it to skip
+	 * a <style> whose rules the cached, render-blocking chrome sheet already carries.
+	 */
+	public static function chrome_carries( string $source ): bool {
+		if ( ! self::active() ) {
+			return false;
+		}
+		$manifest = self::manifest();
+		return is_array( $manifest ) && in_array( $source, (array) ( $manifest['css']['chrome']['sources'] ?? array() ), true );
 	}
 
 	private static function url( string $file ): string {
@@ -866,7 +879,10 @@ final class Delicat_Builder_V9_Engine {
 			}
 		}
 		echo '<script type="module" src="' . esc_url( $engine ) . '" id="delicat-engine-js" data-no-optimize="1" data-no-delay="1" data-no-defer="1" data-cfasync="false"></script>' . "\n";
-		echo '<!-- delicat-engine ' . esc_html( self::VERSION . ' route=' . self::$route . ' css=' . self::$route_bundle . '+' . self::$polish_bundle . ' folded=' . implode( ',', array_keys( self::$absorbed_styles ) ) . ' scripts=' . implode( ',', array_keys( self::$absorbed ) ) ) . ' -->' . "\n";
+		/* V10: the bundle summary is a debugging aid; every cached page carried it. */
+		if ( defined( 'SCRIPT_DEBUG' ) && SCRIPT_DEBUG ) {
+			echo '<!-- delicat-engine ' . esc_html( self::VERSION . ' route=' . self::$route . ' css=' . self::$route_bundle . '+' . self::$polish_bundle . ' folded=' . implode( ',', array_keys( self::$absorbed_styles ) ) . ' scripts=' . implode( ',', array_keys( self::$absorbed ) ) ) . ' -->' . "\n";
+		}
 	}
 
 	/**

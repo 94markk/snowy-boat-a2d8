@@ -225,7 +225,6 @@ final class Delicat_Builder_V9_Legal {
 		 * storefront request instead. */
 		add_action( 'init', array( __CLASS__, 'apply_notice_identity' ), 29 );
 		add_action( 'init', array( __CLASS__, 'maybe_sync_after_upgrade' ), 30 );
-		add_action( 'admin_post_delicat_builder_v9_legal_sync', array( __CLASS__, 'handle_sync' ) );
 		add_filter( 'delicat_builder_v9_footer_legal_links', array( __CLASS__, 'footer_links' ) );
 		add_filter( 'the_content', array( __CLASS__, 'fix_reseller_link' ), 20 );
 	}
@@ -700,33 +699,6 @@ final class Delicat_Builder_V9_Legal {
 		}
 		$stripped = trim( preg_replace( '/\[delicat_native_(terms|privacy|support)\]/', '', $body ) );
 		return '' === trim( wp_strip_all_tags( (string) $stripped ) );
-	}
-
-	public static function handle_sync(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You are not allowed to do this.', 'delicat-builder-v9' ), 403 );
-		}
-		check_admin_referer( 'delicat_builder_v9_legal_sync' );
-
-		$key   = isset( $_POST['doc'] ) ? sanitize_key( wp_unslash( $_POST['doc'] ) ) : '';
-		$force = isset( $_POST['force'] ) && '1' === $_POST['force'];
-
-		if ( 'all' === $key ) {
-			foreach ( array_keys( self::documents() ) as $k ) {
-				self::install( $k, false );
-			}
-			$notice = 'synced';
-		} else {
-			$result = self::install( $key, $force );
-			$notice = in_array( $result, array( 'created', 'updated' ), true ) ? 'synced' : $result;
-		}
-
-		if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'purge_everything' ) ) ) {
-			Delicat_Builder_V9_Cache::purge_everything();
-		}
-
-		wp_safe_redirect( add_query_arg( 'delicat_legal', $notice, wp_get_referer() ? wp_get_referer() : admin_url() ) );
-		exit;
 	}
 
 	/* ------------------------------------------------------------------ */

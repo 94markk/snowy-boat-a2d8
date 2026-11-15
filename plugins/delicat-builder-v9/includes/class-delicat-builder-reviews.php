@@ -479,11 +479,6 @@ final class Delicat_Builder_V9_Reviews {
 		return array_slice( array_merge( $real, $seeded ), 0, 10 );
 	}
 
-	/** Total shown next to "AVIS VÉRIFIÉS": approved popup avis + approved Woo reviews. */
-	public static function total_verified_count(): int {
-		return absint( self::rail_payload()['count'] );
-	}
-
 	/* ------------------------------------------------------------------ */
 	/* Second top-up detection (lazy, cron-independent)                    */
 	/* ------------------------------------------------------------------ */

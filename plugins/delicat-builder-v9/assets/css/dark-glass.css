@@ -248,7 +248,6 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce ul.products li.product,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-carousel__view-all,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process__card,
-html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__card,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mcard,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__rating,
 html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__review-cta,
@@ -770,8 +769,7 @@ html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__price
 
 /* testimonials, trust strip, hero search icon: readable without the
    engine's runtime dark adapter */
-html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mcard,
-html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__card {
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mcard {
   background: var(--nd-card) !important;
   border-color: var(--nd-line) !important;
 }

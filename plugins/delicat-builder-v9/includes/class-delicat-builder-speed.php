@@ -217,9 +217,9 @@ final class Delicat_Builder_V9_Speed {
 
 	/** At most 40 beacons per address per 10 minutes (the address is hashed, never stored). */
 	private static function throttled(): bool {
-		/* 9.4.3: the visitor's address as Security resolves it (Cloudflare-aware). */
-		$ip = ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) )
-			? Delicat_Builder_V9_Security::client_ip()
+		/* 9.4.3: the visitor's address as Security resolves it (Cloudflare-aware); V10: IPv6 per /64. */
+		$ip = ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_bucket' ) ) )
+			? Delicat_Builder_V9_Security::client_bucket()
 			: ( isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : '' );
 		$key = 'dbv9_rum_' . substr( hash_hmac( 'sha256', $ip, wp_salt( 'nonce' ) ), 0, 16 );
 		/* 9.11.0 (audit L-8): one transient per 10-minute window (no wp_cache_incr, whose lost

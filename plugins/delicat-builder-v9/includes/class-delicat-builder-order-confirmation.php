@@ -11,7 +11,8 @@
  * read-only token scoped to one order; customer orders also need the logged-in owner (or a
  * shop manager) and the wp_rest nonce. Rate limited, never cached, and the same 404 whether
  * the order is missing or access is refused. The old GET /delicat-order/v1/status/{id} stays
- * answered from the same model (deprecated, removal planned for 9.6.0).
+ * answered from the same model (deprecated) only while its order is under 48 hours old:
+ * V10 expires its token, which never expired and travels in the URL (logs, history).
  *
  * @package Delicat_Builder_V9
  */
@@ -29,6 +30,8 @@ final class Delicat_Builder_V9_Order_Confirmation {
 	public const ROUTE        = '/order-status';
 	public const LEGACY_NS    = 'delicat-order/v1';
 	public const LEGACY_ROUTE = '/status/(?P<order_id>\d+)';
+	/** V10: lifetime of a legacy GET token, counted from the order's creation (grace for open tabs). */
+	public const LEGACY_TOKEN_TTL = 2 * DAY_IN_SECONDS;
 	public const HANDLE       = 'delicat-builder-v9-order-confirmation';
 
 	/** @var bool */
@@ -623,8 +626,11 @@ final class Delicat_Builder_V9_Order_Confirmation {
 		return (int) $data[0] >= $limit ? max( 1, $window - ( $now - (int) $data[1] ) ) : 0;
 	}
 
-	/** md5 of the client IP: the only form ever stored. */
+	/** md5 of the client IP (V10: of its IPv6 /64): the only form ever stored. */
 	private static function client_key(): string {
+		if ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_bucket' ) ) ) {
+			return md5( (string) Delicat_Builder_V9_Security::client_bucket() );
+		}
 		return md5( self::client_ip() );
 	}
 
@@ -750,8 +756,19 @@ final class Delicat_Builder_V9_Order_Confirmation {
 		$order    = $order_id && function_exists( 'wc_get_order' ) ? wc_get_order( $order_id ) : false;
 		$token    = self::scalar_param( $request, 'token' );
 		/* 9.11.0 (audit L-7): the old never-expiring token also needs the order's viewer,
-		 * as the current route does. The route itself goes in a later minor version. */
-		return self::gate( $order_id, $order && '' !== $token && hash_equals( hash_hmac( 'sha256', 'docp|' . $order->get_id() . '|' . $order->get_order_key(), wp_salt( 'auth' ) ), $token ) && self::viewer_allowed( $order ) );
+		 * as the current route does. V10 (security review #4): and it expires 48 h after the
+		 * order was placed - a refusal like any other (same 404, same refusal budget). */
+		return self::gate( $order_id, $order && '' !== $token && self::legacy_token_fresh( $order ) && hash_equals( hash_hmac( 'sha256', 'docp|' . $order->get_id() . '|' . $order->get_order_key(), wp_salt( 'auth' ) ), $token ) && self::viewer_allowed( $order ) );
+	}
+
+	/** V10: a legacy token is honoured only for an order created less than LEGACY_TOKEN_TTL ago. */
+	private static function legacy_token_fresh( $order ): bool {
+		$created = is_object( $order ) && is_callable( array( $order, 'get_date_created' ) ) ? $order->get_date_created() : null;
+		if ( ! is_object( $created ) || ! is_callable( array( $created, 'getTimestamp' ) ) ) {
+			return false;
+		}
+		$age = time() - (int) $created->getTimestamp();
+		return $age >= -300 && $age < self::LEGACY_TOKEN_TTL;
 	}
 
 	/** Old keys, answered from the new model (tabs still open on the old page keep working). */

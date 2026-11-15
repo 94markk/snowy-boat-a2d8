@@ -569,12 +569,24 @@ public static function purge_product_archives( int $product_id = 0 ): void {
 			return;
 		}
 		/* A REST-light request (app polling) does not load Legal and Stability, which
-		 * act on this once-per-version purge: leave it to the next page request. */
+		 * act on this once-per-version purge: leave it to the next page request.
+		 * V10: so do the session JSON, wc-ajax and WP-Cron profiles; the page or wp-admin
+		 * request that follows a release (the update itself is a wp-admin request) runs it. */
 		if ( defined( 'DELICAT_BUILDER_V9_REST_LIGHT' ) && DELICAT_BUILDER_V9_REST_LIGHT ) {
 			return;
 		}
+		if ( defined( 'DELICAT_BUILDER_V9_PROFILE' ) && ! in_array( DELICAT_BUILDER_V9_PROFILE, array( 'storefront', 'admin' ), true ) ) {
+			return;
+		}
 		update_option( 'delicat_builder_v9_purged_version', $current, true );
+		/* V10: the one release purge. DBP_Kernel::deploy_check() used to flush the whole object cache and
+		 * purge LiteSpeed a second time on the same request; it now only renews its generation token. The
+		 * Builder cache version invalidates every Builder key, so the rest of Redis stays warm. */
 		self::purge_everything();
+		/* LiteSpeed's combined CSS/JS and critical/unique CSS were built from the previous release's markup
+		 * (the purges the Pro deploy check sent until 9.14.4). */
+		do_action( 'litespeed_purge_all_cssjs' );
+		do_action( 'litespeed_purge_all_ccssucss' );
 
 		/*
 		 * LiteSpeed has just been told, and so has Cloudflare IF the merchant

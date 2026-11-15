@@ -171,11 +171,19 @@ final class DBP_Kernel {
 	}
 
 	/**
-	 * Bump the generation and flush every cache layer we can reach.
+	 * Bump the generation and, for the explicit Delicat Pro actions (save, purge button), purge the caches that
+	 * keep pages and combined assets.
 	 *
+	 * V10: never wp_cache_flush(). It emptied the WHOLE object cache (Redis): every plugin's and WooCommerce's
+	 * data, Identity Pro's sign-in and OAuth state, every rate-limit window, so each release restarted the store
+	 * cold and reset its throttles. Builder's own cached fragments and queries are keyed on its cache version,
+	 * which Delicat_Builder_V9_Cache::bump_version() renews; nothing else needs to go.
+	 *
+	 * @param bool $purge False to only renew the token (the deploy check: the release purge is owned by
+	 *                    Delicat_Builder_V9_Cache::maybe_purge_after_upgrade(), once per version).
 	 * @return string New generation token.
 	 */
-	public static function bump_generation() {
+	public static function bump_generation( $purge = true ) {
 		/* pro.37: wp_rand() lives in pluggable.php, which WordPress loads AFTER
 		 * plugin files are included. Calling it from the boot path threw
 		 * "Call to undefined function wp_rand()", the main file caught the
@@ -186,17 +194,20 @@ final class DBP_Kernel {
 		$generation = substr( md5( (string) microtime( true ) . $entropy ), 0, 10 );
 		update_option( self::GENERATION, $generation, false );
 
-		wp_cache_flush();
+		if ( ! $purge ) {
+			return $generation;
+		}
+
+		if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'bump_version' ) ) ) {
+			Delicat_Builder_V9_Cache::bump_version();
+		}
 
 		/* LiteSpeed keeps a combined CSS/JS artefact that survives a plugin
-		 * update, so a version bump alone does not reach the browser. */
+		 * update, so a version bump alone does not reach the browser. Its
+		 * purge-all sends the page-cache purge header itself. */
 		do_action( 'litespeed_purge_all' );
 		do_action( 'litespeed_purge_all_cssjs' );
 		do_action( 'litespeed_purge_all_ccssucss' );
-
-		if ( ! headers_sent() ) {
-			header( 'X-LiteSpeed-Purge: *' );
-		}
 
 		return $generation;
 	}
@@ -257,18 +268,16 @@ final class DBP_Kernel {
 	}
 
 	/**
-	 * Is this request the navigation engine asking for a page fragment?
+	 * Was this request the old navigation engine asking for a page fragment?
+	 *
+	 * V10: never. The fragment protocol (?dbp_nav=1 with an X-Delicat-Pro-Nav header) had no client left: the
+	 * engine fetches ordinary HTML, and no shipped script or app sends that header. Kept for callers outside this
+	 * plugin.
 	 *
 	 * @return bool
 	 */
 	public static function is_fragment_request() {
-		// Require both the dedicated URL and our fetch header. A normal browser
-		// visit to ?dbp_nav=1 must remain an HTML document.
-		return 'GET' === ( $_SERVER['REQUEST_METHOD'] ?? 'GET' )
-			&& isset( $_GET['dbp_nav'], $_SERVER['HTTP_X_DELICAT_PRO_NAV'] )
-			&& is_string( $_GET['dbp_nav'] )
-			&& '1' === $_GET['dbp_nav']
-			&& '1' === $_SERVER['HTTP_X_DELICAT_PRO_NAV'];
+		return false;
 	}
 
 	/**
@@ -333,20 +342,25 @@ final class DBP_Kernel {
 		/* pro.4: require_once on a missing file is E_COMPILE_ERROR, and the
 		 * error is attributed to THIS file, not the missing one. An
 		 * incomplete upload would therefore look like a kernel fault. Each
-		 * layer is loaded only if it is actually on disk. */
-		foreach ( array( 'security', 'state', 'nav', 'assets', 'type' ) as $layer ) {
+		 * layer is loaded only if it is actually on disk.
+		 *
+		 * V10: the security layer answers every request type; navigation, assets and type only shape pages, so
+		 * the REST, wc-ajax, session, WP-Cron, admin-ajax and wp-admin profiles no longer parse them (each of
+		 * them returned at once outside the storefront anyway). The state layer is retired (see state_gone()). */
+		$page_layers = ! defined( 'DELICAT_BUILDER_V9_PROFILE' ) || 'storefront' === DELICAT_BUILDER_V9_PROFILE;
+		foreach ( $page_layers ? array( 'security', 'nav', 'assets', 'type' ) : array( 'security' ) as $layer ) {
 			$path = $dir . 'class-dbp-' . $layer . '.php';
 			if ( file_exists( $path ) ) {
 				require_once $path;
 			}
 		}
-		unset( $layer, $path );
+		unset( $layer, $path, $page_layers );
 
 		if ( self::on( 'security' ) && class_exists( 'DBP_Security', false ) ) {
 			DBP_Security::boot();
 		}
-		if ( self::on( 'state' ) && class_exists( 'DBP_State', false ) ) {
-			DBP_State::boot();
+		if ( isset( $_GET['dbp_state'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+			add_action( 'init', array( __CLASS__, 'state_gone' ), 5 );
 		}
 		if ( self::on( 'navigation' ) && class_exists( 'DBP_Nav', false ) ) {
 			DBP_Nav::boot();
@@ -367,18 +381,51 @@ final class DBP_Kernel {
 			delete_option( 'delicat_builder_v9_pro_boot_error' );
 		}
 
-		if ( is_admin() && file_exists( $dir . 'class-dbp-admin.php' ) ) {
+		/* V10: its menu and admin-post actions only; admin-ajax (heartbeat) never needs it. */
+		if ( is_admin() && ! wp_doing_ajax() && file_exists( $dir . 'class-dbp-admin.php' ) ) {
 			require_once $dir . 'class-dbp-admin.php';
 			if ( class_exists( 'DBP_Admin', false ) ) {
 				DBP_Admin::boot();
 			}
 		}
 
-		/* The legacy layers are quieted last so a module that registered on an
-		 * earlier hook is still removed cleanly. */
-		add_action( 'wp', array( __CLASS__, 'quiet_legacy_layers' ), PHP_INT_MAX );
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'quiet_legacy_layers' ), PHP_INT_MAX );
-		add_action( 'wp_print_footer_scripts', array( __CLASS__, 'quiet_legacy_layers' ), 0 );
+		/* The legacy scripts are quieted last so one enqueued on an earlier hook is
+		 * still removed cleanly. V10: Shell Nav and Front Slim's dequeue passes are gone,
+		 * so nothing has to be unhooked at `wp` any more. */
+		if ( ! is_admin() ) {
+			add_action( 'wp_enqueue_scripts', array( __CLASS__, 'quiet_legacy_layers' ), PHP_INT_MAX );
+			add_action( 'wp_print_footer_scripts', array( __CLASS__, 'quiet_legacy_layers' ), 0 );
+		}
+	}
+
+	/**
+	 * V10: the ?dbp_state=1 snapshot endpoint is retired. It answered anyone with the display name, the wallet
+	 * balance, the cart totals and fresh nonces, and no client calls it any more (the engine reads
+	 * wc-ajax=delicat_session). For one release it answers 410 Gone, uncached, so a forgotten caller gets a clear
+	 * refusal instead of a full uncached page render.
+	 *
+	 * @return void
+	 */
+	public static function state_gone() {
+		if ( is_admin() || wp_doing_ajax() || wp_doing_cron() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+			return;
+		}
+		if ( ! defined( 'DONOTCACHEPAGE' ) ) {
+			define( 'DONOTCACHEPAGE', true );
+		}
+		if ( ! defined( 'LITESPEED_NO_OPTM' ) ) {
+			define( 'LITESPEED_NO_OPTM', true );
+		}
+		add_filter( 'litespeed_comment', '__return_false', PHP_INT_MAX );
+		do_action( 'litespeed_control_set_nocache', 'Delicat state endpoint retired' );
+		nocache_headers();
+		status_header( 410 );
+		if ( ! headers_sent() ) {
+			header( 'Content-Type: application/json; charset=utf-8' );
+			header( 'X-Robots-Tag: noindex, nofollow', true );
+		}
+		echo '{"gone":true}';
+		exit;
 	}
 
 	/**
@@ -397,7 +444,10 @@ final class DBP_Kernel {
 
 		update_option( self::VERSION_KEY, $running, false );
 		self::$settings = null;
-		self::bump_generation();
+		/* V10: the token only. The release purge (one LiteSpeed purge-all, the Builder cache version, LiteSpeed's
+		 * combined CSS/JS) is done once per version by Delicat_Builder_V9_Cache::maybe_purge_after_upgrade() at
+		 * init 11; this used to flush the whole object cache and purge LiteSpeed a second time. */
+		self::bump_generation( false );
 	}
 
 	/**
@@ -416,25 +466,10 @@ final class DBP_Kernel {
 		}
 
 		if ( self::on( 'navigation' ) && self::on( 'legacy_nav_off' ) ) {
-			wp_dequeue_script( 'delicat-builder-v9-shell-nav' );
+			/* V10: shell-nav.js (Shell_Nav) and the never-registered 'delicat-builder-v9-navigation' are gone;
+			 * only the legacy prefetcher can still be enqueued (engine off). */
 			wp_dequeue_script( 'delicat-builder-v9-prefetch' );
-			wp_dequeue_script( 'delicat-builder-v9-navigation' );
-			wp_deregister_script( 'delicat-builder-v9-shell-nav' );
 			wp_deregister_script( 'delicat-builder-v9-prefetch' );
-			wp_deregister_script( 'delicat-builder-v9-navigation' );
-
-			/* pro.16: TurboNav's speculation rules stay. They bind no clicks;
-			 * with the Pro engine active TurboNav restricts them to the routes
-			 * the engine never swaps (product pages), which is exactly where a
-			 * prerendered document makes the open instant. */
-			if ( class_exists( 'Delicat_Builder_V9_Shell_Nav', false ) ) {
-				remove_action( 'wp_enqueue_scripts', array( 'Delicat_Builder_V9_Shell_Nav', 'assets' ), 9 );
-			}
-		}
-
-		if ( self::on( 'assets' ) && self::on( 'legacy_slim_off' ) && class_exists( 'Delicat_Builder_V9_Front_Slim', false ) ) {
-			remove_action( 'wp_enqueue_scripts', array( 'Delicat_Builder_V9_Front_Slim', 'slim_scripts' ), 999 );
-			remove_action( 'wp_enqueue_scripts', array( 'Delicat_Builder_V9_Front_Slim', 'defer_plugin_scripts' ), 9999 );
 		}
 	}
 

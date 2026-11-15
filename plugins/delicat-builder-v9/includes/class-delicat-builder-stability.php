@@ -20,10 +20,9 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    render time, and an X-Delicat-Builder response header. A stale cache is
  *    visible at a glance, in view-source or curl, by anyone.
  *
- * 2. NO WAY TO ASK. The admin can now fetch the homepage as a guest and compare
- *    the stamp it finds with the version installed. If they differ, the notice
- *    says so, names the layer that failed, and offers the purge button. This
- *    ends the loop of "did it work?" being answered by guesswork.
+ * 2. NO WAY TO ASK. (V10: the admin deploy-check notice was removed; it lived in
+ *    this storefront-only class and never displayed. Compare the stamp above
+ *    with the installed version instead.)
  *
  * 3. THE PURGE REPORTS NOTHING. `litespeed_purge_all` fires into the void. The
  *    purge now records what each layer did — LiteSpeed hooked or not, object
@@ -62,8 +61,6 @@ final class Delicat_Builder_V9_Stability {
 		add_action( 'wp_body_open', array( __CLASS__, 'stamp' ), 0 );
 		add_action( 'wp_head', array( __CLASS__, 'authoritative_sizing' ), 9999 );
 		add_action( 'delicat_builder_v9_version_purged', array( __CLASS__, 'record_purge' ), 5, 2 );
-		add_action( 'admin_notices', array( __CLASS__, 'deploy_notice' ) );
-		add_action( 'admin_post_delicat_builder_v9_deploy_check', array( __CLASS__, 'handle_check' ) );
 	}
 
 	/* ------------------------------------------------------------------ */
@@ -85,169 +82,12 @@ final class Delicat_Builder_V9_Stability {
 			. ' · rendered ' . esc_html( gmdate( 'Y-m-d H:i:s' ) ) . " UTC -->\n";
 	}
 
-	/* ------------------------------------------------------------------ */
-	/* 2. Deployment check                                                 */
-	/* ------------------------------------------------------------------ */
-
-	/**
-	 * Fetch the homepage the way a guest does — no cookies, no cache-buster —
-	 * and read the stamp back. A cache-buster would defeat the purpose: the
-	 * point is to see what the cache is actually serving.
+	/*
+	 * V10: the « 2. Deployment check » admin notice (deploy_notice, handle_check, check, is_stale, diagnose)
+	 * is gone. This class is loaded on storefront requests only, so admin_notices and
+	 * admin_post_delicat_builder_v9_deploy_check never ran: the notice and its button were never shown.
+	 * The stamp and the X-Delicat-Builder header above still show the live version (view-source / curl).
 	 */
-	public static function check(): array {
-		$result = array(
-			'checked_at' => time(),
-			'installed'  => self::version(),
-			'live'       => '',
-			'rendered'   => '',
-			'header'     => '',
-			'cf_ray'     => '',
-			'cache'      => '',
-			'error'      => '',
-		);
-		$response = wp_remote_get(
-			home_url( '/' ),
-			array(
-				'timeout'     => 12,
-				'redirection' => 2,
-				'sslverify'   => true,
-				'headers'     => array(
-					'User-Agent' => 'DelicatBuilder-DeployCheck/' . self::version(),
-					'Accept'     => 'text/html',
-				),
-				'cookies'     => array(),
-			)
-		);
-		if ( is_wp_error( $response ) ) {
-			$result['error'] = $response->get_error_message();
-			set_transient( self::TRANSIENT, $result, 10 * MINUTE_IN_SECONDS );
-			return $result;
-		}
-		$status = (int) wp_remote_retrieve_response_code( $response );
-		if ( $status < 200 || $status >= 300 ) {
-			$result['error'] = 'Homepage returned HTTP ' . $status;
-			set_transient( self::TRANSIENT, $result, 10 * MINUTE_IN_SECONDS );
-			return $result;
-		}
-		$body = (string) wp_remote_retrieve_body( $response );
-		if ( preg_match( '/<!-- delicat-builder-v9 ([^\s]+) · rendered ([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}) UTC -->/', $body, $m ) ) {
-			$result['live']     = trim( $m[1] );
-			$result['rendered'] = trim( $m[2] );
-		}
-		$result['header'] = (string) wp_remote_retrieve_header( $response, strtolower( self::HEADER ) );
-		$result['cf_ray'] = (string) wp_remote_retrieve_header( $response, 'cf-ray' );
-		$cache_status     = (string) wp_remote_retrieve_header( $response, 'x-litespeed-cache' );
-		if ( '' === $cache_status ) {
-			$cache_status = (string) wp_remote_retrieve_header( $response, 'cf-cache-status' );
-		}
-		$result['cache'] = $cache_status;
-		set_transient( self::TRANSIENT, $result, 10 * MINUTE_IN_SECONDS );
-		return $result;
-	}
-
-	public static function handle_check(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html__( 'You are not allowed to do this.', 'delicat-builder-v9' ), 403 );
-		}
-		check_admin_referer( 'delicat_builder_v9_deploy_check' );
-		$purge = isset( $_POST['purge'] ) && '1' === $_POST['purge'];
-		if ( $purge && class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'purge_everything' ) ) ) {
-			Delicat_Builder_V9_Cache::purge_everything();
-			self::record_purge( self::version(), 'manual' );
-			/* Give the edge a moment before we read it back. */
-			sleep( 2 );
-		}
-		self::check();
-		wp_safe_redirect( wp_get_referer() ? wp_get_referer() : admin_url() );
-		exit;
-	}
-
-	/**
-	 * Shown on every Delicat admin screen. Loud when the live version lags the
-	 * installed one, quiet and green when they match.
-	 */
-	public static function deploy_notice(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-		$screen = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
-		$id     = $screen instanceof WP_Screen ? (string) $screen->id : '';
-		if ( '' === $id || ( false === strpos( $id, 'delicat' ) && 'plugins' !== $id && 'dashboard' !== $id ) ) {
-			return;
-		}
-
-		$check  = get_transient( self::TRANSIENT );
-		$report = get_option( self::OPTION_REPORT, array() );
-		$report = is_array( $report ) ? $report : array();
-
-		$action = esc_url( admin_url( 'admin-post.php' ) );
-		$nonce  = wp_nonce_field( 'delicat_builder_v9_deploy_check', '_wpnonce', true, false );
-		$form   = static function ( string $label, bool $purge ) use ( $action, $nonce ): string {
-			return '<form method="post" action="' . $action . '" style="display:inline-block;margin:0 6px 0 0">'
-				. $nonce
-				. '<input type="hidden" name="action" value="delicat_builder_v9_deploy_check">'
-				. ( $purge ? '<input type="hidden" name="purge" value="1">' : '' )
-				. '<button type="submit" class="button' . ( $purge ? ' button-primary' : '' ) . '">' . esc_html( $label ) . '</button></form>';
-		};
-
-		echo '<div class="notice ' . ( self::is_stale( $check ) ? 'notice-error' : 'notice-info' ) . '" style="padding:12px 14px">';
-		echo '<p style="margin:0 0 6px"><strong>Delicat Builder V9 — déploiement</strong></p>';
-
-		if ( ! is_array( $check ) ) {
-			echo '<p style="margin:0 0 8px">Version installée : <code>' . esc_html( self::version() ) . '</code>. Aucune vérification n’a encore été faite.</p>';
-		} else {
-			$live = '' !== $check['live'] ? $check['live'] : ( '' !== $check['header'] ? $check['header'] : 'inconnue (aucun tampon dans la page — version antérieure à rc.82)' );
-			echo '<p style="margin:0 0 4px">Installée : <code>' . esc_html( $check['installed'] ) . '</code> &nbsp;·&nbsp; '
-				. 'Servie aux visiteurs : <code>' . esc_html( $live ) . '</code>'
-				. ( '' !== $check['rendered'] ? ' &nbsp;·&nbsp; rendue le ' . esc_html( $check['rendered'] ) . ' UTC' : '' )
-				. '</p>';
-			if ( '' !== $check['error'] ) {
-				echo '<p style="margin:0 0 4px;color:#b32d2e">Impossible de joindre la page d’accueil : ' . esc_html( $check['error'] ) . '</p>';
-			}
-			if ( self::is_stale( $check ) ) {
-				echo '<p style="margin:0 0 8px;color:#b32d2e"><strong>Les visiteurs reçoivent une version antérieure à celle installée.</strong> '
-					. self::diagnose( $check, $report ) . '</p>';
-			} else {
-				echo '<p style="margin:0 0 8px;color:#1e7b3a">La version servie correspond à la version installée.</p>';
-			}
-		}
-
-		if ( ! empty( $report ) ) {
-			echo '<p style="margin:0 0 8px;color:#50575e;font-size:12px">Dernière purge (' . esc_html( (string) ( $report['when'] ?? '' ) ) . ') — '
-				. esc_html( (string) ( $report['summary'] ?? '' ) ) . '</p>';
-		}
-
-		echo $form( 'Vérifier ce que voient les visiteurs', false ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts above.
-		echo $form( 'Purger toutes les couches et revérifier', true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		echo '</div>';
-	}
-
-	private static function is_stale( $check ): bool {
-		if ( ! is_array( $check ) || '' !== (string) $check['error'] ) {
-			return false;
-		}
-		$live = '' !== $check['live'] ? $check['live'] : $check['header'];
-		return '' === $live || $live !== $check['installed'];
-	}
-
-	private static function diagnose( array $check, array $report ): string {
-		$behind_cf = '' !== (string) $check['cf_ray'];
-		$cf_ok     = class_exists( 'Delicat_Builder_V9_Cloudflare', false )
-			&& is_callable( array( 'Delicat_Builder_V9_Cloudflare', 'enabled' ) )
-			&& Delicat_Builder_V9_Cloudflare::enabled();
-		if ( $behind_cf && ! $cf_ok ) {
-			return 'Le site est derrière Cloudflare (en-tête cf-ray présent) mais aucun jeton API n’est configuré dans Delicat → Cloudflare. '
-				. 'La purge LiteSpeed n’atteint jamais le cache de bord : les visiteurs continueront de recevoir l’ancienne page tant que Cloudflare n’est pas purgé — '
-				. 'depuis le tableau de bord Cloudflare, ou en renseignant le jeton pour que le plugin le fasse.';
-		}
-		if ( $behind_cf && $cf_ok ) {
-			return 'Cloudflare est configuré. Si la version reste ancienne après une purge, vérifiez qu’aucune règle « Cache Everything » ne s’applique avec un TTL de bord supérieur, ou purgez depuis Cloudflare.';
-		}
-		if ( ! empty( $report['litespeed'] ) && 'no-listener' === $report['litespeed'] ) {
-			return 'LiteSpeed Cache n’est pas actif ou n’écoute pas litespeed_purge_all — la page est servie par un autre cache (hébergeur, CDN, ou proxy) que ce plugin ne peut pas purger.';
-		}
-		return 'Purgez toutes les couches avec le bouton ci-dessous, puis revérifiez. Si l’ancienne version persiste, un cache que ce plugin ne contrôle pas se trouve devant le site.';
-	}
 
 	/* ------------------------------------------------------------------ */
 	/* 3. Purge report                                                     */
@@ -258,11 +98,11 @@ final class Delicat_Builder_V9_Stability {
 
 		$layers['litespeed'] = has_action( 'litespeed_purge_all' ) ? 'hooked' : 'no-listener';
 
-		$flushed = false;
-		if ( function_exists( 'wp_cache_flush' ) ) {
-			$flushed = (bool) wp_cache_flush();
-		}
-		$layers['object_cache'] = $flushed ? 'flushed' : 'none';
+		/* V10: no wp_cache_flush() here any more. On Redis it emptied the WHOLE object cache once per release
+		 * (WooCommerce, Identity Pro sign-in state, every rate-limit window), on top of the same flush in the Pro
+		 * deploy check. Builder's own fragments and queries are keyed on its cache version, which the release
+		 * purge has just renewed (Delicat_Builder_V9_Cache::purge_everything()); the rest of Redis stays warm. */
+		$layers['object_cache'] = 'versioned';
 
 		$behind_cf = isset( $_SERVER['HTTP_CF_RAY'] ) && '' !== (string) $_SERVER['HTTP_CF_RAY']; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
 		if ( class_exists( 'Delicat_Builder_V9_Cloudflare', false ) && is_callable( array( 'Delicat_Builder_V9_Cloudflare', 'enabled' ) ) && Delicat_Builder_V9_Cloudflare::enabled() ) {

@@ -54,7 +54,6 @@ final class Delicat_Builder_V9_Performance {
 		add_action( 'wp', array( __CLASS__, 'apply_managed_cleanup' ), 40 );
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'dequeue_managed_noncritical' ), 999 );
 		add_action( 'wp_head', array( __CLASS__, 'print_critical_css' ), 2 );
-		add_action( 'wp_head', array( __CLASS__, 'print_high_confidence_preloads' ), 4 );
 		add_filter( 'body_class', array( __CLASS__, 'body_class' ), 50 );
 	}
 
@@ -210,14 +209,6 @@ final class Delicat_Builder_V9_Performance {
 
 		if ( ! self::enabled() || is_admin() || wp_doing_ajax() || is_feed() || is_embed() ) {
 			return;
-		}
-
-		if (
-			class_exists( 'Delicat_Builder_V9_Shell' )
-			&& is_callable( array( 'Delicat_Builder_V9_Shell', 'header_expected' ) )
-			&& Delicat_Builder_V9_Shell::header_expected()
-		) {
-			self::$critical_keys[] = 'shell';
 		}
 
 		if (
@@ -514,7 +505,6 @@ final class Delicat_Builder_V9_Performance {
 			'component:newsletter'     => $component . 'newsletter.css',
 			'component:trust-strip'    => $component . 'trust-strip.css',
 			'component:spacer'         => $component . 'spacer.css',
-			'shell'                    => $critical . 'shell.css',
 			'woo-archive'              => $critical . 'woo-archive.css',
 			'woo-single'               => $critical . 'woo-single.css',
 			'purchase-single'          => $critical . 'purchase-single.css',
@@ -621,50 +611,16 @@ final class Delicat_Builder_V9_Performance {
 		echo '<style id="delicat-builder-v9-critical">' . $css . '</style>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
-	private static function save_data_requested(): bool {
-		$value = isset( $_SERVER['HTTP_SAVE_DATA'] ) ? strtolower( sanitize_text_field( wp_unslash( $_SERVER['HTTP_SAVE_DATA'] ) ) ) : '';
-		return 'on' === $value;
-	}
-
-	public static function print_high_confidence_preloads(): void {
-		if (
-			! self::enabled()
-			|| empty( self::settings()['high_confidence_preloads'] )
-			|| self::save_data_requested()
-		) {
-			return;
-		}
-
-		$urls = array();
-
-		if (
-			! self::managed_homepage_request()
-			&& class_exists( 'Delicat_Builder_V9_Shell' )
-			&& is_callable( array( 'Delicat_Builder_V9_Shell', 'header_expected' ) )
-			&& is_callable( array( 'Delicat_Builder_V9_Shell', 'needs_shell_js' ) )
-			&& Delicat_Builder_V9_Shell::header_expected()
-			&& Delicat_Builder_V9_Shell::needs_shell_js()
-		) {
-			// RC35: on the managed homepage the hero/LCP resource keeps network
-			// priority. Shell JS is still deferred normally, just not preloaded.
-			$path = DELICAT_BUILDER_V9_DIR . 'assets/js/shell.js';
-			if ( is_file( $path ) ) {
-				$urls[] = add_query_arg(
-					'ver',
-					rawurlencode( DELICAT_BUILDER_V9_VERSION ),
-					DELICAT_BUILDER_V9_URL . 'assets/js/shell.js'
-				);
-			}
-		}
-
-		foreach ( array_slice( array_values( array_unique( $urls ) ), 0, 2 ) as $url ) {
-			echo '<link rel="preload" as="script" href="' . esc_url( $url ) . '" fetchpriority="high">' . "\n";
-		}
-	}
+	/**
+	 * V10: print_high_confidence_preloads() is gone. Its only preload was assets/js/shell.js at high priority,
+	 * printed whenever the legacy Shell header rendered; the engine dequeues that script, so the download was
+	 * wasted (and the Header v8 main engine keeps the Shell header off). The « high_confidence_preloads »
+	 * setting stays stored for older builds and is no longer read.
+	 */
 
 	public static function self_test(): array {
 		$map = self::critical_source_map();
-		$required = array( 'component:base', 'shell', 'woo-archive', 'woo-single' );
+		$required = array( 'component:base', 'woo-archive', 'woo-single' );
 		$missing = array();
 		foreach ( $required as $key ) {
 			if ( empty( $map[ $key ] ) || ! is_file( $map[ $key ] ) ) {
@@ -676,17 +632,6 @@ final class Delicat_Builder_V9_Performance {
 			'ok'      => empty( $missing ),
 			'missing' => $missing,
 			'php'     => PHP_VERSION,
-		);
-	}
-
-	public static function diagnostic_graph(): array {
-		return array(
-			'builder_page_id' => self::$builder_page_id,
-			'critical_keys'   => self::$critical_keys,
-			'manifest_graph'  => is_array( self::$manifest['resource_graph'] ?? null )
-				? self::$manifest['resource_graph']
-				: array(),
-			'critical_bytes'  => strlen( self::critical_css() ),
 		);
 	}
 }

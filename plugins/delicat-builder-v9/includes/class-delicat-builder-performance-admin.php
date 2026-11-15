@@ -159,14 +159,11 @@ final class Delicat_Builder_V9_Performance_Admin {
 							<small><?php esc_html_e( '7,000 bytes is recommended for the storefront. Sources that would exceed the cap are skipped rather than bloating the head.', 'delicat-builder-v9' ); ?></small>
 						</div>
 
-						<label class="delicat-switch">
-							<input type="checkbox" name="<?php echo esc_attr( Delicat_Builder_V9_Performance::OPTION ); ?>[high_confidence_preloads]" value="1" <?php checked( ! empty( $s['high_confidence_preloads'] ) ); ?>>
-							<span><strong><?php esc_html_e( 'High-confidence script preload', 'delicat-builder-v9' ); ?></strong><small><?php esc_html_e( 'At most two same-origin Delicat scripts, only when the resource graph says they are immediately useful. Disabled automatically for Save-Data requests.', 'delicat-builder-v9' ); ?></small></span>
-						</label>
 					</section>
 
 					<section class="delicat-admin__card">
 						<h2><?php esc_html_e( 'Predictive navigation', 'delicat-builder-v9' ); ?></h2>
+						<p class="description"><?php esc_html_e( 'Ces réglages ne servent que si le moteur de navigation est coupé (secours). Avec le moteur, la navigation instantanée et ses limites sont réglées dans Delicat Pro.', 'delicat-builder-v9' ); ?></p>
 
 						<label class="delicat-switch">
 							<input type="checkbox" name="<?php echo esc_attr( Delicat_Builder_V9_Performance::OPTION ); ?>[predictive_navigation]" value="1" <?php checked( ! empty( $s['predictive_navigation'] ) ); ?>>

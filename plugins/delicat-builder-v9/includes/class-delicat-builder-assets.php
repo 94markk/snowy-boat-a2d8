@@ -342,7 +342,7 @@ final class Delicat_Builder_V9_Assets {
 	}
 
 	private static function enqueue_script_asset( string $name, array $deps = array() ): void {
-		$allowed = array( 'core', 'carousel', 'heart', 'hero-search', 'prefetch', 'shell', 'theme', 'motion', 'islands' );
+		$allowed = array( 'core', 'carousel', 'heart', 'hero-search', 'prefetch', 'theme', 'motion', 'islands' );
 		if ( ! in_array( $name, $allowed, true ) ) {
 			return;
 		}
@@ -453,29 +453,6 @@ final class Delicat_Builder_V9_Assets {
 		return is_callable( array( 'Delicat_Builder_V9_Shell', 'footer_expected' ) ) && Delicat_Builder_V9_Shell::footer_expected();
 	}
 
-	private static function enqueue_shell_assets(): void {
-		if ( ! self::shell_surface_expected() ) {
-			return;
-		}
-
-		$needs_full_shell_css = ! is_callable( array( 'Delicat_Builder_V9_Shell', 'needs_full_shell_css' ) )
-			|| Delicat_Builder_V9_Shell::needs_full_shell_css();
-		$css_path = DELICAT_BUILDER_V9_DIR . 'assets/css/shell.css';
-		if ( $needs_full_shell_css && is_file( $css_path ) ) {
-			wp_enqueue_style(
-				'delicat-builder-v9-shell',
-				DELICAT_BUILDER_V9_URL . 'assets/css/shell.css',
-				array(),
-				DELICAT_BUILDER_V9_VERSION
-			);
-		}
-
-		if ( is_callable( array( 'Delicat_Builder_V9_Shell', 'needs_shell_js' ) ) && Delicat_Builder_V9_Shell::needs_shell_js() ) {
-			self::enqueue_script_asset( 'shell' );
-		}
-
-	}
-
 	public static function enqueue(): void {
 		if ( ! Delicat_Builder_V9_Core::is_enabled() || is_admin() ) {
 			return;
@@ -485,7 +462,6 @@ final class Delicat_Builder_V9_Assets {
 		$motion = Delicat_Builder_V9_Core::motion_settings();
 
 		self::enqueue_theme_assets();
-		self::enqueue_shell_assets();
 
 		if ( self::$builder_page_id ) {
 			self::enqueue_builder_css();
@@ -621,6 +597,12 @@ final class Delicat_Builder_V9_Assets {
 				'heart'    => $heart_url,
 			),
 		);
+
+		/* V10: the predictive-navigation keys are read only by the legacy prefetch.js, which the engine replaces
+		 * (and dequeues) on every page it delivers; they stay for the engine-off fallback. */
+		if ( class_exists( 'Delicat_Builder_V9_Engine', false ) && is_callable( array( 'Delicat_Builder_V9_Engine', 'active' ) ) && Delicat_Builder_V9_Engine::active() ) {
+			unset( $config['predictiveMode'], $config['intentDelay'], $config['prefetchBudget'], $config['prefetchMaxBytes'], $config['networkAware'], $config['instantProductLaunch'], $config['instantTouchDelay'], $config['archiveTouchPrefetch'] );
+		}
 
 		$config_handle = $needs_core ? 'delicat-builder-v9-core' : 'delicat-builder-v9-islands';
 		wp_add_inline_script(

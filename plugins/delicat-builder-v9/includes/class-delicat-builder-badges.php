@@ -129,11 +129,6 @@ final class Delicat_Builder_V9_Badges {
 		return self::ICONS[ $name ] ?? '';
 	}
 
-	/** @return string[] */
-	public static function icon_names(): array {
-		return array_keys( self::ICONS );
-	}
-
 	/* =====================================================================
 	 * The topics
 	 * ===================================================================== */
@@ -437,21 +432,6 @@ final class Delicat_Builder_V9_Badges {
 			esc_html( $label ),
 			'' !== $title ? ' role="img" title="' . esc_attr( $title ) . '" aria-label="' . esc_attr( $title ) . '"' : '',
 			'' !== $title ? ' aria-hidden="true"' : ''
-		);
-	}
-
-	/**
-	 * "Livraison instantanée", for a digital product.
-	 *
-	 * Same engine, same markup, same drawn icon set - previously this was the
-	 * one badge in the storefront built from an emoji and its own CSS class.
-	 */
-	public static function instant_delivery(): array {
-		return array(
-			'key'   => 'instant',
-			'label' => __( 'Livraison instantanée', 'delicat-builder-v9' ),
-			'icon'  => 'bolt',
-			'tone'  => 'instant',
 		);
 	}
 

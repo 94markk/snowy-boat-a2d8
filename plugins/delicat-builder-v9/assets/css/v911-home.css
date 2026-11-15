@@ -46,8 +46,6 @@ body:not(#d) .delicat-carousel__view-all{min-height:44px!important;display:inlin
 body:not(#d) .delicat-carousel__view-all span{display:none}
 body:not(#d) .delicat-carousel__controls{display:none!important}
 body:not(#d) .delicat-carousel__pagination{display:none!important}
-@media (max-width:600px){
-}
 
 /* Long below-the-fold sections: the browser skips their layout/paint until they come near.
    Ignored by old WebViews (they simply render as before). The banner section is excluded. */
@@ -70,8 +68,8 @@ body:not(#d) .delicat-bk__actions a,body:not(#d) .delicat-bk__actions .delicat-b
 @media (max-width:600px){body:not(#d) .delicat-bk__visual{display:none!important}}
 
 /* Testimonials, FAQ, how it works, trust: flat cards */
-body:not(#d) .delicat-testimonials__card,body:not(#d) .delicat-testimonials__item,body:not(#d) .delicat-faq__item,body:not(#d) .delicat-process__card,body:not(#d) .delicat-trust__panel{background:var(--v-sf)!important;background-image:none!important;border:1px solid var(--v-edge)!important;box-shadow:none!important;color:var(--v-ink)!important}
-body:not(#d) .delicat-testimonials__card,body:not(#d) .delicat-testimonials__item,body:not(#d) .delicat-process__card,body:not(#d) .delicat-trust__panel{border-radius:var(--v-r-card,18px)!important}
+body:not(#d) .delicat-testimonials__item,body:not(#d) .delicat-faq__item,body:not(#d) .delicat-process__card,body:not(#d) .delicat-trust__panel{background:var(--v-sf)!important;background-image:none!important;border:1px solid var(--v-edge)!important;box-shadow:none!important;color:var(--v-ink)!important}
+body:not(#d) .delicat-testimonials__item,body:not(#d) .delicat-process__card,body:not(#d) .delicat-trust__panel{border-radius:var(--v-r-card,18px)!important}
 body:not(#d) .delicat-faq__item{border-radius:14px!important}
 body:not(#d) .delicat-testimonials__title,body:not(#d) .delicat-faq__title,body:not(#d) .delicat-process__title{color:var(--v-ink)!important;font:800 18px/1.25 var(--v-font)!important;letter-spacing:-.01em!important;-webkit-text-fill-color:currentColor!important;background:none!important;text-transform:none!important}
 body:not(#d) .delicat-process__card::before,body:not(#d) .delicat-process__card::after{box-shadow:none!important}

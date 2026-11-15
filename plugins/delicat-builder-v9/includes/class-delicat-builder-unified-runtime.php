@@ -36,6 +36,11 @@ final class Delicat_Builder_V9_Unified_Modules {
 		self::load_modules();
 	}
 
+	/** V10: true on page requests (and when the bootstrap profile is unknown, as before). */
+	private static function page_profile(): bool {
+		return ! defined( 'DELICAT_BUILDER_V9_PROFILE' ) || 'storefront' === DELICAT_BUILDER_V9_PROFILE;
+	}
+
 	public static function legacy_builder_active(): bool {
 		return defined( 'DSB_VERSION' ) || function_exists( 'dsb_available_modules' ) || function_exists( 'dsb_asset' );
 	}
@@ -158,9 +163,12 @@ final class Delicat_Builder_V9_Unified_Modules {
 	private static function load_modules(): void {
 		$settings = self::settings();
 
+		/* V10: the install manifest, the service worker and the head tags exist for pages only. REST, wc-ajax and
+		 * WP-Cron requests no longer parse and boot the PWA (its endpoints are page-profile requests, and its
+		 * path fallback serves them even when a flush elsewhere dropped the rewrite rules). */
 		self::load_one(
 			'pwa',
-			! empty( $settings['pwa'] ),
+			! empty( $settings['pwa'] ) && self::page_profile(),
 			self::legacy_pwa_active(),
 			static function (): void {
 				if ( ! class_exists( 'Delicat_Builder_V9_PWA', false ) && function_exists( 'delicat_builder_v9_safe_require' ) ) {
@@ -246,6 +254,7 @@ final class Delicat_Builder_V9_Unified_Modules {
 			 * cart-session restoration lifecycle is never missed.
 			 */
 			self::set_runtime( 'product_fields', 'deferred', 'Waiting for WooCommerce page context.' );
+			add_action( 'wp_loaded', array( __CLASS__, 'boot_product_fields_saved_cart' ), 0 );
 			add_action( 'wp', array( __CLASS__, 'boot_product_fields_frontend' ), -90 );
 		}
 	}
@@ -273,14 +282,18 @@ final class Delicat_Builder_V9_Unified_Modules {
 		 * restore a persistent cart mid-request) still boot early so the
 		 * session-rehydration filters are never missed.
 		 */
+		/*
+		 * V10: only a cart holding items can carry a calculator line to rehydrate. A WooCommerce session cookie
+		 * alone (every signed-in customer has one, cart empty or not) parsed the 66 KB calculator on every account
+		 * and home page view. WooCommerce sets woocommerce_items_in_cart on the response that first gives the cart
+		 * an item (add to cart is a POST or wc-ajax, below) and on any page load that restores a non-empty cart,
+		 * and keeps it while the cart has items. Product, cart and checkout pages still get the calculator at `wp`,
+		 * and the first request after a sign-in that merges a saved cart gets it at wp_loaded (see
+		 * boot_product_fields_saved_cart(); the user is never resolved here, before Identity Pro's filters exist).
+		 */
 		// Presence checks only; request values are never trusted or executed here.
 		if ( ! empty( $_COOKIE['woocommerce_items_in_cart'] ) ) { // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			return true;
-		}
-		foreach ( array_keys( (array) $_COOKIE ) as $cookie_name ) {
-			if ( 0 === strpos( (string) $cookie_name, 'wp_woocommerce_session_' ) ) {
-				return true;
-			}
 		}
 		if ( isset( $_REQUEST['add-to-cart'] ) || isset( $_REQUEST['wc-ajax'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 			return true;
@@ -289,6 +302,35 @@ final class Delicat_Builder_V9_Unified_Modules {
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * V10: the first request after a sign-in merges the customer's saved cart into this browser's session, at
+	 * wp_loaded (priority 10, WC_Cart_Session::get_cart_from_session), possibly before woocommerce_items_in_cart
+	 * exists. WooCommerce flags that request in the user's meta. Checked here, at wp_loaded 0, where resolving the
+	 * signed-in user is safe (every plugin's determine_current_user filter is registered), and only when a
+	 * WordPress sign-in cookie is present at all.
+	 */
+	public static function boot_product_fields_saved_cart(): void {
+		$signed_in_cookie = false;
+		foreach ( array_keys( (array) $_COOKIE ) as $cookie_name ) {
+			if ( 0 === strpos( (string) $cookie_name, 'wordpress_logged_in_' ) ) {
+				$signed_in_cookie = true;
+				break;
+			}
+		}
+		if ( ! $signed_in_cookie || ! is_user_logged_in() || ! get_user_meta( get_current_user_id(), '_woocommerce_load_saved_cart_after_login', true ) ) {
+			return;
+		}
+		try {
+			self::load_product_fields();
+			if ( ! self::legacy_product_fields_active() ) {
+				self::set_runtime( 'product_fields', 'active', 'Builder V9 owns this system.' );
+			}
+		} catch ( Throwable $error ) {
+			self::record_failure( 'product_fields', $error );
+			self::set_runtime( 'product_fields', 'error', 'V9 kept the module offline after a boot exception.' );
+		}
 	}
 
 	public static function boot_product_fields_frontend(): void {
@@ -332,7 +374,8 @@ final class Delicat_Builder_V9_Unified_Modules {
 	}
 
 	public static function load_product_fields(): void {
-		if ( ! class_exists( 'WooCommerce' ) ) { return; }
+		static $loaded = false;
+		if ( $loaded || ! class_exists( 'WooCommerce' ) ) { return; }
 		// Second guard closes any load-order race between the initial ownership
 		// check and the actual module include.
 		if ( self::legacy_product_fields_active() ) {
@@ -349,6 +392,7 @@ final class Delicat_Builder_V9_Unified_Modules {
 		if ( ! class_exists( 'Delicat_Builder_V9_Product_Fields_Calculator', false ) ) { throw new RuntimeException( 'Calculator class unavailable.' ); }
 		$calculator = new Delicat_Builder_V9_Product_Fields_Calculator();
 		$calculator->init();
+		$loaded = true; /* V10: one calculator per request, whichever hook asked first */
 
 		if ( is_admin() ) {
 			$path = $base . 'class-dmc-calc-admin.php';

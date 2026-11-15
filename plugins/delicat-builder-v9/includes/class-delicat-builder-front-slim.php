@@ -6,46 +6,34 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * RC51.36 — Front Slim.
  *
- * Complements TurboNav's head trim with the front-end bloat it does not touch:
- *
  * 1. GOOGLE FONTS. Playfair/Poppins load from fonts.googleapis.com without a
  *    preconnect to fonts.gstatic.com, costing a full extra connection setup
  *    (DNS+TCP+TLS, easily 100–300 ms on Haitian mobile RTTs) before text can
  *    swap in. Adds both preconnects only when a Google Fonts stylesheet is
  *    actually queued, and enforces display=swap so text never blocks on fonts.
  *
- * 2. CART FRAGMENTS DELAY. TurboNav already drops wc-cart-fragments for
- *    guests with an empty cart. For everyone else it still fires an
- *    uncacheable admin-ajax POST during page load. Since those visitors get a
- *    server-rendered cart badge anyway (they bypass page caches), the script
- *    can load after first interaction or idle instead of competing with LCP.
- *
- * 3. JQUERY MIGRATE (~12 KB) removed on the front end — nothing in the
+ * 2. JQUERY MIGRATE (~12 KB) removed on the front end — nothing in the
  *    Elementor/Woo/V9 stack needs 1.x shims.
  *
- * 4. HEARTBEAT disabled on the front end (it exists for wp-admin post
- *    locking; on a storefront it is pure idle polling).
- *
- * 5. DASHICONS dequeued for logged-out visitors (only the admin bar needs it).
+ * V10: the script diet (heartbeat, guest dashicons, managed-home fonts, head
+ * cleanup, the cart-fragments delay) and the defer pass are gone. With the Pro
+ * asset layer on (the default) DBP_Kernel removed both at `wp` on every page, so
+ * they never ran in production; the head trims live in TurboNav and DBP_Assets,
+ * and the engine owns script delivery.
  *
  * Every behavior is filterable via delicat_builder_v9_front_slim_{feature}
  * and the whole module respects Core enable/safe-mode. Front-end only.
- * Requires PHP 8.3 (gated in the main plugin file). The inline loader is ES5.
+ * Requires PHP 8.3 (gated in the main plugin file).
  */
 final class Delicat_Builder_V9_Front_Slim {
-
-	private static $delayed_fragments = null;
 
 	public static function boot(): void {
 		if ( is_admin() ) {
 			return;
 		}
 		add_action( 'wp_default_scripts', array( __CLASS__, 'remove_jquery_migrate' ) );
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'slim_scripts' ), 999 );
-		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'defer_plugin_scripts' ), 9999 );
 		add_filter( 'wp_resource_hints', array( __CLASS__, 'font_preconnects' ), 10, 2 );
 		add_filter( 'style_loader_src', array( __CLASS__, 'force_font_display_swap' ), 20 );
-		add_action( 'wp_footer', array( __CLASS__, 'print_fragments_loader' ), 99 );
 	}
 
 	private static function active(): bool {
@@ -111,7 +99,7 @@ final class Delicat_Builder_V9_Front_Slim {
 	}
 
 	/* ------------------------------------------------------------------ */
-	/* 2–5. Script diet                                                    */
+	/* 2. jQuery Migrate                                                   */
 	/* ------------------------------------------------------------------ */
 
 	public static function remove_jquery_migrate( $scripts ): void {
@@ -122,163 +110,6 @@ final class Delicat_Builder_V9_Front_Slim {
 		if ( ! empty( $jquery->deps ) && is_array( $jquery->deps ) ) {
 			$jquery->deps = array_values( array_diff( $jquery->deps, array( 'jquery-migrate' ) ) );
 		}
-	}
-
-	public static function slim_scripts(): void {
-		if ( ! self::active() ) {
-			return;
-		}
-
-		if ( self::feature( 'no_front_heartbeat' ) ) {
-			wp_deregister_script( 'heartbeat' );
-		}
-
-		if ( self::feature( 'no_guest_dashicons' ) && ! is_user_logged_in() ) {
-			wp_dequeue_style( 'dashicons' );
-		}
-
-		/* 9.1 RC4: a managed V9 homepage uses the system-font token from
-		 * theme-system/components. Any theme/legacy Google Font stylesheet is
-		 * therefore dead weight there. Native documents already remove these in
-		 * Storefront Fix; this closes the homepage gap without touching ordinary
-		 * theme pages that may genuinely depend on the font. */
-		if (
-			self::feature( 'no_managed_home_google_fonts' )
-			&& function_exists( 'is_front_page' )
-			&& is_front_page()
-			&& function_exists( 'delicat_builder_v9_is_managed_page' )
-			&& delicat_builder_v9_is_managed_page( absint( get_queried_object_id() ) )
-		) {
-			$styles = wp_styles();
-			if ( $styles ) {
-				foreach ( (array) $styles->queue as $handle ) {
-					$registered = $styles->registered[ $handle ] ?? null;
-					$src = is_object( $registered ) ? (string) $registered->src : '';
-					if ( false !== strpos( $src, 'fonts.googleapis.com' ) || false !== strpos( $src, 'fonts.gstatic.com' ) ) {
-						wp_dequeue_style( $handle );
-					}
-				}
-			}
-		}
-
-		/* 9.1 RC2: classic head cleanup — emoji shims, oEmbed discovery, RSD,
-		 * wlwmanifest, shortlinks and the REST discovery link cost bytes or a
-		 * request on every page and serve nothing on this storefront. */
-		if ( self::feature( 'head_cleanup' ) ) {
-			remove_action( 'wp_head', 'print_emoji_detection_script', 7 );
-			remove_action( 'wp_print_styles', 'print_emoji_styles' );
-			add_filter( 'emoji_svg_url', '__return_false' );
-			remove_action( 'wp_head', 'wp_oembed_add_discovery_links' );
-			remove_action( 'wp_head', 'rest_output_link_wp_head' );
-			remove_action( 'wp_head', 'wp_shortlink_wp_head' );
-			remove_action( 'wp_head', 'rsd_link' );
-			remove_action( 'wp_head', 'wlwmanifest_link' );
-			add_filter( 'show_recent_comments_widget_style', '__return_false' );
-		}
-
-		self::maybe_delay_cart_fragments();
-	}
-
-
-	/**
-	 * Apply the defer strategy after normal component enqueues have finished.
-	 * Keeping this as a real late hook avoids registering a hook while the same
-	 * hook is already executing, which is harder to reason about across WP versions.
-	 */
-	public static function defer_plugin_scripts(): void {
-		if ( ! self::active() || ! self::feature( 'defer_plugin_scripts' ) || ! function_exists( 'wp_scripts' ) ) {
-			return;
-		}
-		$scripts = wp_scripts();
-		if ( ! $scripts ) return;
-		foreach ( (array) $scripts->queue as $handle ) {
-			if ( 0 === strpos( (string) $handle, 'delicat' ) || 0 === strpos( (string) $handle, 'dsb' ) ) {
-				wp_script_add_data( $handle, 'strategy', 'defer' );
-			}
-		}
-	}
-
-	/**
-	 * Convert wc-cart-fragments into an interaction/idle-deferred load.
-	 * Never on Cart/Checkout (fragments drive real UI there). If TurboNav
-	 * already dropped the handle (guest + empty cart) there is nothing to do.
-	 */
-	private static function maybe_delay_cart_fragments(): void {
-		if ( ! self::feature( 'delay_cart_fragments' ) ) {
-			return;
-		}
-		if ( ( function_exists( 'is_cart' ) && is_cart() ) || ( function_exists( 'is_checkout' ) && is_checkout() ) ) {
-			return;
-		}
-
-		$scripts = wp_scripts();
-		if ( ! $scripts || ! wp_script_is( 'wc-cart-fragments', 'enqueued' ) || empty( $scripts->registered['wc-cart-fragments'] ) ) {
-			return;
-		}
-
-		$registered = $scripts->registered['wc-cart-fragments'];
-		$src = (string) $registered->src;
-		if ( '' === $src ) {
-			return;
-		}
-		if ( 0 === strpos( $src, '//' ) ) {
-			$src = 'https:' . $src; /* 9.13.0 (audit L-1): https only, whatever is_ssl() says behind the edge */
-		} elseif ( 0 === strpos( $src, '/' ) ) {
-			$src = site_url( $src );
-		}
-		$ver = (string) ( $registered->ver ? $registered->ver : '' );
-		if ( '' !== $ver ) {
-			$src = add_query_arg( 'ver', rawurlencode( $ver ), $src );
-		}
-
-		self::$delayed_fragments = array(
-			'src'  => esc_url_raw( $src ),
-			/* Localized wc_cart_fragments_params must exist before the script runs. */
-			'data' => (string) $scripts->get_data( 'wc-cart-fragments', 'data' ),
-		);
-		wp_dequeue_script( 'wc-cart-fragments' );
-	}
-
-	public static function print_fragments_loader(): void {
-		if ( empty( self::$delayed_fragments ) || ! self::active() ) {
-			return;
-		}
-		$src  = (string) self::$delayed_fragments['src'];
-		$data = (string) self::$delayed_fragments['data'];
-		if ( '' === $src ) {
-			return;
-		}
-
-		if ( '' !== $data ) {
-			echo '<script id="dbv9-fragments-params">' . $data . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_scripts localized data, printed verbatim as core would.
-		}
-		?>
-		<script id="dbv9-fragments-delay">
-		(function () {
-			'use strict';
-			var loaded = false;
-			function go() {
-				if (loaded) { return; }
-				loaded = true;
-				var s = document.createElement('script');
-				s.src = <?php echo wp_json_encode( $src ); ?>;
-				s.defer = true;
-				document.body.appendChild(s);
-				document.removeEventListener('pointerdown', go, true);
-				document.removeEventListener('keydown', go, true);
-				document.removeEventListener('scroll', go, true);
-			}
-			document.addEventListener('pointerdown', go, { passive: true, capture: true });
-			document.addEventListener('keydown', go, { passive: true, capture: true });
-			document.addEventListener('scroll', go, { passive: true, capture: true });
-			if ('requestIdleCallback' in window) {
-				window.requestIdleCallback(go, { timeout: 5000 });
-			} else {
-				window.setTimeout(go, 5000);
-			}
-		})();
-		</script>
-		<?php
 	}
 }
 

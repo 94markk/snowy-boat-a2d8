@@ -170,7 +170,7 @@ RULES;
         // Atomic DB lock: never delete another request's live lock.
         $lock = time() . '|' . bin2hex( random_bytes( 16 ) );
         if ( ! add_option( self::LOCK, $lock, '', false ) ) { self::fail( 'Un téléversement est déjà en cours. Si un transfert a été interrompu, utilisez le bouton de réinitialisation après 15 minutes.' ); }
-        $result = null; $destination = ''; $committed = false;
+        $result = null; $destination = ''; $committed = false; $kept = ''; $kept_dir = '';
         try {
             $result = self::validate( $file['tmp_name'], $file['name'], self::limit() );
             if ( ! is_wp_error( $result ) && '' !== $expected && ! hash_equals( $expected, $result['sha256'] ) ) { $result = new WP_Error( 'apk_checksum', 'L’empreinte SHA-256 ne correspond pas au fichier attendu. Aucun fichier n’a été publié.' ); }
@@ -198,7 +198,7 @@ RULES;
                     if ( get_option( self::LOCK, '' ) !== $lock ) { $result = new WP_Error( 'apk_lock', 'Ce transfert a été réinitialisé. Réessayez.' ); }
                     elseif ( ! update_option( Delicat_Builder_V9_App_Download::OPTION, $settings, false ) ) { $result = new WP_Error( 'apk_save', 'Impossible de sauvegarder le lien. Le fichier n’a pas été publié sur la page.' ); }
                     else {
-                        $committed = true;
+                        $committed = true; $kept = $name; $kept_dir = $storage['dir'];
                         update_option( self::META, array( 'url' => $url, 'sha256' => $result['sha256'], 'bytes' => $result['bytes'], 'uploaded_at' => gmdate( 'c' ), 'uploaded_by' => get_current_user_id(), 'package' => $result['package'], 'version_code' => (int) $result['version_code'], 'version_name' => (string) $result['version_name'], 'build' => (int) $result['build'], 'min_sdk' => (int) $result['min_sdk'] ), false );
                     }
                 }
@@ -208,8 +208,30 @@ RULES;
             if ( ! $committed && $destination && is_file( $destination ) ) { wp_delete_file( $destination ); }
             self::release_lock( $lock );
         }
+        if ( $committed ) {
+            try { self::prune_previous( $kept_dir, $kept ); } catch ( Throwable $e ) { unset( $e ); }
+        }
         if ( is_wp_error( $result ) ) { self::fail( $result ); }
         wp_safe_redirect( add_query_arg( array( 'page' => 'delicat-builder-app-download', 'apk_uploaded' => '1' ), admin_url( 'admin.php' ) ) ); exit;
+    }
+    /**
+     * V10 (security review #11): once a new build is published, the older ones leave the public folder
+     * (a build with known bugs stayed installable from any shared link, 30-60 MB each on the disk quota).
+     * Only generated names directly inside the storage folder; never the build just published. A
+     * download already running finishes: the server keeps the open file.
+     */
+    private static function prune_previous( string $dir, string $keep ): int {
+        $real = '' !== $dir ? realpath( $dir ) : false;
+        if ( false === $real || ! preg_match( '/^delicat-[a-f0-9]{32}\.apk$/D', $keep ) || ! is_file( $real . '/' . $keep ) ) { return 0; }
+        $removed = 0;
+        foreach ( (array) glob( $real . '/delicat-*.apk', GLOB_NOSORT ) as $path ) {
+            $path = (string) $path;
+            $base = basename( $path );
+            if ( $base === $keep || ! preg_match( '/^delicat-[a-f0-9]{32}\.apk$/D', $base ) || is_link( $path ) || ! is_file( $path ) || dirname( (string) realpath( $path ) ) !== $real ) { continue; }
+            wp_delete_file( $path );
+            if ( ! file_exists( $path ) ) { $removed++; }
+        }
+        return $removed;
     }
     /** Compare-and-delete ensures an old request cannot release a newer upload's lock. */
     private static function release_lock( string $lock ): void {

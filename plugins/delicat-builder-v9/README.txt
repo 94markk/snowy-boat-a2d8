@@ -68,57 +68,6 @@ classes, doublon du garde de l’ancienne cloche) ; les anciennes notes de versi
 fichier, l’historique complet reste dans les fichiers CHANGESET livrés avec chaque version.
 Après installation : vider le cache LiteSpeed (Purge All), puis Header Studio › largeur du contenu = 1248.
 
-9.13.0 — Corrections de l’audit sécurité / vitesse du 12 novembre 2026 (partie Builder)
-(1) Vérification du Player ID sur une page en cache : les jetons de sécurité des fournisseurs (Fazercard, Shop2TopUp,
-Top-Up Connector) imprimés dans une page gardée en cache expiraient après 12 à 24 h et « Vérifier » répondait « -1 »
-ou « Session expirée ». Au premier toucher d’un champ fournisseur, le Builder demande des jetons frais au serveur et
-les met à jour (aussi après un changement de région) ; un « Vérifier » touché pendant cette demande attend 4 s au plus.
-(2) Le Top-Up Connector ne charge plus son CSS/JS (≈ 15 Ko) sur les produits qu’il ne vend pas.
-(3) Builder › Security Studio : « Masquer l’index de l’API aux visiteurs » (activé par défaut). Les visiteurs ne voient
-plus la liste des extensions dans /wp-json/ ; les routes, l’application Android et les paiements fonctionnent comme
-avant. Décochez si l’application WooCommerce, Jetpack ou Site Kit ne trouve plus le site.
-(4) Petites corrections : clé d’application des notifications refusée quand l’API Délicat envoie les notifications ;
-scripts toujours en https ; formulaire de lettre d’information en https ; redirection HTTPS permanente (301).
-(5) Quand un groupe de l’API Switcher change de fournisseur, les pages des produits concernés sont aussi vidées du
-cache LiteSpeed une par une.
-(6) Plus rapide : 8 lectures de la base et 2 déchiffrements en moins à chaque page non mise en cache (réglages lus à
-chaque visite rendus « autoload », clés Web Push et Cloudflare lus seulement quand ils servent).
-
-9.12.5 — Changement de région rapide sur réseau lent
-(1) Les régions (Amérique du Nord, Europe…) pointent vers la vraie page du produit au lieu du lien de redirection de
-l’API Switcher (/?delicat_product=…) : sur un téléphone lent, la redirection seule coûtait ~1,9 s. Le lien est calculé
-au chargement de la page à partir du réglage de l’API Switcher (aucun appel distant), gardé en cache et effacé dès
-qu’un groupe, un produit ou les permaliens changent ; si la page ne peut pas être trouvée, l’ancien lien est gardé.
-(2) Au toucher : la région choisie s’affiche tout de suite avec un petit indicateur, « n / N » suit, le bloc PACKAGE
-s’estompe avec une fine barre en haut ; la page ne devient jamais blanche. Après 8 s, « Ouvrir la page » propose un
-chargement normal.
-(3) Sur réseau lent, la page de la région est demandée dès que le doigt se pose (une seule requête, dans le budget) ;
-toujours aucun préchargement de fond sur réseau lent ; sur réseau rapide, les 2 régions voisines restent préparées.
-Mesure (1,4 Mbit/s, 250 ms, processeur ×4) : Amérique du Nord → Europe 4,1 s → 2,2 s.
-
-9.12.4 — Paiement express plus sûr, premier toucher jamais perdu, messages sous les champs, moins de requêtes
-(1) Paiement Wallet : la demande attend jusqu’à 2 minutes (la livraison du fournisseur peut se faire pendant le
-paiement) ; après 8 s « Paiement en cours… » et « La livraison peut prendre jusqu’à une minute, ne fermez pas cette
-fenêtre ». La demande n’est jamais renvoyée. Délai dépassé, connexion coupée, page 403/502/503/504 de l’hébergeur ou
-« demande déjà envoyée » : plus de message rouge, la fenêtre affiche « Nous vérifions votre paiement… » et vérifie le
-résultat toutes les 3 s pendant 3 minutes (onglet visible) : confirmé → « Paiement confirmé » puis la page de la
-commande ; reçu → « Commande reçue — paiement en cours de vérification » ; refusé → message clair et commande
-rechargée ; toujours inconnu → « Consultez vos commandes ». Boutons « Vérifier mes commandes » et « Vérifier ce
-paiement » séparés (44 px), avis orange pour une vérification, rouge seulement pour un vrai échec.
-(2) Serveur : une même demande renvoyée répond « duplicate » (la fenêtre vérifie au lieu d’afficher une erreur) ; un
-autre paiement en cours répond « busy ». Aucune protection n’est assouplie, aucune règle de débit ne change.
-(3) Premier toucher avec LiteSpeed « Delay JS » : « Acheter » / « Ajouter au panier » répondent toujours. Le bouton
-tourne tout de suite et l’action repart dès que la page est prête (10 s au plus, puis envoi classique du formulaire
-avec le pack choisi).
-(4) Champs obligatoires : sans pack « Choisissez un pack. » ; Player ID vide « Entrez votre ID joueur » ; e-mail
-Netflix vide « Entrez votre adresse e-mail » (ou le message du navigateur) : le champ est amené à l’écran, entouré,
-le message est juste dessous et disparaît dès qu’on écrit.
-(5) Moins de requêtes (contre les 403 de l’hébergeur) : préchargement 3 au plus par page, un à la fois, 1,5 s
-d’écart, seulement sur un vrai toucher ; régions : les 2 voisines après 3 s de calme ; règles de préchargement du
-navigateur « conservative » ; session, ventes en direct (60 s), notifications (120 s) et promos espacées ; après un
-403 / 429 / 503, plus aucune requête de fond pendant 10 minutes (tous les onglets).
-(6) Reprend la 9.12.3 du propriétaire (connexion tactile, Identity Pro 6.17.7).
-
 Install / acceptance test
 -------------------------
 1. Back up WordPress database + wp-content.

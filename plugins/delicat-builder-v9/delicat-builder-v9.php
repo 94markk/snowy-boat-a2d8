@@ -384,10 +384,54 @@ function delicat_builder_v9_run_pending_purge(): void {
 		return;
 	}
 	delete_option( 'delicat_builder_v9_purge_pending' );
+	/* V10: one purge per request. The once-per-version release purge (Cache::maybe_purge_after_upgrade, init 11)
+	 * has already renewed the cache version and emptied LiteSpeed on this request. */
+	if ( did_action( 'delicat_builder_v9_version_purged' ) ) {
+		return;
+	}
 	if ( class_exists( 'Delicat_Builder_V9_Cache', false ) && is_callable( array( 'Delicat_Builder_V9_Cache', 'bump_version' ) ) ) {
 		Delicat_Builder_V9_Cache::bump_version();
 	}
 	do_action( 'litespeed_purge_all' );
+}
+
+/**
+ * V10 (security review #5): one visitor must not switch the whole store to Safe Mode. A fatal raised after
+ * WordPress finished loading (in a page, REST, AJAX or wc-ajax handler) on a request that is not an
+ * administrator's trips Safe Mode only once the same fatal came from three different visitors (Security's
+ * client bucket: IPv4 address or IPv6 /64) within ten minutes. A fatal during boot, which every request
+ * would hit, and an administrator's fatal still trip at once. True while the quorum is not reached: the
+ * fatal is recorded (delicat_builder_v9_last_bootstrap_fatal), Safe Mode and the breaker wait.
+ */
+function delicat_builder_v9_fatal_awaits_quorum( string $hash ): bool {
+	if ( '' === $hash || ! function_exists( 'did_action' ) || ! did_action( 'wp_loaded' ) || ! function_exists( 'get_option' ) ) {
+		return false;
+	}
+	if ( function_exists( 'is_user_logged_in' ) && is_user_logged_in() && function_exists( 'current_user_can' ) && current_user_can( 'manage_options' ) ) {
+		return false;
+	}
+	if ( class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_bucket' ) ) ) {
+		$client = (string) Delicat_Builder_V9_Security::client_bucket();
+	} else {
+		$client = isset( $_SERVER['REMOTE_ADDR'] ) && is_string( $_SERVER['REMOTE_ADDR'] ) ? $_SERVER['REMOTE_ADDR'] : 'unknown'; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- hashed, never stored raw.
+	}
+	$client = substr( hash( 'sha256', $client . '|' . ( function_exists( 'wp_salt' ) ? (string) wp_salt( 'nonce' ) : '' ) ), 0, 16 );
+	$now    = time();
+	$votes  = get_option( 'delicat_builder_v9_fatal_votes', array() );
+	$votes  = is_array( $votes ) ? $votes : array();
+	foreach ( $votes as $key => $vote ) {
+		if ( ! is_array( $vote ) || $now - (int) ( $vote['first'] ?? 0 ) >= 600 ) {
+			unset( $votes[ $key ] );
+		}
+	}
+	$vote = $votes[ $hash ] ?? array( 'first' => $now, 'clients' => array() );
+	$seen = is_array( $vote['clients'] ?? null ) ? array_values( $vote['clients'] ) : array();
+	if ( ! in_array( $client, $seen, true ) ) {
+		$seen[] = $client;
+	}
+	$votes[ $hash ] = array( 'first' => (int) $vote['first'], 'clients' => array_slice( $seen, 0, 3 ) );
+	update_option( 'delicat_builder_v9_fatal_votes', array_slice( $votes, -8, null, true ), false );
+	return count( $votes[ $hash ]['clients'] ) < 3;
 }
 
 /* Every automatic Safe Mode trip writes this one option, from a dozen guarded places; none of them may switch the
@@ -502,6 +546,13 @@ register_shutdown_function(
 		if ( $resource_fatal || $in_flux ) {
 			return;
 		}
+		try {
+			if ( delicat_builder_v9_fatal_awaits_quorum( (string) $event['hash'] ) ) {
+				return;
+			}
+		} catch ( Throwable $delicat_builder_v9_quorum_error ) {
+			unset( $delicat_builder_v9_quorum_error ); // fall back to tripping, as before
+		}
 		update_option( 'delicat_builder_v9_safe_mode', 1, false );
 		update_option(
 			'delicat_builder_v9_safe_mode_meta',
@@ -612,6 +663,66 @@ require_once DELICAT_BUILDER_V9_DIR . 'includes/class-delicat-builder-design-sys
 Delicat_Builder_V9_Design_System::boot();
 define( 'DELICAT_BUILDER_V9_URL', set_url_scheme( plugin_dir_url( __FILE__ ), 'https' ) );
 
+/**
+ * V10 REQUEST PROFILE
+ * -------------------
+ * Decided once, from the request itself, before any module is chosen: the option pre-load, the module list, the
+ * Pro layers and the always-on floor all key off it.
+ *
+ *   storefront  a page or any other front-end request that is none of the below (WP-CLI and wp-login.php included)
+ *   rest        /wp-json/… (also behind index.php) or ?rest_route=
+ *   session     ?wc-ajax=delicat_session (the engine's session JSON)
+ *   commerce    any other ?wc-ajax= (cart fragments, add to cart, coupons, update_order_review, checkout, express)
+ *   jobs        wp-cron.php (WP-Cron and the Action Scheduler queue it runs)
+ *   ajax        admin-ajax.php
+ *   admin       wp-admin and admin-post.php
+ *   activate    the plugin activation sandbox, which parses no class files
+ */
+function delicat_builder_v9_request_profile(): string {
+	static $profile = null;
+	if ( null !== $profile ) {
+		return $profile;
+	}
+	$scalar = static function ( $value ): string {
+		return is_scalar( $value ) ? wp_unslash( (string) $value ) : '';
+	};
+	if ( is_admin() && ! wp_doing_ajax() ) {
+		$action = isset( $_REQUEST['action'] ) ? sanitize_key( $scalar( $_REQUEST['action'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+		$plugin = isset( $_REQUEST['plugin'] ) ? sanitize_text_field( $scalar( $_REQUEST['plugin'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+		$profile = in_array( $action, array( 'activate', 'activate-selected' ), true ) && ( '' === $plugin || plugin_basename( DELICAT_BUILDER_V9_FILE ) === $plugin )
+			? 'activate'
+			: 'admin';
+		return $profile;
+	}
+	if ( wp_doing_ajax() ) {
+		return $profile = 'ajax';
+	}
+	if ( wp_doing_cron() ) {
+		return $profile = 'jobs';
+	}
+	/* The query string only, as WooCommerce reads it (WC_AJAX::define_ajax): a page POST whose body happens to carry
+	 * a « wc-ajax » field is still a page. */
+	$wc_ajax = isset( $_GET['wc-ajax'] ) ? sanitize_key( $scalar( $_GET['wc-ajax'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+	if ( '' !== $wc_ajax ) {
+		return $profile = 'delicat_session' === $wc_ajax ? 'session' : 'commerce';
+	}
+	if ( isset( $_GET['rest_route'] ) && '' !== $scalar( $_GET['rest_route'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+		return $profile = 'rest';
+	}
+	if ( isset( $_SERVER['REQUEST_URI'] ) ) {
+		$path   = strtolower( (string) wp_parse_url( $scalar( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ) ) . '/';
+		$home   = rtrim( strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ) ), '/' );
+		$prefix = '/' . trim( strtolower( function_exists( 'rest_get_url_prefix' ) ? (string) rest_get_url_prefix() : 'wp-json' ), '/' ) . '/';
+		foreach ( array( $prefix, '/index.php' . $prefix ) as $needle ) {
+			if ( 0 === strpos( $path, $home . $needle ) ) {
+				return $profile = 'rest';
+			}
+		}
+	}
+	return $profile = 'storefront';
+}
+define( 'DELICAT_BUILDER_V9_PROFILE', delicat_builder_v9_request_profile() );
+
 /*
  * V9 PRO KERNEL
  * -------------
@@ -698,88 +809,134 @@ function delicat_builder_v9_request_scalar( $value ): string {
  * a name that is already autoloaded costs nothing (wp_prime_option_caches
  * skips cache hits), and priming a missing one just records `notoptions`.
  */
-/* 9.5.5: not for heartbeat and other plugins' admin-ajax calls - this plugin loads no module
- * there, so the 60-row read was pure overhead on the most frequent admin request. */
-$delicat_builder_v9_prime_skip = wp_doing_ajax() && isset( $_REQUEST['action'] ) && 'heartbeat' === $_REQUEST['action']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-if ( function_exists( 'wp_prime_option_caches' ) && ! $delicat_builder_v9_prime_skip ) {
-	wp_prime_option_caches(
-		array(
-			'delicat_builder_v9_safe_mode',
-			'delicat_builder_v9_safe_mode_meta',
-			'delicat_builder_v9_settings',
-			'delicat_builder_v9_maintenance',
-			'delicat_builder_v9_cloudflare',
-			'delicat_builder_v9_production',
-			'delicat_builder_v9_shell',
-			'delicat_builder_v9_announcement',
-			'delicat_builder_v9_live_selling',
-			'delicat_builder_v9_cache_version',
-			/* 9.7.7 */
-			'delicat_builder_v9_purge_pending',
-			/* 9.7.8: read by the admin notice about missing files. */
-			'delicat_builder_v9_incomplete_copy',
-			/* 9.4.3: read on every storefront request but missing from the list. */
-			'dsb_notification_privacy_migrated',
-			'delicat_builder_v9_speed',
-			'delicat_builder_v9_seo',
-			'delicat_builder_v9_android_app',
-			'delicat_builder_v9_product_scripts',
-			/* RC55 additions: read by the always-on kernel and the common routes. */
-			'delicat_builder_v9_schema',
-			'delicat_builder_v9_native_only_version',
-			'delicat_builder_v9_performance',
-			'delicat_builder_v9_server_turbo_ready_version',
-			'delicat_builder_v9_purchase_ui',
-			'delicat_builder_v9_woo_ui',
-			'delicat_builder_v9_site',
-			'delicat_builder_v9_native_product',
-			'delicat_builder_v9_native_pages',
-			'delicat_builder_v9_footer',
-			'delicat_builder_v9_motion',
-			'delicat_builder_v9_turbonav',
-			'delicat_builder_v9_front_slim',
-			'delicat_builder_v9_storefront_fix',
-			'delicat_builder_v9_design',
-			'delicat_builder_v9_unified_modules',
-			'delicat_builder_v9_pwa',
-			/* RC78: written with autoload off by RC77 but read on every init(). */
-			'delicat_builder_v9_pwa_rules',
-			'delicat_builder_v9_app_tuning',
-			/* RC80: read on every init() by the upgrade purge. */
-			'delicat_builder_v9_purged_version',
-			'delicat_builder_v9_legal',
-			'delicat_builder_v9_web_push_enabled',
-			'delicat_builder_v9_vapid_public',
-			/* Read by the Cloudflare token check and the encrypted-data admin notice. */
-			'delicat_builder_v9_vault_health',
-			'delicat_builder_v9_archive_builder',
-			'delicat_builder_v9_native_archive_preset',
-			'delicat_builder_v9_compiled_stamp',
-			'delicat_builder_v9_spb_v7411_settings',
-			'delicat_builder_v9_boot_failures',
-			'delicat_builder_v9_module_load_failures',
-			'delicat_builder_v9_shell_failures',
-			'delicat_builder_v9_unified_failures',
-			'delicat_builder_v9_last_runtime_failure',
-			'delicat_builder_v9_last_server_engine_failure',
-			'delicat_builder_v9_dependency_gate',
-			'delicat_builder_v9_private_page_cache',
-			'dsb8_beta2_header',
-			'dsb_menu_builder_settings',
-			'dsb_menu_builder_items',
-			'dsb_menu_quick_items',
-			'dsb_header_notifications_enabled',
-			'dsb_header_notifications',
-			'dsb_bell_personal',
-			/* 9.5.5: one-time stamps and the app page, read on every storefront request. */
-			'delicat_builder_v9_notice_identity_946',
-			'delicat_builder_v9_android_page',
-			'dmc_settings',
-			'dmc_currencies',
-			'delicat_direct_swatches_settings',
-		)
-	);
+/*
+ * V10: one pre-load list per request profile. The storefront and wp-admin keep the full render set; the JSON,
+ * checkout, job and admin-ajax profiles pre-load only what their own modules read (measured with the stub
+ * harness), so a delicat_session, Store API or Action Scheduler request no longer fetches and unserializes the
+ * menus, the header, the notification history or the archive presets it never uses. Pre-loading is a read-path
+ * hint only: a name left out is still read, with its own query. Heartbeat pre-loads nothing (9.5.5).
+ * delicat_builder_v9_front_slim and delicat_builder_v9_storefront_fix are gone from every list: no code reads them.
+ */
+$delicat_builder_v9_prime_base = array(
+	'delicat_builder_v9_safe_mode',
+	'delicat_builder_v9_safe_mode_meta',
+	'delicat_builder_v9_settings',
+	'delicat_builder_v9_maintenance',
+	'delicat_builder_v9_cache_version',
+	/* 9.7.7 */
+	'delicat_builder_v9_purge_pending',
+	'delicat_builder_v9_purged_version',
+	'delicat_builder_v9_schema',
+	'delicat_builder_v9_native_only_version',
+	'delicat_builder_v9_live_selling',
+);
+/* Read by the unified runtime (notifications, multi-currency, product fields) on REST, checkout and job requests. */
+$delicat_builder_v9_prime_unified = array(
+	'delicat_builder_v9_cloudflare',
+	'delicat_builder_v9_unified_modules',
+	'delicat_builder_v9_performance',
+	'dsb_notification_privacy_migrated',
+	'dsb_header_notifications_enabled',
+	'dsb_header_notifications',
+	'dsb_bell_personal',
+	'delicat_builder_v9_web_push_enabled',
+	'delicat_builder_v9_vapid_public',
+	'dmc_settings',
+	'dmc_currencies',
+);
+switch ( DELICAT_BUILDER_V9_PROFILE ) {
+	case 'ajax':
+		/* 9.5.5: heartbeat loads no module. Other admin-ajax calls read the boot gates only. */
+		$delicat_builder_v9_prime = isset( $_REQUEST['action'] ) && 'heartbeat' === $_REQUEST['action'] // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			? array()
+			: $delicat_builder_v9_prime_base;
+		break;
+	case 'session':
+		$delicat_builder_v9_prime = $delicat_builder_v9_prime_base;
+		break;
+	case 'rest':
+		$delicat_builder_v9_prime = array_merge( $delicat_builder_v9_prime_base, $delicat_builder_v9_prime_unified, array( 'delicat_builder_v9_private_page_cache' ) );
+		break;
+	case 'commerce':
+		$delicat_builder_v9_prime = array_merge(
+			$delicat_builder_v9_prime_base,
+			$delicat_builder_v9_prime_unified,
+			array( 'delicat_builder_v9_production', 'delicat_builder_v9_purchase_ui', 'delicat_builder_v9_native_product', 'dsb8_beta2_header', 'delicat_builder_v9_private_page_cache' )
+		);
+		break;
+	case 'jobs':
+		$delicat_builder_v9_prime = array_merge( $delicat_builder_v9_prime_base, $delicat_builder_v9_prime_unified, array( 'delicat_builder_v9_web_push_db_version', 'delicat_builder_v9_seo_index_gen' ) );
+		break;
+	case 'activate':
+		$delicat_builder_v9_prime = array();
+		break;
+	default: /* storefront and admin: the full render set (RC53, RC55, RC78, RC80, 9.4.3, 9.5.5) */
+		$delicat_builder_v9_prime = array_merge(
+			$delicat_builder_v9_prime_base,
+			array(
+				/* 9.7.8: read by the admin notice about missing files. */
+				'delicat_builder_v9_incomplete_copy',
+				'delicat_builder_v9_cloudflare',
+				'delicat_builder_v9_production',
+				'delicat_builder_v9_shell',
+				'delicat_builder_v9_announcement',
+				'dsb_notification_privacy_migrated',
+				'delicat_builder_v9_speed',
+				'delicat_builder_v9_seo',
+				'delicat_builder_v9_seo_index_gen',
+				'delicat_builder_v9_android_app',
+				'delicat_builder_v9_product_scripts',
+				'delicat_builder_v9_performance',
+				'delicat_builder_v9_server_turbo_ready_version',
+				'delicat_builder_v9_purchase_ui',
+				'delicat_builder_v9_woo_ui',
+				'delicat_builder_v9_site',
+				'delicat_builder_v9_native_product',
+				'delicat_builder_v9_native_pages',
+				'delicat_builder_v9_footer',
+				'delicat_builder_v9_motion',
+				'delicat_builder_v9_turbonav',
+				'delicat_builder_v9_design',
+				'delicat_builder_v9_unified_modules',
+				'delicat_builder_v9_pwa',
+				'delicat_builder_v9_pwa_rules',
+				'delicat_builder_v9_app_tuning',
+				'delicat_builder_v9_legal',
+				'delicat_builder_v9_web_push_enabled',
+				'delicat_builder_v9_vapid_public',
+				/* Read by the Cloudflare token check and the encrypted-data admin notice. */
+				'delicat_builder_v9_vault_health',
+				'delicat_builder_v9_archive_builder',
+				'delicat_builder_v9_native_archive_preset',
+				'delicat_builder_v9_compiled_stamp',
+				'delicat_builder_v9_spb_v7411_settings',
+				'delicat_builder_v9_boot_failures',
+				'delicat_builder_v9_module_load_failures',
+				'delicat_builder_v9_shell_failures',
+				'delicat_builder_v9_unified_failures',
+				'delicat_builder_v9_last_runtime_failure',
+				'delicat_builder_v9_last_server_engine_failure',
+				'delicat_builder_v9_dependency_gate',
+				'delicat_builder_v9_private_page_cache',
+				'dsb8_beta2_header',
+				'dsb_menu_builder_settings',
+				'dsb_menu_builder_items',
+				'dsb_menu_quick_items',
+				'dsb_header_notifications_enabled',
+				'dsb_header_notifications',
+				'dsb_bell_personal',
+				'delicat_builder_v9_notice_identity_946',
+				'delicat_builder_v9_android_page',
+				'dmc_settings',
+				'dmc_currencies',
+				'delicat_direct_swatches_settings',
+			)
+		);
 }
+if ( function_exists( 'wp_prime_option_caches' ) && $delicat_builder_v9_prime ) {
+	wp_prime_option_caches( $delicat_builder_v9_prime );
+}
+unset( $delicat_builder_v9_prime, $delicat_builder_v9_prime_base, $delicat_builder_v9_prime_unified );
 
 /* Resolve Safe Mode before selecting a class graph. Trips from an older build
  * are stale after an update; current-build trips receive a truly minimal boot. */
@@ -845,16 +1002,45 @@ add_action( 'init', 'delicat_builder_v9_run_pending_purge', 100 );
  * thrown away when they differ. A rebuild that overlaps a supplier sync (built before change B,
  * saved after it) is therefore never served.
  */
+/*
+ * V10: a supplier sync saving fifty products fired this several times per product, and each write was an
+ * autoloaded option, so every one re-serialized WordPress's whole autoloaded options blob (Redis alloptions).
+ * The stamp is now kept in memory while the request runs, renewed by each change, and written once, at shutdown,
+ * with autoload off (the storefront pre-loads it). A map built in this request after a change still sees the new
+ * stamp (delicat_builder_v9_seo_index_generation() answers the pending one), so it is never stored as fresh.
+ */
+function delicat_builder_v9_seo_index_pending( ?string $set = null ): string {
+	static $pending = '';
+	if ( null !== $set ) {
+		$pending = $set;
+	}
+	return $pending;
+}
 function delicat_builder_v9_seo_index_generation(): string {
-	return (string) get_option( 'delicat_builder_v9_seo_index_gen', '' );
+	$pending = delicat_builder_v9_seo_index_pending();
+	return '' !== $pending ? $pending : (string) get_option( 'delicat_builder_v9_seo_index_gen', '' );
 }
 function delicat_builder_v9_seo_index_stale(): void {
-	update_option( 'delicat_builder_v9_seo_index_gen', uniqid( '', true ), true );
+	if ( '' === delicat_builder_v9_seo_index_pending() ) {
+		add_action( 'shutdown', 'delicat_builder_v9_seo_index_commit', 0 );
+	}
+	delicat_builder_v9_seo_index_pending( uniqid( '', true ) );
 	if ( class_exists( 'Delicat_Builder_V9_SEO_Index', false ) ) {
 		Delicat_Builder_V9_SEO_Index::forget();
 	}
 }
+function delicat_builder_v9_seo_index_commit(): void {
+	$pending = delicat_builder_v9_seo_index_pending();
+	if ( '' !== $pending ) {
+		update_option( 'delicat_builder_v9_seo_index_gen', $pending, false );
+	}
+}
 function delicat_builder_v9_seo_index_watch(): void {
+	static $watching = false;
+	if ( $watching ) {
+		return;
+	}
+	$watching = true;
 	$types = array( 'page', 'post', 'product' );
 	$taxes = array( 'product_cat', 'product_tag', 'category' );
 	add_action( 'transition_post_status', static function ( $new, $old, $post ) use ( $types ): void {
@@ -929,7 +1115,33 @@ function delicat_builder_v9_seo_index_watch(): void {
 		add_action( 'add_option_' . $option, 'delicat_builder_v9_seo_index_stale' );
 	}
 }
-delicat_builder_v9_seo_index_watch();
+/*
+ * V10: content changes come from wp-admin, REST, admin-ajax, wc-ajax, WP-Cron and Action Scheduler, WP-CLI and form
+ * posts, which keep the full watch. A storefront GET or HEAD saves nothing, so it no longer registers the ~57
+ * watcher callbacks; a few triggers register them just in time should one of them write a post or a term anyway
+ * (Legal's once-per-version document sync runs on the first storefront request after an update, and a payment
+ * callback that changes stock recounts the categories).
+ */
+if ( 'storefront' !== DELICAT_BUILDER_V9_PROFILE
+	|| ( defined( 'WP_CLI' ) && WP_CLI )
+	|| ! in_array( strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) ), array( 'GET', 'HEAD' ), true ) // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- compared only.
+) {
+	delicat_builder_v9_seo_index_watch();
+} else {
+	$delicat_builder_v9_seo_watch_late = static function ( $value = null ) {
+		delicat_builder_v9_seo_index_watch();
+		return $value;
+	};
+	/* Each fires BEFORE the write the full watch reacts to (post insert/update/trash, post delete, term
+	 * create/edit/delete, term relationships, term recounts, the watched post meta and options). */
+	foreach ( array( 'wp_insert_post_data', 'pre_insert_term', 'pre_update_option' ) as $delicat_builder_v9_seo_hook ) {
+		add_filter( $delicat_builder_v9_seo_hook, $delicat_builder_v9_seo_watch_late, 0 );
+	}
+	foreach ( array( 'before_delete_post', 'edit_terms', 'pre_delete_term', 'add_term_relationship', 'delete_term_relationships', 'edit_term_taxonomy', 'add_post_meta', 'update_post_meta', 'delete_post_meta', 'add_option' ) as $delicat_builder_v9_seo_hook ) {
+		add_action( $delicat_builder_v9_seo_hook, $delicat_builder_v9_seo_watch_late, 0 );
+	}
+	unset( $delicat_builder_v9_seo_watch_late, $delicat_builder_v9_seo_hook );
+}
 
 /**
  * Lightweight public homepage-context check.
@@ -1074,8 +1286,6 @@ $delicat_builder_v9_wc_ajax = isset( $_REQUEST['wc-ajax'] ) // phpcs:ignore Word
 	: '';
 if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review', 'delicat_express_pay' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
-	if ( 'update_order_review' === $delicat_builder_v9_wc_ajax ) {
-	}
 	if (
 		class_exists( 'Delicat_Builder_V9_Purchase_Native', false )
 		&& is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'activate_checkout_request' ) )
@@ -1260,8 +1470,6 @@ function delicat_builder_v9_maybe_upgrade_native_only(): bool {
 						'delicat_builder_v9_performance',
 						'delicat_builder_v9_motion',
 						'delicat_builder_v9_footer',
-						'delicat_builder_v9_storefront_fix',
-						'delicat_builder_v9_front_slim',
 						'delicat_builder_v9_turbonav',
 						'delicat_builder_v9_dependency_gate',
 						'delicat_builder_v9_cache_version',
@@ -1335,23 +1543,8 @@ if ( wp_doing_ajax() && isset( $_REQUEST['action'] ) ) { // phpcs:ignore WordPre
  * are recognised: the /wp-json/ prefix (also behind index.php) and ?rest_route=.
  * A request that is not recognised keeps the full public graph, as before.
  */
-$delicat_builder_v9_rest_request = false;
-if ( ! is_admin() && ! wp_doing_ajax() && '' === $delicat_builder_v9_wc_ajax ) {
-	if ( isset( $_GET['rest_route'] ) && '' !== delicat_builder_v9_request_scalar( $_GET['rest_route'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
-		$delicat_builder_v9_rest_request = true;
-	} elseif ( isset( $_SERVER['REQUEST_URI'] ) ) {
-		$delicat_builder_v9_rest_path   = strtolower( (string) wp_parse_url( delicat_builder_v9_request_scalar( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH ) ) . '/';
-		$delicat_builder_v9_rest_home   = rtrim( strtolower( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ) ), '/' );
-		$delicat_builder_v9_rest_prefix = '/' . trim( strtolower( function_exists( 'rest_get_url_prefix' ) ? (string) rest_get_url_prefix() : 'wp-json' ), '/' ) . '/';
-		foreach ( array( $delicat_builder_v9_rest_prefix, '/index.php' . $delicat_builder_v9_rest_prefix ) as $delicat_builder_v9_rest_needle ) {
-			if ( 0 === strpos( $delicat_builder_v9_rest_path, $delicat_builder_v9_rest_home . $delicat_builder_v9_rest_needle ) ) {
-				$delicat_builder_v9_rest_request = true;
-				break;
-			}
-		}
-		unset( $delicat_builder_v9_rest_path, $delicat_builder_v9_rest_home, $delicat_builder_v9_rest_prefix, $delicat_builder_v9_rest_needle );
-	}
-}
+/* V10: detected once by delicat_builder_v9_request_profile() (the same two forms). */
+$delicat_builder_v9_rest_request = 'rest' === DELICAT_BUILDER_V9_PROFILE;
 
 /* Plugin activation must parse only the minimal kernel. Loading every admin,
  * editor, PWA and Woo renderer inside WordPress's activation sandbox made an
@@ -1359,13 +1552,7 @@ if ( ! is_admin() && ! wp_doing_ajax() && '' === $delicat_builder_v9_wc_ajax ) {
 $delicat_builder_v9_admin_action = isset( $_REQUEST['action'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- request routing only.
 	? sanitize_key( delicat_builder_v9_request_scalar( $_REQUEST['action'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	: '';
-$delicat_builder_v9_plugin_arg = isset( $_REQUEST['plugin'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- request routing only.
-	? sanitize_text_field( delicat_builder_v9_request_scalar( $_REQUEST['plugin'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
-	: '';
-$delicat_builder_v9_activating = is_admin()
-	&& ! wp_doing_ajax()
-	&& in_array( $delicat_builder_v9_admin_action, array( 'activate', 'activate-selected' ), true )
-	&& ( '' === $delicat_builder_v9_plugin_arg || plugin_basename( __FILE__ ) === $delicat_builder_v9_plugin_arg );
+$delicat_builder_v9_activating = 'activate' === DELICAT_BUILDER_V9_PROFILE; /* V10: same test, decided once */
 $delicat_builder_v9_admin_page = isset( $_REQUEST['page'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- request routing only.
 	? sanitize_key( delicat_builder_v9_request_scalar( $_REQUEST['page'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 	: '';
@@ -1439,6 +1626,48 @@ if ( ! $delicat_builder_v9_boot_safe_mode && ! $delicat_builder_v9_activating
 	} catch ( Throwable $delicat_builder_v9_oc_error ) {
 		unset( $delicat_builder_v9_oc_error );
 	}
+}
+
+/*
+ * V10 WEB PUSH SIGN-OUT (security review #1)
+ * ------------------------------------------
+ * A browser subscribed to Web Push carries the HttpOnly cookie dbv9_push_ep. When it signs
+ * out (wp-login.php, My Account, Identity Pro's admin-ajax logout: every request type, so
+ * this is registered here and not by a module) its row stops receiving the account's
+ * personal order pushes; when it signs in as someone else, the previous account's binding
+ * is released. Nothing is registered, parsed or queried for a browser without the cookie.
+ */
+if ( ! $delicat_builder_v9_activating && isset( $_COOKIE['dbv9_push_ep'] ) ) {
+	$delicat_builder_v9_push_unbind = static function ( int $leaving, int $arriving ): void {
+		try {
+			if ( class_exists( 'Delicat_Builder_V9_Web_Push', false ) || delicat_builder_v9_safe_require( 'includes/class-delicat-builder-web-push.php' ) ) {
+				if ( is_callable( array( 'Delicat_Builder_V9_Web_Push', 'unbind_browser' ) ) ) {
+					Delicat_Builder_V9_Web_Push::unbind_browser( $leaving, $arriving );
+				}
+			}
+		} catch ( Throwable $delicat_builder_v9_push_error ) {
+			unset( $delicat_builder_v9_push_error );
+		}
+	};
+	add_action(
+		'wp_logout',
+		static function ( $user_id = 0 ) use ( $delicat_builder_v9_push_unbind ): void {
+			$delicat_builder_v9_push_unbind( absint( $user_id ), 0 );
+		},
+		10,
+		1
+	);
+	add_action(
+		'wp_login',
+		static function ( $user_login = '', $user = null ) use ( $delicat_builder_v9_push_unbind ): void {
+			if ( $user instanceof WP_User && $user->ID > 0 ) {
+				$delicat_builder_v9_push_unbind( 0, (int) $user->ID );
+			}
+		},
+		10,
+		2
+	);
+	unset( $delicat_builder_v9_push_unbind );
 }
 
 /*
@@ -1573,6 +1802,53 @@ if ( ! $delicat_builder_v9_activating ) {
 			}
 		}
 	);
+
+	/*
+	 * V10 BACKGROUND JOB MAP
+	 * ----------------------
+	 * Action Scheduler runs queued jobs from WP-Cron (the jobs profile) and from its async admin-ajax runner, where
+	 * Builder loads no module at all (a foreign admin-ajax action). A notification or Web Push delivery picked up
+	 * by that runner found no Builder callback and was dropped without a word. Each job below now loads its own
+	 * files when it fires, wherever it runs, and stands aside when its module is booted on this request (the
+	 * module's own callback answers then, exactly as before). A job whose module the owner switched off in
+	 * « Modules unifiés » is still left alone, as before.
+	 * hook => [ files, class, method, accepted args, unified module switch ('' when none) ].
+	 */
+	$delicat_builder_v9_jobs = array(
+		'delicat_builder_v9_deliver_notification'   => array( array( 'includes/class-delicat-builder-notifications.php', 'includes/class-delicat-builder-web-push.php' ), 'Delicat_Builder_V9_Notifications', 'deliver_queued', 1, 'notifications' ),
+		'delicat_builder_v9_deliver_web_push_batch' => array( array( 'includes/class-delicat-builder-notifications.php', 'includes/class-delicat-builder-web-push.php' ), 'Delicat_Builder_V9_Web_Push', 'deliver_batch_action', 2, 'notifications' ),
+		'delicat_builder_v9_seo_index_rebuild'      => array( array( 'includes/class-delicat-builder-seo.php', 'includes/class-delicat-builder-seo-index.php' ), 'Delicat_Builder_V9_SEO_Index', 'rebuild_job', 0, '' ),
+	);
+	foreach ( $delicat_builder_v9_jobs as $delicat_builder_v9_job_hook => $delicat_builder_v9_job ) {
+		add_action(
+			$delicat_builder_v9_job_hook,
+			static function ( ...$args ) use ( $delicat_builder_v9_job_hook, $delicat_builder_v9_job ): void {
+				list( $files, $class, $method, , $switch ) = $delicat_builder_v9_job;
+				if ( class_exists( $class, false ) && false !== has_action( $delicat_builder_v9_job_hook, array( $class, $method ) ) ) {
+					return; // the booted module's own callback runs this job
+				}
+				if ( '' !== $switch ) {
+					$unified = get_option( 'delicat_builder_v9_unified_modules', array() );
+					if ( is_array( $unified ) && array_key_exists( $switch, $unified ) && empty( $unified[ $switch ] ) ) {
+						return; // switched off: no callback, exactly as before
+					}
+				}
+				foreach ( $files as $relative ) {
+					delicat_builder_v9_safe_require( $relative );
+				}
+				if ( class_exists( $class, false ) && is_callable( array( $class, $method ) ) ) {
+					try {
+						call_user_func_array( array( $class, $method ), $args );
+					} catch ( Throwable $error ) {
+						unset( $error );
+					}
+				}
+			},
+			10,
+			$delicat_builder_v9_job[3]
+		);
+	}
+	unset( $delicat_builder_v9_jobs, $delicat_builder_v9_job_hook, $delicat_builder_v9_job );
 }
 
 /*
@@ -1929,6 +2205,51 @@ if ( $delicat_builder_v9_activating ) {
 		 * search suggestions failed until a full reload. */
 		'includes/class-delicat-builder-engine.php',
 	) as $delicat_builder_v9_module ) delicat_builder_v9_safe_require( $delicat_builder_v9_module );
+} elseif ( ! $delicat_builder_v9_boot_safe_mode && in_array( DELICAT_BUILDER_V9_PROFILE, array( 'commerce', 'jobs' ), true ) ) {
+	/*
+	 * V10 COMMERCE AND JOBS PROFILES
+	 * ------------------------------
+	 * A wc-ajax request (cart fragments, add to cart, coupons, update_order_review, checkout, the express
+	 * sheet) and a WP-Cron run (WooCommerce's own jobs, the Action Scheduler queue, the currency rates, the
+	 * notification and push deliveries) never print a page, yet they used to parse the whole storefront:
+	 * header, menu, drawer, footer, engine, navigation, SEO, the router and its renderers. They now load what
+	 * acts outside a page, the same set the REST-light profile proved: the cache and its invalidation, the
+	 * security kernel, the unified runtime (notification order events and deliveries, multi-currency prices and
+	 * its rates job, the product-fields calculator for cart lines), the French WooCommerce strings and gateway
+	 * texts, the product-name sweep (order lines), the review invalidation kernel and Core (Live Selling,
+	 * Maintenance, Cloudflare). wc-ajax also keeps the header, whose cart fragment and live basket answer there.
+	 * WooCommerce owns every endpoint, nonce, total and payment; nothing here changes a price, an order or a
+	 * payment, and a module left out had no hook that runs on these requests (the hook dump is in the V10 notes).
+	 * The checkout bridge above still adds the native checkout contract, and the express transport and the
+	 * payment guards load below for both profiles.
+	 */
+	$delicat_builder_v9_profile_modules = array(
+		'includes/class-delicat-builder-cache.php',
+		'includes/class-delicat-builder-query-cache.php',
+		'includes/class-delicat-builder-security.php',
+		'includes/class-delicat-builder-unified-runtime.php',
+		'includes/class-delicat-builder-reviews-kernel.php',
+		'includes/class-delicat-builder-storefront-fix.php',
+		'includes/class-delicat-builder-app-polish.php',
+	);
+	if ( 'commerce' === DELICAT_BUILDER_V9_PROFILE ) {
+		/* woocommerce_add_to_cart_fragments and wc-ajax=delicat_builder_v9_header_cart */
+		$delicat_builder_v9_profile_modules[] = 'includes/class-delicat-builder-header-runtime.php';
+	}
+	$delicat_builder_v9_profile_modules[] = 'includes/class-delicat-builder-core.php';
+	foreach ( $delicat_builder_v9_profile_modules as $delicat_builder_v9_module ) delicat_builder_v9_safe_require( $delicat_builder_v9_module );
+	unset( $delicat_builder_v9_profile_modules );
+
+	// Edge purges follow LiteSpeed's purges (stock changes at checkout, supplier syncs in the queue).
+	$delicat_builder_v9_cf = get_option( 'delicat_builder_v9_cloudflare', array() );
+	if ( is_array( $delicat_builder_v9_cf ) && ! empty( $delicat_builder_v9_cf['enabled'] ) && ! empty( $delicat_builder_v9_cf['zone_id'] ) && ( ! empty( $delicat_builder_v9_cf['api_token'] ) || ! empty( $delicat_builder_v9_cf['api_token_encrypted'] ) ) ) {
+		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-cloudflare.php' );
+	}
+	// The hardening headers keep answering wc-ajax responses exactly as before, when that module is on.
+	$delicat_builder_v9_production = 'commerce' === DELICAT_BUILDER_V9_PROFILE ? get_option( 'delicat_builder_v9_production', array() ) : array();
+	if ( is_array( $delicat_builder_v9_production ) && ! empty( $delicat_builder_v9_production['enabled'] ) ) {
+		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-production.php' );
+	}
 } else {
     // Always-on storefront kernel: security/integration systems that must attach
     // before query resolution plus Header/Menu, which are global UI.
@@ -1946,7 +2267,7 @@ if ( $delicat_builder_v9_activating ) {
 			'includes/class-delicat-builder-cache.php','includes/class-delicat-builder-query-cache.php','includes/class-delicat-builder-security.php','includes/class-delicat-builder-performance.php','includes/class-delicat-builder-server-engine.php',
 			'includes/class-delicat-builder-app-view.php',
 			'includes/class-delicat-builder-unified-runtime.php',
-			'includes/class-delicat-builder-menu-runtime.php','includes/class-delicat-builder-header-runtime.php','includes/class-delicat-builder-drawer.php','includes/class-delicat-builder-bottom-nav.php','includes/class-delicat-builder-session.php','includes/class-delicat-builder-shell-nav.php',
+			'includes/class-delicat-builder-menu-runtime.php','includes/class-delicat-builder-header-runtime.php','includes/class-delicat-builder-drawer.php','includes/class-delicat-builder-bottom-nav.php','includes/class-delicat-builder-session.php',
 			'includes/class-delicat-builder-footer.php',
 			'includes/class-delicat-builder-runtime-router.php','includes/class-delicat-builder-reviews-kernel.php','includes/class-delicat-builder-front-slim.php','includes/class-delicat-builder-storefront-fix.php',
 			'includes/class-delicat-builder-core.php',
@@ -2006,7 +2327,8 @@ if ( ! $delicat_builder_v9_activating && ! DELICAT_BUILDER_V9_FOREIGN_AJAX ) {
         /* wc-ajax is not marked DOING_AJAX until Woo init. The session JSON
          * profile deliberately skips Runtime Router and never renders a page;
          * neither does the REST-light profile. */
-        if ( 'delicat_session' !== $delicat_builder_v9_wc_ajax && ! $delicat_builder_v9_rest_request ) {
+        /* V10: nor do the commerce (other wc-ajax) and jobs (WP-Cron) profiles. */
+        if ( 'storefront' === DELICAT_BUILDER_V9_PROFILE ) {
             $delicat_builder_v9_critical[] = 'Delicat_Builder_V9_Runtime_Router';
         }
     }
@@ -2303,7 +2625,9 @@ add_action(
  * (a Throwable quarantines the module and records Safe Mode) and never
  * during the activation sandbox, which parses no class files by design.
  */
-if ( ! $delicat_builder_v9_activating ) {
+/* V10: pages, REST answers (avatar addresses, content-hashed asset addresses) and wp-admin (content-hashed admin
+ * assets) only. The session JSON, wc-ajax, WP-Cron and admin-ajax print no document and enqueue nothing. */
+if ( in_array( DELICAT_BUILDER_V9_PROFILE, array( 'storefront', 'rest', 'admin' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-audit-fixes.php' );
 }
 
@@ -2329,7 +2653,7 @@ add_action( 'admin_init', static function () {
 /* PRO21: enable the requested native popup once on an administrator's upgrade
  * visit. Subsequent merchant changes and explicit per-product overrides persist. */
 add_action( 'admin_init', static function () {
-    if ( ! current_user_can( 'manage_options' ) || get_option( 'delicat_builder_pro21_popup_enabled' ) ) return;
+    if ( wp_doing_ajax() || ! current_user_can( 'manage_options' ) || get_option( 'delicat_builder_pro21_popup_enabled' ) ) return; // V10: not on heartbeat / admin-ajax (one non-autoloaded read each)
     $settings = get_option( 'delicat_builder_v9_native_product', array() );
     if ( ! is_array( $settings ) ) $settings = array();
     $settings['express_checkout'] = 1;
@@ -2536,8 +2860,12 @@ add_action(
 	}
 );
 
-/* Payment hooks use the same guarded loader as the other modules. */
-if ( ! $delicat_builder_v9_activating ) {
+/* Payment hooks use the same guarded loader as the other modules.
+ * V10: wherever WooCommerce can run a classic checkout (a page POST, wc-ajax=checkout, the express sheet), the
+ * daily intent cleanup (WP-Cron) and wp-admin (the reconcile notice and admin-post action). The Store API, the
+ * session JSON and admin-ajax never fire the classic checkout hooks these guards attach to (every handler returns
+ * at once without a context of its own there), so those requests no longer parse the class. */
+if ( in_array( DELICAT_BUILDER_V9_PROFILE, array( 'storefront', 'commerce', 'jobs', 'admin' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-express-payment.php' );
 }
 
@@ -2568,17 +2896,52 @@ add_filter( 'wp_page_menu', static function ( $menu ) {
     return $html . '</nav>';
 }, 20 );
 
-// Native mobile app distribution is available on frontend and Builder settings.
-delicat_builder_v9_safe_require( 'includes/class-delicat-builder-app-download.php' );
-// 9.12.3: shared server back-off (window.DelicatBackoff) printed first in <head>; see the class header.
-delicat_builder_v9_safe_require( 'includes/class-delicat-builder-rate-guard.php' );
-// 9.13.0 (audit 2026-11-12): the Connector's front assets only on products it sells (M-1); the REST index hidden from guests (L-7).
-delicat_builder_v9_safe_require( 'includes/class-delicat-builder-supplier-assets.php' );
-delicat_builder_v9_safe_require( 'includes/class-delicat-builder-rest-index.php' );
+/*
+ * V10: the always-on floor is loaded where it acts, no longer on every request (heartbeat, the session JSON,
+ * WP-Cron and wc-ajax paid for all of it):
+ *  - app distribution: pages, wp-admin (its screen, the release hook) and REST (the app API reads the release);
+ *  - the server back-off script and the supplier front assets: pages only (wp_head, wp_enqueue_scripts);
+ *  - the REST index switch: REST and wp-admin (its card and admin-post action), and just in time wherever
+ *    else the REST server starts;
+ *  - event promotions: wherever WooCommerce may validate a coupon (pages, wc-ajax, the Store API, admin-ajax,
+ *    which applies coupons to an order from wp-admin, and WP-Cron, where a queued job can recalculate an order),
+ *    not on heartbeat or the session JSON.
+ * The activation sandbox loads none of them (RC17: it parses no class files).
+ */
+if ( in_array( DELICAT_BUILDER_V9_PROFILE, array( 'storefront', 'rest', 'admin' ), true ) ) {
+	// Native mobile app distribution is available on frontend and Builder settings.
+	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-app-download.php' );
+}
+if ( 'storefront' === DELICAT_BUILDER_V9_PROFILE ) {
+	// 9.12.3: shared server back-off (window.DelicatBackoff) printed first in <head>; see the class header.
+	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-rate-guard.php' );
+	// 9.13.0 (audit 2026-11-12): the Connector's front assets only on products it sells (M-1).
+	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-supplier-assets.php' );
+}
+if ( in_array( DELICAT_BUILDER_V9_PROFILE, array( 'rest', 'admin' ), true ) ) {
+	// 9.13.0 (audit 2026-11-12): the REST index hidden from guests (L-7).
+	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-rest-index.php' );
+} elseif ( 'activate' !== DELICAT_BUILDER_V9_PROFILE ) {
+	/* Any other request that starts the REST server anyway (a REST address the profile did not recognise, e.g. a
+	 * prefix changed by the theme, or an internal rest_do_request()) still gets the L-7 hardening, just in time. */
+	add_action(
+		'rest_api_init',
+		static function (): void {
+			if ( ! class_exists( 'Delicat_Builder_V9_Rest_Index', false ) ) {
+				delicat_builder_v9_safe_require( 'includes/class-delicat-builder-rest-index.php' );
+			}
+		},
+		0
+	);
+}
 
 // 9.12.2: event promotions (WooCommerce coupons with a start date, members-only flag, banner + one-tap offer).
-add_action( 'plugins_loaded', static function (): void {
-    if ( class_exists( 'WooCommerce', false ) ) {
-        delicat_builder_v9_safe_require( 'includes/class-delicat-builder-event-promos.php' );
-    }
-}, 20 );
+$delicat_builder_v9_heartbeat = 'ajax' === DELICAT_BUILDER_V9_PROFILE && isset( $_REQUEST['action'] ) && 'heartbeat' === $_REQUEST['action']; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+if ( ! $delicat_builder_v9_heartbeat && ! in_array( DELICAT_BUILDER_V9_PROFILE, array( 'activate', 'session' ), true ) ) {
+	add_action( 'plugins_loaded', static function (): void {
+		if ( class_exists( 'WooCommerce', false ) ) {
+			delicat_builder_v9_safe_require( 'includes/class-delicat-builder-event-promos.php' );
+		}
+	}, 20 );
+}
+unset( $delicat_builder_v9_heartbeat );

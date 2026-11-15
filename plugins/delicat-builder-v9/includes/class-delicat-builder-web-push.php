@@ -20,6 +20,12 @@ final class Delicat_Builder_V9_Web_Push {
 	private const MAX_PAYLOAD_BYTES = 1800;
 	private const BATCH_SIZE = 12;
 	private const PUSH_SW_QUERY = 'delicat_v9_push_sw';
+	/**
+	 * V10: HttpOnly cookie naming this browser's subscription row (its endpoint hash). Read
+	 * on wp_logout / wp_login by the bootstrap so the browser that signs out stops receiving
+	 * the account's personal pushes. Name shared with delicat-builder-v9.php.
+	 */
+	public const BROWSER_COOKIE = 'dbv9_push_ep';
 
 	private static bool $booted = false;
 	private static ?array $vapid_cache = null;
@@ -63,7 +69,19 @@ final class Delicat_Builder_V9_Web_Push {
 		/* 9.13.0 (speed): the keys are made / opened where they are used (public_key(), vapid_header()). At init
 		   only in the admin and cron - it ran on EVERY request: two key reads, the enabled flag, an OpenSSL
 		   decryption of the private key and a vault-health read. */
-		if ( ( is_admin() || wp_doing_cron() ) && ! wp_doing_ajax() && self::enabled() ) { self::ensure_vapid_keys(); }
+		/* V10: here only a MISSING key pair is created (wp-admin, WP-Cron). Opening the stored private key - an
+		   OpenSSL decryption plus a vault-health write - ran on every Builder admin page and every cron run; it now
+		   waits for a push to be signed (vapid_header()), and wp-admin re-checks the vault at most once a day so a
+		   salt change is still reported. */
+		if ( ( is_admin() || wp_doing_cron() ) && ! wp_doing_ajax() && self::enabled() ) {
+			$has_pair = '' !== (string) get_option( self::VAPID_PUBLIC_OPTION, '' ) && '' !== (string) get_option( self::VAPID_PRIVATE_OPTION, '' );
+			if ( ! $has_pair || ( is_admin() && false === get_transient( 'dbv9_vapid_checked' ) ) ) {
+				self::ensure_vapid_keys();
+				if ( is_admin() ) {
+					set_transient( 'dbv9_vapid_checked', 1, DAY_IN_SECONDS );
+				}
+			}
+		}
 	}
 
 	private static function install_schema(): void {
@@ -442,7 +460,61 @@ self.addEventListener('notificationclick',event=>{
 		if ( false === $written ) {
 			return new WP_Error( 'push_subscription_write_failed', 'Impossible d’enregistrer cet appareil pour le Web Push.', array( 'status' => 500 ) );
 		}
+		self::remember_browser( $hash );
 		return self::no_store( array( 'ok' => true, 'subscribed' => true, 'user_id' => get_current_user_id() ) );
+	}
+
+	/** V10: the browser keeps the hash of its own endpoint (HttpOnly, never read by scripts). */
+	private static function remember_browser( string $hash ): void {
+		if ( headers_sent() ) { return; }
+		setcookie(
+			self::BROWSER_COOKIE,
+			$hash,
+			array(
+				'expires'  => '' === $hash ? time() - YEAR_IN_SECONDS : time() + YEAR_IN_SECONDS,
+				'path'     => '/',
+				'domain'   => defined( 'COOKIE_DOMAIN' ) && COOKIE_DOMAIN ? (string) COOKIE_DOMAIN : '',
+				'secure'   => is_ssl(),
+				'httponly' => true,
+				'samesite' => 'Lax',
+			)
+		);
+	}
+
+	/** Endpoint hash named by this browser's cookie, or '' when absent or malformed. */
+	public static function browser_endpoint_hash(): string {
+		$raw = isset( $_COOKIE[ self::BROWSER_COOKIE ] ) && is_string( $_COOKIE[ self::BROWSER_COOKIE ] ) ? strtolower( trim( (string) $_COOKIE[ self::BROWSER_COOKIE ] ) ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- validated just below.
+		return 1 === preg_match( '/^[a-f0-9]{64}$/', $raw ) ? $raw : '';
+	}
+
+	/**
+	 * V10 (security review #1): personal order pushes followed the last signed-in customer on a
+	 * shared phone or cyber-café PC after logout. On wp_logout the row this browser names drops
+	 * back to a guest subscription (broadcasts only) when it belonged to the account signing
+	 * out; on wp_login a row still bound to another account is released the same way, and the
+	 * page's own re-subscription binds it to the new account. Only this browser's row is
+	 * touched, so the customer's other devices keep their alerts. A forged cookie can at most
+	 * turn a row of another account into a guest row (sign-in) or one of the signing-out
+	 * account's own rows (sign-out); it never binds anything to anyone.
+	 *
+	 * @param int $leaving  Account signing out (wp_logout), or 0.
+	 * @param int $arriving Account signing in (wp_login), or 0.
+	 */
+	public static function unbind_browser( int $leaving, int $arriving = 0 ): int {
+		$hash = self::browser_endpoint_hash();
+		if ( '' === $hash || ( $leaving <= 0 && $arriving <= 0 ) ) { return 0; }
+		global $wpdb;
+		$table = self::table();
+		$now   = current_time( 'mysql', true );
+		if ( $leaving > 0 ) {
+			$sql = $wpdb->prepare( "UPDATE {$table} SET user_id=0, updated_at=%s WHERE endpoint_hash=%s AND user_id=%d", $now, $hash, $leaving ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		} else {
+			$sql = $wpdb->prepare( "UPDATE {$table} SET user_id=0, updated_at=%s WHERE endpoint_hash=%s AND user_id>0 AND user_id<>%d", $now, $hash, $arriving ); // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		}
+		$suppress = $wpdb->suppress_errors( true );
+		$changed  = $wpdb->query( $sql ); // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- prepared above.
+		$wpdb->suppress_errors( $suppress );
+		return is_int( $changed ) ? $changed : 0;
 	}
 
 	public static function rest_unsubscribe( WP_REST_Request $request ) {
@@ -466,6 +538,7 @@ self.addEventListener('notificationclick',event=>{
 			}
 			$wpdb->delete( $table, array( 'id' => absint( $row['id'] ) ), array( '%d' ) );
 		}
+		if ( self::browser_endpoint_hash() === $hash ) { self::remember_browser( '' ); }
 		return self::no_store( array( 'ok' => true, 'subscribed' => false ) );
 	}
 

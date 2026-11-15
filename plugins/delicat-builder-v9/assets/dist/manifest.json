@@ -158,34 +158,6 @@
     "assets/css/v911-home.css"
    ]
   },
-  "builder-design": {
-   "file": "builder-design.74e1b4ed1049.css",
-   "bytes": 255836,
-   "sha256": "74e1b4ed10494acfee97edb9e10cc7f6fb108a7782fe36bdfa6ff7f2c63eca83",
-   "sources": [
-    "assets/components/base.css",
-    "assets/components/testimonials.css",
-    "assets/components/trust-strip.css",
-    "assets/components/products.css",
-    "assets/components/newsletter.css",
-    "assets/components/how-it-works.css",
-    "assets/components/hero.css",
-    "assets/components/bon-kliyan.css",
-    "assets/components/text.css",
-    "assets/components/banner.css",
-    "assets/components/category-chips.css",
-    "assets/components/faq.css",
-    "assets/components/why-delicat.css",
-    "assets/components/favorites.css",
-    "assets/components/spacer.css",
-    "assets/css/reviews.css",
-    "assets/css/native-document.css",
-    "assets/css/native-footer.css",
-    "assets/css/design-studio.css",
-    "assets/css/v911-cards.css",
-    "assets/css/v911-home.css"
-   ]
-  },
   "builder-lite": {
    "file": "home-lite.67636468e33c.css",
    "bytes": 53602,
@@ -194,19 +166,6 @@
     "assets/css/reviews.css",
     "assets/css/native-document.css",
     "assets/css/native-footer.css",
-    "assets/css/v911-cards.css",
-    "assets/css/v911-home.css"
-   ]
-  },
-  "builder-lite-design": {
-   "file": "builder-lite-design.61a4bac53e27.css",
-   "bytes": 70777,
-   "sha256": "61a4bac53e27ba5cc3707ab9764958e46f40df057cacec8adb9299f648ad87cc",
-   "sources": [
-    "assets/css/reviews.css",
-    "assets/css/native-document.css",
-    "assets/css/native-footer.css",
-    "assets/css/design-studio.css",
     "assets/css/v911-cards.css",
     "assets/css/v911-home.css"
    ]

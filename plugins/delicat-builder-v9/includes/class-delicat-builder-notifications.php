@@ -20,6 +20,8 @@ final class Delicat_Builder_V9_Notifications {
 	public const LEGACY_FCM_KEY       = 'dsb_notification_fcm_server_key';
 	public const ENCRYPTED_SERVICE    = 'delicat_builder_v9_notification_service_account_enc';
 	public const PRIVACY_MIGRATION    = 'dsb_notification_privacy_migrated';
+	/** V10: LiteSpeed tag of the guest /notifications JSON. */
+	public const PUBLIC_CACHE_TAG     = 'dbv9_notif';
 	public const REST_NAMESPACE       = 'delicat/v1';
 	public const UI_REST_NAMESPACE    = 'delicat-builder-v9/v1';
 	private const TOKEN_TRANSIENT     = 'dbv9_notification_google_access_token';
@@ -50,6 +52,11 @@ final class Delicat_Builder_V9_Notifications {
 			add_filter( 'pre_do_shortcode_tag', array( __CLASS__, 'intercept_notification_shortcode' ), PHP_INT_MAX, 4 );
 			add_action( 'wp_head', array( __CLASS__, 'critical_frontend_guard' ), 1 );
 			add_action( 'rest_api_init', array( __CLASS__, 'register_rest_routes' ) );
+			/* V10 (security review #3): a published, removed or edited announcement leaves the
+			 * guests' cached list at once, whichever code writes the history. */
+			add_action( 'update_option_' . self::HISTORY_OPTION, array( __CLASS__, 'history_changed' ), 10, 2 );
+			add_action( 'add_option_' . self::HISTORY_OPTION, array( __CLASS__, 'purge_public_list' ), 10, 0 );
+			add_action( 'delete_option_' . self::HISTORY_OPTION, array( __CLASS__, 'purge_public_list' ), 10, 0 );
 			if ( class_exists( 'Delicat_Builder_V9_Web_Push', false ) ) { Delicat_Builder_V9_Web_Push::boot(); }
 
 			// RC37.8: same-origin AJAX fallback for hosts/security layers that block
@@ -425,7 +432,7 @@ final class Delicat_Builder_V9_Notifications {
 			return false; /* no token is not a guess: it does not count toward the lockout */
 		}
 		/* 9.3: twenty wrong tokens from one address lock that address out for ten minutes. */
-		$ip   = class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ? Delicat_Builder_V9_Security::client_ip() : (string) ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+		$ip   = class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_bucket' ) ) ? Delicat_Builder_V9_Security::client_bucket() : (string) ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- V10: IPv6 counted per /64.
 		$lock = 'dbv9_apptoken_' . substr( hash_hmac( 'sha256', $ip, wp_salt( 'nonce' ) ), 0, 24 );
 		$fail = get_transient( $lock );
 		$fail = is_array( $fail ) ? $fail : array( 'count' => 0, 'since' => time() );
@@ -545,7 +552,7 @@ final class Delicat_Builder_V9_Notifications {
 		 * moves to the recent end, so a flood of fake tokens can no longer push the real phones out of the
 		 * 200-device list. Administrators are not limited. */
 		if ( ! isset( $devices[ $id ] ) && ! current_user_can( 'manage_woocommerce' ) ) {
-			$ip     = class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_ip' ) ) ? Delicat_Builder_V9_Security::client_ip() : (string) ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput
+			$ip     = class_exists( 'Delicat_Builder_V9_Security', false ) && is_callable( array( 'Delicat_Builder_V9_Security', 'client_bucket' ) ) ? Delicat_Builder_V9_Security::client_bucket() : (string) ( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput -- V10: IPv6 counted per /64.
 			$bucket = 'dbv9_devreg_' . substr( hash_hmac( 'sha256', $ip, wp_salt( 'nonce' ) ), 0, 24 );
 			$count  = (int) get_transient( $bucket );
 			if ( $count >= 30 ) {
@@ -577,8 +584,36 @@ final class Delicat_Builder_V9_Notifications {
 			$response->header( 'Cache-Control', 'private, no-store, no-cache, must-revalidate, max-age=0' );
 			$response->header( 'Pragma', 'no-cache' );
 			$response->header( 'Vary', 'Cookie' );
+			/* V10: LiteSpeed's REST cache (private cache included) never keeps a signed-in list. */
+			do_action( 'litespeed_control_set_nocache', 'Delicat V9 private notifications' );
 		}
 		return $response;
+	}
+
+	/** V10: drop the guests' cached /notifications answer (LiteSpeed tag). */
+	public static function purge_public_list(): void {
+		do_action( 'litespeed_purge', self::PUBLIC_CACHE_TAG );
+	}
+
+	/**
+	 * update_option_dsb_header_notifications: purge only when a row guests can see changed.
+	 * Every order status change writes a personal row here; those never reach the guest list.
+	 */
+	public static function history_changed( $old_value, $value ): void {
+		if ( self::public_rows( $old_value ) !== self::public_rows( $value ) ) {
+			self::purge_public_list();
+		}
+	}
+
+	/** Rows that are not explicitly personal ('user' / 'private'), as stored. */
+	private static function public_rows( $items ): array {
+		$out = array();
+		foreach ( is_array( $items ) ? $items : array() as $item ) {
+			if ( is_array( $item ) && ! in_array( (string) ( $item['audience'] ?? '' ), array( 'user', 'private' ), true ) ) {
+				$out[] = $item;
+			}
+		}
+		return $out;
 	}
 
 	/** Guest lists contain broadcast-safe admin rows only and may be cached briefly. */
@@ -592,6 +627,10 @@ final class Delicat_Builder_V9_Notifications {
 			$response->header( 'Cache-Control', 'public, max-age=15, stale-while-revalidate=30' );
 			$response->header( 'ETag', $etag );
 			$response->header( 'Vary', 'Accept-Encoding' );
+			/* V10 (security review #3): LiteSpeed's REST cache ignores the header above and kept
+			 * this answer for its own REST TTL (7 days by default): same 15 s, tagged for the purge. */
+			do_action( 'litespeed_control_set_ttl', 15 );
+			do_action( 'litespeed_tag_add', self::PUBLIC_CACHE_TAG );
 			$incoming = isset( $_SERVER['HTTP_IF_NONE_MATCH'] ) ? trim( sanitize_text_field( wp_unslash( $_SERVER['HTTP_IF_NONE_MATCH'] ) ) ) : '';
 			if ( '' !== $incoming && hash_equals( $etag, $incoming ) ) {
 				$response->set_status( 304 );
