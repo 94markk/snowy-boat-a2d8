@@ -363,7 +363,7 @@
 				// Never display a stale response as verification of edited fields.
 				if (!isAttached(wrap) || requestRevision !== revision || JSON.stringify(getValues(wrap)) !== JSON.stringify(values)) return;
 				historyCache = {};
-				historyWanted = true;
+				wantHistory();
 				var previousHistory = wrap.querySelector('.dst2t-player-history');
 				if (previousHistory) previousHistory.remove();
 				wrap.removeAttribute('data-dst2t-history-ready');
@@ -394,8 +394,17 @@
 		});
 	}
 
+	function wantHistory() {
+		historyWanted = true;
+		document.removeEventListener('pointerdown', onHistoryIntent, true);
+		document.removeEventListener('focusin', onHistoryIntent, true);
+		document.removeEventListener('change', onHistoryIntent, true);
+		document.removeEventListener('click', onShopperInput, true);
+		document.removeEventListener('keydown', onShopperInput, true);
+	}
+
 	// First sign of intent: a tap or focus in the fields, or a package chosen in
-	// the product form (the Builder's package cards dispatch a native change).
+	// the product form with a native change (a plain select, the V10 package cards).
 	function onHistoryIntent(event) {
 		if (historyWanted) return;
 		var target = event.target;
@@ -406,17 +415,58 @@
 			hit = form && form.querySelector('.dst2t-field-list[data-dst2t-history-product]');
 		}
 		if (!hit) return;
-		historyWanted = true;
-		document.removeEventListener('pointerdown', onHistoryIntent, true);
-		document.removeEventListener('focusin', onHistoryIntent, true);
-		document.removeEventListener('change', onHistoryIntent, true);
+		wantHistory();
 		scanHistory();
+	}
+
+	// The Builder V9 package cards (dlc-914-swatches.js) and other custom selects
+	// set the WooCommerce select through jQuery, which fires no native event. Their
+	// pick shows up as the card's dsb:plan_selected and WooCommerce's
+	// woocommerce_variation_select_change and found_variation. Those also fire for
+	// a package the page picks by itself (WooCommerce default attributes, the
+	// Builder's recommended card), so they count only once the shopper has tapped
+	// or typed in that form: opening a product page still fetches nothing.
+	var shopperForm = null;
+	var shopperSeen = false;
+
+	function onShopperInput(event) {
+		if (event.isTrusted === false) return;
+		shopperSeen = true;
+		var target = event.target;
+		var form = target && target.closest ? target.closest('form.cart') : null;
+		if (form) shopperForm = form;
+	}
+
+	function shopperUsed(form) {
+		if (shopperForm) return shopperForm === form;
+		// Nothing seen yet: LiteSpeed starts delayed scripts on the first tap, and the
+		// Builder replays a tap on a card as a synthetic click. The browser's sticky
+		// activation still records that the shopper tapped.
+		var activation = !shopperSeen && window.navigator ? window.navigator.userActivation : null;
+		return !!(activation && activation.hasBeenActive);
+	}
+
+	function onPackageIntent(event) {
+		if (!historyWanted) {
+			var target = event.target;
+			var form = target && target.closest ? target.closest('form.cart') : null;
+			if (!form || !form.querySelector('.dst2t-requirements, .dst2t-field-list[data-dst2t-history-product]') || !shopperUsed(form)) return;
+			wantHistory();
+		}
+		// found_variation comes after WooCommerce painted the chosen package's fields.
+		// The other two come before it: that repaint then loads the saved IDs.
+		if (event.type === 'found_variation') scanHistory();
 	}
 
 	if (historyConfig) {
 		document.addEventListener('pointerdown', onHistoryIntent, true);
 		document.addEventListener('focusin', onHistoryIntent, true);
 		document.addEventListener('change', onHistoryIntent, true);
+		document.addEventListener('click', onShopperInput, true);
+		document.addEventListener('keydown', onShopperInput, true);
+		document.addEventListener('dsb:plan_selected', onPackageIntent, true);
+		// Bubbles here from the form after its own handlers, the repaint included.
+		$(document).on('found_variation woocommerce_variation_select_change', onPackageIntent);
 	}
 
 	$(function () {

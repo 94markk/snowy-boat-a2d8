@@ -5,9 +5,13 @@ if (!class_exists('Delicat_Package_Selection', false)) {
 final class Delicat_Package_Selection {
     const RECIPE = '_delicat_package_recipe_v1';
     const MIGRATION = 'delicat_package_selector_repair_v1';
-    // Autoloaded index {parent id: [custom package variation ids]}. Storefront
-    // filters skip every product that is not in it, without a query.
+    // Autoloaded index {format, parents: {parent id: [custom package variation ids]}}.
+    // Storefront filters skip every product that is not in it, without a query.
     const INDEX = 'delicat_package_index_v1';
+    // A stored value without this format (such as the empty map written by the
+    // unreleased Gateway 4.25.0 / Shop2Topup 2.10.0 builds) counts as unknown and
+    // is rebuilt from the database once.
+    const INDEX_FORMAT = 2;
     const INDEX_CHECK = 'delicat_package_index_checked';
     private static $booted = false;
     private static $rows = array();
@@ -41,7 +45,7 @@ final class Delicat_Package_Selection {
     public static function index() {
         if (null === self::$index && function_exists('get_option')) {
             $stored = get_option(self::INDEX, null);
-            if (is_array($stored)) { self::set_index($stored, false); }
+            if (is_array($stored) && isset($stored['format'], $stored['parents']) && self::INDEX_FORMAT === (int) $stored['format'] && is_array($stored['parents'])) { self::set_index($stored['parents'], false); }
         }
         return self::$index;
     }
@@ -62,16 +66,21 @@ final class Delicat_Package_Selection {
             foreach ((array) $children as $id) { $id = absint($id); if ($id && !isset($ids[$id])) { $clean[$pid][] = $id; $ids[$id] = $pid; } }
         }
         self::$index = $clean; self::$package_ids = $ids;
-        if ($save && function_exists('update_option')) { update_option(self::INDEX, $clean, true); }
+        if ($save && function_exists('update_option')) { update_option(self::INDEX, array('format' => self::INDEX_FORMAT, 'parents' => $clean), true); }
     }
     public static function rebuild_index() {
         if (!function_exists('get_posts')) { return; }
-        $rows = get_posts(array('post_type' => 'product_variation', 'post_status' => array('publish','private','draft','pending','future','trash'), 'fields' => 'id=>parent', 'posts_per_page' => -1, 'meta_key' => self::RECIPE, 'orderby' => 'ID', 'order' => 'ASC', 'no_found_rows' => true));
+        // 'ids' is a plain id list on every WordPress version and cache path. Never
+        // 'id=>parent': it returns parent ids (keyed 'post_parent:ID' from the query cache).
+        $rows = get_posts(array('post_type' => 'product_variation', 'post_status' => array('publish','private','draft','pending','future','trash'), 'fields' => 'ids', 'posts_per_page' => -1, 'meta_key' => self::RECIPE, 'orderby' => 'ID', 'order' => 'ASC', 'no_found_rows' => true));
+        $ids = array();
+        foreach ((array) $rows as $row) { $id = absint(is_object($row) ? $row->ID : $row); if ($id) { $ids[] = $id; } }
+        // One query for the package posts not in the object cache, not one per parent lookup.
+        if ($ids && function_exists('_prime_post_caches')) { _prime_post_caches($ids, false, false); }
         $index = array();
-        foreach ((array) $rows as $row) {
-            $id = is_object($row) ? absint($row->ID) : absint($row);
-            $pid = is_object($row) ? absint($row->post_parent) : absint(wp_get_post_parent_id($id));
-            if ($id && $pid) { $index[$pid][] = $id; }
+        foreach ($ids as $id) {
+            $pid = absint(wp_get_post_parent_id($id));
+            if ($pid) { $index[$pid][] = $id; }
         }
         self::set_index($index, true);
         if ($index && class_exists('Delicat_Custom_Packages', false) && method_exists('Delicat_Custom_Packages', 'hook_mapping')) { Delicat_Custom_Packages::hook_mapping(); }

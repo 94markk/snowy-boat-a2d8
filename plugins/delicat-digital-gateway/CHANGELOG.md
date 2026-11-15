@@ -9,7 +9,8 @@
 ### 2. Technique
 
 - Nouveaux fichiers assets/product-fields.css et assets/product-fields.js (poignée dfr-product-fields) ; transitions coupées avec « réduire les animations » et le mode économie.
-- Nouvelle option delicat_package_index_v1 (construite une fois au premier chargement après la mise à jour, puis tenue à jour). Si elle manquait, le forfait est refusé à la commande, jamais livré au mauvais prix.
+- Nouvelle option delicat_package_index_v1 (construite une fois au premier chargement après la mise à jour, puis tenue à jour ; elle porte une marque de format et un index sans cette marque est reconstruit). Si un forfait y manquait, il serait refusé à la commande, jamais livré au mauvais prix.
+- Nouveau test tests/package-index-smoke.php : l'index est construit comme WordPress répond réellement (« ids » et « id=>parent », y compris depuis le cache de requêtes) et chaque forfait garde sa liaison fournisseur.
 - Module de forfaits partagé identique dans Shop2Topup 2.10.0.
 
 ## 4.24.0 — Confirmations en quelques secondes, pages plus légères
