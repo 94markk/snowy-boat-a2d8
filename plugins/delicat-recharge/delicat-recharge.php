@@ -321,12 +321,25 @@ register_deactivation_hook( __FILE__, function () {
  * never contain them, which made every account section slower to open.
  * Shortcode renders still enqueue the assets themselves wherever they appear.
  *
- * V10: an allow-list instead of a list of sections to skip. Only the wallet tab (TeraWallet's
- * endpoints) and, without Delicat Identity, the legacy dashboard carry the wallet design; every
- * other section (Identity's connected-accounts, the Gateway's reseller-api, any future one) no
- * longer receives the stylesheet, form.js, jQuery and the inline override. Filters:
- * delicat_recharge_wallet_ui_endpoints (sections to add) and, as before,
- * delicat_recharge_wallet_ui_skip_endpoints (a section removed from that list now loads the design).
+ * 6.8.0: same rule as 6.7.0. The design loads on EVERY account section except the skip list
+ * below. A first 6.8.0 build used an allow-list (wallet tab only). That removed form.css, form.js
+ * and the glass override from live sections that no plugin in this repository registers:
+ * revendeur (Delicat Resellers), exchanges (« Mes échanges »), app-security, my-data, delete-account
+ * and api-revendeur. form.css also holds site-wide rules: the account menu hover, and chat bubbles
+ * lifted above the bottom bar on phones. So the skip list is back, and the only sections added to
+ * the 6.7.0 list are Identity's connected-accounts and the Gateway's reseller-api.
+ *
+ * Filters (arrays of endpoint slugs, '' = the account home):
+ * - delicat_recharge_wallet_ui_skip_endpoints (6.5.1, unchanged): sections that never get the
+ *   design. It runs last and has the final word: a section it adds never loads the design, and a
+ *   section it removes does.
+ * - delicat_recharge_wallet_ui_endpoints (6.8.0, kept): sections that must get the design. It
+ *   receives the same default as in the allow-list build: TeraWallet's wallet tabs (the default
+ *   slugs and the ones set in WooCommerce) and, without Identity, the home. A section it returns
+ *   is taken off the default skip list before the skip filter runs, so adding one here works
+ *   (even 'orders') unless the skip filter lists it again. Taking a section out of this list no
+ *   longer hides the design, because every section that is not skipped loads it. To hide it, add
+ *   the section to the skip filter.
  */
 function delicat_recharge_account_needs_wallet_ui(): bool {
     static $memo = null;
@@ -357,17 +370,19 @@ function delicat_recharge_account_needs_wallet_ui(): bool {
             $allow[] = $slug;
         }
     }
+    // The 6.7.0 skip list, plus Identity's connected-accounts and the Gateway's reseller-api.
+    $skip = array( 'orders', 'view-order', 'downloads', 'edit-address', 'edit-account', 'payment-methods', 'add-payment-method', 'delete-payment-method', 'set-default-payment-method', 'change-password', 'identity-center', 'security-sessions', 'customer-logout', 'lost-password', 'connected-accounts', 'reseller-api' );
     /* The account home is Delicat Identity's own screen when it is active; without it, a
      * legacy dashboard may still carry the wallet card, so the design keeps loading there. */
-    $skip = array( 'orders', 'view-order', 'downloads', 'edit-address', 'edit-account', 'payment-methods', 'add-payment-method', 'delete-payment-method', 'set-default-payment-method', 'change-password', 'identity-center', 'security-sessions', 'customer-logout', 'lost-password', 'connected-accounts', 'reseller-api' );
     if ( class_exists( 'DIP_My_Account_Modern' ) ) {
         $skip[] = '';
     } else {
         $allow[] = '';
     }
-    $filtered_skip = (array) apply_filters( 'delicat_recharge_wallet_ui_skip_endpoints', $skip );
-    $allow         = array_merge( (array) apply_filters( 'delicat_recharge_wallet_ui_endpoints', $allow ), array_diff( $skip, $filtered_skip ) );
-    $needs         = in_array( $endpoint, $allow, true ) && ! in_array( $endpoint, $filtered_skip, true );
+    // Sections that must get the design leave the default skip list; the skip filter decides last.
+    $allow = array_filter( (array) apply_filters( 'delicat_recharge_wallet_ui_endpoints', $allow ), 'is_string' );
+    $skip  = (array) apply_filters( 'delicat_recharge_wallet_ui_skip_endpoints', array_values( array_diff( $skip, $allow ) ) );
+    $needs = ! in_array( $endpoint, $skip, true );
     if ( did_action( 'wp' ) ) {
         $memo = $needs; // asked up to three times per page (styles, script, head override)
     }

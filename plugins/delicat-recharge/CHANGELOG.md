@@ -13,10 +13,10 @@ Ce fichier remplace les notes par version (`README-v*.txt`, `API-SYNC-v6.2.0.md`
 (1) **QR codes dessinés sur le site** (carte de solde, « Envoyer de l'argent ») : plus aucune requête vers
     api.qrserver.com, donc le code du client n'est plus envoyé à un tiers et le QR s'affiche même si ce service
     est lent ou bloqué. Image SVG gardée un jour dans le cache objet.
-(2) **Pages du compte plus légères** : les styles et scripts du portefeuille ne sont chargés que sur l'onglet
-    portefeuille, les pages portefeuille et les pages avec un code court (plus sur « Comptes connectés » ni
-    « API revendeur »). Le jeton de sécurité et les réglages du portefeuille ne sont calculés que là où le script
-    est chargé.
+(2) **Pages du compte plus légères** : les styles et scripts du portefeuille ne se chargent plus sur « Comptes
+    connectés » ni « API revendeur ». Ils restent chargés sur les autres onglets du compte (portefeuille, « Mes
+    échanges », Revendeur, sécurité de l'application, mes données…), comme en 6.7.0. Le jeton de sécurité et les
+    réglages du portefeuille ne sont calculés que là où le script est chargé.
 (3) **Serveur** : les 27 classes sont chargées à la demande ; une page de la boutique compile 76 Ko au lieu de
     578 Ko. L'administration, admin-ajax, le cron et WP-CLI construisent tout comme avant (même ordre).
 
@@ -24,8 +24,9 @@ Ce fichier remplace les notes par version (`README-v*.txt`, `API-SYNC-v6.2.0.md`
 
 - Nouvelle classe Delicat_QR (includes/class-qr.php), encodeur QR écrit pour l'extension (vérifié module par
   module contre une bibliothèque de référence et décodé par un lecteur QR).
-- Nouveau filtre delicat_recharge_wallet_ui_endpoints pour ajouter un onglet du compte qui doit afficher le
-  portefeuille.
+- Le filtre delicat_recharge_wallet_ui_skip_endpoints (onglets sans portefeuille) ne change pas et garde le dernier
+  mot. Nouveau filtre delicat_recharge_wallet_ui_endpoints : un onglet qu'il renvoie affiche le portefeuille même
+  s'il figure dans la liste exclue par défaut.
 - Les vérifications des tâches planifiées se font dans l'administration, admin-ajax et le cron, plus sur chaque
   page de la boutique.
 
