@@ -131,3 +131,67 @@ new latency tests (`delicat-digital-gateway/tests/delivery_smoke.php`,
 that run the real plugin code against stubbed WordPress, WooCommerce and
 supplier APIs. Recharge's CSS was compared in headless Chrome (44 scenarios).
 Watch the first real orders after installing.
+
+---
+
+# V10 — Delicat Builder V10 Pro beta 1 and speed pass (15 November 2026)
+
+| Plugin | Installed | New |
+|---|---|---|
+| Delicat Builder (folder `delicat-builder-v9`) | 9.14.4 | **10.0.0-beta.1 — "Delicat Builder V10 Pro"** |
+| Delicat Identity Pro | 6.18.0 | **6.19.0** |
+| Delicat Digital Gateway | 4.24.0 | **4.25.0** |
+| Delicat Top-Up Fulfillment (Shop2Topup) | 2.9.0 | **2.10.0** |
+| Delicat Recharge | 6.7.0 | **6.8.0** |
+| Delicat Rewards | 4.1.0 | **4.2.0** |
+
+Same folders, settings, option/hook/route names and app contract: each zip installs over the
+current version (« Remplacer la version actuelle »). French notes are at the top of each
+plugin's README/CHANGELOG.
+
+## iPhone zoomed-out pages — root cause
+WooCommerce's hidden screen-reader price text (« Price range… ») was absolutely positioned
+against the window, about 1,000 px past the right edge; Safari measured the page at ~1,400 px
+and zoomed out. The text is now pinned inside its box (Builder chrome + Identity account CSS).
+Measured with the page-width guard lifted: 9.14.4 = 1,411–1,670 px wide, V10 = exactly the
+screen (320, 390, 412, 440 px and laptop), visible screen pixel-identical.
+
+## Measured speed changes (stub harness / Chromium, before → after)
+- wc-ajax checkout 55 → 24 PHP files, cart fragments 54 → 23, WP-Cron 53 → 21, REST 32 → 24.
+- Options pre-loaded per non-page request 68 → 13–29; one HTML fix-up pass (7.3 → 2.1 ms).
+- Plugin update: Redis full flush 2 → 0, LiteSpeed purge-all 2 → 1.
+- Signed-in product page with region variants: 2 background uncached product renders
+  (~1 s / 53 queries each on the live server) → 0.
+- App/PWA visitors: uncached session request once per tab instead of once per page.
+- App shell precache 138.7 → 111.8 KB gzip (3 files fewer); RUM writes 51 → 3 per 50 beacons.
+- Identity Pro: guest pages load 2.7 KB of sign-in script instead of 29.7 KB; account home
+  −65 KB; 7 PHP files / 240 KB less per page (cold boot 34.8 → 29.1 ms); dashboard order
+  queries cached 90 s.
+- Recharge: storefront compiles 76 KB of PHP instead of 578 KB; QR codes drawn locally.
+- Gateway: −12.5 KB inline per top-up product (now cached files); shop pages 24 → 0 package
+  queries for 24 variable products. Shop2Topup: no saved-ID request on page load; storefront
+  PHP 449 → 348 KB; Rewards 329 → 312 KB.
+- Builder size 318 files / 7.7 MB → 308 files / 7.2 MB (8 unused files removed).
+Live response times depend on LiteSpeed cache hits; compare `?dbv9_turbo_diag=1` (request ms,
+DB queries) on the same pages before and after installing.
+
+## Independent review before release
+Six reviewers checked every V10 change; each fix was verified by a separate checker. Fixed:
+- Gateway/Shop2Topup: the new package index came out empty (custom packages unpurchasable,
+  fail-closed) — rebuilt correctly, new `tests/package-index-smoke.php`.
+- Builder: a crafted POST could trip Safe Mode; REST URLs with `?wc-ajax=` skipped the
+  calculator; stale SEO map pages were cacheable; calculator just-in-time on cart pricing;
+  previous APK kept; engine checks the session once per tab under the service worker and after
+  any sign-in/out.
+- Identity: compact scripts rebuilt as ES5 (old Android WebViews); other tabs notified of
+  Google / wp-login / WooCommerce sign-ins.
+- Recharge: wallet styles stay on every account tab except Connected accounts / Reseller API.
+
+## After installing
+1. Back up, install the 6 zips, then LiteSpeed › Purge All and purge the CDN.
+2. Test once: a full purchase (cart, coupon, payment), a custom package (« 220 = 110 x 2 »),
+   Player ID verification, the header cart badge, an order-status notification, the account
+   page on iPhone, the wallet tab and « Mes échanges ».
+3. Flutter app: Google / passkey / biometric sign-in, refresh, pairing.
+4. E-mails: one WooCommerce order e-mail and one password reset (Email Studio design).
+5. Beta: if anything is wrong, reinstall Builder 9.14.4 (no data is changed).
