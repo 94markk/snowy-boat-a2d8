@@ -1,14 +1,14 @@
 {
  "version": 2,
- "builtAt": "2026-11-15T06:51:44.590Z",
+ "builtAt": "2026-11-15T08:56:15.642Z",
  "js": {
   "engine": {
-   "file": "engine.c91db31e62ba.js",
+   "file": "engine.4c41e469fa55.js",
    "bytes": 90186,
-   "sha256": "c91db31e62ba5ed2d0fc7823c47bb038053db8b8905e3ce1a7c3e10e0d9fe8e0",
+   "sha256": "4c41e469fa5530942d096931ead03d1e93c8b4a1deaa732dfcbeacd02ed398a7",
    "imports": [
     "chunks/chunk.d1a484e3dd19.js",
-    "chunks/chunk.2285931c3f9a.js",
+    "chunks/chunk.cb51c40e1f8f.js",
     "chunks/chunk.385b5371c4d9.js",
     "chunks/chunk.fefdb647cb09.js",
     "chunks/chunk.71647e346105.js"
@@ -31,9 +31,9 @@
    "sha256": "b0f23acbe54395754c83cfe0897dbae8057536b1f30558e2b00c190dd93b0a9e",
    "name": null
   },
-  "chunks/widgets.29b088456120.js": {
+  "chunks/widgets.2b0576467f8e.js": {
    "bytes": 11743,
-   "sha256": "29b08845612019426561d95687c545f6f8a28245e544963991f9f595aa352ecc",
+   "sha256": "2b0576467f8eb3c1d85ffc6ea53305ea3f3d1a339502d3debd9e6e27dc31a61e",
    "name": "widgets"
   },
   "chunks/chunk.d1a484e3dd19.js": {
@@ -46,9 +46,9 @@
    "sha256": "94cd6c57cd130c8e12559e452c8721d20df58eb74c73f74e71c5ed22f5b6a67c",
    "name": "reviews"
   },
-  "chunks/chunk.2285931c3f9a.js": {
-   "bytes": 13239,
-   "sha256": "2285931c3f9aa54861ab983d7447348f9c34912b80756d8c8b0f39df77d55394",
+  "chunks/chunk.cb51c40e1f8f.js": {
+   "bytes": 13385,
+   "sha256": "cb51c40e1f8f9a01e5f13f0df496144c3d1708f2d47ac8eabcf0de065913e901",
    "name": null
   },
   "chunks/purchase-native.451d1f377e58.js": {
@@ -76,9 +76,9 @@
    "sha256": "71647e346105c824bd792c617c7606c4ede1565435c0972835d8da1b71f069eb",
    "name": null
   },
-  "chunks/shell-header.ef1b6402e5b6.js": {
+  "chunks/shell-header.ce41f905b998.js": {
    "bytes": 10548,
-   "sha256": "ef1b6402e5b6cf6f748818aef37a407fbdfc9e2c2dcf8dfe8955734664f8f4e6",
+   "sha256": "ce41f905b9980d66f1c6010fa1623b1757394b8e8a4813107e78b0708bce5bb3",
    "name": "shell-header"
   }
  },

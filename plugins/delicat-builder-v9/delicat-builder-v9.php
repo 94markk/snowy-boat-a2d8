@@ -700,12 +700,8 @@ function delicat_builder_v9_request_profile(): string {
 	if ( wp_doing_cron() ) {
 		return $profile = 'jobs';
 	}
-	/* The query string only, as WooCommerce reads it (WC_AJAX::define_ajax): a page POST whose body happens to carry
-	 * a « wc-ajax » field is still a page. */
-	$wc_ajax = isset( $_GET['wc-ajax'] ) ? sanitize_key( $scalar( $_GET['wc-ajax'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
-	if ( '' !== $wc_ajax ) {
-		return $profile = 'delicat_session' === $wc_ajax ? 'session' : 'commerce';
-	}
+	/* REST before wc-ajax: WordPress answers a REST request at parse_request, before WooCommerce looks at wc-ajax
+	 * (template_redirect), so a REST URL that also carries ?wc-ajax=… is a REST request and needs the REST modules. */
 	if ( isset( $_GET['rest_route'] ) && '' !== $scalar( $_GET['rest_route'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
 		return $profile = 'rest';
 	}
@@ -718,6 +714,12 @@ function delicat_builder_v9_request_profile(): string {
 				return $profile = 'rest';
 			}
 		}
+	}
+	/* The query string only, as WooCommerce reads it (WC_AJAX::define_ajax): a page POST whose body happens to carry
+	 * a « wc-ajax » field is still a page. */
+	$wc_ajax = isset( $_GET['wc-ajax'] ) ? sanitize_key( $scalar( $_GET['wc-ajax'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- routing only.
+	if ( '' !== $wc_ajax ) {
+		return $profile = 'delicat_session' === $wc_ajax ? 'session' : 'commerce';
 	}
 	return $profile = 'storefront';
 }
@@ -1280,9 +1282,14 @@ if ( $delicat_builder_v9_maintenance_on || $delicat_builder_v9_maintenance_previ
  * endpoints so hidden address fields cannot return as required at submission.
  * This registers filters only; Woo owns the endpoint, nonce, totals, gateway,
  * payment and order creation from start to finish.
+ *
+ * V10 (review fix): the query string only, as WooCommerce reads it (WC_AJAX::define_ajax/do_wc_ajax) and as the
+ * request profile reads it. A « wc-ajax » field in a POST body never reaches a WooCommerce endpoint, so it must not
+ * choose Builder modules either (it used to pick the session module set on a storefront request, which the
+ * dependency gate then read as a missing Runtime Router and tripped Safe Mode).
  */
-$delicat_builder_v9_wc_ajax = isset( $_REQUEST['wc-ajax'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
-	? sanitize_key( delicat_builder_v9_request_scalar( $_REQUEST['wc-ajax'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
+$delicat_builder_v9_wc_ajax = isset( $_GET['wc-ajax'] ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
+	? sanitize_key( delicat_builder_v9_request_scalar( $_GET['wc-ajax'] ) ) // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- endpoint routing only.
 	: '';
 if ( ! $delicat_builder_v9_boot_safe_mode && in_array( $delicat_builder_v9_wc_ajax, array( 'checkout', 'update_order_review', 'delicat_express_pay' ), true ) ) {
 	delicat_builder_v9_safe_require( 'includes/class-delicat-builder-purchase-native.php' );
@@ -2185,8 +2192,12 @@ if ( $delicat_builder_v9_activating ) {
 	if ( is_array( $delicat_builder_v9_cf ) && ! empty( $delicat_builder_v9_cf['enabled'] ) && ! empty( $delicat_builder_v9_cf['zone_id'] ) && ( ! empty( $delicat_builder_v9_cf['api_token'] ) || ! empty( $delicat_builder_v9_cf['api_token_encrypted'] ) ) ) {
 		delicat_builder_v9_safe_require( 'includes/class-delicat-builder-cloudflare.php' );
 	}
-} elseif ( ! $delicat_builder_v9_boot_safe_mode && 'delicat_session' === $delicat_builder_v9_wc_ajax ) {
+} elseif ( ! $delicat_builder_v9_boot_safe_mode && 'session' === DELICAT_BUILDER_V9_PROFILE ) {
 	/*
+	 * V10 (review fix): chosen from the request profile, the same input the dependency gate below reads, never
+	 * from a second read of the request (a POST body « wc-ajax=delicat_session » sent to a page or to wp-cron.php
+	 * picked this set on a storefront or jobs request).
+	 *
 	 * RC71 ULTRA-LIGHT SESSION PROFILE
 	 * --------------------------------
 	 * This is the hottest uncached Builder endpoint. Session now returns only
@@ -2282,6 +2293,8 @@ if ( $delicat_builder_v9_activating ) {
 			'includes/class-delicat-builder-speed.php',
 		);
 	foreach ( $delicat_builder_v9_public_modules as $delicat_builder_v9_module ) delicat_builder_v9_safe_require( $delicat_builder_v9_module );
+	/* V10 (review fix): the dependency gate below requires the Runtime Router only when this list asked for it. */
+	$delicat_builder_v9_router_expected = in_array( 'includes/class-delicat-builder-runtime-router.php', $delicat_builder_v9_public_modules, true );
 
 	/* RC71: diagnostics are a developer-only overlay. Do not parse its class on
 	 * every shopper request; the class performs the capability check at render. */
@@ -2328,7 +2341,9 @@ if ( ! $delicat_builder_v9_activating && ! DELICAT_BUILDER_V9_FOREIGN_AJAX ) {
          * profile deliberately skips Runtime Router and never renders a page;
          * neither does the REST-light profile. */
         /* V10: nor do the commerce (other wc-ajax) and jobs (WP-Cron) profiles. */
-        if ( 'storefront' === DELICAT_BUILDER_V9_PROFILE ) {
+        /* V10 (review fix): required only when the module list above actually loaded its file (the storefront
+         * set), so the gate can no longer disagree with the branch that chose the modules. */
+        if ( 'storefront' === DELICAT_BUILDER_V9_PROFILE && ! empty( $delicat_builder_v9_router_expected ) ) {
             $delicat_builder_v9_critical[] = 'Delicat_Builder_V9_Runtime_Router';
         }
     }

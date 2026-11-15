@@ -4,10 +4,11 @@ var d = Object.assign({ minGap: 2500, stale: 6e4, navStale: 6e4, fresh: 6e4 }, z
 d.url || (d.url = T.url || location.pathname + "?wc-ajax=delicat_session"), !d.resetUrl && T.resetUrl && (d.resetUrl = T.resetUrl);
 var a = { data: null, ts: 0, pending: null, queued: null, listeners: [], signature: "" }, L = 0, F = false, S = false, _ = false, x = false, g = null, GV = "dlc-gv-v1";
 try {
-  g = new URL(location.href), S = g.searchParams.get("delicat_auth_reset") === "1", _ = g.searchParams.get("delicat_auth_recover") === "1", x = g.searchParams.get("dip_auth_sync") === "1";
+  g = new URL(location.href), S = g.searchParams.get("delicat_auth_reset") === "1", _ = g.searchParams.get("delicat_auth_recover") === "1", x = !!g.searchParams.get("dip_auth_sync");
 } catch {
   let e = (t) => new RegExp("(?:[?&])" + t + "=1(?:&|$)").test(location.search || "");
-  S = e("delicat_auth_reset"), _ = e("delicat_auth_recover"), x = e("dip_auth_sync");
+  /* V10: Identity Pro marks a sign-in/out landing with a random value (DIP_Session_Router::sync_marker), not "1". */
+  S = e("delicat_auth_reset"), _ = e("delicat_auth_recover"), x = /(?:[?&])dip_auth_sync=[^&]+/.test(location.search || "");
 }
 function D() {
   /* V10: the service worker keeps no page copies since 9.12.1 (pages always come from the
@@ -236,16 +237,25 @@ function gvRecent() {
   }
 }
 /* Should a guest page ask the server whether the shopper is really signed out?
-   V10: no longer "whenever a service worker controls the page". Since 9.12.1 the worker never
-   answers a page from a stored copy, so a controlled page is as fresh as any other, and the
-   check cost one uncached WordPress + WooCommerce request per page view of every returning
-   guest and of the installed app. Only a page that did not come over the network is checked:
-   a history load (back/forward), always, and a browser-cache copy (no bytes transferred),
-   once per tab until the next sign-in or sign-out. */
+   V10: no longer on every page view a service worker controls. Since 9.12.1 the worker never
+   answers a page from a stored copy, and the check cost one uncached WordPress + WooCommerce
+   request per page view of every returning guest and of the installed app. A history load
+   (back/forward) is always checked. A browser-cache copy (no bytes transferred) and a page
+   under the service worker (Chromium reports bytes for those, so they look like network
+   pages, yet app/PWA users can still get a wrong-variant copy from LiteSpeed or the CDN)
+   are checked once per tab, until the next sign-in or sign-out. */
 function ie() {
   try {
     let e = n.performance && performance.getEntriesByType ? performance.getEntriesByType("navigation") : [], t = e && e[0];
-    return t ? t.type === "back_forward" ? true : Number(t.transferSize || 0) === 0 && Number(t.decodedBodySize || 0) > 0 && !gvRecent() : false;
+    if (t && t.type === "back_forward") return true;
+    if (gvRecent()) return false;
+    let sw = false;
+    try {
+      sw = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
+    } catch {
+    }
+    if (sw) return true;
+    return t ? Number(t.transferSize || 0) === 0 && Number(t.decodedBodySize || 0) > 0 : false;
   } catch {
     return false;
   }

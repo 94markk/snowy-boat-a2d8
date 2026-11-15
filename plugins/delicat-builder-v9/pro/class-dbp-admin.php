@@ -65,15 +65,15 @@ final class DBP_Admin {
 			),
 			'assets'         => array(
 				__( 'Asset pipeline', 'delicat-builder-v9' ),
-				__( 'Master switch for everything below that touches CSS and JavaScript.', 'delicat-builder-v9' ),
+				__( 'Master switch for everything below that touches CSS and JavaScript. While the V10 engine is active (the default), the inline shell rules are part of its shared stylesheet and stay on whatever this switch says; for them it applies only when the engine is off.', 'delicat-builder-v9' ),
 			),
 			'route_assets'   => array(
 				__( 'Route-scoped bundles', 'delicat-builder-v9' ),
 				__( 'Product, archive and purchase bundles stop shipping to pages that do not use them. Roughly 108 KB off every non-product page.', 'delicat-builder-v9' ),
 			),
 			'critical_css'   => array(
-				__( 'Inline shell CSS', 'delicat-builder-v9' ),
-				__( 'Reserves the header and app dock height before the stylesheets arrive, which removes the late layout jump. Additive — it never replaces a stylesheet.', 'delicat-builder-v9' ),
+				__( 'Inline shell CSS (engine off only)', 'delicat-builder-v9' ),
+				__( 'Reserves the header and app dock height before the stylesheets arrive, which removes the late layout jump. Additive — it never replaces a stylesheet. While the V10 engine is active (the default), these rules are part of its shared stylesheet and always apply: this switch takes effect only when the engine is off.', 'delicat-builder-v9' ),
 			),
 			'type_system'    => array(
 				__( 'One type and colour scale', 'delicat-builder-v9' ),

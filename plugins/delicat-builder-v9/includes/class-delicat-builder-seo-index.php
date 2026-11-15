@@ -79,11 +79,11 @@ final class Delicat_Builder_V9_SEO_Index {
 		 * not run within QUEUE_GRACE, ONE request rebuilds it here under a lock.
 		 */
 		if ( $usable && self::queue_rebuild( $gen ) ) {
-			return self::$map = $cached;
+			return self::$map = self::serve_while_rebuilding( $cached, $gen );
 		}
 		if ( ! self::lock() ) {
 			if ( $usable ) {
-				return self::$map = $cached; // the request holding the lock is rebuilding it
+				return self::$map = self::serve_while_rebuilding( $cached, $gen ); // the request holding the lock is rebuilding it
 			}
 			/* Nothing to serve yet: this request answers without hidden or redirected items, and its page must
 			 * not be kept by any cache. The next request reads the map the lock holder stores. */
@@ -97,6 +97,23 @@ final class Delicat_Builder_V9_SEO_Index {
 		} finally {
 			self::unlock();
 		}
+	}
+
+	/**
+	 * V10 (review fix): the stored map, served while its rebuild is pending.
+	 *
+	 * When the content changed since it was built (its stamp is not the current one), it can still offer an item the
+	 * change hid or redirected (a new supplier category in the drawer, the chips, the sitemaps, robots), and nothing
+	 * purges LiteSpeed or the CDN when the job later stores the new map. So the page built from it is not kept by any
+	 * cache, as when there is no map at all; the next page after the rebuild is cached as usual.
+	 * A map that is only older than FRESH, with the current stamp, describes the same content: it stays cacheable
+	 * (otherwise every page would go uncached every 12 hours until the job runs) and the job refreshes it.
+	 */
+	private static function serve_while_rebuilding( array $cached, string $gen ): array {
+		if ( ( $cached['gen'] ?? null ) !== $gen && function_exists( 'delicat_builder_v9_no_store' ) ) {
+			delicat_builder_v9_no_store( 'seo index rebuilding' );
+		}
+		return $cached;
 	}
 
 	/** Seconds a stored map counts as fresh when nothing changed (it used to expire after 12 hours). */

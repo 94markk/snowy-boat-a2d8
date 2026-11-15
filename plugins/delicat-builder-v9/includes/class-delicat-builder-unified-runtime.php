@@ -256,6 +256,58 @@ final class Delicat_Builder_V9_Unified_Modules {
 			self::set_runtime( 'product_fields', 'deferred', 'Waiting for WooCommerce page context.' );
 			add_action( 'wp_loaded', array( __CLASS__, 'boot_product_fields_saved_cart' ), 0 );
 			add_action( 'wp', array( __CLASS__, 'boot_product_fields_frontend' ), -90 );
+			/* V10 (review fix): just in time, wherever WooCommerce restores a calculator line from the session or
+			 * prices the cart, whatever cookies the browser kept (see boot_product_fields_cart_load()). */
+			add_action( 'woocommerce_load_cart_from_session', array( __CLASS__, 'boot_product_fields_cart_load' ), 0 );
+			add_action( 'woocommerce_before_calculate_totals', array( __CLASS__, 'boot_product_fields_just_in_time' ), 0 );
+		}
+	}
+
+	/**
+	 * V10 (review fix): woocommerce_items_in_cart is a session cookie (a browser or WebView restart drops it) while
+	 * the WooCommerce session lasts two days, so a cart holding a calculator line can reach a page that did not boot
+	 * the calculator early. WooCommerce restores the cart on every front-end request (wp_loaded), so this loads the
+	 * calculator only when the session's cart actually holds a calculator line; pricing itself is covered by
+	 * boot_product_fields_just_in_time() on woocommerce_before_calculate_totals, which WooCommerce fires only for a
+	 * cart with items. Both run at priority 0: the calculator's own callbacks (woocommerce_get_cart_item_from_session
+	 * inside the same load, apply_cart_prices at 20 on the same totals pass) are added before WordPress reaches them.
+	 */
+	public static function boot_product_fields_cart_load(): void {
+		try {
+			$session = function_exists( 'WC' ) && is_object( WC() ) && isset( WC()->session ) && is_object( WC()->session ) && is_callable( array( WC()->session, 'get' ) )
+				? WC()->session
+				: null;
+			$lines   = $session ? $session->get( 'cart', null ) : null;
+		} catch ( Throwable $error ) {
+			unset( $error );
+			return;
+		}
+		if ( ! is_array( $lines ) ) {
+			return;
+		}
+		foreach ( $lines as $line ) {
+			if ( is_array( $line ) && isset( $line['dmc_calc'] ) ) {
+				self::boot_product_fields_just_in_time();
+				return;
+			}
+		}
+	}
+
+	/** V10 (review fix): the guarded loader, once per request from these hooks; a loaded calculator makes it a no-op. */
+	public static function boot_product_fields_just_in_time(): void {
+		static $tried = false;
+		if ( $tried ) {
+			return;
+		}
+		$tried = true;
+		try {
+			self::load_product_fields();
+			if ( ! self::legacy_product_fields_active() ) {
+				self::set_runtime( 'product_fields', 'active', 'Builder V9 owns this system.' );
+			}
+		} catch ( Throwable $error ) {
+			self::record_failure( 'product_fields', $error );
+			self::set_runtime( 'product_fields', 'error', 'V9 kept the module offline after a boot exception.' );
 		}
 	}
 

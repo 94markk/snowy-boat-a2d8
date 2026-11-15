@@ -170,7 +170,7 @@ RULES;
         // Atomic DB lock: never delete another request's live lock.
         $lock = time() . '|' . bin2hex( random_bytes( 16 ) );
         if ( ! add_option( self::LOCK, $lock, '', false ) ) { self::fail( 'Un téléversement est déjà en cours. Si un transfert a été interrompu, utilisez le bouton de réinitialisation après 15 minutes.' ); }
-        $result = null; $destination = ''; $committed = false; $kept = ''; $kept_dir = '';
+        $result = null; $destination = ''; $committed = false; $kept = ''; $kept_dir = ''; $replaced = array();
         try {
             $result = self::validate( $file['tmp_name'], $file['name'], self::limit() );
             if ( ! is_wp_error( $result ) && '' !== $expected && ! hash_equals( $expected, $result['sha256'] ) ) { $result = new WP_Error( 'apk_checksum', 'L’empreinte SHA-256 ne correspond pas au fichier attendu. Aucun fichier n’a été publié.' ); }
@@ -189,6 +189,8 @@ RULES;
                 else {
                     $url = $storage['url'] . $name;
                     $settings = Delicat_Builder_V9_App_Download::settings();
+                    // V10 (review fix): the link being replaced, so prune_previous() keeps that build.
+                    $replaced = array( is_string( $settings['url'] ?? null ) ? $settings['url'] : '', is_array( $previous ) && is_string( $previous['url'] ?? null ) ? $previous['url'] : '' );
                     $settings['url'] = $url; $settings['type'] = 'apk'; $settings['size'] = size_format( $result['bytes'], 1 );
                     // pro.59: identity from the manifest; the typed version only overrides the label.
                     $settings['version'] = (string) $result['version_name']; $settings['build'] = (int) $result['build'];
@@ -209,7 +211,7 @@ RULES;
             self::release_lock( $lock );
         }
         if ( $committed ) {
-            try { self::prune_previous( $kept_dir, $kept ); } catch ( Throwable $e ) { unset( $e ); }
+            try { self::prune_previous( $kept_dir, $kept, $replaced ); } catch ( Throwable $e ) { unset( $e ); }
         }
         if ( is_wp_error( $result ) ) { self::fail( $result ); }
         wp_safe_redirect( add_query_arg( array( 'page' => 'delicat-builder-app-download', 'apk_uploaded' => '1' ), admin_url( 'admin.php' ) ) ); exit;
@@ -217,17 +219,39 @@ RULES;
     /**
      * V10 (security review #11): once a new build is published, the older ones leave the public folder
      * (a build with known bugs stayed installable from any shared link, 30-60 MB each on the disk quota).
-     * Only generated names directly inside the storage folder; never the build just published. A
-     * download already running finishes: the server keeps the open file.
+     * Only generated names directly inside the storage folder; never the build just published.
+     * V10 (review fix): nor the build it replaces. Pages, edge and CDN copies and App API clients may still
+     * carry that link, and Android's DownloadManager resumes an interrupted download with new Range requests,
+     * so it stays until the next upload: the folder holds the current and the previous build. The replaced
+     * build is the one the link pointed to before this upload ($replaced_urls, used only to KEEP a file: a name
+     * that is not a generated name already listed in the folder matches nothing); when no recorded link names
+     * one, the most recent other build is kept.
      */
-    private static function prune_previous( string $dir, string $keep ): int {
+    private static function prune_previous( string $dir, string $keep, array $replaced_urls = array() ): int {
         $real = '' !== $dir ? realpath( $dir ) : false;
         if ( false === $real || ! preg_match( '/^delicat-[a-f0-9]{32}\.apk$/D', $keep ) || ! is_file( $real . '/' . $keep ) ) { return 0; }
-        $removed = 0;
+        $older = array();
         foreach ( (array) glob( $real . '/delicat-*.apk', GLOB_NOSORT ) as $path ) {
             $path = (string) $path;
             $base = basename( $path );
             if ( $base === $keep || ! preg_match( '/^delicat-[a-f0-9]{32}\.apk$/D', $base ) || is_link( $path ) || ! is_file( $path ) || dirname( (string) realpath( $path ) ) !== $real ) { continue; }
+            $older[ $base ] = $path;
+        }
+        $previous = array();
+        foreach ( $replaced_urls as $replaced_url ) {
+            $name = is_string( $replaced_url ) && '' !== $replaced_url ? basename( (string) wp_parse_url( $replaced_url, PHP_URL_PATH ) ) : '';
+            if ( '' !== $name && isset( $older[ $name ] ) ) { $previous[ $name ] = true; }
+        }
+        if ( ! $previous && $older ) {
+            $newest = ''; $newest_time = -1;
+            foreach ( $older as $base => $path ) {
+                $time = (int) filemtime( $path );
+                if ( $time > $newest_time ) { $newest = $base; $newest_time = $time; }
+            }
+            $previous[ $newest ] = true;
+        }
+        $removed = 0;
+        foreach ( array_diff_key( $older, $previous ) as $path ) {
             wp_delete_file( $path );
             if ( ! file_exists( $path ) ) { $removed++; }
         }

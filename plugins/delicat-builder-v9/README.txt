@@ -6,8 +6,8 @@ besoin, et le téléphone fait moins d'allers-retours avec le serveur.
 prix (« Price range… ») était placé contre la fenêtre, hors de l'écran ; il est maintenant épinglé dans son cadre.
 La protection de la 9.14.4 reste en place.
 (2) Moins d'attente côté serveur :
-- Visiteur qui revient (application installée / service worker) : plus de requête « session » non mise en cache à
-  chaque page (1 → 0 par page vue). La vérification de la session invitée se fait une fois par onglet.
+- Visiteur qui revient (application installée / service worker) : la requête « session » non mise en cache est faite
+  une fois par onglet au lieu d'une fois par page vue, et de nouveau après chaque connexion ou déconnexion.
 - Client connecté sur une fiche produit à variantes de région : le site ne précharge plus 2 autres fiches en
   arrière-plan (chacune coûtait environ 1 s de calcul et 53 requêtes au serveur).
 - Panier, paiement, coupons (wc-ajax) et tâches planifiées : environ moitié moins de code chargé (paiement 55 → 24
@@ -35,11 +35,24 @@ La protection de la 9.14.4 reste en place.
 - Fichiers de version (README.txt, integrity-manifest.json) refusés par le serveur web (.htaccess).
 - Désinstallation : suppression des secrets seulement avec define( 'DELICAT_BUILDER_V9_PURGE_ON_UNINSTALL', true ).
 - ?dbp_state=1 (ancien état Pro) répond 410 ; l'application utilise wc-ajax=delicat_session.
-(5) Nettoyage : 8 fichiers inutilisés retirés (457 Ko : feuilles Design Studio jamais choisies, ancien en-tête
+- Revue indépendante avant publication, corrigé : un simple envoi de formulaire contenant « wc-ajax=delicat_session »
+  ne peut plus mettre la boutique en mode sans échec ; une adresse de l'API REST qui porte aussi ?wc-ajax= est
+  traitée comme REST (calculateur et devises chargés).
+(5) Fiabilité (revue avant publication) :
+- Calculateur de produits : chargé juste à temps dès que WooCommerce restaure ou recalcule le panier, même après
+  la fermeture de l'application.
+- SEO : pendant qu'une carte SEO attend sa reconstruction après un changement de contenu, les pages construites avec
+  elle ne sont pas gardées en cache.
+- Application Android : la version précédente de l'APK reste téléchargeable après la publication d'une nouvelle
+  (liens en cache et téléchargements interrompus).
+- Après une connexion ou déconnexion (Google, wp-login, formulaire), le moteur vérifie de nouveau la session.
+- Pro › « Inline shell CSS » : ces règles font maintenant partie de la feuille commune quand le moteur est actif ;
+  l'interrupteur ne s'applique que moteur désactivé (libellé mis à jour).
+(6) Nettoyage : 8 fichiers inutilisés retirés (457 Ko : feuilles Design Studio jamais choisies, ancien en-tête
 Shell, shell-nav, navigation et état Pro), anciennes couches de navigation, fonctions sans appel, notes de version
 antérieures à 9.14.0. Le code court [delicat_app_header] est retiré (l'en-tête natif est placé automatiquement).
 Plugin : 318 → 309 fichiers, 7,7 → 7,2 Mo.
-(6) Après installation : LiteSpeed › Purger tout, puis le CDN (Cloudflare). Vérifier une fois : un achat complet
+(7) Après installation : LiteSpeed › Purger tout, puis le CDN (Cloudflare). Vérifier une fois : un achat complet
 (panier, coupon, paiement), le badge du panier, une notification de statut de commande, la page Compte sur iPhone.
 Bêta : en cas de souci, réinstaller la 9.14.4 (aucune donnée n'est modifiée).
 
