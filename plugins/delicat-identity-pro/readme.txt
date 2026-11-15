@@ -2,10 +2,39 @@
 Contributors: delicatstore
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 6.18.0
+Stable tag: 6.19.0
 License: GPLv2 or later
 
 Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
+
+== Version 6.19.0 — iPhone et pages plus légères ==
+15 novembre 2026. Aucune donnée, aucun réglage, aucune route de l’application ni aucun nom d’action ne change.
+
+(1) Clients — iPhone : la page Compte ne s’affiche plus rétrécie dans le tiers gauche de l’écran. Le texte
+  caché pour les lecteurs d’écran du rail des favoris (« Price range… ») était placé contre la fenêtre, hors de
+  l’écran, et Safari dézoomait toute la page. Il est maintenant épinglé dans son cadre (account-app.css).
+(2) Clients — pages plus rapides
+* Visiteurs (accueil, boutique, produits) : un seul petit script au chargement (2,7 Ko au lieu de 29,7 Ko).
+  Les scripts de la fenêtre de connexion arrivent quand le téléphone est libre, au premier toucher de
+  « Connexion » ou sur un lien #delicat-login ; un toucher plus tôt ouvre la fenêtre dès qu’ils sont prêts.
+* Client connecté : passkeys (script et style) seulement sur l’onglet Sécurité, le style de connexion seulement
+  dans Identité et sécurité, le Centre de sécurité seulement dans le Centre d’identité. Accueil du compte :
+  −65 Ko (−19 Ko compressé).
+* Accueil du compte : le nombre de commandes et les 3 dernières commandes sont gardés 90 s dans le cache objet
+  (Redis) et effacés à chaque changement d’une commande du client (2 recherches de commandes en moins par vue).
+* Serveur : le studio d’e-mails n’est chargé que lorsqu’un e-mail est construit ; l’API mobile et les passkeys
+  de l’application seulement pour l’API REST, les requêtes avec un jeton de l’application, l’administration, le
+  cron et WP-CLI. −7 fichiers et −240 Ko de PHP par page ; démarrage à froid 34,8 → 29,1 ms. Les tâches
+  planifiées ne sont plus vérifiées à chaque page (administration, cron et WP-CLI seulement).
+(3) Équipe
+* Scripts publics minifiés (.min.js). Les sources lisibles restent et SCRIPT_DEBUG les recharge. Après
+  modification d’un script : sh tools/build-assets.sh.
+* Filtre dip_lazy_guest_bundle (vrai par défaut) pour revenir à l’ancien chargement des visiteurs.
+(4) Installation et vérifications
+* Remplacer la version actuelle avec delicat-identity-pro-6.19.0.zip, puis LiteSpeed › Purger tout et
+  Cloudflare.
+* À vérifier une fois : connexion Google, passkey et biométrie dans l’application (et rafraîchissement, appairage),
+  un e-mail de commande WooCommerce et un e-mail de mot de passe (design Email Studio), l’onglet Sécurité.
 
 == Version 6.18.0 — Audit sécurité, vitesse et nettoyage ==
 Audit complet du 14 novembre 2026. Aucune donnée, aucun réglage, aucune route de l’application ni aucun

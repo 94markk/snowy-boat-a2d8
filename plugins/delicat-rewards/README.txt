@@ -1,4 +1,4 @@
-DELICAT REWARDS — ADMIN EDITION 4.1.0
+DELICAT REWARDS — ADMIN EDITION 4.2.0
 
 Programme de fidélité de Delicat Store (WooCommerce, devise HTG, portefeuille Delicat Wallet /
 TeraWallet). Une page client, trois onglets : « Classement » (Meilleur Client de la semaine),
@@ -72,6 +72,13 @@ Routes du site : delicat/v1 /rewards, /claim, /reward-pins, /leaderboard, /winne
 ============================================================
 4. JOURNAL DES MODIFICATIONS
 ============================================================
+
+4.2.0 — 15 novembre 2026 — CHARGEMENT À LA DEMANDE
+(1) Pages de la boutique plus légères : les écrans d'administration du concours et le transport AJAX ne sont
+    chargés que dans l'administration (ou WP-CLI) et pendant les appels AJAX (329 → 312 Ko et 10 → 9 fichiers
+    par page). Rien ne change à l'écran.
+(2) Technique : nouveau fichier competition.php (fonctions publiques du concours, toujours chargé) ;
+    competition-admin.php ne garde que l'écran d'administration.
 
 4.1.0 — 14 novembre 2026 — AUDIT : SÉCURITÉ, VITESSE, CORRECTIFS
 (1) Page Bonus Free Fire sur les téléphones modestes et les navigateurs de Facebook/TikTok.

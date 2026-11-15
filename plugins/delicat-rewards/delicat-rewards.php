@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Delicat Rewards — Admin Edition
  * Description: Complete Delicat Rewards system with branding controls and secure license server for Client editions.
- * Version:     4.1.0
+ * Version:     4.2.0
  * Author:      Delicat Store Haiti
  * Requires PHP: 7.4
  *
@@ -53,7 +53,7 @@ define( 'DELICAT_BOARD_SPEND_WEIGHT', 0.70 ); // Meilleur Client: money is prima
 define( 'DELICAT_BOARD_ORDER_WEIGHT', 0.30 ); // distinct WooCommerce orders
 define( 'DELICAT_LEDGER_DEBT_KEY',    '#debt' ); // reserved signed-ledger key: purchases still owed (sanitize_key can never produce it)
 define( 'DELICAT_DEBT_MONTHS',        13 );    // how many past months a refund after a claim is carried forward from
-if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '4.1.0' ); // keep in step with the header
+if ( ! defined( 'DELICAT_REWARDS_VERSION' ) ) define( 'DELICAT_REWARDS_VERSION', '4.2.0' ); // keep in step with the header
 
 /** Capability required for every Delicat admin screen and action. */
 require_once __DIR__ . '/wallet-rewards.php';

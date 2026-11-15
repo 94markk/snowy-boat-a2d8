@@ -6,7 +6,7 @@ contient aussi Catalog Studio (import et synchronisation du catalogue fournisseu
 vérification du Player ID, la livraison chiffrée des codes, l'API revendeur financée par
 le portefeuille et les routes REST utilisées par l'application Flutter.
 
-Version actuelle : **4.24.0** — historique détaillé dans `CHANGELOG.md`.
+Version actuelle : **4.25.0** — historique détaillé dans `CHANGELOG.md`.
 Forfaits personnalisés (220 = 110 × 2…) : voir `CUSTOM-PACKAGES.md`.
 
 ## Prérequis

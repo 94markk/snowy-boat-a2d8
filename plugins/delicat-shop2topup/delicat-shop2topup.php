@@ -3,7 +3,7 @@
  * Plugin Name: Delicat – Top-Up Fulfillment for WooCommerce
  * Plugin URI:  https://delicastoreha.com/
  * Description: Rebuilt white-label WooCommerce fulfillment integration using the documented SHOP2TOPUP v1 API contract, strict Bearer authentication, signed webhooks, idempotent orders, player validation, grouped variation catalog import, protected manual HTG pricing, balance monitoring, and catalog synchronization.
- * Version:     2.9.0
+ * Version:     2.10.0
  * Author:      Delicat Store
  * Text Domain: delicat-shop2topup
  * Domain Path: /languages
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'DST2T_VERSION', '2.9.0' );
+define( 'DST2T_VERSION', '2.10.0' );
 define( 'DST2T_FILE', __FILE__ );
 define( 'DST2T_PATH', plugin_dir_path( __FILE__ ) );
 define( 'DST2T_URL', plugin_dir_url( __FILE__ ) );

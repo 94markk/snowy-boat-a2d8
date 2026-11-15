@@ -1,3 +1,17 @@
+## 4.25.0 — Fiches produit plus légères (15 novembre 2026)
+
+### 1. Pour les clients
+
+1. Fiche produit d'une recharge : le style et le script des champs de compte (ID joueur, vérification, derniers UID) sont des fichiers mis en cache par le navigateur au lieu d'être réécrits dans chaque page (−12,5 Ko par fiche). Après une navigation instantanée du Builder, la vérification n'est plus envoyée deux fois.
+2. Boutique et catégories : les forfaits personnalisés sont connus grâce à un index enregistré ; plus une requête par produit variable (24 produits : 24 → 0 requêtes).
+3. Page Mon compte : le cache objet (Redis) reste actif. La page reste privée et non mise en cache ; les codes déchiffrés ne passent toujours que par la réponse privée « Afficher les codes ».
+
+### 2. Technique
+
+- Nouveaux fichiers assets/product-fields.css et assets/product-fields.js (poignée dfr-product-fields) ; transitions coupées avec « réduire les animations » et le mode économie.
+- Nouvelle option delicat_package_index_v1 (construite une fois au premier chargement après la mise à jour, puis tenue à jour). Si elle manquait, le forfait est refusé à la commande, jamais livré au mauvais prix.
+- Module de forfaits partagé identique dans Shop2Topup 2.10.0.
+
 ## 4.24.0 — Confirmations en quelques secondes, pages plus légères
 
 ### 1. Pour les clients

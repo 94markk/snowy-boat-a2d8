@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.10.0 — 2026-11-15
+
+### 1. Pour les clients
+
+- Fiche produit plus rapide pour les clients connectés : les 5 derniers UID ne sont plus demandés au serveur à chaque visite d'un produit, seulement quand le client commence à choisir un forfait ou à saisir son ID. Le champ en cours de saisie ne bouge pas quand la liste apparaît.
+- Le formulaire de compte est envoyé une seule fois par produit au lieu d'une fois par forfait (page plus légère sur les produits à nombreux forfaits).
+- Boutique et catégories : plus une requête par produit variable pour les forfaits personnalisés (index enregistré, module partagé avec le Gateway).
+
+### 2. Technique
+
+- Le code d'administration, de WP-CLI et de l'éditeur de produit n'est chargé que dans l'administration ou WP-CLI (boutique : 24 → 21 fichiers, 449 → 348 Ko compilés).
+- La configuration de l'historique n'est envoyée que si le réglage « historique des ID » est actif.
+- Version 2.10.0 obligatoire pour que les navigateurs reprennent le nouveau frontend.js (nouvelles clés {prefix}_fields_key / {prefix}_fields_id dans les variations).
+
 ## 2.9.0 — 2026-11-14
 
 ### 1. Pour les clients

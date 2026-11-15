@@ -3,7 +3,7 @@ Contributors: delicatstore
 Tags: woocommerce, game topup, digital delivery, reseller api, vouchers
 Requires at least: 6.2
 Requires PHP: 7.4
-Stable tag: 2.9.0
+Stable tag: 2.10.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -134,6 +134,11 @@ The plugin scrubs supplier-specific storefront copy/metadata and keeps operation
 == Changelog ==
 
 The complete history is in CHANGELOG.md.
+
+= 2.10.0 =
+* Product pages: saved Player IDs are requested only when the shopper starts choosing a package or typing an ID (no admin-ajax request on every signed-in view); the account form is sent once per product instead of once per package.
+* Admin, WP-CLI and product-editor code is no longer compiled on storefront requests (24 → 21 files, 449 → 348 KB).
+* Shared package module: package index, no query per variable product on shop pages.
 
 = 2.9.0 =
 * Supplier-confirmed deliveries complete the WooCommerce order within seconds: the post-response lane now runs on LiteSpeed, a signed callback that loses the order-lock race is settled right after its response, two extra status reads happen in the first minute, and order jobs outrank catalog jobs.

@@ -1,4 +1,4 @@
-# Delicat – Top-Up Fulfillment for WooCommerce — 2.9.0
+# Delicat – Top-Up Fulfillment for WooCommerce — 2.10.0
 
 White-label WooCommerce integration for the SHOP2TOPUP Reseller API v1, built for delicastoreha.com: signed webhooks, idempotent supplier orders, player validation, grouped variation catalog import, protected manual HTG pricing, balance monitoring, catalog/stock synchronization and vouchers encrypted at rest. WooCommerce stays the authority for payments and prices; the plugin only spends supplier balance for paid, attested order lines.
 
