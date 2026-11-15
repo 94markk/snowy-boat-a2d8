@@ -373,3 +373,9 @@ body.dip-account-app .dipapp-empty-glyph.dipapp-heart{color:#e11d48;opacity:.55}
 /* Visually hidden labels, whatever the theme provides. */
 body.dip-account-app .dipapp-stat .screen-reader-text,body.dip-account-app .dipapp-dashboard .screen-reader-text{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;clip-path:inset(50%)!important;border:0!important;white-space:nowrap!important}
 @media(max-width:480px){body.dip-account-app .dipapp-stat-value{font-size:22px}}
+/* 6.18.1 — Favourites rail: each card is positioned and the rail too, so anything absolutely
+   positioned inside a card (WooCommerce's hidden "Price range" text, badges) stays inside the
+   rail's own scroll area. Before, those spans were positioned against the page; on iPhone the
+   10th card's span made the account page 1400 px wide and Safari zoomed the whole page out. */
+body.dip-account-app .dipapp-fav-rail,body.dip-account-app .dipapp-fav{position:relative}
+body.dip-account-app .dipapp-dashboard .screen-reader-text:not(:focus),.dipma-sr{top:0!important;left:0!important}

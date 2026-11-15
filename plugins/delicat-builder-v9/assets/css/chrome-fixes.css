@@ -398,3 +398,19 @@ body .wc-block-grid__product-add-to-cart .wp-block-button__link {
     }
   }
 }
+/* V10 — Root cause of the zoomed-out pages on iPhone (found by the 9.14.4 diagnostics):
+   hidden screen-reader text. WooCommerce prints <span class="screen-reader-text">
+   ("Price range: …") in every price range; the rule that hides it is position:absolute
+   with no top/left, so the span stays where the text would be, inside a scrolling
+   product rail, while its containing block is the page. The rail and main cannot clip
+   it: the 10th card's span sat at x≈1400 and Safari zoomed the page out to show it.
+   Pinned to the corner of its containing block it can never widen anything. Focused
+   skip links keep their own placement. */
+.screen-reader-text:not(:focus):not(:focus-within),
+.dlc-sr-only,
+.dbp-sr-only,
+.dlc-vo-sr,
+.dlc-oc-sr {
+  top: 0 !important;
+  left: 0 !important;
+}
