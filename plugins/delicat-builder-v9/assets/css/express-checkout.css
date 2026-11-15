@@ -1,0 +1,154 @@
+/* Delicat Builder V9 9.12.2 — express order sheet, the owner's mockup (« Votre commande »). Presentation only:
+   WooCommerce's form, nonces, wallet gateway, terms and process-checkout are unchanged. Flat, one action colour
+   (the Builder's buy colour), light and « Nuit douce », 320–430 px, a 200 ms slide-up (transform only). */
+.dnp-express[data-dnp-express]{--dx-bg:var(--v-sf,#fff);--dx-ink:var(--v-ink,#121629);--dx-mut:var(--v-mut,#4A5370);--dx-fnt:var(--v-fnt,#5F6884);--dx-line:var(--v-edge,#E2E6EE);--dx-soft:var(--v-track,#EEF1F6);--dx-buy:var(--v-buy,var(--dlc-buy,#D81E4B));--dx-buy-ink:var(--v-buy-ink,#fff);--dx-ok:var(--v-ok,#15803D);--dx-oks:var(--v-oks,#E7F6EC);--dx-warn:var(--v-warn,#9A5B13);--dx-warns:var(--v-warns,#FFF4E0);--dx-bad:var(--v-bad,#C62828);--dx-ac:var(--v-aci,#1D4ED8);position:fixed;inset:0;z-index:2147483250;display:flex;align-items:flex-end;justify-content:center;font-family:var(--v-font,Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);color:var(--dx-ink)}
+.dnp-express[data-dnp-express][hidden]{display:none!important}
+.dnp-express-backdrop{position:absolute;inset:0;background:rgba(10,12,28,.52);opacity:0;transition:opacity .2s ease}
+.dnp-express-sheet{position:relative;box-sizing:border-box;display:flex;flex-direction:column;width:min(100%,520px);max-height:calc(100vh - 12px);max-height:calc(100dvh - 12px);margin:0;overflow:hidden;background:var(--dx-bg);color:var(--dx-ink);border-radius:22px 22px 0 0;box-shadow:0 -6px 24px rgba(16,24,40,.14);transform:translateY(100%);transition:transform .2s cubic-bezier(.16,1,.3,1);outline:none}
+.dnp-express[data-dnp-express].is-open .dnp-express-backdrop{opacity:1}
+.dnp-express[data-dnp-express].is-open .dnp-express-sheet{transform:none}
+@media (min-width:600px){.dnp-express[data-dnp-express]{align-items:center}.dnp-express-sheet{border-radius:22px;max-height:calc(100dvh - 48px)}}
+.dnp-express-grip{display:block;width:40px;height:4px;margin:8px auto 0;border-radius:2px;background:var(--dx-line)}
+/* header row: content left, a 44 px × right — never on top of the text */
+.dnp-express-headrow{display:flex;align-items:center;gap:10px;padding:8px 10px 10px 16px;border-bottom:1px solid var(--dx-line)}
+.dnp-express-head{flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:12px}
+.dnp-express-close{position:static!important;flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:0;padding:0;border:0;border-radius:12px;background:var(--dx-soft);color:var(--dx-ink);cursor:pointer}
+.dnp-express-close svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+.dnpx-thumb{flex:none;display:flex;align-items:center;justify-content:center;width:44px;height:44px;overflow:hidden;border-radius:12px;background:var(--dx-soft);color:var(--dx-mut);font:800 18px/1 var(--v-font,Inter,sans-serif);text-transform:uppercase}
+.dnpx-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.dnpx-head-copy{min-width:0}
+.dnpx-head-title{margin:0;color:var(--dx-ink);font:700 16px/1.25 var(--v-font,Inter,sans-serif);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dnpx-head-sub{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin:3px 0 0;color:var(--dx-mut);font:500 13px/1.3 var(--v-font,Inter,sans-serif)}
+.dnpx-chip{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:11px;background:var(--dx-soft);color:var(--dx-ink);font:600 12px/1 var(--v-font,Inter,sans-serif);white-space:nowrap}
+.dnp-express-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:12px 16px 4px}
+.dnp-express-notice{margin:0 0 10px;padding:10px 12px;border-radius:12px;background:#FDECEE;color:var(--dx-bad);font:500 13.5px/1.45 var(--v-font,Inter,sans-serif)}
+.dnp-express-notice[hidden]{display:none}
+.dnp-express-notice.is-warn{background:var(--dx-warns);color:var(--dx-warn)}
+.dnp-express-notice p{margin:0 0 4px}.dnp-express-notice p:last-of-type{margin-bottom:0}
+.dnp-express-fallback{display:inline-block;margin-top:6px;min-height:32px;font-weight:700;color:inherit;text-decoration:underline;background:none;border:0;padding:0;cursor:pointer}
+/* cards */
+.dnpx-card{margin:0 0 10px;padding:12px 14px;border:1px solid var(--dx-line);border-radius:16px;background:var(--dx-bg)}
+.dnpx-label{margin:0 0 8px;color:var(--dx-fnt);font:600 12px/1.2 var(--v-font,Inter,sans-serif);letter-spacing:.02em}
+.dnpx-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--dx-line)}
+.dnpx-item:first-child{border-top:0;padding-top:0}
+.dnpx-item[hidden]{display:none}
+.dnpx-item .dnpx-thumb{width:40px;height:40px;border-radius:10px;font-size:15px}
+.dnpx-item-copy{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dnpx-item-copy strong{font:600 14px/1.3 var(--v-font,Inter,sans-serif);color:var(--dx-ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dnpx-acct,.dnpx-note{display:flex;align-items:center;gap:5px;min-width:0;color:var(--dx-mut);font:500 12.5px/1.3 var(--v-font,Inter,sans-serif)}
+.dnpx-acct span,.dnpx-note{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dnpx-acct svg{flex:none;width:15px;height:15px}
+.dnpx-acct.is-ok svg{color:var(--dx-ok)}
+.dnpx-item-price{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px;font-variant-numeric:tabular-nums}
+.dnpx-item-price strong{font:700 14px/1.2 var(--v-font,Inter,sans-serif);white-space:nowrap}
+.dnpx-item-price span{color:var(--dx-fnt);font:500 12px/1.2 var(--v-font,Inter,sans-serif)}
+.dnpx-more{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:44px;margin:8px 0 0;padding:0 12px;border:1px solid var(--dx-line);border-radius:12px;background:var(--dx-soft);color:var(--dx-ink);font:600 13.5px/1 var(--v-font,Inter,sans-serif);cursor:pointer}
+.dnpx-more[aria-expanded="true"] svg{transform:rotate(180deg)}
+.dnpx-acct-line{display:flex;align-items:center;gap:10px}
+.dnpx-acct-line>svg{flex:none;width:22px;height:22px;color:var(--dx-fnt)}
+.dnpx-acct-line.is-ok>svg{color:var(--dx-ok)}
+.dnpx-acct-copy{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px}
+.dnpx-acct-copy strong{font:700 15px/1.25 var(--v-font,Inter,sans-serif);overflow-wrap:anywhere}
+.dnpx-acct-copy span{color:var(--dx-mut);font:500 13px/1.3 var(--v-font,Inter,sans-serif);font-variant-numeric:tabular-nums}
+.dnpx-link{flex:none;min-height:44px;padding:0 4px;border:0;background:none;color:var(--dx-ac);font:600 13.5px/1 var(--v-font,Inter,sans-serif);text-decoration:none;cursor:pointer;display:inline-flex;align-items:center}
+.dnpx-sum-row{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:4px 0;color:var(--dx-mut);font:500 14px/1.35 var(--v-font,Inter,sans-serif)}
+.dnpx-sum-row strong{color:var(--dx-ink);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dnpx-sum-row.is-promo strong{color:var(--dx-ok)}
+.dnpx-sum-row.is-total{margin-top:4px;padding-top:8px;border-top:1px solid var(--dx-line);color:var(--dx-ink);font-weight:700;font-size:15px}
+.dnpx-sum-row.is-total strong{font-size:17px;font-weight:800}
+.dnpx-wallet{display:flex;align-items:center;gap:10px}
+.dnpx-wallet>svg{flex:none;width:36px;height:36px;padding:8px;box-sizing:border-box;border-radius:10px;background:var(--dx-soft);color:var(--dx-ac)}
+.dnpx-wallet-copy{display:flex;flex-direction:column;gap:2px;min-width:0;font:500 13px/1.35 var(--v-font,Inter,sans-serif);color:var(--dx-mut);font-variant-numeric:tabular-nums}
+.dnpx-wallet-copy strong{color:var(--dx-ink);font-size:14.5px;font-weight:700}
+.dnpx-pay.is-short .dnpx-wallet-copy span{color:var(--dx-bad)}
+.dnpx-other{margin-top:4px}
+.dnpx-muted{color:var(--dx-fnt)}
+.dnpx-alert{display:flex;gap:10px;align-items:flex-start;margin:0 0 10px;padding:12px;border-radius:14px;background:#FDECEE;color:var(--dx-bad);font:500 13px/1.4 var(--v-font,Inter,sans-serif)}
+.dnpx-alert>svg{flex:none;margin-top:1px}
+.dnpx-alert div{display:flex;flex-direction:column;gap:2px}
+.dnpx-alert strong{font-size:14.5px;font-weight:700}
+.dnpx-alert span{color:var(--dx-ink)}
+.dnpx-alert.dnpx-wa{background:var(--dx-warns);color:var(--dx-warn)}
+.dnpx-alert.dnpx-wa.is-soft{background:var(--dx-soft);color:var(--dx-mut)}
+/* coupon: a dashed row that opens the field in place; WooCommerce applies it */
+.dnpx-coupon{margin:0 0 10px}
+.dnpx-coupon-add{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:0 12px;border:1.5px dashed var(--dx-line);border-radius:12px;background:none;color:var(--dx-ac);font:600 13.5px/1 var(--v-font,Inter,sans-serif);cursor:pointer}
+.dnpx-coupon-form{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.dnpx-coupon-form[hidden]{display:none}
+.dnpx-coupon-field{flex:1 1 150px;min-width:0;display:flex;flex-direction:column}
+.dnpx-coupon-field input{box-sizing:border-box;width:100%;height:46px;padding:0 12px;border:1.5px solid var(--v-edge2,#C9D0DC);border-radius:12px;background:var(--dx-bg);color:var(--dx-ink);font:600 16px/1 var(--v-font,Inter,sans-serif);text-transform:uppercase;letter-spacing:.04em}
+.dnpx-coupon-apply{flex:none;height:46px;padding:0 16px;border:0;border-radius:12px;background:var(--dx-ink);color:var(--dx-bg);font:700 14px/1 var(--v-font,Inter,sans-serif);cursor:pointer}
+.dnpx-coupon-on,.dnpx-coupon-offer{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;margin:0 0 8px;padding:0 4px 0 12px;border-radius:12px;background:var(--dx-oks);color:var(--dx-ok);font:600 13.5px/1.3 var(--v-font,Inter,sans-serif)}
+.dnpx-coupon-offer{background:var(--dx-soft);color:var(--dx-ink)}
+/* contact */
+.dnp-express-details{margin:0 0 10px;padding:12px 14px;border:1px solid var(--dx-line);border-radius:16px}
+.dnp-express-details[hidden]{display:none}
+.dnpx-contact-line{display:flex;align-items:center;gap:10px}
+.dnpx-contact-copy{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:2px;font:500 13px/1.35 var(--v-font,Inter,sans-serif);color:var(--dx-mut)}
+.dnpx-contact-copy strong{color:var(--dx-ink);font-size:14.5px;font-weight:700;overflow-wrap:anywhere}
+.dnpx-fields[hidden]{display:none}
+.dnp-express-field{display:flex;flex-direction:column;gap:5px;margin:0 0 10px;color:var(--dx-mut);font:600 13px/1.3 var(--v-font,Inter,sans-serif)}
+.dnp-express-field input,.dnp-express-field select,.dnp-express-field textarea{box-sizing:border-box;width:100%;min-height:48px;padding:0 12px;border:1.5px solid var(--v-edge2,#C9D0DC);border-radius:12px;background:var(--dx-bg);color:var(--dx-ink);font:500 16px/1.2 var(--v-font,Inter,sans-serif)}
+.dnp-express-field input[aria-invalid="true"]{border-color:var(--dx-bad)}
+.dnp-express-hint{color:var(--dx-fnt);font-weight:500;font-size:12.5px}
+.dnpx-req{color:var(--dx-bad);font-style:normal}
+.dnpx-err{display:block;margin:2px 0 0;color:var(--dx-bad);font:600 12.5px/1.35 var(--v-font,Inter,sans-serif)}
+/* footer: terms ABOVE the one pay button (the Builder's buy colour), trust line */
+.dnp-express-footer{flex:0 0 auto;padding:10px 16px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--dx-line);background:var(--dx-bg)}
+.dnp-express-terms{margin:0 0 10px}
+.dnp-express-terms[hidden]{display:none}
+.dnpx-terms{display:flex;align-items:center;gap:10px;min-height:44px;color:var(--dx-ink);font:500 13.5px/1.35 var(--v-font,Inter,sans-serif);cursor:pointer}
+.dnpx-terms input{flex:none;width:22px;height:22px;margin:0;accent-color:var(--dx-buy)}
+.dnpx-terms a{color:var(--dx-ac);text-decoration:underline}
+.dnp-express-terms.is-error .dnpx-terms{color:var(--dx-bad)}
+.dnp-express-terms.is-error .dnpx-terms input{outline:2px solid var(--dx-bad);outline-offset:2px}
+.dnp-express-pay{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:52px;padding:0 18px;border:0;border-radius:14px;background:var(--dx-buy);color:var(--dx-buy-ink);font:700 16px/1 var(--v-font,Inter,sans-serif);font-variant-numeric:tabular-nums;cursor:pointer;box-shadow:none;transition:opacity .15s ease}
+.dnp-express-pay svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.dnp-express-pay[aria-disabled="true"],.dnp-express-pay:disabled{opacity:.5;cursor:not-allowed}
+.dnp-express-pay.is-recharge{background:var(--dx-ink);color:var(--dx-bg)}
+.dnpx-spin{display:none;width:18px;height:18px;box-sizing:border-box;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:dnpx-spin .7s linear infinite}
+.dnp-express-pay.is-waiting .dnpx-spin,.dnp-express-pay.is-paying .dnpx-spin{display:inline-block}
+.dnp-express-pay.is-waiting .dnpx-lock,.dnp-express-pay.is-paying .dnpx-lock,.dnp-express-pay.is-recharge .dnpx-lock{display:none}
+@keyframes dnpx-spin{to{transform:rotate(360deg)}}
+.dnp-express-foot{display:flex;justify-content:center;flex-wrap:wrap;gap:4px 14px;margin:8px 0 0;color:var(--dx-fnt);font:500 12px/1.3 var(--v-font,Inter,sans-serif)}
+.dnp-express-foot span{display:inline-flex;align-items:center;gap:4px}
+.dnp-express-foot svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.dnp-express-woo{display:none!important}
+.dnp-express-close:focus-visible,.dnp-express-pay:focus-visible,.dnpx-link:focus-visible,.dnpx-more:focus-visible,.dnpx-coupon-add:focus-visible{outline:3px solid var(--dx-ac);outline-offset:2px}
+/* the classic script (engine off) still renders its rows */
+.dnp-express-row{display:flex;justify-content:space-between;gap:12px;padding:6px 0;font:500 14px/1.35 var(--v-font,Inter,sans-serif)}
+.dnp-express-row-label{color:var(--dx-mut)}
+.dnp-express-card,.dnp-express-wallet{margin:0 0 10px;padding:8px 14px;border:1px solid var(--dx-line);border-radius:16px}
+.dnp-express-inline{margin:0 0 12px;padding:10px 12px;border-radius:12px;background:#FDECEE;color:var(--dx-bad,#C62828);font:500 13.5px/1.45 var(--v-font,Inter,sans-serif)}
+.dnp-express-inline p{margin:0}
+.dnp-express-debug{position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483646;max-height:40vh;overflow:auto;margin:0;padding:10px;border-radius:12px;background:#111827;color:#d1fae5;font:12px/1.4 ui-monospace,monospace;white-space:pre-wrap}
+body.dnp-express-open{overflow:hidden}
+html.dlc-theme-dark .dnp-express-notice,html[data-delicat-theme="dark"] .dnp-express-notice,html.dlc-theme-dark .dnpx-alert,html[data-delicat-theme="dark"] .dnpx-alert{background:#3A1D22}
+html.dlc-theme-dark .dnpx-alert.dnpx-wa,html[data-delicat-theme="dark"] .dnpx-alert.dnpx-wa{background:var(--dx-warns)}
+html.dlc-theme-dark .dnp-express-sheet,html[data-delicat-theme="dark"] .dnp-express-sheet{box-shadow:none;border-top:1px solid var(--dx-line)}
+@media (prefers-reduced-motion:reduce){.dnp-express-sheet,.dnp-express-backdrop{transition:none}.dnpx-spin{animation:none;border-right-color:currentColor;opacity:.6}}
+html.delicat-reduce-motion .dnp-express-sheet,html.delicat-low-power .dnp-express-sheet{transition:none}
+/* theme heading / paragraph / label sizes must not leak into the sheet */
+.dnp-express-sheet .dnpx-label{margin:0 0 8px!important;font:600 12px/1.2 var(--v-font,Inter,sans-serif)!important;color:var(--dx-fnt)!important;letter-spacing:.02em!important;text-transform:none!important}
+.dnp-express-sheet .dnpx-head-title{font:700 16px/1.25 var(--v-font,Inter,sans-serif)!important;margin:0!important;letter-spacing:0!important}
+.dnp-express-sheet .dnpx-head-sub,.dnp-express-sheet .dnp-express-foot{margin-bottom:0!important}
+.dnp-express-sheet .dnp-express-foot{font:500 12px/1.3 var(--v-font,Inter,sans-serif)!important}
+.dnp-express-sheet .dnpx-terms{font:500 13.5px/1.35 var(--v-font,Inter,sans-serif)!important}
+.dnp-express-sheet .dnp-express-pay.is-recharge{background:var(--dx-buy);color:var(--dx-buy-ink)}
+/* 9.12.4 — payment notices. Amber while a payment is being checked, green when confirmed, red only for a real
+   failure; the actions are separate full-width secondary buttons (44 px, 8 px apart), never glued links. */
+.dnp-express-sheet .dnp-express-notice{padding:12px 14px!important;border-radius:14px!important;font:500 13.5px/1.45 var(--v-font,Inter,sans-serif)!important}
+.dnp-express-sheet .dnp-express-notice.is-warn{background:var(--dx-warns)!important;color:var(--dx-warn)!important}
+.dnp-express-sheet .dnp-express-notice.is-ok{background:var(--dx-oks)!important;color:var(--dx-ok)!important;font-weight:700!important}
+.dnp-express-sheet .dnpx-notice-text p{margin:0 0 4px!important;font:inherit!important;color:inherit!important}
+.dnp-express-sheet .dnpx-notice-text p:first-child{font-weight:700!important}
+.dnp-express-sheet .dnpx-notice-text p:last-child{margin-bottom:0!important}
+.dnp-express-sheet .dnpx-notice-acts{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.dnp-express-sheet .dnpx-notice-acts .dnp-express-fallback{display:flex!important;align-items:center;justify-content:center;box-sizing:border-box;width:100%;min-height:44px;margin:0!important;padding:0 14px!important;border:1px solid var(--dx-line)!important;border-radius:12px!important;background:var(--dx-bg)!important;color:var(--dx-ink)!important;font:600 14px/1.2 var(--v-font,Inter,sans-serif)!important;text-align:center;text-decoration:none!important;cursor:pointer}
+.dnp-express-sheet .dnpx-notice-acts .dnp-express-fallback:disabled{opacity:.55;cursor:default}
+.dnp-express-sheet .dnpx-notice-acts .dnp-express-fallback:focus-visible{outline:2px solid var(--dx-ac);outline-offset:2px}
+.dnp-express-sheet .dnp-express-foot.is-note{display:block!important;text-align:center;color:var(--dx-mut)!important;font:600 12.5px/1.4 var(--v-font,Inter,sans-serif)!important}
+.dnp-express-pay.is-done{background:var(--dx-ok)!important;color:#fff!important}
+.dnp-express-pay.is-done .dnpx-spin{display:none!important}
+html.dlc-theme-dark .dnp-express-sheet .dnp-express-notice.is-warn,html[data-delicat-theme="dark"] .dnp-express-sheet .dnp-express-notice.is-warn{background:var(--dx-warns)!important;color:var(--dx-warn)!important}
+html.dlc-theme-dark .dnp-express-sheet .dnp-express-notice.is-ok,html[data-delicat-theme="dark"] .dnp-express-sheet .dnp-express-notice.is-ok{background:var(--dx-oks)!important;color:var(--dx-ok)!important}

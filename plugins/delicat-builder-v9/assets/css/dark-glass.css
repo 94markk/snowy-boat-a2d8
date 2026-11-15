@@ -1,0 +1,818 @@
+/*
+ * Delicat Builder V9 — dark mode « Nuit douce » (9.10.1). Replaces the 9.3.16
+ * "glass + soft depth" look. Last file of the chrome bundle; applies only in
+ * dark mode. Light mode is untouched.
+ *
+ * The app 6.1 palette: graphite page #0F1218, solid cards #171B22, raised /
+ * alternate #1B2029, sheets and menus #222733, hairlines #262B35 / #353C49,
+ * soft-white ink #E6E8EF (never pure white body text), secondary #A7AEBE,
+ * faint #8A93A6, success #5BD3A0, danger #FF8C95, warning #F2C36B. The accent
+ * stays the Design Studio colour; filled buttons use its deeper "fill" tone
+ * with white text (>= 4.5:1). Highlighted / hero panels are a SOLID
+ * accent-tinted card (--ds-color-primary-tint: 20 % accent over the card) with
+ * an accent-tinted hairline, never a bright saturated fill.
+ *
+ * Flat and battery-light: no translucent stacks, no glow halos, no paired
+ * (neumorphic) shadows, no blur, no fixed colour washes behind the page.
+ * The --g-* names are kept so older selectors keep working; they now hold
+ * solid values ("0 0 0 0 transparent" where a shadow list is expected).
+ * No color-mix() without a plain fallback, no backdrop-filter, no relative
+ * colours (old Android WebViews).
+ *
+ * 1. Tokens          5. Product page          9. Account, cart, checkout
+ * 2. Page canvas     6. Home + catalogue     10. Notifications, sheets
+ * 3. Header          7. Fields               11. Footer
+ * 4. Drawer + nav    8. Buttons              12. Low-power phones
+ * 13. Order confirmation   14. One container, not two (9.7.3)
+ * 15. Colours hard-coded elsewhere (theme system, components, product page)
+ */
+
+/* 1 ---------------------------------------------------------- tokens */
+html.dlc-theme-dark,
+html[data-delicat-theme="dark"] {
+  --nd-page: var(--ds-color-background, #0f1218);
+  --nd-card: var(--ds-color-surface, #171b22);
+  --nd-raised: var(--ds-color-surface-2, #1b2029);
+  --nd-overlay: var(--ds-color-surface-elevated, #222733);
+  --nd-line: var(--ds-color-border, #262b35);
+  --nd-line-strong: var(--ds-color-border-strong, #353c49);
+  --nd-text: var(--ds-color-text, #e6e8ef);
+  --nd-muted: var(--ds-color-text-muted, #a7aebe);
+  --nd-faint: var(--ds-color-faint, #8a93a6);
+  --nd-success: var(--ds-color-success-text, #5bd3a0);
+  --nd-danger: var(--ds-color-danger-text, #ff8c95);
+  --nd-warning: var(--ds-color-warning-text, #f2c36b);
+  --nd-accent: var(--ds-color-primary, #60a5fa);
+  --nd-fill: var(--ds-color-primary-fill, #2563eb);
+  --nd-tint: var(--ds-color-primary-tint, #1a294a);
+  --nd-tint-line: var(--ds-color-primary-line, #1d3b7c);
+  --nd-none: 0 0 0 0 transparent;
+  /* legacy names (9.3.16 glass) now point at the solid palette */
+  --g-canvas: var(--nd-page);
+  --g-card: var(--nd-card);
+  --g-card-solid: var(--nd-card);
+  --g-card-2: var(--nd-raised);
+  --g-edge: var(--nd-line);
+  --g-edge-hi: var(--nd-tint-line);
+  --g-depth: var(--nd-none);
+  --g-depth-sm: var(--nd-none);
+  --g-inset: var(--nd-none);
+  --g-field: var(--nd-raised);
+  --g-pill: var(--nd-raised);
+  --g-glow: var(--nd-none);
+  --g-text: var(--nd-text);
+  --g-muted: var(--nd-muted);
+  /* theme-system names */
+  --dlc-bg: var(--nd-page);
+  --dlc-bg-elevated: var(--nd-card);
+  --dlc-surface: var(--nd-card);
+  --dlc-surface-strong: var(--nd-card);
+  --dlc-surface-soft: var(--nd-raised);
+  --dlc-text: var(--nd-text);
+  --dlc-text-soft: var(--nd-text);
+  --dlc-muted: var(--nd-muted);
+  --dlc-border: var(--nd-line);
+  --dlc-border-strong: var(--nd-line-strong);
+  --dlc-success: var(--nd-success);
+  --dlc-danger: var(--nd-danger);
+  --dlc-shadow-sm: var(--nd-none);
+  --dlc-shadow: var(--nd-none);
+  --dlc-shadow-lg: var(--nd-none);
+  --dlc-glass-blur: 0px;
+  --dlc-control: var(--nd-raised);
+}
+html.dlc-theme-dark {
+  background: var(--nd-page) !important;
+}
+
+/* 2 ------------------------------------------------- page canvas */
+/* 9.3.16 drew three fixed colour glows behind the page: gone (solid page). */
+html.dlc-theme-dark::before {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-woo-ui,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-woo-archive,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.woocommerce-shop,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.tax-product_cat,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.tax-product_tag,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-managed,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-cart,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout {
+  background: var(--nd-page) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body #page,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .site,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .site-content,
+html.dlc-theme-dark[data-delicat-theme="dark"] body #content,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .content-area,
+html.dlc-theme-dark[data-delicat-theme="dark"] body #primary,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .site-main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .wp-site-blocks,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-page-main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product-main,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"],
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout--homepage-managed {
+  background-color: transparent !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce-page {
+  background-color: transparent !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-managed,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"],
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout--homepage-managed {
+  --dbv9-home-bg: transparent !important;
+  --delicat-surface: var(--nd-card) !important;
+  --delicat-text: var(--nd-text) !important;
+  --delicat-muted: var(--nd-muted) !important;
+  --delicat-border: var(--nd-line) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product {
+  --dnp-bg: transparent !important;
+  --dnp-card: var(--nd-card) !important;
+  --dnp-surface: var(--nd-raised);
+  --dnp-border: var(--nd-line);
+}
+
+/* 3 ---------------------------------------------------------- header */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header {
+  --dsb8-header-bg: var(--nd-page) !important;
+  --dsb8-header-text: var(--nd-text) !important;
+  --dsb8-border-color: var(--nd-line) !important;
+  background: var(--nd-page) !important;
+  border-bottom: 1px solid var(--nd-line) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dsb8-header__action,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dbv9-notifications__bell {
+  border-radius: 14px;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dsb8-header__action:active,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header .dbv9-notifications__bell:active {
+  background: var(--nd-raised) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body [data-delicat-theme-toggle] {
+  border-color: var(--nd-line) !important;
+  background: var(--nd-raised) !important;
+  color: var(--nd-text) !important;
+}
+
+/* 4 ------------------------------------------------- drawer + bottom nav */
+html.dlc-theme-dark .dlx-drawer {
+  --dlx-bg: var(--nd-card);
+  --dlx-card: var(--nd-raised);
+  --dlx-soft: var(--nd-raised);
+  --dlx-line: var(--nd-line);
+  --dlx-text: var(--nd-text);
+  --dlx-muted: var(--nd-muted);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-drawer__panel {
+  background: var(--nd-card);
+  border-right: 1px solid var(--nd-line);
+  box-shadow: none;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-theme,
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-drawer .dlx-account__code {
+  background: var(--nd-raised);
+  border-color: var(--nd-line);
+  box-shadow: none;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlx-account__avatar {
+  box-shadow: 0 0 0 2px var(--nd-card), 0 0 0 3px var(--nd-line-strong);
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bottom-nav,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-managed .delicat-bottom-nav {
+  --dbn-bg: var(--nd-card);
+  --dbn-line: var(--nd-line);
+  background: var(--nd-card) !important;
+  border: 1px solid var(--nd-line) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bottom-nav .dbn-center {
+  background: var(--nd-fill) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 4px var(--nd-page) !important;
+}
+
+/* 5 ---------------------------------------------------- product page */
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-section {
+  background: var(--nd-card) !important;
+  border: 1px solid var(--nd-line) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp-review,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp-trust span,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .dnp-more-options {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card:hover {
+  border-color: var(--nd-line-strong) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-card.is-selected {
+  background: var(--nd-tint) !important;
+  border-color: var(--nd-accent) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .dnp-mobile-dock {
+  background: var(--nd-card) !important;
+  border: 0 !important;
+  border-top: 1px solid var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+
+/* 6 --------------------------------------------- home + catalogue cards */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce ul.products li.product,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-carousel__view-all,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mcard,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__rating,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__review-cta,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-faq__item,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__panel,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why__payments,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-newsletter,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__domain,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-fav__card {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why__payment,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bk__perk,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-like__chip,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__google,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process__icon,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mavatar {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__form {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line-strong) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__form input {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__results {
+  background: var(--nd-overlay) !important;
+  border: 1px solid var(--nd-line-strong) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result:hover,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result.is-active {
+  background: var(--nd-tint) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result img,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__result-placeholder,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__media,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-search-image {
+  background-color: var(--nd-raised) !important;
+}
+
+/* 7 ----------------------------------------------------------- fields */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce form :where(input.input-text, select, textarea),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product :where(input[type="text"], input[type="email"], input[type="tel"], input[type="number"], select, textarea),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-review-dialog :where(.dlc-review-input, .dlc-review-textarea),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-header__search input[type="search"],
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-currency__select {
+  background-color: var(--nd-raised) !important;
+  border-color: var(--nd-line-strong) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .woocommerce form :where(input.input-text, select, textarea):focus,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product :where(input, select, textarea):focus,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-review-dialog :where(.dlc-review-input, .dlc-review-textarea):focus {
+  border-color: var(--nd-accent) !important;
+  box-shadow: 0 0 0 1px var(--nd-accent) !important;
+  outline: none !important;
+}
+
+/* 8 ---------------------------------------------------------- buttons */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dnp-reviews-btn, .dlc-review-btn--primary, .single_add_to_cart_button, .checkout-button, #place_order, .dnp-buy-now) {
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dlc-review-btn--ghost, .dlc-vote, .dlc-rv-chip, .dlc-reviews-all-btn, .dbv9-currency__buttons button) {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line-strong) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-vote--up[aria-pressed="true"] {
+  background: #223836 !important;
+  border-color: #2f5a4c !important;
+  box-shadow: none !important;
+  color: var(--nd-success) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-vote--down[aria-pressed="true"] {
+  background: #3c2d34 !important;
+  border-color: #5e3a42 !important;
+  box-shadow: none !important;
+  color: var(--nd-danger) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dlc-rv-chip[aria-pressed="true"] {
+  background: var(--nd-tint) !important;
+  border-color: var(--nd-accent) !important;
+  color: var(--nd-text) !important;
+  box-shadow: none !important;
+}
+
+/* 9 --------------------------------------------- account, cart, checkout */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.woocommerce-MyAccount-navigation, .woocommerce-cart-form, .cart_totals, .woocommerce-checkout-review-order, .woocommerce form.login, .woocommerce form.register, .wc-block-components-sidebar, .wc-block-checkout__main, .dsb-wallet-card, .dsb-menu-card) {
+  background: var(--nd-card) !important;
+  border: 1px solid var(--nd-line) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout :where(.dpn-checkout-steps, .dpn-account-card, .dpn-checkout-section, .dip-wc-login-panel, #order_review, #payment),
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-cart :where(.dpn-account-card, .dpn-gate-card, .dpn-gate-cart),
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-checkout :where(.dip-wc-login-panel, .dc-login-required, #order_review, #payment),
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart :where(tr.cart_item > td, td.actions) {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout-classic #payment ul.payment_methods > li {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout-classic #payment .payment_box,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .woocommerce-error,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .woocommerce-message,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .woocommerce-info,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .woocommerce-error,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .woocommerce-message,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .woocommerce-info,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .woocommerce-error,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .woocommerce-message,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-product .woocommerce-info {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.dpn-checkout .dpn-checkout-dock,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dpn-checkout-dock {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-thumb img, .dpn-empty-icon, .dpn-wallet-icon, .dcn-empty-icon, .dpn-account-mark) {
+  background-color: var(--nd-raised) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-badge, .dpn-account-status, .dcn-cart-category, .dpn-wallet-ui) {
+  background: var(--nd-tint) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dpn-clear, .dcn-clear-cart, .delicat-native-cart a.remove) {
+  background: #3c2d34 !important;
+  color: var(--nd-danger) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-native-cart .quantity,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-native-cart td.product-thumbnail a {
+  background: var(--nd-raised) !important;
+  box-shadow: none !important;
+}
+
+/* 10 ------------------------------------------ notifications, sheets, pwa */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-notifications__panel,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-panel,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-panel__head,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-panel__foot,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-pwa-card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-install-bar,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-push-help__card {
+  background: var(--nd-overlay) !important;
+  border: 1px solid var(--nd-line-strong) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dbv9-notifications__item,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-item {
+  background: transparent !important;
+  border-color: var(--nd-line-strong) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.dbv9-notifications__code, .dbv9-pwa-step-icon, .dbv9-pwa-close, .dbv9-install-bar__close, .dbv9-push-help__close, .dbv9-notifications__error button, .dbv9-notifications__icon, .dsb8-cart-item__remove, .dsb8-cart-panel__close) {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line-strong) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-panel__foot > a {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line-strong) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .dsb8-cart-panel__foot > a.is-checkout {
+  background: var(--nd-fill) !important;
+  border-color: transparent !important;
+  color: #ffffff !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-review-dialog {
+  background: var(--nd-card);
+  border-color: var(--nd-line-strong);
+  box-shadow: none;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-rv-summary,
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-rv-item {
+  background: var(--nd-raised);
+  box-shadow: none;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dlc-review-star {
+  box-shadow: none;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-currency-sticky {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+}
+
+/* 11 ----------------------------------------------------------- footer */
+html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-footer {
+  --ft-bg: var(--nd-page);
+  --ft-surface: var(--nd-card);
+  --ft-surface-2: var(--nd-raised);
+  --ft-text: var(--nd-text);
+  --ft-muted: var(--nd-muted);
+  --ft-line: var(--nd-line);
+  --ft-wa: var(--nd-success);
+  --ft-wa-bg: #223836;
+  --ft-shadow: none;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] .dbv9-footer.dbv9-ft {
+  border-top: 1px solid var(--nd-line);
+}
+
+/* 12 --------------------------------------------------- low-power phones */
+/* Nothing heavy is left to drop: the palette is already flat. */
+
+/* 13 --------------------------------------- order confirmation (9.4.1) */
+/* The « Commande reçue » cards are solid cards; the hero keeps its status
+   tint and its own tinted edge (order-confirmation.css). */
+html.dlc-theme-dark .dlc-oc .dlc-oc-card {
+  background-color: var(--nd-card);
+  background-image: none;
+  box-shadow: none;
+}
+html.dlc-theme-dark .dlc-oc .dlc-oc-card:not(.dlc-oc-hero) {
+  border-color: var(--nd-line);
+}
+html.delicat-low-power.dlc-theme-dark .dlc-oc .dlc-oc-card {
+  background-color: var(--nd-card);
+  background-image: none;
+  box-shadow: none;
+}
+
+/* 14 ------------------------------------------- 9.7.3: one container, not two */
+/* Dark mode drew a frame around sections whose cards already carry the design (a box in a box):
+ * the product hero, the purchase options around the PACKAGE card, the account content around the
+ * account cards, and the orders table around order rows that are cards on phones. The frame is not
+ * drawn; the cards inside are unchanged. Light mode is unchanged. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-hero,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+@media (max-width: 768px) {
+  html.dlc-theme-dark[data-delicat-theme="dark"] body table.woocommerce-orders-table.shop_table {
+    background: transparent !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+  }
+}
+/* WooCommerce block notices (e.g. "Confirm your email address" above the orders) were left white in dark mode. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .wc-block-components-notice-banner {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  color: var(--nd-text) !important;
+}
+
+/* 15 ------------------------ 9.10.1: colours hard-coded in other sheets */
+/* section titles / subtitles (theme-system.css and the component sheets) */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-carousel__title, .delicat-category-chips__title, .delicat-process__title, .delicat-why__title, .delicat-testimonials__title, .delicat-faq__title, .delicat-fav__title, .delicat-newsletter h2, .delicat-banner-rail__heading, .delicat-bk__title, .delicat-trust__title),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"] :where(.delicat-carousel__title, .delicat-category-chips__title, .delicat-process__title, .delicat-why__title, .delicat-testimonials__title, .delicat-faq__title, .delicat-newsletter h2) {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-carousel__subtitle, .delicat-category-chips__subtitle, .delicat-process__subtitle, .delicat-testimonials__subtitle, .delicat-faq__subtitle, .delicat-fav__subtitle),
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-page-layout[data-delicat-homepage-managed="1"] :where(.delicat-carousel__subtitle, .delicat-category-chips__subtitle, .delicat-process__subtitle, .delicat-testimonials__subtitle, .delicat-faq__subtitle) {
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-process__card h3, .delicat-why__card h3, .delicat-testimonials__footer strong, .delicat-testimonials__review-cta > strong, .delicat-trust__item strong, .delicat-faq__item summary, .delicat-fav__body strong) {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-process__card p, .delicat-why__card p, .delicat-why__payments-title, .delicat-why__payment-note, .delicat-testimonials__copy, .delicat-testimonials__mquote, .delicat-testimonials__rating-label, .delicat-faq__answer, .delicat-faq__answer p, .delicat-trust__item > span:last-child, .delicat-fav__body span) {
+  color: var(--nd-muted) !important;
+}
+
+/* home hero (« neo glass pro »): a solid accent-tinted panel, no mesh, no sheen */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro.is-mesh {
+  --dbv9-hero-glass-bg: var(--nd-tint) !important;
+  --dbv9-hero-glass-border: var(--nd-tint-line) !important;
+  --dbv9-hero-glass-text: var(--nd-text) !important;
+  --dbv9-hero-glass-muted: var(--nd-muted) !important;
+  --dbv9-hero-glass-chip: transparent !important;
+  --dbv9-hero-glass-chip-border: var(--nd-tint-line) !important;
+  background: var(--nd-tint) !important;
+  border: 1px solid var(--nd-tint-line) !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro::before,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro::after {
+  display: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-homepage-managed #delicat-section-home-premium-hero .delicat-section__inner,
+html.dlc-theme-dark[data-delicat-theme="dark"] body.delicat-builder-homepage-managed #delicat-section-home-premium-hero .delicat-section__inner {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro .delicat-builder-hero__title {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero:not(.has-background) .delicat-builder-hero__highlight {
+  background: none !important;
+  -webkit-text-fill-color: currentColor;
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro .delicat-builder-hero__eyebrow,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro .delicat-builder-hero__benefit {
+  background: transparent !important;
+  border-color: var(--nd-tint-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero--style-neo_glass_pro .delicat-builder-hero__eyebrow {
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero__benefit .delicat-inline-icon {
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero__eyebrow-dot {
+  background: var(--nd-accent) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero:not(.has-background) .delicat-builder-hero__cta,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero:not(.has-background) .delicat-builder-hero-search__submit {
+  background: var(--nd-fill) !important;
+  box-shadow: none !important;
+  color: #ffffff !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero__float-item,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero.is-mesh .delicat-builder-hero__float-item {
+  border-color: var(--nd-tint-line) !important;
+  background: var(--nd-card) !important;
+  box-shadow: none !important;
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero__float-item::before {
+  display: none !important;
+}
+
+/* « Avec Délicat vous pouvez » banner cards: tinted solid panels in dark,
+   not saturated blocks; the button carries the card colour. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card {
+  border-color: var(--dbc-accent) !important;
+  background: color-mix(in srgb, var(--dbc-accent) 20%, #171b22) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+@supports not (color: color-mix(in srgb, red, blue)) {
+  html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card {
+    background: var(--nd-card) !important;
+  }
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card::before {
+  display: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card__title {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card__text {
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card__icon {
+  border-color: var(--nd-line-strong) !important;
+  background: var(--nd-card) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card__deco {
+  opacity: 0.05 !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark a.delicat-banner-card__button {
+  background: var(--dbc-accent) !important;
+  color: var(--dbc-on-accent, #ffffff) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-banner-rail--dark .delicat-banner-card__arrow {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+/* product cards: the name/price band was navy (#101334) */
+html.dlc-theme-dark[data-delicat-theme="dark"] body section.delicat-carousel[data-delicat-managed-homepage="1"] .delicat-product-card__body,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__body {
+  background: var(--nd-card) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__name,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__title {
+  color: var(--nd-text) !important;
+}
+
+/* catalogue (theme-system.css used #11152a and #f7f8fc) */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-woo-archive-tools, .woocommerce-ordering select, .delicat-woo-archive ul.products li.product.delicat-woo-product-card) {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-woo-archive :where(.woocommerce-products-header__title.page-title, .woocommerce-loop-product__title, .price, .amount) {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-woo-archive :where(.woocommerce-result-count, .term-description, .woocommerce-products-header__description) {
+  color: var(--nd-muted) !important;
+}
+
+/* product page pieces from theme-system.css: the purchase section was a
+   bright blue-to-red gradient; now the accent-tinted solid panel. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product {
+  --dnp-text: var(--nd-text) !important;
+  --dnp-muted: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product :where(.dnp-purchase h2, .dnp-details h2, .dnp-related h2) {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product .dnp-purchase :where(p, label, legend) {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-section {
+  background: var(--nd-tint) !important;
+  border: 1px solid var(--nd-tint-line) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-section-title {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-price del {
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-reset {
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product form.variations_form .ddsw-check {
+  background: var(--nd-fill) !important;
+  color: #ffffff !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product-main {
+  background: var(--nd-page) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body.single-product .delicat-native-product :where(.dnp-hero, .dnp-purchase, .dnp-section) {
+  box-shadow: none !important;
+}
+
+/* topic pills on product cards: solid raised chip, soft-white ink */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-badge--topic {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  color: var(--nd-text) !important;
+}
+
+/* « Comment ça marche », « Pourquoi Delicat », favourites: the ultra cards
+   carried their own navy (#12142a) at high specificity. */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__grid .delicat-process__card.delicat-process__card,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__list .delicat-why__card.delicat-why__card {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__grid .delicat-process__card.delicat-process__card h3,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__list .delicat-why__card.delicat-why__card h3 {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__grid .delicat-process__card.delicat-process__card p,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__list .delicat-why__card.delicat-why__card p {
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__grid .delicat-process__card.delicat-process__card .delicat-process__number {
+  color: var(--nd-faint) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__grid .delicat-process__card.delicat-process__card .delicat-process__icon {
+  background: var(--nd-raised) !important;
+  border-color: var(--nd-line) !important;
+  box-shadow: none !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__title,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__title {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__subtitle,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__subtitle,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__cta-text {
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-process.delicat-process--ultra .delicat-process__eyebrow,
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-category-chips__eyebrow, .delicat-carousel__eyebrow, .delicat-why__eyebrow, .delicat-fav__eyebrow) {
+  color: var(--nd-muted) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-why.delicat-why--ultra .delicat-why__cta {
+  background: var(--nd-tint) !important;
+  border-color: var(--nd-tint-line) !important;
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-fav__icon {
+  background: var(--nd-raised) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-carousel__view-all,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-carousel__head-actions > a {
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-product-card__price {
+  color: var(--nd-muted) !important;
+}
+
+/* testimonials, trust strip, hero search icon: readable without the
+   engine's runtime dark adapter */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mcard,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__card {
+  background: var(--nd-card) !important;
+  border-color: var(--nd-line) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mid > strong,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__domain strong {
+  color: var(--nd-text) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mid > span,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mquote,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__rating-note,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__rating-note a,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__review-cta p,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__footer {
+  color: var(--nd-muted) !important;
+  border-color: var(--nd-line) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__mproduct,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-testimonials__rating > strong,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-trust__icon,
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-builder-hero-search__icon {
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-bk__ring {
+  border-color: var(--nd-line-strong) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body section.delicat-carousel[data-delicat-managed-homepage="1"] .delicat-carousel__view-all.delicat-carousel__view-all.delicat-carousel__view-all {
+  color: var(--nd-accent) !important;
+}
+html.dlc-theme-dark[data-delicat-theme="dark"] body section.delicat-carousel[data-delicat-managed-homepage="1"] .delicat-product-card__price > span {
+  color: var(--nd-muted) !important;
+}
+
+/* no frosted glass in dark: the theme system's blurred bars and panels are
+   solid « Nuit douce » surfaces (no backdrop compositing on phones) */
+html.dlc-theme-dark[data-delicat-theme="dark"] body :where(.delicat-shell--header, .delicat-shell__bottom-nav, .dsb-bottom-nav, .dsb-modern-menu, .delicat-shell__search-panel, .delicat-shell__drawer-panel, .dbv9-notifications__panel, .woocommerce div.product .summary, [data-delicat-glass], .delicat-bottom-nav, .dsb8-header--glass) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* favourite (heart) button on product cards: the outline was navy #1f2340,
+   invisible on a dark chip */
+html.dlc-theme-dark[data-delicat-theme="dark"] body .delicat-like {
+  --dbv9-like-ink: var(--nd-text);
+}
