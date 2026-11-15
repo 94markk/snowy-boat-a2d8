@@ -314,24 +314,33 @@ final class Delicat_Builder_V9_TurboNav {
 	 * @return array<int,string> URL patterns.
 	 */
 	private static function full_document_targets() {
-		$paths = array();
+		$paths  = array();
+		$signed = is_user_logged_in();
+		/* V10: guests get the cart and the checkout only. A guest's account page is the sign-in
+		 * form and the wallet only redirects to it: Chrome answered the tap from the prefetched
+		 * copy, so the visit never reached PHP and Identity Pro, which ignores speculative
+		 * requests on purpose, never remembered the page the shopper came from (no return to the
+		 * product after signing in). */
+		$pages = $signed ? array( 'cart', 'myaccount', 'checkout' ) : array( 'cart', 'checkout' );
 		if ( function_exists( 'wc_get_page_permalink' ) ) {
-			foreach ( array( 'cart', 'myaccount', 'checkout' ) as $page ) {
+			foreach ( $pages as $page ) {
 				$path = wp_parse_url( (string) wc_get_page_permalink( $page ), PHP_URL_PATH );
 				if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
 					$paths[] = trailingslashit( $path );
 				}
 			}
 		}
-		$wallet = '/my-wallet/';
-		if ( class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) && is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'wallet_url' ) ) ) {
-			$path = wp_parse_url( (string) Delicat_Builder_V9_Purchase_Native::wallet_url(), PHP_URL_PATH );
-			if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
-				$wallet = trailingslashit( $path );
+		if ( $signed ) {
+			$wallet = '/my-wallet/';
+			if ( class_exists( 'Delicat_Builder_V9_Purchase_Native', false ) && is_callable( array( 'Delicat_Builder_V9_Purchase_Native', 'wallet_url' ) ) ) {
+				$path = wp_parse_url( (string) Delicat_Builder_V9_Purchase_Native::wallet_url(), PHP_URL_PATH );
+				if ( is_string( $path ) && '' !== $path && '/' !== $path ) {
+					$wallet = trailingslashit( $path );
+				}
 			}
+			$paths[] = $wallet;
 		}
-		$paths[] = $wallet;
-		$paths   = array_values( array_unique( array_filter( $paths ) ) );
+		$paths = array_values( array_unique( array_filter( $paths ) ) );
 		return array_map(
 			static function ( $path ) {
 				return $path . '*';
@@ -344,8 +353,9 @@ final class Delicat_Builder_V9_TurboNav {
 	 * 9.5.3: the two full pages a signed-in shopper opens most from the tab bar, the wallet and
 	 * the account home, are prerendered (built in the background, scripts included) when a finger
 	 * lands on their link or the pointer rests on it, so the tap shows them at once (Chrome). Exact
-	 * paths only: never a sub-page, never a URL with a query (logout, nonces). Guests get the
-	 * prefetch below (their account page is the sign-in form).
+	 * paths only: never a sub-page, never a URL with a query (logout, nonces). Guests get neither
+	 * page ahead of time (V10: their account page is the sign-in form, see full_document_targets).
+	 * V10: on a slow connection the prerender becomes a prefetch (print_full_document_prefetch).
 	 *
 	 * @return array<int,string> Exact paths.
 	 */
@@ -450,7 +460,24 @@ final class Delicat_Builder_V9_TurboNav {
 		if ( ! is_string( $json ) || '' === $json ) {
 			return;
 		}
-		echo '<script type="speculationrules" id="dbv9-speculation-full" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_json_encode output.
+		if ( ! $instant ) {
+			echo '<script type="speculationrules" id="dbv9-speculation-full" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_json_encode output.
+			return;
+		}
+		/* V10: a prerender builds the signed-in account page or wallet for real (uncached PHP, its
+		 * scripts and images) as soon as a finger lands on the link, even when the finger then
+		 * scrolls away. On a slow connection (Save-Data, 2G/3G, or the Builder's delicat-slow-net
+		 * probe) that work competes with the page in front of the shopper, so the rules ship inert
+		 * and a slow connection downgrades the prerender to a prefetch of the same links (the HTML
+		 * only, nothing run). Fast connections keep the prerender. Same gate as the RC79 rules. */
+		echo '<script type="delicat/speculationrules" id="dbv9-speculation-full" data-no-optimize="1" data-no-delay="1" data-cfasync="false">' . $json . '</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_json_encode output.
+		echo '<script id="dbv9-speculation-full-gate" data-no-optimize="1" data-no-delay="1" data-cfasync="false">(function(){' // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- fixed literal.
+			. 'var s=document.getElementById("dbv9-speculation-full");if(!s)return;'
+			. 'var t=s.textContent,c=navigator.connection||{},e=String(c.effectiveType||"");'
+			. 'if(c.saveData||/^(slow-2g|2g|3g)$/.test(e)||document.documentElement.className.indexOf("delicat-slow-net")>-1){'
+			. 'try{var r=JSON.parse(t);r.prefetch=(r.prefetch||[]).concat(r.prerender||[]);delete r.prerender;t=JSON.stringify(r);}catch(x){return;}}'
+			. 'var n=document.createElement("script");n.type="speculationrules";n.textContent=t;s.parentNode.replaceChild(n,s);'
+			. '}());</script>' . "\n";
 	}
 
 	/**

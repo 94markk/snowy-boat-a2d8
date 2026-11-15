@@ -93,11 +93,11 @@ add_action('plugins_loaded', ['DIP_SDK', 'init'], 18);
 add_action('plugins_loaded', ['DIP_WooCommerce', 'init'], 20);
 add_action('plugins_loaded', function () { DIP_Nextend_Parity::init(['DIP_Plugin', 'runtime_settings']); }, 22);
 add_action('plugins_loaded', function () { DIP_Performance::init(['DIP_Plugin', 'runtime_settings']); }, 19);
-add_action('plugins_loaded', function () { DIP_Mobile_API::init(['DIP_Plugin', 'runtime_settings']); }, 21);
+// V10: the app layer (Mobile API + app passkeys) starts on REST, app-credential and housekeeping requests only (DIP_Boot).
+add_action('plugins_loaded', ['DIP_Boot', 'mobile_layer'], 21);
 
 add_action('plugins_loaded', array('DIP_Delicat_App_Sync','init'), 30);
-// 6.11.0: app passkeys (Credential Manager) and the site's Android app link (assetlinks.json).
-add_action('plugins_loaded', ['DIP_Mobile_Passkeys', 'init'], 21);
+// 6.11.0: the site's Android app link (assetlinks.json). App passkeys (Credential Manager) start with the app layer above.
 add_action('plugins_loaded', ['DIP_Android_App', 'init'], 16);
 
 add_action('plugins_loaded', ['DIP_Session_Router', 'init'], 19);

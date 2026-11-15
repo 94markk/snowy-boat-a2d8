@@ -10,6 +10,9 @@ defined('ABSPATH') || exit;
 final class DIP_My_Account_Modern {
     /** Preference cookie of the « Masquer le solde » toggle (value 1/0 only). */
     const BALANCE_COOKIE = 'dipma_balance_hidden';
+    /** V10: object-cache copy of the account home's order counts and latest order ids (per customer). */
+    const ORDERS_CACHE_GROUP = 'delicat_identity';
+    const ORDERS_CACHE_TTL = 90;
 
     private static $initialized = false;
     /** @var array<int,array> per-request security summary, by user id */
@@ -36,6 +39,10 @@ final class DIP_My_Account_Modern {
         add_action('wp_enqueue_scripts', [__CLASS__, 'assets'], 90);
         add_action('template_redirect', [__CLASS__, 'early_private_account'], 0);
         add_action('template_redirect', [__CLASS__, 'redirect_legacy_identity_endpoint'], 15);
+        // V10: any change to one of the customer's orders refreshes the account home's counts.
+        foreach (['woocommerce_new_order', 'woocommerce_update_order', 'woocommerce_order_status_changed', 'woocommerce_before_trash_order', 'woocommerce_untrash_order', 'woocommerce_before_delete_order'] as $hook) {
+            add_action($hook, [__CLASS__, 'forget_order_summary'], 10, 2);
+        }
     }
 
     public static function is_account() {
@@ -154,10 +161,10 @@ final class DIP_My_Account_Modern {
     public static function assets() {
         if (!self::is_account()) return;
         // Early non-deferred theme sync: correct on first paint, including iOS dark OS + site light.
-        wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, false);
+        wp_enqueue_script('dip-account-theme', DIP_Boot::asset_url('account-theme.js'), [], DIP_VERSION, false);
         wp_enqueue_style('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.css', [], DIP_VERSION);
         wp_enqueue_style('dip-account-app', DIP_URL . 'assets/account-app.css', ['dip-my-account-modern'], DIP_VERSION);
-        wp_enqueue_script('dip-my-account-modern', DIP_URL . 'assets/my-account-modern.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
+        wp_enqueue_script('dip-my-account-modern', DIP_Boot::asset_url('my-account-modern.js'), [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
         if (function_exists('wp_script_add_data')) wp_script_add_data('dip-my-account-modern', 'strategy', 'defer');
     }
 
@@ -318,7 +325,13 @@ final class DIP_My_Account_Modern {
             try { $context['balance'] = (float) woo_wallet()->wallet->get_wallet_balance($uid, 'edit'); }
             catch (Throwable $e) { $context['balance'] = null; }
         }
-        if ($uid && function_exists('wc_get_orders')) {
+        $cached = $uid && function_exists('wc_get_orders') ? self::cached_order_summary($uid) : null;
+        if ($cached !== null) {
+            $context['orders'] = $cached['orders'];
+            $context['pending'] = $cached['pending'];
+            $context['recent'] = $cached['recent'];
+        } elseif ($uid && function_exists('wc_get_orders')) {
+            $complete = true;
             try {
                 // One query gives the three latest orders and the total shown on « Commandes ».
                 $result = wc_get_orders(self::orders_query_args($uid, ['limit' => 3, 'paginate' => true, 'orderby' => 'date', 'order' => 'DESC']));
@@ -328,12 +341,15 @@ final class DIP_My_Account_Modern {
                 } elseif (is_array($result)) {
                     $context['recent'] = array_slice($result, 0, 3);
                     $context['orders'] = count($result);
+                } else {
+                    $complete = false;
                 }
-            } catch (Throwable $e) {}
+            } catch (Throwable $e) { $complete = false; }
             try {
                 $pending = wc_get_orders(self::orders_query_args($uid, ['status' => ['wc-pending', 'wc-processing', 'wc-on-hold'], 'limit' => 1, 'paginate' => true, 'return' => 'ids']));
                 $context['pending'] = is_object($pending) && isset($pending->total) ? (int) $pending->total : 0;
-            } catch (Throwable $e) {}
+            } catch (Throwable $e) { $complete = false; }
+            if ($complete) self::store_order_summary($uid, $context);
         }
         if ($uid && function_exists('wc_get_customer_total_spent')) {
             try { $context['spent'] = (float) wc_get_customer_total_spent($uid); } catch (Throwable $e) {}
@@ -343,6 +359,51 @@ final class DIP_My_Account_Modern {
             return $order instanceof WC_Order && (int) $order->get_customer_id() === $uid;
         }));
         return self::$commerce[$uid] = $context;
+    }
+
+    private static function order_summary_key($uid) {
+        return 'dipma_orders_v1_' . absint($uid);
+    }
+
+    /**
+     * V10: the account home's order total, in-progress count and three latest
+     * order ids, kept 90 s in the object cache (Redis) and dropped as soon as
+     * one of the customer's orders is created, saved, changes status, or is
+     * trashed or deleted. The orders themselves are read live (WooCommerce
+     * keeps them in its own cache); anything unexpected falls back to the
+     * live queries. WooCommerce stays the source of truth.
+     */
+    private static function cached_order_summary($uid) {
+        $found = false;
+        $data = wp_cache_get(self::order_summary_key($uid), self::ORDERS_CACHE_GROUP, false, $found);
+        if (!$found || !is_array($data) || !isset($data['orders'], $data['pending'], $data['recent']) || !is_array($data['recent'])) return null;
+        if (!function_exists('wc_get_order')) return null;
+        $recent = [];
+        foreach (array_slice($data['recent'], 0, 3) as $order_id) {
+            $order = wc_get_order(absint($order_id));
+            // Gone, refunded into another object or no longer this customer's: ask WooCommerce again.
+            if (!($order instanceof WC_Order) || (int) $order->get_customer_id() !== (int) $uid) return null;
+            $recent[] = $order;
+        }
+        return ['orders' => (int) $data['orders'], 'pending' => (int) $data['pending'], 'recent' => $recent];
+    }
+
+    private static function store_order_summary($uid, array $context) {
+        $ids = [];
+        foreach ((array) $context['recent'] as $order) {
+            if ($order instanceof WC_Order && (int) $order->get_customer_id() === (int) $uid) $ids[] = (int) $order->get_id();
+        }
+        wp_cache_set(self::order_summary_key($uid), ['orders' => (int) $context['orders'], 'pending' => (int) $context['pending'], 'recent' => array_slice($ids, 0, 3)], self::ORDERS_CACHE_GROUP, self::ORDERS_CACHE_TTL);
+    }
+
+    /** Order hooks ($order_id, then the order object, a status or nothing): forget that customer's summary. */
+    public static function forget_order_summary($order_id, $order = null) {
+        if (!is_object($order) || !is_callable([$order, 'get_customer_id'])) {
+            $order = function_exists('wc_get_order') ? wc_get_order(absint($order_id)) : null;
+        }
+        if (!is_object($order) || !is_callable([$order, 'get_customer_id'])) return;
+        $customer = absint($order->get_customer_id());
+        if ($customer) wp_cache_delete(self::order_summary_key($customer), self::ORDERS_CACHE_GROUP);
     }
 
     /**

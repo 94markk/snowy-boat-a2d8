@@ -68,8 +68,9 @@ final class DIP_Passkeys {
         }
     }
 
+    /** The same merged settings, from DIP_Plugin's per-request copy (flushed on every write). */
     private static function settings() {
-        return wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
+        return DIP_Plugin::runtime_settings();
     }
 
     public static function available() {
@@ -1223,7 +1224,7 @@ final class DIP_Passkeys {
         $s=self::settings(); if(($s['passkeys_available']??'yes')!=='yes') return false;
         if(defined('REST_REQUEST') && REST_REQUEST) return false;
         wp_enqueue_style('dip-passkeys',DIP_URL.'assets/passkeys.css',[],DIP_VERSION);
-        wp_enqueue_script('dip-passkeys',DIP_URL.'assets/passkeys.js',[],DIP_VERSION,['in_footer' => true, 'strategy' => 'defer']);
+        wp_enqueue_script('dip-passkeys',DIP_Boot::asset_url('passkeys.js'),[],DIP_VERSION,['in_footer' => true, 'strategy' => 'defer']);
         if(!self::$runtime_enqueued){
             self::$runtime_enqueued=true;
             wp_localize_script('dip-passkeys','DIPPasskeys',self::frontend_config());
@@ -1241,10 +1242,20 @@ final class DIP_Passkeys {
     public static function assets(){
         $s=self::settings(); if(($s['passkeys_available']??'yes')!=='yes') return;
         $is_wp_login=did_action('login_enqueue_scripts') || (isset($GLOBALS['pagenow']) && $GLOBALS['pagenow']==='wp-login.php');
-        $is_account=function_exists('is_account_page') && is_account_page();
+        // V10: on the account page a guest gets the sign-in form; a signed-in
+        // customer sees passkey markup only on the Security tab. Elsewhere
+        // (dashboard, orders, wallet…) the renderers still load the runtime
+        // themselves if they print a passkey button (reauth card).
+        $is_account=function_exists('is_account_page') && is_account_page() && (!is_user_logged_in() || self::security_tab_request());
         $load=$is_wp_login || $is_account || self::page_has_passkey_markup();
         if(!$load && !is_user_logged_in() && apply_filters('dip_passkeys_enqueue_storefront', false)) $load=true;
         if($load) self::enqueue_runtime();
+    }
+
+    /** My Account › Identité et sécurité › Sécurité (the passkeys card and the confirmation card). */
+    private static function security_tab_request() {
+        if (!class_exists('DIP_Customer_Dashboard') || get_query_var(DIP_Customer_Dashboard::ENDPOINT, null) === null) return false;
+        return isset($_GET['dip_tab']) && is_string($_GET['dip_tab']) && sanitize_key(wp_unslash($_GET['dip_tab'])) === 'security'; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- read-only tab selector.
     }
 
     private static function date_label($timestamp) {

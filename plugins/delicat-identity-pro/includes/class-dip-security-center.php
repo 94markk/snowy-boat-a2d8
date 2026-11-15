@@ -27,14 +27,18 @@ final class DIP_Security_Center {
 
     public static function assets() {
         if (!is_user_logged_in()) return;
-        $load = function_exists('is_account_page') && is_account_page();
+        // V10: in My Account only the Identity Center shows these forms (its
+        // stylesheet is trimmed from the other endpoints at priority 100); a
+        // Security Center printed anywhere else enqueues both files itself.
+        $load = function_exists('is_account_page') && is_account_page()
+            && class_exists('DIP_Customer_Dashboard') && get_query_var(DIP_Customer_Dashboard::ENDPOINT, null) !== null;
         if (!$load && is_singular()) {
             global $post;
             $load = $post instanceof WP_Post && has_shortcode((string) $post->post_content, 'delicat_security_center');
         }
         if (!$load) return;
         wp_enqueue_style('dip-customer-dashboard', DIP_URL . 'assets/customer-dashboard.css', [], DIP_VERSION);
-        wp_enqueue_script('dip-security-center-client', DIP_URL . 'assets/security-center.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
+        wp_enqueue_script('dip-security-center-client', DIP_Boot::asset_url('security-center.js'), [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
     }
 
     public static function record_native_login($user_login, $user) {
@@ -390,7 +394,7 @@ final class DIP_Security_Center {
         }
 
         wp_enqueue_style('dip-customer-dashboard', DIP_URL . 'assets/customer-dashboard.css', [], DIP_VERSION);
-        wp_enqueue_script('dip-security-center-client', DIP_URL . 'assets/security-center.js', [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
+        wp_enqueue_script('dip-security-center-client', DIP_Boot::asset_url('security-center.js'), [], DIP_VERSION, ['in_footer' => true, 'strategy' => 'defer']);
 
         $atts = shortcode_atts(['title'=>'Centre de sécurité'], $atts, 'delicat_security_center');
         $user_id = get_current_user_id();

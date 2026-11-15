@@ -1,0 +1,296 @@
+import { b as F } from "./chunk.6ed550529e0e.js";
+import { e as te } from "./chunk.5a740e779038.js";
+import { a as ae, b as ie, c as le } from "./chunk.385b5371c4d9.js";
+import "./chunk.fefdb647cb09.js";
+import { a as s, b as I, c as o, d as j, e as x, g as z, i as H, l as O, u as G, z as se } from "./chunk.71647e346105.js";
+var J = "dbv9_annc";
+function ne() {
+  let l = [], d;
+  try {
+    d = j('[data-delicat-assistant],[class*="assistant"],[id*="assistant"],[class*="chat"],[id*="chat"],[class*="support-widget"],[id*="support-widget"],iframe[title*="chat" i],iframe[title*="assistant" i]');
+  } catch {
+    d = [];
+  }
+  for (let e of d) {
+    if (!e || e.closest && e.closest("[data-dbv9-announcement]")) continue;
+    let n;
+    try {
+      n = o.getComputedStyle(e);
+    } catch {
+      n = null;
+    }
+    !n || n.position !== "fixed" && n.position !== "sticky" || (l.push({ node: e, display: e.style.getPropertyValue("display"), priority: e.style.getPropertyPriority("display") }), e.style.setProperty("display", "none", "important"));
+  }
+  return l;
+}
+var re = (l) => {
+  for (let d of l) !d.node || !d.node.style || (d.display ? d.node.style.setProperty("display", d.display, d.priority || "") : d.node.style.removeProperty("display"));
+};
+function oe(l, d, e) {
+  let n = s.getElementById("delicat-builder-v9-announcement-css");
+  if (n && String(n.media || "").toLowerCase() === "print" && (n.media = "all"), !l || l.getAttribute("data-dbv9-annc-ready") === "1") return;
+  l.setAttribute("data-dbv9-annc-ready", "1");
+  let m = l.querySelector(".dbv9-annc__dialog");
+  if (!m) return;
+  s.body && l.parentNode !== s.body && s.body.appendChild(l);
+  let L = l.getAttribute("data-sig") || "", v = l.getAttribute("data-frequency") || "days", p = parseInt(l.getAttribute("data-days"), 10);
+  (isNaN(p) || p < 1) && (p = 7);
+  let g = parseInt(l.getAttribute("data-delay"), 10);
+  (isNaN(g) || g < 0) && (g = 0);
+  let c = l.getAttribute("data-audience") || "all", b = () => {
+    let r = e.session && e.session.get ? e.session.get() : null;
+    return r && typeof r.loggedIn == "boolean" ? r.loggedIn : se();
+  };
+  if (c === "guests" && b() || c === "members" && !b() || v !== "always" && O.read(J) === L) return;
+  let y = null, S = false, _ = 0, k = [], N = () => {
+    v !== "always" && O.write(J, L, v === "session" ? 0 : p * 86400);
+  }, M = (r) => {
+    if (r.key === "Escape" || r.key === "Esc") {
+      r.preventDefault(), P();
+      return;
+    }
+    if (r.key !== "Tab") return;
+    let w = G(m);
+    if (!w.length) return;
+    let i = w[0], u = w[w.length - 1];
+    r.shiftKey && s.activeElement === i ? (r.preventDefault(), u.focus()) : !r.shiftKey && s.activeElement === u && (r.preventDefault(), i.focus());
+  };
+  function E() {
+    if (S) return;
+    S = true, y = s.activeElement, l.hidden = false, l.classList.remove("is-closing"), I.classList.add("dbv9-annc-lock"), ae("announcement"), k = ne(), H(() => H(() => l.classList.add("is-open")));
+    let r = G(m);
+    r.length && r[0].focus(), s.addEventListener("keydown", M, true);
+  }
+  function P() {
+    S && (S = false, N(), l.classList.remove("is-open"), l.classList.add("is-closing"), I.classList.remove("dbv9-annc-lock"), ie("announcement"), re(k), k = [], s.removeEventListener("keydown", M, true), _ && o.clearTimeout(_), _ = o.setTimeout(() => {
+      if (l.classList.remove("is-closing"), l.hidden = true, y && y.focus) try {
+        y.focus();
+      } catch {
+      }
+    }, 320));
+  }
+  for (let r of j("[data-dbv9-annc-dismiss]", l)) x(r, "click", (w) => {
+    w.preventDefault(), P();
+  }, { signal: d });
+  x(m, "click", (r) => r.stopPropagation(), { signal: d });
+  let A = l.querySelector("[data-dbv9-annc-go]");
+  A && x(A, "click", N, { signal: d });
+  let q = () => {
+    g > 0 ? o.setTimeout(E, g) : E();
+  };
+  s.prerendering ? s.addEventListener("prerenderingchange", q, { once: true }) : q(), d.addEventListener("abort", () => {
+    s.removeEventListener("keydown", M, true);
+  }, { once: true });
+}
+function ce({ signal: l, engine: d }) {
+  for (let e of j("[data-dbv9-announcement]")) oe(e, l, d);
+}
+function de({ signal: l, config: d, engine: e }) {
+  let n = o.DelicatLiveSelling || d.liveSelling;
+  if (!n || !n.endpoint) return;
+  let m = () => o.matchMedia ? o.matchMedia("(max-width:899px)").matches : innerWidth < 900;
+  if (m() && n.showMobile === false || !m() && n.showDesktop === false) return;
+  let L = "dbv9_live_sale_seen_v1", v = 0, p = 0, g = false, c = null, b = 0, y = null, S = false, _ = (t) => String(t == null ? "" : t).toLowerCase(), k = (t) => Array.isArray(t) ? t.map(_).filter(Boolean) : [], N = k(n.blockedRoutes), M = k(n.blockedPaths).filter((t) => t !== "/"), E = Array.isArray(n.allowedRoutes) ? k(n.allowedRoutes) : null, P = (t) => {
+    let a = "/";
+    try {
+      a = _(decodeURIComponent(new URL(String(t || ""), location.href).pathname));
+    } catch {
+      return "/";
+    }
+    let h = _(n.basePath).replace(/\/+$/, "");
+    return h && a.indexOf(h + "/") === 0 && (a = a.slice(h.length)), a = a.replace(/^\/+|\/+$/g, ""), a ? "/" + a + "/" : "/";
+  }, A = (t) => {
+    let a = P(t);
+    return !M.some((h) => a.indexOf(h) === 0) && !(e.nav && e.nav.isProductUrl && false);
+  }, q = (t) => {
+    let a = _(t);
+    return a ? N.indexOf(a) !== -1 ? false : !E || E.indexOf(a) !== -1 : true;
+  }, r = !A(location.href), w = () => O.read(L), i = (t) => O.write(L, String(t || ""), 2592e3), u = (t) => {
+    try {
+      let a = new URL(String(t || ""), location.href);
+      return a.origin === location.origin ? a.href : "#";
+    } catch {
+      return "#";
+    }
+  }, T = (t) => {
+    let a = Math.max(0, Math.floor(Date.now() / 1e3 - (Number(t) || 0)));
+    if (a < 60) return "\xC0 l'instant";
+    let h = Math.floor(a / 60);
+    if (h < 60) return `Il y a ${h} min`;
+    let f = Math.floor(h / 60);
+    return f < 24 ? `Il y a ${f} h` : Math.floor(f / 24) < 2 ? "Hier" : "R\xE9cemment";
+  }, B = (t) => {
+    let a = String(n.messageTemplate || "Un client vient d\u2019acheter {product}");
+    return a.includes("{product}") ? a.replace("{product}", String(t || "")) : `Un client vient d\u2019acheter ${String(t || "")}`;
+  }, U = (t) => {
+    s.body.classList.toggle("dbv9-live-sale-visible", !!t), z("delicat:live-sale", { visible: !!t });
+  }, Q = () => y || (y = new Promise((t) => {
+    let a = String(n.styleUrl || "");
+    if (!a) return t(true);
+    let h = s.querySelector("link[data-dbv9-live-selling-style]");
+    if (h && h.sheet) return t(true);
+    let f = s.createElement("link");
+    f.rel = "stylesheet", f.href = a, f.dataset.dbv9LiveSellingStyle = "1";
+    let C = false, D = (V) => {
+      C || (C = true, o.clearTimeout(R), f.onload = null, f.onerror = null, V || f.remove(), t(V));
+    }, R = o.setTimeout(() => D(false), 4e3);
+    f.onload = () => D(true), f.onerror = () => D(false), s.head.appendChild(f);
+  }).then((t) => (t || (y = null), t)), y), Z = () => {
+    if (c && c.isConnected) return c;
+    c = s.createElement("aside"), c.className = "dbv9-live-sale " + (n.position === "bottom_right" ? "dbv9-live-sale--bottom-right" : "dbv9-live-sale--bottom-left"), c.hidden = true, c.setAttribute("aria-live", "polite"), c.innerHTML = '<button class="dbv9-live-sale__close" type="button" aria-label="Fermer">\xD7</button><a class="dbv9-live-sale__link" href="#"><span class="dbv9-live-sale__media"><img class="dbv9-live-sale__image" width="48" height="48" alt="" loading="lazy" decoding="async"></span><span class="dbv9-live-sale__copy"><small></small><b></b><em></em></span><span class="dbv9-live-sale__arrow" aria-hidden="true">\u2192</span></a>', s.body.appendChild(c);
+    let t = c.querySelector(".dbv9-live-sale__close");
+    return t.hidden = n.showClose === false, x(t, "click", () => Y(true), { signal: l }), c;
+  };
+  function Y(t = false) {
+    if (b && (o.clearTimeout(b), b = 0), !c || !c.isConnected) {
+      U(false);
+      return;
+    }
+    let a = c;
+    a.classList.remove("is-visible"), o.setTimeout(() => {
+      a.classList.contains("is-visible") || (a.hidden = true, U(false));
+    }, 180), t && (a.dataset.dismissed = "1", W());
+  }
+  async function ee(t) {
+    if (!t || !t.id || !t.title || !await Q() || s.hidden || r) return;
+    let a = Z();
+    if (a.dataset.dismissed === "1") return;
+    let h = a.querySelector(".dbv9-live-sale__link"), f = a.querySelector(".dbv9-live-sale__image"), C = a.querySelector("small"), D = a.querySelector("b"), R = a.querySelector("em");
+    h.href = u(t.url), C.textContent = String(n.label || "\u{1F525} Vente en direct"), D.textContent = B(t.title), R.textContent = T(t.created), t.image ? (f.src = t.image, f.closest(".dbv9-live-sale__media").hidden = false) : (f.removeAttribute("src"), f.closest(".dbv9-live-sale__media").hidden = true), a.hidden = false, H(() => {
+      a.classList.add("is-visible"), U(true);
+    }), b && o.clearTimeout(b), b = o.setTimeout(() => Y(false), Math.min(15e3, Math.max(3e3, Number(n.displayDuration) || 6200))), i(t.id);
+  }
+  let K = 0;
+  async function $() {
+    if (r || g || s.hidden || navigator.onLine === false || c && c.dataset.dismissed === "1" || o.DelicatBackoff && o.DelicatBackoff.on() || Date.now() - K < 55e3) return;
+    K = Date.now(), g = true;
+    let t = 0;
+    try {
+      let a = new URL(n.endpoint, location.href), h = w();
+      h && a.searchParams.set("after", h);
+      let f = new AbortController();
+      t = o.setTimeout(() => f.abort(), 5e3);
+      let C = await fetch(a.href, { credentials: "omit", headers: { Accept: "application/json" }, signal: f.signal });
+      if (o.DelicatBackoff && o.DelicatBackoff.trip(C.status), !C.ok) return;
+      let D = await C.json(), R = Array.isArray(D.items) ? D.items : [];
+      R.length && await ee(R[0]);
+    } catch {
+    } finally {
+      t && o.clearTimeout(t), g = false;
+    }
+  }
+  function W() {
+    v && (o.clearTimeout(v), v = 0), p && (o.clearInterval(p), p = 0);
+  }
+  function X() {
+    if (r || v || p) return;
+    let t = Math.min(18e4, Math.max(6e4, Number(n.initialDelay) || 6e4)), a = Math.min(3e5, Math.max(6e4, Number(n.pollInterval) || 6e4));
+    v = o.setTimeout(() => {
+      v = 0, S = true, $(), p = o.setInterval($, a);
+    }, t);
+  }
+  s.prerendering ? s.addEventListener("prerenderingchange", X, { once: true }) : X(), x(s, "visibilitychange", () => {
+    !s.hidden && S && !r && (!c || c.dataset.dismissed !== "1") && $();
+  }, { passive: true, signal: l }), x(s, "delicat:navigated", (t) => {
+    let a = t && t.detail || {};
+    q(a.route) && A(a.url || location.href) ? r && (r = false, (!c || c.dataset.dismissed !== "1") && X()) : (r = true, W(), Y(false));
+  }, { signal: l }), l.addEventListener("abort", () => {
+    W(), c && c.remove();
+  }, { once: true });
+}
+var ue = 72, fe = 104;
+function me({ signal: l, config: d }) {
+  if (!d.pullRefresh && !I.classList.contains("dlx-pull-refresh") || !("ontouchstart" in o) && !(navigator.maxTouchPoints > 0)) return;
+  let e = null, n = null, m = null, L = false, v = false, p = false, g = false, c = 0, b = 0, y = () => {
+    if (e) return e;
+    e = s.createElement("div"), e.className = "dlx-ptr", e.setAttribute("aria-hidden", "true"), e.style.position = "fixed", e.style.left = "50%", e.style.pointerEvents = "none", e.style.opacity = "0", n = s.createElement("div"), n.className = "dlx-ptr__ring", n.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>', e.appendChild(n);
+    let i = s.createElement("div");
+    return i.className = "dlx-ptr__check", i.innerHTML = '<svg viewBox="0 0 24 24" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>', e.appendChild(i), s.body.appendChild(e), e;
+  }, S = (i) => {
+    let u = 0;
+    for (; i && i !== s.body && i.nodeType === 1 && u < 12; ) {
+      if (u++, i.scrollHeight > i.clientHeight + 1 || i.scrollWidth > i.clientWidth + 1) {
+        let T = "";
+        try {
+          let B = o.getComputedStyle(i);
+          T = B.overflowY + " " + B.overflowX;
+        } catch {
+        }
+        if (/auto|scroll/.test(T)) return i;
+      }
+      i = i.parentNode;
+    }
+    return null;
+  }, _ = () => p || le(), k = () => {
+    c = 0;
+    let i = Math.min(fe, b * 0.5);
+    y(), e.style.transform = "translate3d(-50%," + i + "px,0)", e.style.opacity = String(Math.min(1, i / 44)), n.style.transform = "rotate(" + i * 3 + "deg)";
+    let u = i >= ue * 0.5;
+    u !== v && (v = u, e.classList.toggle("is-armed", v));
+  }, N = (i) => {
+    b = i, c || (c = H(k));
+  }, M = () => {
+    e && (e.classList.remove("is-armed"), e.classList.add("is-settling"), e.style.transform = "", e.style.opacity = "", o.setTimeout(() => {
+      e && e.classList.remove("is-settling");
+    }, 260));
+  }, E = () => {
+    try {
+      location.reload();
+    } catch {
+      location.href = location.href;
+    }
+  }, P = () => {
+    p = true, y(), e.classList.add("is-loading"), e.classList.remove("is-armed"), e.style.transform = "translate3d(-50%,64px,0)", e.style.opacity = "1", z("delicat:pull-refresh");
+    let i = () => {
+      p = false, e && (e.classList.remove("is-loading"), e.classList.add("is-done"), o.setTimeout(() => {
+        e && (e.classList.remove("is-done"), M());
+      }, 560));
+    }, u = null;
+    try {
+      F.invalidate(), te.refresh("pull-refresh"), u = F.navigate(location.href, { push: false, fresh: true });
+    } catch {
+      E();
+      return;
+    }
+    if (!u || typeof u.then != "function") return;
+    let T = o.setTimeout(E, 15e3);
+    u.then(() => {
+      o.clearTimeout(T), i();
+    }, () => {
+      o.clearTimeout(T), E();
+    });
+  }, A = (i) => {
+    if (!m || i.touches.length !== 1) return;
+    let u = i.touches[0].clientY - m.y, T = i.touches[0].clientX - m.x;
+    if (!L) {
+      if (u < 12 || Math.abs(T) > Math.abs(u) * 0.8) {
+        (u < -4 || Math.abs(T) > 12) && (m = null, r());
+        return;
+      }
+      if ((o.pageYOffset || I.scrollTop || 0) > 0) {
+        m = null, r();
+        return;
+      }
+      L = true, y(), e.classList.add("is-active"), e.classList.remove("is-settling");
+    }
+    N(u <= 0 ? 0 : u), i.cancelable && i.preventDefault();
+  }, q = () => {
+    g || (g = true, s.addEventListener("touchmove", A, { passive: false }));
+  }, r = () => {
+    g && (g = false, s.removeEventListener("touchmove", A, { passive: false }));
+  }, w = () => {
+    if (r(), !m) return;
+    let i = v;
+    m = null, L && (L = false, e && e.classList.remove("is-active"), i ? P() : M(), v = false);
+  };
+  x(s, "touchstart", (i) => {
+    m = null, L = false, v = false, r(), !(i.touches.length !== 1 || _()) && ((o.pageYOffset || I.scrollTop || 0) > 0 || S(i.target) || (m = { x: i.touches[0].clientX, y: i.touches[0].clientY }, q()));
+  }, { passive: true, signal: l }), x(s, "touchend", w, { passive: true, signal: l }), x(s, "touchcancel", w, { passive: true, signal: l }), x(o, "pageshow", () => {
+    p = false, r(), e && (e.classList.remove("is-loading"), M());
+  }, { signal: l }), l.addEventListener("abort", r, { once: true });
+}
+export {
+  ce as announcement,
+  de as liveSelling,
+  me as pullRefresh
+};

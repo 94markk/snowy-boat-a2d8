@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * 1. Real-user measurement (RUM). Google's field data (CrUX) does not see the Flutter app
  *    (Android WebView), Facebook / TikTok in-app browsers, Samsung Internet or iOS, nor the
  *    engine's in-page navigations, which is most of this store's traffic. A sampled share of
- *    page views (10 % by default) loads a 3 KB script once the page has loaded. It reads the
+ *    page views (5 % by default since V10) loads a 3 KB script once the page has loaded. It reads the
  *    browser's own performance entries (LCP, FCP, TTFB, CLS, INP and the engine's navigation
  *    time) and sends one small beacon when the page is hidden. The server keeps daily
  *    histograms per segment only: no IP address, no user, no URL, no cookie. Builder ->
@@ -19,8 +19,10 @@ if ( ! defined( 'ABSPATH' ) ) {
  *    images are never converted twice). Existing images are left as they are.
  *
  * Writes are bounded: per-IP throttle (hashed, 10 minutes), a daily cap, fixed-size
- * histograms, 14 days kept. The HTML stays identical for every visitor (sampling happens in
- * the browser), so page caches are unaffected.
+ * histograms, 14 days kept. V10: with a persistent object cache (Redis) each beacon is parked
+ * there and the day's histogram option is written once per 25 beacons instead of once per
+ * beacon. The HTML stays identical for every visitor (sampling happens in the browser), so
+ * page caches are unaffected.
  */
 final class Delicat_Builder_V9_Speed {
 
@@ -29,6 +31,9 @@ final class Delicat_Builder_V9_Speed {
 	private const DAYS_OPTION = 'delicat_builder_v9_rum_days';
 	private const KEEP_DAYS   = 14;
 	private const DAILY_CAP   = 20000;
+	/** V10: beacons parked in the object cache, written to the day's option this many at a time. */
+	private const FLUSH_EVERY = 25;
+	private const CACHE_GROUP = 'delicat_builder_v9_rum';
 
 	/** Upper edges of the histogram buckets (the last bucket is open). */
 	private const EDGES_MS  = array( 100, 200, 300, 400, 500, 600, 800, 1000, 1200, 1500, 1800, 2000, 2500, 3000, 3500, 4000, 5000, 6000, 8000, 10000, 15000, 20000, 30000 );
@@ -43,7 +48,7 @@ final class Delicat_Builder_V9_Speed {
 	public static function defaults(): array {
 		return array(
 			'rum'          => 1,
-			'rum_sample'   => 10, /* 9.4.3: 10 % is plenty at this traffic and halves the beacon writes */
+			'rum_sample'   => 5, /* V10: 5 % (was 10 %): enough for p75 at this traffic, half the beacon requests */
 			'webp_uploads' => 'auto',
 		);
 	}
@@ -239,28 +244,140 @@ final class Delicat_Builder_V9_Speed {
 	}
 
 	/**
+	 * Histogram increments of one beacon: metric => segment => bucket => count.
+	 *
+	 * @param array<string,array<int,float>> $values   Metric => values.
+	 * @param array<int,string>              $segments Segments this beacon counts in.
+	 * @return array<string,array<string,array<int,int>>>
+	 */
+	private static function histogram( array $values, array $segments ): array {
+		$h = array();
+		foreach ( $values as $metric => $list ) {
+			foreach ( $list as $v ) {
+				$b = self::bucket( (string) $metric, (float) $v );
+				foreach ( $segments as $seg ) {
+					$h[ $metric ][ $seg ][ $b ] = (int) ( $h[ $metric ][ $seg ][ $b ] ?? 0 ) + 1;
+				}
+			}
+		}
+		return $h;
+	}
+
+	/**
+	 * Adds histogram $add into $into (both metric => segment => bucket => count).
+	 *
+	 * @param array<string,mixed> $into Histogram to add to.
+	 * @param array<string,mixed> $add  Histogram to add.
+	 * @return array<string,mixed>
+	 */
+	private static function merge( array $into, array $add ): array {
+		foreach ( $add as $metric => $segs ) {
+			foreach ( (array) $segs as $seg => $buckets ) {
+				foreach ( (array) $buckets as $b => $n ) {
+					$into[ $metric ][ $seg ][ (int) $b ] = (int) ( $into[ $metric ][ $seg ][ (int) $b ] ?? 0 ) + (int) $n;
+				}
+			}
+		}
+		return $into;
+	}
+
+	/**
 	 * @param array<string,array<int,float>> $values   Metric => values.
 	 * @param array<int,string>              $segments Segments this beacon counts in.
 	 */
 	private static function add( array $values, array $segments ): void {
-		$day  = gmdate( 'Ymd' );
+		$hist = self::histogram( $values, $segments );
+		if ( ! $hist ) {
+			return;
+		}
+		$day = gmdate( 'Ymd' );
+		/* V10: with Redis, a beacon costs object-cache writes only. Each one takes a slot number from an
+		 * atomic counter and parks its increments under that slot; the beacon whose slot closes a group
+		 * of FLUSH_EVERY (it alone owns that group) writes the group to the day options in one go. The
+		 * day's option used to be read and rewritten (an SQL UPDATE) for every beacon, and two beacons at
+		 * the same moment lost one of their counts. Without a persistent cache: the direct write, as before. */
+		if ( function_exists( 'wp_using_ext_object_cache' ) && wp_using_ext_object_cache() && function_exists( 'wp_cache_get_multiple' ) ) {
+			wp_cache_add( 'seq', 0, self::CACHE_GROUP );
+			$slot = wp_cache_incr( 'seq', 1, self::CACHE_GROUP );
+			$slot = is_numeric( $slot ) ? (int) $slot : 0;
+			if ( $slot > 0 && wp_cache_set( 'b' . $slot, array( $day, $hist ), self::CACHE_GROUP, 7 * DAY_IN_SECONDS ) ) {
+				if ( 0 === $slot % self::FLUSH_EVERY ) {
+					self::flush( $slot - self::FLUSH_EVERY + 1, $slot );
+				}
+				return;
+			}
+		}
+		self::store( $day, $hist, 1 );
+	}
+
+	/**
+	 * Writes the parked beacons of slots $from..$to to their day options and drops them.
+	 */
+	private static function flush( int $from, int $to ): void {
+		$keys = array();
+		for ( $i = max( 1, $from ); $i <= $to; $i++ ) {
+			$keys[] = 'b' . $i;
+		}
+		$found  = (array) wp_cache_get_multiple( $keys, self::CACHE_GROUP );
+		$by_day = array();
+		foreach ( $found as $key => $entry ) {
+			if ( ! is_array( $entry ) || ! isset( $entry[0], $entry[1] ) || ! is_array( $entry[1] ) || ! preg_match( '/^\d{8}$/', (string) $entry[0] ) ) {
+				continue;
+			}
+			wp_cache_delete( (string) $key, self::CACHE_GROUP );
+			$d = (string) $entry[0];
+			$by_day[ $d ]['h'] = self::merge( $by_day[ $d ]['h'] ?? array(), $entry[1] );
+			$by_day[ $d ]['n'] = (int) ( $by_day[ $d ]['n'] ?? 0 ) + 1;
+		}
+		foreach ( $by_day as $d => $part ) {
+			self::store( (string) $d, $part['h'], $part['n'] );
+		}
+	}
+
+	/**
+	 * Adds $n beacons' histogram increments to the day's option (read-modify-write).
+	 *
+	 * @param array<string,mixed> $hist Histogram increments.
+	 */
+	private static function store( string $day, array $hist, int $n ): void {
 		$key  = self::DAY_PREFIX . $day;
 		$data = get_option( $key, array() );
 		$data = is_array( $data ) ? $data : array();
-		$data['n'] = (int) ( $data['n'] ?? 0 ) + 1;
-		if ( $data['n'] > self::DAILY_CAP ) {
+		$prev = (int) ( $data['n'] ?? 0 );
+		if ( $prev >= self::DAILY_CAP ) {
 			return;
 		}
-		foreach ( $values as $metric => $list ) {
-			foreach ( $list as $v ) {
-				$b = self::bucket( $metric, $v );
-				foreach ( $segments as $seg ) {
-					$data['h'][ $metric ][ $seg ][ $b ] = (int) ( $data['h'][ $metric ][ $seg ][ $b ] ?? 0 ) + 1;
-				}
-			}
-		}
+		$data['n'] = $prev + $n;
+		$data['h'] = self::merge( isset( $data['h'] ) && is_array( $data['h'] ) ? $data['h'] : array(), $hist );
 		update_option( $key, $data, false );
 		self::index( $day );
+	}
+
+	/**
+	 * Beacons parked in the object cache and not written yet (at most FLUSH_EVERY - 1), for the
+	 * admin view. Read only: the next owner of a full group still writes them.
+	 *
+	 * @return array<string,array<string,mixed>> Day => histogram.
+	 */
+	private static function pending(): array {
+		if ( ! function_exists( 'wp_using_ext_object_cache' ) || ! wp_using_ext_object_cache() || ! function_exists( 'wp_cache_get_multiple' ) ) {
+			return array();
+		}
+		$seq = (int) wp_cache_get( 'seq', self::CACHE_GROUP );
+		if ( $seq < 1 ) {
+			return array();
+		}
+		$keys = array();
+		for ( $i = $seq - ( $seq % self::FLUSH_EVERY ) + 1; $i <= $seq; $i++ ) {
+			$keys[] = 'b' . $i;
+		}
+		$out = array();
+		foreach ( (array) wp_cache_get_multiple( $keys, self::CACHE_GROUP ) as $entry ) {
+			if ( is_array( $entry ) && isset( $entry[0], $entry[1] ) && is_array( $entry[1] ) ) {
+				$out[ (string) $entry[0] ] = self::merge( $out[ (string) $entry[0] ] ?? array(), $entry[1] );
+			}
+		}
+		return $out;
 	}
 
 	/** Remembers which days exist and drops the ones older than two weeks. */
@@ -284,18 +401,16 @@ final class Delicat_Builder_V9_Speed {
 	 * @return array<string,array<string,array{p75:float,n:int}>>
 	 */
 	public static function summary( int $days ): array {
-		$merged = array();
+		$merged  = array();
+		$pending = self::pending();
 		for ( $i = 0; $i < $days; $i++ ) {
-			$data = get_option( self::DAY_PREFIX . gmdate( 'Ymd', time() - $i * DAY_IN_SECONDS ), array() );
-			if ( ! is_array( $data ) || empty( $data['h'] ) || ! is_array( $data['h'] ) ) {
-				continue;
+			$day  = gmdate( 'Ymd', time() - $i * DAY_IN_SECONDS );
+			$data = get_option( self::DAY_PREFIX . $day, array() );
+			if ( is_array( $data ) && ! empty( $data['h'] ) && is_array( $data['h'] ) ) {
+				$merged = self::merge( $merged, $data['h'] );
 			}
-			foreach ( $data['h'] as $metric => $segs ) {
-				foreach ( (array) $segs as $seg => $buckets ) {
-					foreach ( (array) $buckets as $b => $n ) {
-						$merged[ $metric ][ $seg ][ (int) $b ] = (int) ( $merged[ $metric ][ $seg ][ (int) $b ] ?? 0 ) + (int) $n;
-					}
-				}
+			if ( ! empty( $pending[ $day ] ) ) {
+				$merged = self::merge( $merged, $pending[ $day ] );
 			}
 		}
 		$out = array();
@@ -360,7 +475,7 @@ final class Delicat_Builder_V9_Speed {
 		$input = is_array( $input ) ? $input : array();
 		return array(
 			'rum'          => empty( $input['rum'] ) ? 0 : 1,
-			'rum_sample'   => max( 1, min( 100, absint( $input['rum_sample'] ?? 10 ) ) ),
+			'rum_sample'   => max( 1, min( 100, absint( $input['rum_sample'] ?? 5 ) ) ),
 			'webp_uploads' => in_array( $input['webp_uploads'] ?? 'auto', array( 'auto', 'on', 'off' ), true ) ? (string) $input['webp_uploads'] : 'auto',
 		);
 	}
@@ -483,7 +598,7 @@ final class Delicat_Builder_V9_Speed {
 					<tr><th scope="row"><?php esc_html_e( 'Mesure sur les téléphones des clients', 'delicat-builder-v9' ); ?></th>
 						<td><label><input type="checkbox" name="<?php echo esc_attr( self::OPTION ); ?>[rum]" value="1" <?php checked( ! empty( $s['rum'] ) ); ?>> <?php esc_html_e( 'Activée', 'delicat-builder-v9' ); ?></label></td></tr>
 					<tr><th scope="row"><label for="dbv9-rum-sample"><?php esc_html_e( 'Part des visites mesurées (%)', 'delicat-builder-v9' ); ?></label></th>
-						<td><input id="dbv9-rum-sample" type="number" min="1" max="100" name="<?php echo esc_attr( self::OPTION ); ?>[rum_sample]" value="<?php echo esc_attr( (string) (int) $s['rum_sample'] ); ?>" class="small-text"> <p class="description"><?php esc_html_e( '10 % suffit pour une boutique de cette taille ; chaque mesure est une petite requête après le départ du client.', 'delicat-builder-v9' ); ?></p></td></tr>
+						<td><input id="dbv9-rum-sample" type="number" min="1" max="100" name="<?php echo esc_attr( self::OPTION ); ?>[rum_sample]" value="<?php echo esc_attr( (string) (int) $s['rum_sample'] ); ?>" class="small-text"> <p class="description"><?php esc_html_e( '5 % suffit pour une boutique de cette taille ; chaque mesure est une petite requête après le départ du client.', 'delicat-builder-v9' ); ?></p></td></tr>
 					<tr><th scope="row"><label for="dbv9-webp"><?php esc_html_e( 'Tailles WebP des nouvelles photos', 'delicat-builder-v9' ); ?></label></th>
 						<td><select id="dbv9-webp" name="<?php echo esc_attr( self::OPTION ); ?>[webp_uploads]">
 							<option value="auto" <?php selected( $s['webp_uploads'], 'auto' ); ?>><?php esc_html_e( 'Automatique (sauf si une autre extension s’en charge)', 'delicat-builder-v9' ); ?></option>

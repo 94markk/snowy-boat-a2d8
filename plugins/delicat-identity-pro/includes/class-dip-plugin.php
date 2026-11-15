@@ -346,9 +346,22 @@ final class DIP_Plugin {
         if (is_admin()) return;
         $s = $this->settings();
         if (!$force && ($s['conditional_assets'] ?? 'yes') === 'yes' && class_exists('DIP_Performance') && !DIP_Performance::should_load_front_assets() && !did_action('login_enqueue_scripts')) return;
+        // V10: a signed-in customer sees no sign-in buttons on the cart, the
+        // checkout or the account pages; only the linked-accounts screens
+        // use these rules. A renderer that prints buttons still forces it.
+        if (!$force && ($s['conditional_assets'] ?? 'yes') === 'yes' && is_user_logged_in() && !did_action('login_enqueue_scripts') && !self::linked_accounts_screen()) return;
         wp_enqueue_style('dip-login', DIP_URL . 'assets/login.css', [], DIP_VERSION);
         $css = ':root{--dip-width:' . absint($s['button_width']) . '%;--dip-height:' . absint($s['button_height']) . 'px;--dip-radius:' . absint($s['button_radius']) . 'px;--dip-font:' . absint($s['button_font_size']) . 'px;--dip-weight:' . absint($s['button_weight']) . ';--dip-bg:' . esc_attr($s['button_bg']) . ';--dip-color:' . esc_attr($s['button_color']) . ';--dip-border:' . esc_attr($s['button_border']) . ';}';
         wp_add_inline_style('dip-login', $css);
+    }
+
+    /** My Account › Identité et sécurité (« Comptes liés ») or the legacy Connected accounts endpoint. */
+    private static function linked_accounts_screen() {
+        if (!function_exists('is_account_page') || !is_account_page()) return false;
+        foreach (['DIP_Customer_Dashboard', 'DIP_WooCommerce'] as $class) {
+            if (class_exists($class) && get_query_var(constant($class . '::ENDPOINT'), null) !== null) return true;
+        }
+        return false;
     }
 
     public function admin_menu() {

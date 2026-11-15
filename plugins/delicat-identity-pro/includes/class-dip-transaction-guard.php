@@ -12,7 +12,8 @@ final class DIP_Transaction_Guard {
         add_filter('dip_self_service_actions',static function($a){$a[]='dip_transaction_approve';return $a;});
         add_action('wp_enqueue_scripts',[__CLASS__,'assets'],100);
         add_action(self::CLEANUP_HOOK,[__CLASS__,'cleanup']);
-        if(!wp_next_scheduled(self::CLEANUP_HOOK))wp_schedule_event(time()+HOUR_IN_SECONDS,'hourly',self::CLEANUP_HOOK);
+        // V10: the schedule is kept by wp-admin, WP-Cron and WP-CLI requests, not on every storefront view.
+        if(DIP_Boot::housekeeping_request()&&!wp_next_scheduled(self::CLEANUP_HOOK))wp_schedule_event(time()+HOUR_IN_SECONDS,'hourly',self::CLEANUP_HOOK);
     }
     public static function binding() { return hash_hmac('sha256',get_current_user_id().'|'.wp_get_session_token(),wp_salt('secure_auth')); }
     public static function canonical($data,$depth=0) {
@@ -91,7 +92,7 @@ final class DIP_Transaction_Guard {
         wp_safe_redirect(add_query_arg('dip_confirm_transaction',$id,home_url('/')));exit;
     }
     /** Deferred: it only wraps fetch() for a later form submit, so it never needs to block parsing. */
-    public static function assets() { if(is_user_logged_in()&&class_exists('DES_Ajax'))wp_enqueue_script('dip-financial-confirmation',DIP_URL.'assets/financial-confirmation.js',[],DIP_VERSION,['in_footer'=>true,'strategy'=>'defer']); }
+    public static function assets() { if(is_user_logged_in()&&class_exists('DES_Ajax'))wp_enqueue_script('dip-financial-confirmation',DIP_Boot::asset_url('financial-confirmation.js'),[],DIP_VERSION,['in_footer'=>true,'strategy'=>'defer']); }
     public static function cleanup() {
         global $wpdb;
         $names=$wpdb->get_col($wpdb->prepare("SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s AND CAST(SUBSTRING_INDEX(option_name,'_',-1) AS UNSIGNED) < %d ORDER BY option_id ASC LIMIT 1000",$wpdb->esc_like('dip_tx_used_').'%',time()));

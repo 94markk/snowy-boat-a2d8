@@ -59,18 +59,19 @@
 		return (mem > 0 && mem <= 2) || d.documentElement.classList.contains('delicat-low-power') || /2g/.test(c.effectiveType || '') ? 1 : 0;
 	}
 
-	function send() {
+	/* V10: later engine navigations are sent 5 at a time (or when the page is left), not on every hide. */
+	function send(final) {
 		var p = { k: kind, lo: low() };
 		if (!sent) {
 			p.f = 1;
 			p.lcp = Math.round(m.lcp); p.fcp = Math.round(m.fcp); p.ttfb = Math.round(m.ttfb);
 			p.cls = Math.round(m.cls * 1000) / 1000; p.inp = Math.round(inp());
-		} else if (!soft.length) {
+		} else if (!soft.length || (!final && soft.length < 5)) {
 			return;
 		}
 		if (soft.length) { p.nav = soft; soft = []; }
 		try { if (n.sendBeacon(ep, JSON.stringify(p))) { sent = true; } } catch (e) { /* page leaving */ }
 	}
-	d.addEventListener('visibilitychange', function () { if (d.visibilityState === 'hidden') { send(); } });
-	w.addEventListener('pagehide', send);
+	d.addEventListener('visibilitychange', function () { if (d.visibilityState === 'hidden') { send(false); } });
+	w.addEventListener('pagehide', function () { send(true); });
 }());

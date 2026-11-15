@@ -26,6 +26,8 @@ final class DIP_Native_Auth {
 
     private static $initialized = false;
     private static $modal_rendered = false;
+    /** @var bool|null V10: per-request answer of lazy_guest_bundle() */
+    private static $lazy_bundle = null;
 
     public static function init() {
         if (self::$initialized) return;
@@ -71,6 +73,7 @@ final class DIP_Native_Auth {
         add_action('wp_body_open', [__CLASS__, 'render_modal'], 99);
         add_action('wp_footer', [__CLASS__, 'render_modal'], 5);
         add_action('wp_head', [__CLASS__, 'print_trigger_fallback'], 2);
+        add_action('wp_footer', [__CLASS__, 'print_lazy_config'], 20);
         add_action('admin_notices', [__CLASS__, 'legacy_snippet_notice']);
     }
 
@@ -114,8 +117,9 @@ final class DIP_Native_Auth {
         echo '<div class="notice notice-warning"><p><strong>Delicat Identity:</strong> ' . esc_html__('un ancien snippet de connexion Delicat semble encore actif. Désactivez sa copie dans Code Snippets afin d’éviter des hooks AJAX, lockouts et modals en double.', 'delicat-google-login') . '</p></div>';
     }
 
+    /** The same merged settings, from DIP_Plugin's per-request copy (flushed on every write). */
     private static function settings() {
-        return wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults());
+        return DIP_Plugin::runtime_settings();
     }
 
     private static function normalize_ip($value) {
@@ -583,7 +587,14 @@ final class DIP_Native_Auth {
      * slow network) opens the account page instead of doing nothing.
      */
     public static function print_trigger_fallback() {
-        if (is_admin() || is_user_logged_in() || !wp_script_is('dip-auth-shell', 'enqueued')) return;
+        if (is_admin() || is_user_logged_in()) return;
+        if (self::lazy_guest_bundle() && wp_script_is('dip-auth-shell', 'registered') && !wp_script_is('dip-auth-shell', 'enqueued')) {
+            if (self::print_lazy_loader()) return;
+            // The loader could not be printed: the footer tags, as before V10.
+            wp_enqueue_script('dip-account-theme');
+            wp_enqueue_script('dip-auth-shell');
+        }
+        if (!wp_script_is('dip-auth-shell', 'enqueued')) return;
         $url = self::account_page_url();
         echo '<script data-no-optimize="1" data-no-delay="1" data-no-defer="1" data-cfasync="false">(function(){var u=' . wp_json_encode(esc_url_raw($url)) . ';window.DIPAuthAccountUrl=u;document.addEventListener("click",function(e){if(window.DIPAuthShell)return;var t=e.target&&e.target.closest&&e.target.closest("[data-dip-auth-open],[data-dl-open],.dsb-account-login,a[href$=\"#delicat-login\"],a[href$=\"#dip-identity-modal\"],[aria-controls=\"dip-identity-modal\"]");if(!t)return;e.preventDefault();e.stopImmediatePropagation();var r=u;try{var x=new URL(u,location.href);x.searchParams.set("redirect_to",location.href);r=x.href;}catch(_){}location.href=r;},true);})();</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput -- JSON-encoded URL.
     }
@@ -911,6 +922,12 @@ final class DIP_Native_Auth {
             '/delicat-identity-pro/assets/auth-panel.js',
             '/delicat-identity-pro/assets/session-router.js',
             '/delicat-identity-pro/assets/passkeys.js',
+            // V10: the minified twins (DIP_Boot::asset_url()).
+            '/delicat-identity-pro/assets/auth-shell.min.js',
+            '/delicat-identity-pro/assets/account-theme.min.js',
+            '/delicat-identity-pro/assets/auth-panel.min.js',
+            '/delicat-identity-pro/assets/session-router.min.js',
+            '/delicat-identity-pro/assets/passkeys.min.js',
         ])));
     }
 
@@ -948,11 +965,11 @@ final class DIP_Native_Auth {
         // The site theme probe is needed in the head only where the account
         // area is painted; on catalogue pages it runs at the end of the page.
         $account_area = class_exists('DIP_Performance') && DIP_Performance::should_load_front_assets();
-        wp_enqueue_script('dip-account-theme', DIP_URL . 'assets/account-theme.js', [], DIP_VERSION, !$account_area);
-        wp_enqueue_script('dip-auth-shell', DIP_URL . 'assets/auth-shell.js', ['dip-account-theme'], DIP_VERSION, true);
+        wp_register_script('dip-account-theme', DIP_Boot::asset_url('account-theme.js'), [], DIP_VERSION, !$account_area);
+        wp_register_script('dip-auth-shell', DIP_Boot::asset_url('auth-shell.js'), ['dip-account-theme'], DIP_VERSION, true);
         wp_localize_script('dip-auth-shell', 'DIPIdentityModal', [
-            'frameJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_URL . 'assets/auth-frame.js'),
-            'passkeysJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_URL . 'assets/passkeys.js'),
+            'frameJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_Boot::asset_url('auth-frame.js')),
+            'passkeysJsUrl' => add_query_arg('ver', DIP_VERSION, DIP_Boot::asset_url('passkeys.js')),
             'passkeys' => self::passkey_frontend_config(),
             'ajaxUrl' => self::ajax_url(),
             'redirectUrl' => self::login_redirect(),
@@ -967,6 +984,81 @@ final class DIP_Native_Auth {
             'lazyModal' => self::inline_modal() ? 0 : 1,
             'accountUrl' => esc_url_raw(self::account_page_url()),
         ]);
+        // V10: guest catalogue pages fetch the two scripts after the page
+        // has loaded (print_lazy_loader()); everywhere else they are tags.
+        if (self::lazy_guest_bundle()) return;
+        wp_enqueue_script('dip-account-theme');
+        wp_enqueue_script('dip-auth-shell');
+    }
+
+    /**
+     * V10: on guest pages outside the account area (home, shop, categories,
+     * products: the page-cached ones) the sign-in window's scripts
+     * (account-theme.js and auth-shell.js) are no longer part of the page
+     * load. A small loader in <head> (assets/auth-loader.js) fetches them
+     * once the page has loaded and the browser is idle, at once on an
+     * auth-state address (#delicat-login, dip_auth_error, dip_verified,
+     * dip_identity_open), or on the first touch, hover or focus of a sign-in
+     * button. A tap that comes before them opens the window as soon as they
+     * run (the account page after 6 s or on failure, as the old fallback
+     * did). The account page, the cart and the checkout keep the script tags.
+     * add_filter('dip_lazy_guest_bundle', '__return_false') restores them
+     * everywhere.
+     */
+    public static function lazy_guest_bundle() {
+        if (self::$lazy_bundle !== null) return self::$lazy_bundle;
+        $lazy = !is_admin() && !is_user_logged_in()
+            && (self::settings()['native_modal_enabled'] ?? 'yes') === 'yes'
+            && !self::inline_modal()
+            && !(class_exists('DIP_Performance') && DIP_Performance::should_load_front_assets())
+            && is_readable(DIP_Boot::asset_path('auth-loader.js'))
+            && (bool) apply_filters('dip_lazy_guest_bundle', true);
+        // Conditional tags are only meaningful once the main query ran.
+        if (did_action('wp')) self::$lazy_bundle = $lazy;
+        return $lazy;
+    }
+
+    /** Script URL with the ?ver= WordPress itself would print for a registered handle ('' when unknown). */
+    private static function registered_script_url($handle) {
+        $scripts = wp_scripts();
+        if (!isset($scripts->registered[$handle]) || !is_string($scripts->registered[$handle]->src) || $scripts->registered[$handle]->src === '') return '';
+        $script = $scripts->registered[$handle];
+        $src = apply_filters('script_loader_src', $script->ver ? add_query_arg('ver', $script->ver, $script->src) : $script->src, $handle);
+        return is_string($src) && $src !== '' ? esc_url_raw($src) : '';
+    }
+
+    /** <head>: the sign-in loader (assets/auth-loader.js, inline) with the lazy guest bundle's script URLs. false: nothing printed. */
+    private static function print_lazy_loader() {
+        $urls = [];
+        foreach (['dip-account-theme', 'dip-auth-shell'] as $handle) {
+            $src = self::registered_script_url($handle);
+            if ($src !== '') $urls[] = $src;
+        }
+        $code = is_readable(DIP_Boot::asset_path('auth-loader.js')) ? (string) file_get_contents(DIP_Boot::asset_path('auth-loader.js')) : '';
+        if (count($urls) !== 2 || strpos($code, 'DIPAuthLoader') === false) return false;
+        // One base URL and short paths (the scripts share the plugin folder).
+        $base = substr($urls[0], 0, strrpos($urls[0], '/') + 1);
+        $paths = [];
+        foreach ($urls as $src) {
+            if (strpos($src, $base) !== 0) { $base = ''; break; }
+        }
+        foreach ($urls as $src) $paths[] = substr($src, strlen($base));
+        $config = [
+            'u' => esc_url_raw(self::account_page_url()),
+            'b' => $base,
+            'f' => $paths,
+            's' => '[data-dip-auth-open],[data-dl-open],.dsb-account-login,a[href$="#delicat-login"],a[href$="#dip-identity-modal"],[aria-controls="dip-identity-modal"]',
+        ];
+        $code = preg_replace('~^/\*!.*?\*/\s*~s', '', trim($code));
+        echo '<script data-no-optimize="1" data-no-delay="1" data-no-defer="1" data-cfasync="false">' . $code . 'DIPAuthLoader(' . wp_json_encode($config, JSON_UNESCAPED_SLASHES) . ');</script>' . "\n"; // phpcs:ignore WordPress.Security.EscapeOutput -- plugin file and JSON-encoded config.
+        return true;
+    }
+
+    /** Footer of a lazy guest page: the config wp_localize_script() would have printed with the tag. */
+    public static function print_lazy_config() {
+        if (is_admin() || is_user_logged_in() || !self::lazy_guest_bundle()) return;
+        if (!wp_script_is('dip-auth-shell', 'registered') || wp_script_is('dip-auth-shell', 'enqueued') || wp_script_is('dip-auth-shell', 'done')) return;
+        wp_scripts()->print_extra_script('dip-auth-shell');
     }
 
     private static function safe_fragment_redirect($candidate) {

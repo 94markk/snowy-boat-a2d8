@@ -230,7 +230,7 @@ final class DIP_Access_Guard {
      */
     private static function protected_page_slugs() {
         $settings = class_exists('DIP_Plugin')
-            ? wp_parse_args((array) get_option(DIP_Plugin::OPTION, []), DIP_Plugin::defaults())
+            ? DIP_Plugin::runtime_settings()
             : ['protected_page_slugs' => 'my-wallet'];
         $raw = (string) ($settings['protected_page_slugs'] ?? 'my-wallet');
         $parts = preg_split('/[\s,;]+/', $raw);

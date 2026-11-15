@@ -34,7 +34,8 @@ final class DIP_App_Sync_V2 {
         // Account deletion and privacy erasure: per-user pairing and device rows.
         add_action('deleted_user', [__CLASS__, 'user_deleted']);
         add_filter('wp_privacy_personal_data_erasers', [__CLASS__, 'register_erasers']);
-        if (!wp_next_scheduled('dip_app_pairing_cleanup')) {
+        // V10: checked on wp-admin, WP-Cron and WP-CLI requests, not on every storefront view.
+        if (DIP_Boot::housekeeping_request() && !wp_next_scheduled('dip_app_pairing_cleanup')) {
             wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'dip_app_pairing_cleanup');
         }
         if ((string) get_option(self::SCHEMA_OPTION, '') !== self::SCHEMA_VERSION) self::install();

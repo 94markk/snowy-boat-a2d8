@@ -67,7 +67,7 @@ final class DIP_WooCommerce {
         if (!function_exists('is_checkout') || !is_checkout() || is_order_received_page()) return;
         // The Checkout block keeps its own field state; the restore helper targets the classic form.
         if (function_exists('has_block') && function_exists('wc_get_page_id') && has_block('woocommerce/checkout', wc_get_page_id('checkout'))) return;
-        wp_enqueue_script('dip-checkout-restore', DIP_URL . 'assets/checkout-restore.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-checkout-restore', DIP_Boot::asset_url('checkout-restore.js'), [], DIP_VERSION, true);
     }
 
     public static function login_redirect($redirect, $user) {

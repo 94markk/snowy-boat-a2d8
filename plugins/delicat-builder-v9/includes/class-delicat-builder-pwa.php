@@ -11,8 +11,6 @@ final class Delicat_Builder_V9_PWA {
 			'enabled'       => 1,
 			'install_ui'    => 1,
 			'static_cache'  => 1,
-			'document_cache'=> 1,
-			'document_ttl'  => 600,
 			'max_entries'   => 64,
 			'theme_color'   => '#11104a',
 			'background'    => '#ffffff',
@@ -190,6 +188,32 @@ final class Delicat_Builder_V9_PWA {
 		exit;
 	}
 
+	/**
+	 * V10: where the full launch-screen set is printed. It was 15 links (about 4.1 KB of HTML) and
+	 * 15 file checks on every page; now only the home page, the installed app's start page. Any
+	 * other page gives the engine the device list (splash_config) and the engine adds the one link
+	 * that matches the iPhone in Safari, so « Sur l'écran d'accueil » from any page keeps its
+	 * launch screen and other phones download nothing.
+	 */
+	private static function splash_in_head(): bool {
+		return (bool) apply_filters( 'delicat_builder_v9_pwa_splash_in_head', is_front_page() );
+	}
+
+	/**
+	 * V10: what the engine needs to add the matching launch-screen link on an iPhone: the image
+	 * endpoint prefix and the supported portrait sizes as "width x height x ratio" (CSS pixels).
+	 *
+	 * @return array<string,string> Empty when launch screens cannot be built here.
+	 */
+	private static function splash_config(): array {
+		if ( ! self::splash_supported() ) { return array(); }
+		$sizes = array();
+		foreach ( self::SPLASH_DEVICES as $d ) {
+			$sizes[] = (int) $d[0] . 'x' . (int) $d[1] . 'x' . (int) $d[2];
+		}
+		return array( 'u' => esc_url_raw( home_url( '/delicat-v9-splash-' ) ), 'd' => implode( ' ', $sizes ) );
+	}
+
 	/** The <link rel="apple-touch-startup-image"> set, built files served directly. */
 	private static function splash_links(): string {
 		if ( ! self::splash_supported() ) { return ''; }
@@ -281,6 +305,31 @@ final class Delicat_Builder_V9_PWA {
 		exit;
 	}
 
+	/**
+	 * V10: what the installed app keeps from install: the engine module and its imports, the chrome
+	 * and polish sheets every page uses, and the product route, the screen opened most from all the
+	 * others. The home, shop and page route sheets were downloaded at install even for a shopper who
+	 * never opened those screens (about 27 KB compressed on a budget phone, after every release); they
+	 * now load the first time they are used, from the browser cache or the network, like any route.
+	 *
+	 * @param array<int,string> $files Plugin-relative files from Engine::precache_files().
+	 * @return array<int,string>
+	 */
+	private static function shell_files( array $files ): array {
+		return array_values(
+			array_filter(
+				$files,
+				static function ( $rel ) {
+					$rel = (string) $rel;
+					if ( 0 !== strpos( $rel, 'assets/dist/' ) || '.css' !== substr( $rel, -4 ) ) {
+						return true;
+					}
+					return (bool) preg_match( '#^assets/dist/(?:chrome|polish|polish-storefront|product)\.[0-9a-f]{12}\.css$#', $rel );
+				}
+			)
+		);
+	}
+
 	private static function service_worker_response(): void {
 		$s = self::settings();
 		$scope = wp_parse_url( home_url( '/' ), PHP_URL_PATH );
@@ -299,34 +348,18 @@ final class Delicat_Builder_V9_PWA {
 			do_action( 'litespeed_control_set_ttl', 300 );
 		}
 		header( 'X-Content-Type-Options: nosniff' );
-		$cache_name = 'delicat-v9-static-' . preg_replace( '/[^A-Za-z0-9_.-]/', '-', DELICAT_BUILDER_V9_VERSION );
-		/* 9.7.8 (FE-06): the app shell has a cache of its own that is never trimmed. It shared the 64-entry
-		 * runtime cache with product pictures, where the oldest entries (the shell) went first. */
-		$shell_cache = 'delicat-v9-shell-' . preg_replace( '/[^A-Za-z0-9_.-]/', '-', DELICAT_BUILDER_V9_VERSION );
+		/* V10: cache names no longer carry the plugin version. A release used to rename both caches,
+		 * so every installed app downloaded its whole shell again (and lost its runtime copies) even
+		 * though the built files are content-hashed and the unchanged ones keep their URL. The runtime
+		 * cache keeps one name; the shell cache is named after its file list (below), and a new list
+		 * reuses every copy the device already holds. */
+		$cache_name = 'delicat-v9-static';
 		$max = min( 120, max( 20, absint( $s['max_entries'] ?? 64 ) ) );
 		$cache_enabled = empty( $s['static_cache'] ) ? 'false' : 'true';
-		$doc_enabled   = empty( $s['document_cache'] ) ? 'false' : 'true';
-		/* RC71.2: Identity's public modal contains browser-bound auth state/nonces.
-		 * Static CSS/JS/image caching remains enabled, but HTML shell caching is
-		 * disabled while Identity is the authentication authority so login/logout
-		 * can never revive stale signed-in/signed-out markup. */
-		if ( class_exists( 'Delicat_Builder_V9_Identity_Bridge', false ) && Delicat_Builder_V9_Identity_Bridge::authority_enabled() ) {
-			$doc_enabled = 'false';
-		}
-		/* RC40: a fresh cached document is returned before the network is even
-		 * consulted, so an installed app could keep showing the open storefront
-		 * while maintenance is on. Documents go network-only until it is lifted. */
-		if ( class_exists( 'Delicat_Builder_V9_Maintenance', false ) && Delicat_Builder_V9_Maintenance::is_enabled() ) {
-			$doc_enabled = 'false';
-		}
-		/* 9.11.0 (audit L-9): the app view is an HttpOnly cookie the worker cannot see, so a
-		 * website copy of a page could be served inside the Play app. No document cache while
-		 * the App API's app-view module is present. */
-		if ( class_exists( 'Delicat_App_Browse', false ) ) {
-			$doc_enabled = 'false';
-		}
-		$doc_ttl       = min( 3600, max( 60, absint( $s['document_ttl'] ?? 600 ) ) );
-		$doc_cache     = 'delicat-v9-docs-' . preg_replace( '/[^A-Za-z0-9_.-]/', '-', DELICAT_BUILDER_V9_VERSION );
+		/* V10: the page (document) cache code is gone from the worker (dbv9Document, its in-flight map,
+		 * TTL, currency key and the dbv9-clear-docs message): since 9.12.1 every page comes from the
+		 * network (offline page kept), so none of it could run. The wallet, order-pay and order-received
+		 * routes join the private paths the worker never intercepts. */
 		/* RC36: the storefront shell is precached at install so repeat visits and the first offline open already have it. */
 		$precache = array();
 		$chrome_css = array( 'assets/css/theme-system.css', 'assets/dsb8-beta2-header.css', 'assets/css/drawer.css', 'assets/css/bottom-nav.css' );
@@ -336,7 +369,7 @@ final class Delicat_Builder_V9_PWA {
 		 * are never requested by a page, so precaching them would only cost data. */
 		$engine_precache = ( class_exists( 'Delicat_Builder_V9_Engine', false ) && is_callable( array( 'Delicat_Builder_V9_Engine', 'precache_files' ) ) ) ? (array) Delicat_Builder_V9_Engine::precache_files() : array();
 		if ( ! empty( $engine_precache ) ) {
-			$precache_files = $engine_precache;
+			$precache_files = self::shell_files( $engine_precache );
 		}
 		/*
 		 * pro.17: every one of these files has a content-addressed twin, and the
@@ -372,25 +405,27 @@ final class Delicat_Builder_V9_PWA {
 			$precache = array_merge( $precache, (array) Delicat_Builder_V9_Engine::precache_urls() );
 		}
 		$precache = (array) apply_filters( 'delicat_builder_v9_pwa_precache', array_values( array_unique( array_map( 'esc_url_raw', $precache ) ) ) );
+		/* 9.7.8 (FE-06): the app shell has a cache of its own that is never trimmed. It shared the 64-entry
+		 * runtime cache with product pictures, where the oldest entries (the shell) went first.
+		 * V10: named after the file list, so the worker script (and the cache) only change when the list does. */
+		$shell_cache = 'delicat-v9-shell-' . substr( md5( (string) wp_json_encode( array_values( $precache ) ) ), 0, 12 );
 		?>
 'use strict';
 const DBV9_CACHE=<?php echo wp_json_encode( $cache_name ); ?>;
 const DBV9_SHELL=<?php echo wp_json_encode( $shell_cache ); ?>;
-const DBV9_DOCS=<?php echo wp_json_encode( $doc_cache ); ?>;
 const DBV9_MAX=<?php echo (int) $max; ?>;
 const DBV9_STATIC_CACHE=<?php echo $cache_enabled; ?>;
-const DBV9_DOC_CACHE=<?php echo $doc_enabled; ?>;
-const DBV9_DOC_TTL=<?php echo (int) $doc_ttl; ?>*1000;
 const DBV9_PRECACHE=<?php echo wp_json_encode( $precache ); ?>;
 const DBV9_OFFLINE='<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Hors ligne</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f6f7fb;color:#15172a;text-align:center;padding:24px}h1{font-size:22px;margin:0 0 8px}p{color:#6b7285;margin:0 0 18px}a{display:inline-block;padding:12px 20px;border-radius:14px;background:#2563eb;color:#fff;text-decoration:none;font-weight:700}@media(prefers-color-scheme:dark){body{background:#0d1020;color:#e9ebf5}p{color:#a5abc0}}</style></head><body><div><h1>Vous êtes hors ligne</h1><p>Reconnectez-vous pour continuer vos achats.<br>Ou pa konekte : tcheke entènèt ou.</p><a href="">Réessayer</a></div></body></html>';
-const DBV9_PRIVATE=/(?:\/wp-admin(?:\/|$)|\/wp-login\.php(?:\/|$)|\/cart(?:\/|$)|\/panier(?:\/|$)|\/checkout(?:\/|$)|\/commande(?:\/|$)|\/my-account(?:\/|$)|\/mon-compte(?:\/|$)|\/my-wallet(?:\/|$)|\/wp-json(?:\/|$)|admin-ajax\.php)/i;
+const DBV9_PRIVATE=/(?:\/wp-admin(?:\/|$)|\/wp-login\.php(?:\/|$)|\/cart(?:\/|$)|\/panier(?:\/|$)|\/checkout(?:\/|$)|\/commande(?:\/|$)|\/my-account(?:\/|$)|\/mon-compte(?:\/|$)|\/my-wallet(?:\/|$)|\/woo-wallet(?:\/|$)|\/wallet(?:\/|$)|\/mon-portefeuille(?:\/|$)|\/portefeuille(?:\/|$)|\/order-pay(?:\/|$)|\/order-received(?:\/|$)|\/wp-json(?:\/|$)|admin-ajax\.php)/i;
 const DBV9_SENSITIVE_Q=/(?:^|&)(?:delicat_product|delicat_product_fragment|wc-ajax|add-to-cart|remove_item|undo_item|_wpnonce|nonce|action|dip_action|logout|customer-logout)=/i;
 async function dbv9Trim(){const c=await caches.open(DBV9_CACHE);const keys=await c.keys();if(keys.length>DBV9_MAX){await Promise.all(keys.slice(0,keys.length-DBV9_MAX).map(k=>c.delete(k)));}}
 /* 9.7.8 (FE-04): the shell is copied through the browser's normal HTTP cache. Every file in it has its content hash or ?ver
-   in the URL, so the copy the page already downloaded is the right one; forcing a reload downloaded all of it again. */
-self.addEventListener('install',e=>e.waitUntil((async()=>{try{if(DBV9_STATIC_CACHE&&DBV9_PRECACHE.length){const c=await caches.open(DBV9_SHELL);await Promise.all(DBV9_PRECACHE.map(u=>c.add(u).catch(()=>{})));}}catch(_){}await self.skipWaiting();})()));
+   in the URL, so the copy the page already downloaded is the right one; forcing a reload downloaded all of it again.
+   V10: a copy already in one of the site's caches is reused; only new files are downloaded. */
+async function dbv9Shell(c,u){try{if(await c.match(u))return;const hit=await caches.match(u);if(hit&&hit.ok){await c.put(u,hit);return;}await c.add(u);}catch(_){}}
+self.addEventListener('install',e=>e.waitUntil((async()=>{try{if(DBV9_STATIC_CACHE&&DBV9_PRECACHE.length){const c=await caches.open(DBV9_SHELL);await Promise.all(DBV9_PRECACHE.map(u=>dbv9Shell(c,u)));}}catch(_){}await self.skipWaiting();})()));
 self.addEventListener('activate',e=>e.waitUntil((async()=>{try{if(self.registration.navigationPreload)await self.registration.navigationPreload.enable();}catch(_){}const keys=await caches.keys();await Promise.all(keys.filter(k=>k.startsWith('delicat-v9-')&&k!==DBV9_CACHE&&k!==DBV9_SHELL).map(k=>caches.delete(k)));await self.clients.claim();})()));
-self.addEventListener('message',e=>{const d=e.data||{};if(d.type==='dbv9-clear-docs'){e.waitUntil(caches.delete(DBV9_DOCS));}});
 self.addEventListener('push',e=>{
   let d={};try{d=e.data?e.data.json():{};}catch(_){try{d={body:e.data?e.data.text():''};}catch(__){d={};}}
   const title=String(d.title||'Delicat Store').slice(0,120),body=String(d.body||'').slice(0,360);
@@ -403,56 +438,16 @@ self.addEventListener('notificationclick',e=>{
   e.waitUntil(self.clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{for(const c of list){try{if(new URL(c.url).origin===self.location.origin){c.navigate(target).catch(()=>{});return c.focus();}}catch(_){}}return self.clients.openWindow?self.clients.openWindow(target):undefined;}));
 });
 function dbv9Stamp(resp){const h=new Headers(resp.headers);h.set('x-dbv9-cached-at',String(Date.now()));return new Response(resp.body,{status:resp.status,statusText:resp.statusText,headers:h});}
-function dbv9Fresh(hit){const at=Number(hit&&hit.headers.get('x-dbv9-cached-at'))||0;return at&&(Date.now()-at)<DBV9_DOC_TTL;}
-/* RC60: one network fetch per document URL at a time. A touchstart warm-up
-   (shell-header fetch from shell-nav.js) and the tap's own navigation arrive
-   ~100-300 ms apart for the same URL; the navigation now joins the warm-up's
-   in-flight request instead of opening a second one, so the head start is
-   real on the very first visit, not only once the copy is cached. */
-const dbv9DocInflight=new Map();
-const DBV9_DOCS_MAX=40;
-async function dbv9TrimDocs(c){try{const keys=await c.keys();if(keys.length>DBV9_DOCS_MAX){await Promise.all(keys.slice(0,keys.length-DBV9_DOCS_MAX).map(k=>c.delete(k)));}}catch(_){}}
-function dbv9DocFetch(e,r,c,key,keyUrl){
-  let p=dbv9DocInflight.get(keyUrl);
-  if(p)return p;
-  p=(async()=>{
-    let resp=null;try{resp=(e.preloadResponse&&await e.preloadResponse)||await fetch(r);}catch(_){resp=null;}
-    if(resp&&resp.ok&&resp.type!=='opaque'&&(resp.headers.get('content-type')||'').includes('text/html')){
-      const cc=(resp.headers.get('cache-control')||'').toLowerCase();
-      if(!/(?:no-store|no-cache|private)/.test(cc)){c.put(key,dbv9Stamp(resp.clone())).then(()=>dbv9TrimDocs(c)).catch(()=>{});}
-    }
-    return resp;
-  })();
-  dbv9DocInflight.set(keyUrl,p);
-  p.then(()=>dbv9DocInflight.delete(keyUrl),()=>dbv9DocInflight.delete(keyUrl));
-  return p;
-}
 /* 9.7.8 (FE-05): a storefront page opened without a connection shows the store's own offline page (Réessayer)
    instead of the browser's error screen. Nothing is stored; private pages are never intercepted. */
 async function dbv9Network(e,r){try{return (e.preloadResponse&&await e.preloadResponse)||await fetch(r);}catch(_){return new Response(DBV9_OFFLINE,{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});}}
-async function dbv9Currency(){try{if(self.cookieStore&&self.cookieStore.get){const c=await self.cookieStore.get('dmc_currency');return c&&c.value?String(c.value).replace(/[^A-Z]/g,'').slice(0,3):'';}}catch(_){}return '';}
-async function dbv9Document(e,r,u){
-  const c=await caches.open(DBV9_DOCS);
-  /* 9.3: prices on a cached copy belong to one display currency; the copy is keyed by it. */
-  const cur=await dbv9Currency();
-  const keyUrl=u.origin+u.pathname+u.search+(cur?(u.search?'&':'?')+'__dbv9cur='+cur:'');
-  const key=new Request(keyUrl,{headers:{'Accept':'text/html'}});
-  const hit=await c.match(key);
-  if(hit&&dbv9Fresh(hit)){if(!dbv9DocInflight.has(keyUrl))e.waitUntil(dbv9DocFetch(e,r,c,key,keyUrl).catch(()=>{}));return hit;}
-  const fresh=await dbv9DocFetch(e,r,c,key,keyUrl);
-  /* Every consumer gets its own copy; the shared response is never read directly. */
-  if(fresh)return fresh.clone();
-  if(hit)return hit;
-  return new Response(DBV9_OFFLINE,{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}});
-}
 self.addEventListener('fetch',e=>{
   const r=e.request;if(r.method!=='GET')return;
   let u;try{u=new URL(r.url);}catch(_){return;}
   if(u.origin!==self.location.origin||DBV9_PRIVATE.test(u.pathname)||DBV9_SENSITIVE_Q.test(u.search.replace(/^\?/,'')))return;
-  const isDoc=r.mode==='navigate'||r.headers.get('X-Delicat-Shell')==='1';
-  /* 9.12.1: a page (navigation or the engine's page fetch) always comes from the network, never from a
-     cached copy, so a returning shopper never sees an older build after an update; offline page kept. */
-  if(isDoc){if(r.mode==='navigate')e.respondWith(dbv9Network(e,r));return;}
+  /* 9.12.1: a page always comes from the network, never from a cached copy, so a returning shopper never sees an
+     older build after an update; offline page kept. */
+  if(r.mode==='navigate'){e.respondWith(dbv9Network(e,r));return;}
   if(!DBV9_STATIC_CACHE)return;
   const d=r.destination||'';
   const isStatic=['style','script','image','font'].includes(d)||/\.(?:css|js|png|jpe?g|gif|webp|avif|svg|woff2?)(?:$|\?)/i.test(u.pathname);
@@ -502,7 +497,9 @@ self.addEventListener('fetch',e=>{
 		if ( $icon ) {
 			echo '<link rel="apple-touch-icon" sizes="180x180" href="' . esc_url( self::icon_url( 180 ) ?: $icon ) . '">' . "\n";
 		}
-		echo self::splash_links(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts.
+		if ( self::splash_in_head() ) {
+			echo self::splash_links(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- built from escaped parts.
+		}
 	}
 
 	public static function enqueue_runtime(): void {
@@ -523,6 +520,12 @@ self.addEventListener('fetch',e=>{
 		$scope = wp_parse_url( home_url( '/' ), PHP_URL_PATH );
 		$scope = is_string( $scope ) && '' !== $scope ? trailingslashit( $scope ) : '/';
 		$config = array( 'serviceWorker' => $sw, 'scope' => $scope, 'installUI' => empty( $s['install_ui'] ) ? 0 : 1 );
+		if ( ! self::splash_in_head() ) {
+			$splash = self::splash_config();
+			if ( $splash ) {
+				$config['splash'] = $splash;
+			}
+		}
 		wp_add_inline_script( 'delicat-builder-v9-pwa-runtime', 'window.DelicaPWARuntime=' . wp_json_encode( $config ) . ';', 'before' );
 	}
 

@@ -441,7 +441,7 @@ final class DIP_Visual_Builder_Pro {
         if ($done || !class_exists('DIP_Native_Auth')) return;
         $done = true;
         $ajax = wp_make_link_relative(admin_url('admin-ajax.php'));
-        wp_enqueue_script('dip-auth-panel', DIP_URL . 'assets/auth-panel.js', [], DIP_VERSION, true);
+        wp_enqueue_script('dip-auth-panel', DIP_Boot::asset_url('auth-panel.js'), [], DIP_VERSION, true);
         wp_localize_script('dip-auth-panel', 'DIPAuthPanel', [
             'ajaxUrl' => (is_string($ajax) && strpos($ajax, '/') === 0) ? $ajax : '/wp-admin/admin-ajax.php',
             'nonceAction' => DIP_Native_Auth::AJAX_NONCE_ACTION,

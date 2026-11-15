@@ -17,7 +17,8 @@ final class DIP_Performance {
         add_action(self::CRON_HOOK, [__CLASS__, 'scheduled_maintenance']);
         add_action('update_option_' . DIP_Plugin::OPTION, [__CLASS__, 'settings_changed'], 10, 2);
         add_action('upgrader_process_complete', [__CLASS__, 'purge_cache'], 20, 2);
-        if (!wp_next_scheduled(self::CRON_HOOK)) {
+        // V10: checked on wp-admin, WP-Cron and WP-CLI requests, not on every storefront view.
+        if (DIP_Boot::housekeeping_request() && !wp_next_scheduled(self::CRON_HOOK)) {
             wp_schedule_event(time() + 3 * HOUR_IN_SECONDS, 'daily', self::CRON_HOOK);
         }
     }

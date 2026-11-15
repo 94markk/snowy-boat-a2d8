@@ -51,7 +51,8 @@ final class DIP_Mobile_API {
         // 6.11.0: the App API's account events reach the quick sign-in keys too.
         add_action('delicat_app_revoke_all_external_sessions', [__CLASS__, 'on_app_revoke_all'], 10, 1);
         add_action('delicat_app_erase_customer_data', [__CLASS__, 'on_app_erase_customer_data'], 10, 1);
-        if (!wp_next_scheduled('dip_mobile_cleanup')) wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'dip_mobile_cleanup');
+        // V10: the schedule is kept by wp-admin, WP-Cron and WP-CLI requests (not on every app call).
+        if (DIP_Boot::housekeeping_request() && !wp_next_scheduled('dip_mobile_cleanup')) wp_schedule_event(time() + HOUR_IN_SECONDS, 'daily', 'dip_mobile_cleanup');
     }
 
     public static function install() {
@@ -165,8 +166,11 @@ final class DIP_Mobile_API {
     private static function scalar($value) {
         return is_scalar($value) ? (string) $value : '';
     }
-    /** @internal 6.11.0: also read by DIP_Mobile_Passkeys. */
-    public static function settings() { return is_callable(self::$settings_cb) ? (array) call_user_func(self::$settings_cb) : []; }
+    /** @internal 6.11.0: also read by DIP_Mobile_Passkeys. V10: also before init() (the class can load on its own, see DIP_Boot::mobile_layer()). */
+    public static function settings() {
+        $cb = self::$settings_cb ?: ['DIP_Plugin', 'runtime_settings'];
+        return is_callable($cb) ? (array) call_user_func($cb) : [];
+    }
     /** @internal 6.11.0: also read by DIP_Mobile_Passkeys. */
     public static function enabled() { return (self::settings()['mobile_api_enabled'] ?? 'no') === 'yes'; }
     private static function table() { global $wpdb; return $wpdb->prefix . self::TABLE_SUFFIX; }

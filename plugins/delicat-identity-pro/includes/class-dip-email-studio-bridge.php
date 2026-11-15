@@ -35,9 +35,48 @@ final class DIP_Email_Studio_Bridge {
             add_action('admin_notices', [__CLASS__, 'standalone_notice']);
             return;
         }
-        if (self::load() && self::needs_admin_ui()) {
-            self::load_admin_ui();
+        if (self::needs_admin_ui()) {
+            if (self::load()) self::load_admin_ui();
+            return;
         }
+        // wp-admin screens (settings saves, WooCommerce e-mail settings) keep
+        // the runtime from the start, as before.
+        if ((is_admin() && !wp_doing_ajax()) || did_action('woocommerce_email')) {
+            self::load();
+            return;
+        }
+        // V10: storefront, AJAX, REST and cron requests compile the e-mail
+        // runtime (about 108 KB) only when an e-mail is built: WooCommerce's
+        // mailer starts, an e-mail template is located or rendered, or
+        // WordPress builds a new-account notification. Each entry loads the
+        // runtime, whose own filters then run in the same call (a callback
+        // added to a running hook at a later priority still runs).
+        add_action('woocommerce_email', [__CLASS__, 'load_runtime'], 0);
+        add_filter('woocommerce_locate_template', [__CLASS__, 'load_for_template'], 1, 2);
+        add_filter('wc_get_template', [__CLASS__, 'load_for_template'], 1, 2);
+        add_filter('wp_new_user_notification_email', [__CLASS__, 'load_for_notification'], 1);
+        add_filter('wp_new_user_notification_email_admin', [__CLASS__, 'load_for_notification'], 1);
+    }
+
+    /** woocommerce_email: the WooCommerce mailer is starting (subject/heading filters, templates). */
+    public static function load_runtime() {
+        self::load();
+    }
+
+    /**
+     * woocommerce_locate_template / wc_get_template: an e-mail template is
+     * about to be located or included (wc_get_template() may take its path
+     * from WooCommerce's template cache without locating it).
+     */
+    public static function load_for_template($template, $template_name = '') {
+        if (!self::$loaded && is_string($template_name) && strpos($template_name, 'emails/') === 0) self::load();
+        return $template;
+    }
+
+    /** wp_new_user_notification_email(_admin): the runtime's own filter (priority 99) designs it. */
+    public static function load_for_notification($notification) {
+        self::load();
+        return $notification;
     }
 
     public static function maybe_complete_migration() {
