@@ -13,7 +13,7 @@ final class Delicat_Builder_V9_Admin {
 
 	public static function menu(): void {
 		add_menu_page(
-			__( 'Delicat Builder V9', 'delicat-builder-v9' ),
+			__( 'Delicat Builder V10 Pro', 'delicat-builder-v9' ),
 			__( 'Delicat Builder', 'delicat-builder-v9' ),
 			'manage_options',
 			'delicat-builder-v9',
@@ -313,7 +313,7 @@ final class Delicat_Builder_V9_Admin {
 			<div class="delicat-admin__hero">
 				<div>
 					<span class="delicat-admin__eyebrow">RC 45 · PREMIUM RUNTIME</span>
-					<h1>Delicat Builder V9</h1>
+					<h1>Delicat Builder V10 Pro</h1>
 					<p>Release-candidate application runtime for WordPress + WooCommerce. RC 36 preserves official Woo Blocks compatibility and adds WordPress Site Health checks, internal self-tests, manual staging evidence and Stable 9.0.0 eligibility gates while preserving Identity Pro and WooCommerce authority.</p>
 				</div>
 				<div class="delicat-admin__version"><?php echo esc_html( DELICAT_BUILDER_V9_VERSION ); ?></div>

@@ -62,8 +62,8 @@ final class Delicat_Builder_V9_Turbo_Diagnostics {
 		$cache_state = class_exists( 'Delicat_Builder_V9_Server_Engine', false ) ? Delicat_Builder_V9_Server_Engine::cache_state() : 'N/A';
 		$elapsed = isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ? max( 0, microtime( true ) - (float) $_SERVER['REQUEST_TIME_FLOAT'] ) : 0;
 		?>
-		<aside id="dbv9-turbo-diagnostics" style="position:fixed;z-index:2147483000;right:12px;bottom:12px;max-width:min(430px,calc(100vw - 24px));padding:14px 16px;border:1px solid rgba(255,255,255,.18);border-radius:16px;background:rgba(9,13,32,.96);box-shadow:0 16px 45px rgba(0,0,0,.28);color:#fff;font:500 12px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" aria-label="Delicat V9 Turbo diagnostics">
-			<strong style="display:block;font-size:14px;margin-bottom:7px">V9 Turbo Diagnostics · RC51.34</strong>
+		<aside id="dbv9-turbo-diagnostics" style="position:fixed;z-index:2147483000;right:12px;bottom:12px;max-width:min(430px,calc(100vw - 24px));padding:14px 16px;border:1px solid rgba(255,255,255,.18);border-radius:16px;background:rgba(9,13,32,.96);box-shadow:0 16px 45px rgba(0,0,0,.28);color:#fff;font:500 12px/1.5 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif" aria-label="Delicat Builder V10 Pro diagnostics">
+			<strong style="display:block;font-size:14px;margin-bottom:7px">Builder V10 Pro diagnostics</strong>
 			<div>SSR body cache: <b><?php echo esc_html( $cache_state ); ?></b> · Request: <b><?php echo esc_html( number_format_i18n( $elapsed * 1000, 1 ) ); ?> ms</b></div>
 			<div>DB queries: <b><?php echo esc_html( (string) get_num_queries() ); ?></b> · Peak memory: <b><?php echo esc_html( size_format( memory_get_peak_usage( true ) ) ); ?></b></div>
 			<div>V9 JS: <b><?php echo esc_html( size_format( $js_bytes ) ); ?></b> (<?php echo esc_html( (string) count( $script_handles ) ); ?>) · CSS: <b><?php echo esc_html( size_format( $css_bytes ) ); ?></b> (<?php echo esc_html( (string) count( $style_handles ) ); ?>)</div>

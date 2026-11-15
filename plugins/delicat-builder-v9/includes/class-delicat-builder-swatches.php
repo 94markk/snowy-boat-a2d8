@@ -724,7 +724,7 @@ final class Delicat_Builder_V9_Swatches {
                     <div class="ddsw-studio-brand">
                         <span class="ddsw-studio-logo" aria-hidden="true">D</span>
                         <div>
-                            <div class="ddsw-studio-kicker">Delicat Builder V9</div>
+                            <div class="ddsw-studio-kicker">Delicat Builder V10 Pro</div>
                             <h1>Swatch Studio <span>Premium</span></h1>
                             <p>Variations WooCommerce natives, presets par produit et aperçu instantané.</p>
                         </div>

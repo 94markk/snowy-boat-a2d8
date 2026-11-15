@@ -104,7 +104,7 @@ final class Delicat_Builder_V9_Pages {
 	public static function meta_box(): void {
 		add_meta_box(
 			'delicat-builder-v9-page',
-			__( 'Delicat Builder V9', 'delicat-builder-v9' ),
+			__( 'Delicat Builder V10 Pro', 'delicat-builder-v9' ),
 			array( __CLASS__, 'render_meta_box' ),
 			'page',
 			'side',

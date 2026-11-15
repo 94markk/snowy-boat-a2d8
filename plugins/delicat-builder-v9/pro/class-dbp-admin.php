@@ -119,7 +119,7 @@ final class DBP_Admin {
 		$saved    = isset( $_GET['dbp'] ) ? sanitize_key( wp_unslash( (string) $_GET['dbp'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- display flag only.
 
 		echo '<div class="wrap">';
-		echo '<h1>' . esc_html__( 'Delicat Builder V9 Pro', 'delicat-builder-v9' ) . '</h1>';
+		echo '<h1>' . esc_html__( 'Delicat Builder V10 Pro', 'delicat-builder-v9' ) . '</h1>';
 		echo '<p>' . esc_html__( 'Version', 'delicat-builder-v9' ) . ': <code>' . esc_html( DELICAT_BUILDER_V9_VERSION ) . '</code> &middot; '
 			. esc_html__( 'Cache generation', 'delicat-builder-v9' ) . ': <code>' . esc_html( DBP_Kernel::generation() ) . '</code></p>';
 

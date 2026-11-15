@@ -200,7 +200,7 @@ final class Delicat_Builder_V9_Security_Admin {
 						<tr><td>Admin Google Secure Mode</td><td>Delicat Identity Pro</td></tr>
 						<tr><td>Brute-force / lockouts</td><td>Delicat Identity Pro</td></tr>
 						<tr><td>Authentication security audit</td><td>Delicat Identity Pro</td></tr>
-						<tr><td>Builder layout / compiler / performance</td><td>Delicat Builder V9</td></tr>
+						<tr><td>Builder layout / compiler / performance</td><td>Delicat Builder V10 Pro</td></tr>
 						<tr><td>Products / cart / checkout / order validation</td><td>WooCommerce</td></tr>
 					</tbody>
 				</table>

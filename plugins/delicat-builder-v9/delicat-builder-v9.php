@@ -1,9 +1,9 @@
 <?php
 /**
- * Plugin Name: Delicat Builder V9 Pro — App-Speed Kernel
+ * Plugin Name: Delicat Builder V10 Pro — App-Speed Kernel
  * Plugin URI: https://delicastoreha.com/
- * Description: Application-speed storefront kernel for WordPress + WooCommerce. Every V9 feature, rebuilt on one navigation engine, one asset pipeline and one session store.
- * Version: 9.14.4
+ * Description: Application-speed storefront kernel for WordPress + WooCommerce. V10 Pro: one navigation engine, one asset pipeline, one session store, and only the code each request needs.
+ * Version: 10.0.0-beta.1
 
  * Requires at least: 6.4
  * Requires PHP: 8.3
@@ -53,7 +53,7 @@ if ( PHP_VERSION_ID < 80300 ) {
 				if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'activate_plugins' ) ) {
 					return;
 				}
-				echo '<div class="notice notice-error"><p><strong>Delicat Builder V9 Pro</strong> '
+				echo '<div class="notice notice-error"><p><strong>Delicat Builder V10 Pro</strong> '
 					. esc_html( sprintf( 'est en pause : cette version exige PHP 8.3 ou plus récent, et ce serveur utilise PHP %s. La boutique continue sans le builder jusqu’à la mise à jour de PHP ; rien n’est perdu.', PHP_VERSION ) )
 					. '</p></div>';
 			}
@@ -247,7 +247,7 @@ add_action(
 		$why     = $tripped > 0
 			? sprintf( 'Sa protection automatique l’a désactivé le %s après une erreur répétée.', wp_date( 'j/m/Y H:i', $tripped ) )
 			: 'Il a été désactivé.';
-		echo '<div class="notice notice-error"><p><strong>Delicat Builder V9 ne fonctionne pas.</strong> ' . esc_html( $why )
+		echo '<div class="notice notice-error"><p><strong>Delicat Builder V10 Pro ne fonctionne pas.</strong> ' . esc_html( $why )
 			. ' La boutique s’affiche avec le thème seul. <a href="' . esc_url( admin_url( 'plugins.php' ) ) . '">Ouvrir les extensions</a> et réactiver Delicat Builder V9 (réinstallez le zip si l’erreur revient).</p></div>';
 	}
 );
@@ -308,7 +308,7 @@ function delicat_builder_v9_incomplete_copy_notice(): void {
 		return;
 	}
 	$files = array_slice( array_map( 'strval', (array) $state['missing'] ), 0, 3 );
-	echo '<div class="notice notice-error"><p><strong>Delicat Builder V9</strong> : '
+	echo '<div class="notice notice-error"><p><strong>Delicat Builder V10 Pro</strong> : '
 		. esc_html(
 			sprintf(
 				/* translators: 1: date and time, 2: list of files */
@@ -621,7 +621,7 @@ register_shutdown_function(
 	}
 );
 
-define( 'DELICAT_BUILDER_V9_VERSION', '9.14.4' );
+define( 'DELICAT_BUILDER_V9_VERSION', '10.0.0-beta.1' );
 
 /* RC32: no theme/plugin file editing from wp-admin — a compromised admin session must not become code execution. */
 if ( ! defined( 'DISALLOW_FILE_EDIT' ) ) {
@@ -2490,7 +2490,7 @@ register_activation_hook(
 	static function () {
 		if ( PHP_VERSION_ID < 80300 ) {
 			deactivate_plugins( plugin_basename( __FILE__ ) );
-			wp_die( esc_html__( 'Delicat Builder V9 requires PHP 8.3 or newer.', 'delicat-builder-v9' ) );
+			wp_die( esc_html__( 'Delicat Builder V10 Pro requires PHP 8.3 or newer.', 'delicat-builder-v9' ) );
 		}
 
 		/* RC17: activation is deliberately boring. Seed only primitive options;

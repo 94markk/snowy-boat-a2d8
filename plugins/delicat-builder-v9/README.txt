@@ -1,3 +1,48 @@
+10.0.0-beta.1 — Delicat Builder V10 Pro, bêta 1 (15 novembre 2026)
+Même dossier, mêmes réglages, mêmes pages : V10 Pro s'installe par-dessus la 9.14.4 (« Remplacer la version
+actuelle »). Le moteur de navigation est gardé et allégé : chaque requête ne charge plus que le code dont elle a
+besoin, et le téléphone fait moins d'allers-retours avec le serveur.
+(1) iPhone : la cause des pages rétrécies est corrigée à la source. Le texte caché pour les lecteurs d'écran des
+prix (« Price range… ») était placé contre la fenêtre, hors de l'écran ; il est maintenant épinglé dans son cadre.
+La protection de la 9.14.4 reste en place.
+(2) Moins d'attente côté serveur :
+- Visiteur qui revient (application installée / service worker) : plus de requête « session » non mise en cache à
+  chaque page (1 → 0 par page vue). La vérification de la session invitée se fait une fois par onglet.
+- Client connecté sur une fiche produit à variantes de région : le site ne précharge plus 2 autres fiches en
+  arrière-plan (chacune coûtait environ 1 s de calcul et 53 requêtes au serveur).
+- Panier, paiement, coupons (wc-ajax) et tâches planifiées : environ moitié moins de code chargé (paiement 55 → 24
+  fichiers, panier 54 → 23, cron 53 → 21) ; API REST 32 → 24 fichiers.
+- Pages non mises en cache : une seule passe de correction HTML au lieu de deux (7,3 → 2,1 ms).
+- Réglages lus en une seule fois selon le type de requête (13 à 29 au lieu de 68 pour les requêtes hors pages).
+- Index SEO reconstruit en arrière-plan, une seule fois, sous verrou : plus de reconstruction pendant la visite
+  d'un client.
+- Mise à jour du plugin : plus de vidage complet du cache Redis (2 → 0), une seule purge LiteSpeed (2 → 1).
+- Statistiques de vitesse : 3 écritures en base pour 50 mesures au lieu de 51.
+(3) Moins de données envoyées au téléphone :
+- Application installée : 3 fichiers de moins à précharger (−27 Ko compressé) ; une nouvelle version ne
+  re-télécharge plus tous les fichiers de l'application.
+- En-tête des pages : −1 Ko compressé par page vue (le style de la barre de progression passe dans la feuille
+  commune mise en cache) ; −3,3 Ko de liens inutiles sur les pages autres que l'accueil.
+- Styles jamais utilisés retirés (ancien bandeau de confiance du pied de page, ancien gabarit des avis, titre
+  superposé des cartes produit).
+- Invité : plus de préchargement de « Mon compte » et « Mon portefeuille » (la redirection après connexion
+  fonctionne de nouveau). En 3G, le client connecté précharge sans calculer la page en arrière-plan.
+(4) Sécurité :
+- Limites anti-abus par réseau IPv6 (/64) et plafond par compte après 30 échecs de connexion en une heure.
+- Abonnement aux notifications détaché du compte à la déconnexion (téléphone partagé).
+- Liens de confirmation de commande au format ancien acceptés seulement pour une commande de moins de 2 jours.
+- Mode sans échec : déclenché après 2 visiteurs différents (une seule erreur isolée ne coupe plus le site).
+- Fichiers de version (README.txt, integrity-manifest.json) refusés par le serveur web (.htaccess).
+- Désinstallation : suppression des secrets seulement avec define( 'DELICAT_BUILDER_V9_PURGE_ON_UNINSTALL', true ).
+- ?dbp_state=1 (ancien état Pro) répond 410 ; l'application utilise wc-ajax=delicat_session.
+(5) Nettoyage : 8 fichiers inutilisés retirés (457 Ko : feuilles Design Studio jamais choisies, ancien en-tête
+Shell, shell-nav, navigation et état Pro), anciennes couches de navigation, fonctions sans appel, notes de version
+antérieures à 9.14.0. Le code court [delicat_app_header] est retiré (l'en-tête natif est placé automatiquement).
+Plugin : 318 → 309 fichiers, 7,7 → 7,2 Mo.
+(6) Après installation : LiteSpeed › Purger tout, puis le CDN (Cloudflare). Vérifier une fois : un achat complet
+(panier, coupon, paiement), le badge du panier, une notification de statut de commande, la page Compte sur iPhone.
+Bêta : en cas de souci, réinstaller la 9.14.4 (aucune donnée n'est modifiée).
+
 9.14.4 — Page encore trop large sur iPhone : correctif renforcé + diagnostic précis (15 novembre 2026)
 (1) Le diagnostic de la 9.14.3 a montré la vraie cause : la page mesurait 1402 px sur un écran de 440 px, alors
 qu’aucun élément visible ne dépassait. Ce qui dépasse est donc dessiné « contre la fenêtre » (un élément positionné

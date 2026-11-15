@@ -221,7 +221,7 @@ final class Delicat_Builder_V9_Identity_Bridge {
 		$extensions = is_array( $extensions ) ? $extensions : array();
 
 		$extensions['delicat-builder-v9'] = array(
-			'name'            => 'Delicat Builder V9',
+			'name'            => 'Delicat Builder V10 Pro',
 			'version'         => DELICAT_BUILDER_V9_VERSION,
 			'requires_api'    => self::SDK_API,
 			'health_callback' => array( __CLASS__, 'extension_health' ),
