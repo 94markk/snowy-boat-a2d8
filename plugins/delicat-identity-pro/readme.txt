@@ -27,8 +27,12 @@ Authentification et gestion sécurisée des comptes WordPress / WooCommerce.
   cron et WP-CLI. −7 fichiers et −240 Ko de PHP par page ; démarrage à froid 34,8 → 29,1 ms. Les tâches
   planifiées ne sont plus vérifiées à chaque page (administration, cron et WP-CLI seulement).
 (3) Équipe
-* Scripts publics minifiés (.min.js). Les sources lisibles restent et SCRIPT_DEBUG les recharge. Après
-  modification d’un script : sh tools/build-assets.sh.
+* Scripts publics minifiés (.min.js) en ES5, comme leurs sources : ils fonctionnent aussi sur les anciens
+  téléphones Android (WebView antérieure à Chrome 66) et dans l’application. Les sources lisibles restent et
+  SCRIPT_DEBUG les recharge. Après modification d’un script : sh tools/build-assets.sh (--check vérifie que les
+  .min.js sont à jour et en ES5).
+* Après une connexion par Google, wp-login.php ou un formulaire WooCommerce, les autres onglets ouverts sont
+  prévenus (rechargés une fois, sans boucle) et le moteur Builder revérifie la session.
 * Filtre dip_lazy_guest_bundle (vrai par défaut) pour revenir à l’ancien chargement des visiteurs.
 (4) Installation et vérifications
 * Remplacer la version actuelle avec delicat-identity-pro-6.19.0.zip, puis LiteSpeed › Purger tout et

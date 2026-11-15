@@ -8,8 +8,9 @@
   }
   /**
    * Sign-in/out version as this tab sees it: the cross-tab marker written by
-   * the modal, passkeys and logout, plus the last dip_auth_sync landing of
-   * this tab (Google, wp-login.php, WooCommerce forms). null: no storage.
+   * the modal, passkeys and logout (and by a dip_auth_sync landing that they
+   * did not announce: Google, wp-login.php, WooCommerce forms), plus the last
+   * dip_auth_sync landing of this tab. null: no storage.
    */
   function sessionVersion() {
     try { return String(localStorage.getItem('dip-session-change')) + '|' + String(sessionStorage.getItem('dip-auth-sync-seen')); } catch (e) { return null; }
@@ -47,10 +48,34 @@
       .catch(function (error) { window.alert(error.message || 'Déconnexion impossible. Réessayez.'); })
       .finally(function () { busy = false; link.removeAttribute('aria-busy'); });
   }, true);
+  // The page this tab just left already told the other tabs (it wrote
+  // dip-session-change before leaving: modal, passkeys, logout). Kept for the
+  // next page only.
+  var announced = null;
+  try { announced = sessionStorage.getItem('dip-session-announced'); sessionStorage.removeItem('dip-session-announced'); } catch (e) {}
+  window.addEventListener('pagehide', function () {
+    if (!window.__DIP_AUTH_NAVIGATING__) return;
+    try { sessionStorage.setItem('dip-session-announced', String(localStorage.getItem('dip-session-change'))); } catch (e) {}
+  });
   var marker = new URLSearchParams(location.search).get('dip_auth_sync');
   if (marker !== null) {
     clearDocuments();
-    try { sessionStorage.setItem('dip-auth-sync-seen', marker); } catch (e) {}
+    // A sign-in that reached this landing through a server redirect (Google,
+    // wp-login.php, WooCommerce forms) is announced here, as the modal does:
+    // other tabs reload (listener below) and the Builder engine re-checks its
+    // guest copy. Only on this tab's first landing with this marker, so a
+    // reload, or a landing tab reloaded by another tab, writes nothing (no
+    // reload ping-pong); not when the previous page already announced it, and
+    // not on a back/forward visit to an older landing (no new sign-in).
+    var announce = false, traversal = false;
+    try { announce = sessionStorage.getItem('dip-auth-sync-seen') !== marker; sessionStorage.setItem('dip-auth-sync-seen', marker); } catch (e) { announce = false; }
+    try {
+      var nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+      traversal = nav ? nav.type === 'back_forward' : !!(performance.navigation && performance.navigation.type === 2);
+    } catch (e) {}
+    if (announce && !traversal) {
+      try { if (announced !== String(localStorage.getItem('dip-session-change'))) localStorage.setItem('dip-session-change', String(Date.now())); } catch (e) {}
+    }
   }
   var loadedVersion = sessionVersion();
   // Back/forward cache: an anonymous page is reloaded only when it was
