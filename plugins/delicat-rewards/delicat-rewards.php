@@ -14,7 +14,8 @@
  *   delicat-rewards.php   configuration, purchase counting, signed ledger, claims, leaderboard, weekly award
  *   wallet-rewards.php    HTG credit through TeraWallet (one durable marker per reward, never a second credit)
  *   reward-delivery.php   a customer's reward orders and legacy PINs (owner-only, no-store)
- *   competition-admin.php weekly periods, closing and history; referral.php / referral-admin.php
+ *   competition.php       weekly periods and past winners; competition-admin.php closing and history (wp-admin)
+ *   referral.php / referral-admin.php
  *   bonus-page.php        [delicat_bonus_free_fire] page and its single boot request
  *   app-contract.php      delicat_rewards_app_*() for the Delicat App API
  *   rewards-admin.php     dashboard screens and forms: loaded in wp-admin only (4.1.0)
@@ -59,7 +60,9 @@ require_once __DIR__ . '/wallet-rewards.php';
 require_once __DIR__ . '/reward-delivery.php';
 require_once __DIR__ . '/rewards-view.php';
 require_once __DIR__ . '/supplier-history.php';
-require_once __DIR__ . '/rewards-transport.php';
+if ( wp_doing_ajax() ) {
+	require_once __DIR__ . '/rewards-transport.php'; // V10: its only entry point is admin-ajax.php
+}
 
 function delicat_cap() {
 	return apply_filters( 'delicat_admin_cap', 'manage_woocommerce' );
@@ -2762,9 +2765,10 @@ add_action( 'rest_api_init', function () {
 if ( ( is_admin() && ! wp_doing_ajax() ) || ( defined( 'WP_CLI' ) && WP_CLI ) ) {
 	require_once __DIR__ . '/rewards-admin.php';
 	require_once __DIR__ . '/referral-admin.php';
+	require_once __DIR__ . '/competition-admin.php'; // V10: period closing form, history, admin-post action
 }
 
-require_once __DIR__ . '/competition-admin.php';
+require_once __DIR__ . '/competition.php'; // V10: periods and past winners (pages, REST, app contract)
 require_once __DIR__ . '/app-contract.php';
 require_once __DIR__ . '/referral.php';
 require_once __DIR__ . '/bonus-page.php';

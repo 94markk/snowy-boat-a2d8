@@ -625,10 +625,13 @@ class Delicat_Send_Money {
 						<button type="button" class="dsm-x" data-dsm-close aria-label="Fermer">&times;</button>
 					</div>
 					<p class="dsm-hint dsm-center">Faites scanner ce code pour recevoir de l’argent.</p>
+					<?php $qr_src = Delicat_QR::data_uri( $qr_data ); // V10: drawn here, no third-party request ?>
+					<?php if ( '' !== $qr_src ) : ?>
 					<div class="dsm-qr">
-						<img loading="lazy" alt="QR code"
-						     src="https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=2&data=<?php echo rawurlencode( $qr_data ); ?>">
+						<img decoding="async" alt="QR code" width="260" height="260"
+						     src="<?php echo esc_attr( $qr_src ); ?>">
 					</div>
+					<?php endif; ?>
 					<div class="dsm-code-box">
 						<span>Mon code</span>
 						<code id="dsm-my-code"><?php echo esc_html( $my_code ); ?></code>

@@ -107,39 +107,140 @@ if ( ! defined( 'DELICAT_URL' ) ) {
     define( 'DELICAT_URL', plugin_dir_url( __FILE__ ) );
 }
 
-// Load all classes
-foreach ( [
-    'class-database',
-    'class-files',
-    'class-terawallet',
-    // 6.6.4: class-moncash (MonCash Business API check) and class-natcash (Natcash
-    // API placeholder) were removed: nothing called them (RCH-10).
-    'class-email',
-    'class-webhook',
-    'class-ajax-handler',
-    'class-shortcode',
-    'class-send-money',
-    'class-admin',
-    'class-clients',
-    'class-guard',
-    'class-watchdog',
-    'class-push',
-    'class-alerts',
-    'class-rest',
-    'class-app-api',
-    'class-natcash-auto',
-    'class-sms-store', // 6.6.5: SMS kept 24 h (minimum) then deleted, body encrypted
-    'class-sms-guard',
-    'class-license',
-    'class-client-license',
-    'class-client-ux',
-    'class-workflow',
-    'class-growth',
-    'class-api-sync',
-    'class-code-lookup',
-    'class-maintenance',
-] as $file ) {
-    require_once DELICAT_PATH . "includes/{$file}.php";
+/*
+ * V10: classes load on demand. Every file in includes/ holds one class and nothing else, so this
+ * class map replaces the 27 require_once calls of 6.7.0: a static helper (Delicat_Database,
+ * Delicat_Push, Delicat_Natcash_Auto::norm_code() ...) still works from anywhere, but a storefront
+ * page no longer compiles the console, AJAX, REST and cron code (578 KB of PHP down to about 76 KB).
+ * 6.6.4: class-moncash (MonCash Business API check) and class-natcash (Natcash API placeholder)
+ * were removed: nothing called them (RCH-10).
+ */
+spl_autoload_register( static function ( $class ) {
+    static $map = [
+        'delicat_database'          => 'class-database',
+        'delicat_files'             => 'class-files',
+        'delicat_terawallet'        => 'class-terawallet',
+        'delicat_email'             => 'class-email',
+        'delicat_webhook'           => 'class-webhook',
+        'delicat_ajax_handler'      => 'class-ajax-handler',
+        'delicat_shortcode'         => 'class-shortcode',
+        'delicat_send_money'        => 'class-send-money',
+        'delicat_admin'             => 'class-admin',
+        'delicat_clients'           => 'class-clients',
+        'delicat_guard'             => 'class-guard',
+        'delicat_watchdog'          => 'class-watchdog',
+        'delicat_push'              => 'class-push',
+        'delicat_alerts'            => 'class-alerts',
+        'delicat_rest'              => 'class-rest',
+        'delicat_app_api'           => 'class-app-api',
+        'delicat_natcash_auto'      => 'class-natcash-auto',
+        'delicat_sms_store'         => 'class-sms-store', // 6.6.5: SMS kept 24 h (minimum) then deleted, body encrypted
+        'delicat_sms_guard'         => 'class-sms-guard',
+        'delicat_license'           => 'class-license',
+        'delicat_client_license'    => 'class-client-license',
+        'delicat_client_ux'         => 'class-client-ux',
+        'delicat_workflow'          => 'class-workflow',
+        'delicat_growth'            => 'class-growth',
+        'delicat_recharge_api_sync' => 'class-api-sync',
+        'delicat_code_lookup'       => 'class-code-lookup',
+        'delicat_maintenance'       => 'class-maintenance',
+        'delicat_qr'                => 'class-qr', // V10: QR codes drawn locally (no api.qrserver.com)
+    ];
+    $key = strtolower( (string) $class );
+    if ( isset( $map[ $key ] ) ) {
+        require_once DELICAT_PATH . 'includes/' . $map[ $key ] . '.php';
+    }
+} );
+
+/**
+ * V10: every component, in the order 6.7.0 built them on each request.
+ */
+function delicat_recharge_parts(): array {
+    return [ 'files', 'ajax_handler', 'shortcode', 'admin', 'clients', 'send_money', 'guard', 'watchdog', 'alerts', 'rest', 'app_api', 'natcash_auto', 'sms_guard', 'license', 'client_ux', 'workflow', 'growth', 'api_sync', 'code_lookup', 'maintenance', 'sms_store' ];
+}
+
+/**
+ * V10: builds components (their hooks, shortcodes and REST routes) at most once per request.
+ */
+function delicat_recharge_boot( array $parts ): void {
+    static $built = [];
+    foreach ( $parts as $part ) {
+        if ( isset( $built[ $part ] ) ) {
+            continue;
+        }
+        $built[ $part ] = true;
+        switch ( $part ) {
+            case 'files':        new Delicat_Files(); break;
+            case 'ajax_handler': new Delicat_Ajax_Handler(); break;
+            case 'shortcode':    new Delicat_Shortcode(); break;
+            case 'admin':        new Delicat_Admin(); break;
+            case 'clients':
+                remove_filter( 'authenticate', 'delicat_recharge_login_ban', 30 ); // the real filter takes over
+                new Delicat_Clients();
+                break;
+            case 'send_money':   new Delicat_Send_Money(); break;
+            case 'guard':        new Delicat_Guard(); break;
+            case 'watchdog':     new Delicat_Watchdog(); break;
+            case 'alerts':       new Delicat_Alerts(); break;
+            case 'rest':         new Delicat_Rest(); break;
+            case 'app_api':      new Delicat_App_Api(); break;
+            case 'natcash_auto': new Delicat_Natcash_Auto(); break;
+            case 'sms_guard':
+                Delicat_SMS_Guard::init();
+                if ( did_action( 'init' ) ) {
+                    Delicat_SMS_Guard::maybe_migrate(); // built after init (REST): run its one-time switch now
+                }
+                break;
+            case 'license':      new Delicat_License(); break;
+            case 'client_ux':    new Delicat_Client_Ux(); break;
+            case 'workflow':     new Delicat_Workflow(); break;
+            case 'growth':       new Delicat_Growth(); break;
+            case 'api_sync':     Delicat_Recharge_Api_Sync::init(); break;
+            case 'code_lookup':  Delicat_Code_Lookup::init(); break; // 6.5.0: read-only TransCode search (admin)
+            case 'maintenance':  Delicat_Maintenance::init(); break; // 6.6.4: bonus-marker clean-up (daily)
+            case 'sms_store':    Delicat_SMS_Store::init(); break;   // 6.6.5: SMS retention (hourly purge) + its setting
+        }
+    }
+}
+
+/**
+ * V10: wp-admin (admin-ajax.php and admin-post.php included), wp-cron.php and WP-CLI build every
+ * component, exactly as 6.7.0 did on every request.
+ */
+function delicat_recharge_full_request(): bool {
+    return is_admin() || wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI );
+}
+
+/** V10: REST API parts, built when the REST server starts (their routes register at rest_api_init 10 as before). */
+function delicat_recharge_boot_rest(): void {
+    delicat_recharge_boot( [ 'guard', 'rest', 'app_api', 'natcash_auto', 'sms_guard', 'license' ] );
+}
+
+/**
+ * V10: approvals happen in admin-ajax.php and REST requests, where these listeners are already
+ * built. Should one ever happen on another storefront request, the listeners (priorities 5 and 20)
+ * are built first, so they still run in this same call.
+ */
+function delicat_recharge_boot_approval_listeners(): void {
+    delicat_recharge_boot( [ 'guard', 'natcash_auto' ] );
+}
+
+/** V10: with ALTERNATE_WP_CRON a storefront request can turn into the cron run: build everything first. */
+function delicat_recharge_boot_cron( $pre ) {
+    if ( wp_doing_cron() ) {
+        delicat_recharge_boot( delicat_recharge_parts() );
+    }
+    return $pre;
+}
+
+/** V10: the login ban on storefront requests (wp-login.php, My Account, XML-RPC): same filter, priority 30. */
+function delicat_recharge_login_ban( $user ) {
+    return ( new Delicat_Clients( false ) )->enforce_login_ban( $user );
+}
+
+/** V10: [delicat_envoyer_argent] on storefront requests; the class loads only when the shortcode renders. */
+function delicat_recharge_send_money_shortcode(): string {
+    return ( new Delicat_Send_Money() )->render();
 }
 
 register_activation_hook( __FILE__, function () {
@@ -175,27 +276,18 @@ add_action( 'init', function () {
 }, 1 );
 
 add_action( 'plugins_loaded', function () {
-    new Delicat_Files();
-    new Delicat_Ajax_Handler();
-    new Delicat_Shortcode();
-    new Delicat_Admin();
-    new Delicat_Clients();
-    new Delicat_Send_Money();
-    new Delicat_Guard();
-    new Delicat_Watchdog();
-    new Delicat_Alerts();
-    new Delicat_Rest();
-    new Delicat_App_Api();
-    new Delicat_Natcash_Auto();
-    Delicat_SMS_Guard::init();
-    new Delicat_License();
-    new Delicat_Client_Ux();
-    new Delicat_Workflow();
-    new Delicat_Growth();
-    Delicat_Recharge_Api_Sync::init();
-    Delicat_Code_Lookup::init(); // 6.5.0: read-only TransCode search (admin)
-    Delicat_Maintenance::init(); // 6.6.4: bonus-marker clean-up (daily)
-    Delicat_SMS_Store::init();   // 6.6.5: SMS retention (hourly purge) + its setting
+    if ( delicat_recharge_full_request() ) {
+        delicat_recharge_boot( delicat_recharge_parts() );
+        return;
+    }
+    // V10: storefront requests (pages, wp-login.php, wc-ajax, REST, XML-RPC) build only what can run
+    // there. The schedules are still checked on every admin, admin-ajax and cron request.
+    delicat_recharge_boot( [ 'shortcode', 'client_ux', 'growth', 'api_sync' ] );
+    add_filter( 'authenticate', 'delicat_recharge_login_ban', 30 );
+    add_shortcode( 'delicat_envoyer_argent', 'delicat_recharge_send_money_shortcode' );
+    add_action( 'rest_api_init', 'delicat_recharge_boot_rest', 0 );
+    add_action( 'delicat_recharge_approved', 'delicat_recharge_boot_approval_listeners', -1000, 0 );
+    add_filter( 'pre_get_ready_cron_jobs', 'delicat_recharge_boot_cron' );
 } );
 
 // Clear scheduled cron jobs when the plugin is deactivated.
@@ -228,8 +320,19 @@ register_deactivation_hook( __FILE__, function () {
  * including order details, the orders list, profile and security screens that
  * never contain them, which made every account section slower to open.
  * Shortcode renders still enqueue the assets themselves wherever they appear.
+ *
+ * V10: an allow-list instead of a list of sections to skip. Only the wallet tab (TeraWallet's
+ * endpoints) and, without Delicat Identity, the legacy dashboard carry the wallet design; every
+ * other section (Identity's connected-accounts, the Gateway's reseller-api, any future one) no
+ * longer receives the stylesheet, form.js, jQuery and the inline override. Filters:
+ * delicat_recharge_wallet_ui_endpoints (sections to add) and, as before,
+ * delicat_recharge_wallet_ui_skip_endpoints (a section removed from that list now loads the design).
  */
 function delicat_recharge_account_needs_wallet_ui(): bool {
+    static $memo = null;
+    if ( null !== $memo ) {
+        return $memo;
+    }
     if ( ! function_exists( 'is_account_page' ) || ! is_account_page() ) {
         return false;
     }
@@ -246,14 +349,29 @@ function delicat_recharge_account_needs_wallet_ui(): bool {
             }
         }
     }
-    $skip = array( 'orders', 'view-order', 'downloads', 'edit-address', 'edit-account', 'payment-methods', 'add-payment-method', 'delete-payment-method', 'set-default-payment-method', 'change-password', 'identity-center', 'security-sessions', 'customer-logout', 'lost-password' );
+    // TeraWallet's wallet tab and its transactions (default slugs and the ones set in WooCommerce).
+    $allow = array( 'woo-wallet', 'woo-wallet-transactions', 'my-wallet', 'wallet-transactions' );
+    foreach ( array( 'woocommerce_woo_wallet_endpoint', 'woocommerce_woo_wallet_transactions_endpoint' ) as $option ) {
+        $slug = (string) get_option( $option, '' );
+        if ( '' !== $slug ) {
+            $allow[] = $slug;
+        }
+    }
     /* The account home is Delicat Identity's own screen when it is active; without it, a
      * legacy dashboard may still carry the wallet card, so the design keeps loading there. */
-    if ( '' === $endpoint && class_exists( 'DIP_My_Account_Modern' ) ) {
+    $skip = array( 'orders', 'view-order', 'downloads', 'edit-address', 'edit-account', 'payment-methods', 'add-payment-method', 'delete-payment-method', 'set-default-payment-method', 'change-password', 'identity-center', 'security-sessions', 'customer-logout', 'lost-password', 'connected-accounts', 'reseller-api' );
+    if ( class_exists( 'DIP_My_Account_Modern' ) ) {
         $skip[] = '';
+    } else {
+        $allow[] = '';
     }
-    $skip = (array) apply_filters( 'delicat_recharge_wallet_ui_skip_endpoints', $skip );
-    return ! in_array( $endpoint, $skip, true );
+    $filtered_skip = (array) apply_filters( 'delicat_recharge_wallet_ui_skip_endpoints', $skip );
+    $allow         = array_merge( (array) apply_filters( 'delicat_recharge_wallet_ui_endpoints', $allow ), array_diff( $skip, $filtered_skip ) );
+    $needs         = in_array( $endpoint, $allow, true ) && ! in_array( $endpoint, $filtered_skip, true );
+    if ( did_action( 'wp' ) ) {
+        $memo = $needs; // asked up to three times per page (styles, script, head override)
+    }
+    return $needs;
 }
 
 add_action( 'wp_enqueue_scripts', function () {

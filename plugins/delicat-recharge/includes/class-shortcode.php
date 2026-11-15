@@ -33,7 +33,11 @@ class Delicat_Shortcode {
             [ 'in_footer' => true, 'strategy' => 'defer' ]
         );
 
-        wp_localize_script( 'delicat-recharge', 'delicatData', $this->data() );
+        // V10: delicatData (a nonce and four options) is built only for a page that prints the
+        // script: the wallet pages below, or any page where a shortcode enqueued it. It used to be
+        // built on every storefront page. Just before the scripts print, whichever comes first.
+        add_action( 'wp_print_scripts', [ $this, 'localize' ], 1 );
+        add_action( 'wp_print_footer_scripts', [ $this, 'localize' ], 1 );
 
         // v5.0.3: load the modern wallet design outside the recharge shortcode too.
         // This is required because the WooCommerce dashboard / Code Snippets wallet
@@ -42,6 +46,16 @@ class Delicat_Shortcode {
             wp_enqueue_style( 'delicat-recharge' );
             wp_enqueue_script( 'delicat-recharge' );
         }
+    }
+
+    /** V10: attaches delicatData once, when the script (or something that needs it) is queued. */
+    public function localize(): void {
+        static $done = false;
+        if ( $done || ! wp_script_is( 'delicat-recharge', 'enqueued' ) ) {
+            return;
+        }
+        $done = true;
+        wp_localize_script( 'delicat-recharge', 'delicatData', $this->data() );
     }
 
     private function data(): array {
@@ -99,7 +113,8 @@ class Delicat_Shortcode {
 
         $code = $this->delicat_user_code( $uid );
 
-        $qr_data = rawurlencode( 'DELICAT:' . $code );
+        // V10: drawn here (Delicat_QR), no longer fetched from api.qrserver.com with the code in the URL.
+        $qr_src = Delicat_QR::data_uri( 'DELICAT:' . $code );
 
         ob_start();
         ?>
@@ -157,8 +172,9 @@ class Delicat_Shortcode {
                         <button type="button" class="dw12-qr-close delicat-qr-close" data-delicat-qr-close aria-label="Fermer">×</button>
                         <h3>Recevoir de l’argent</h3>
                         <p>Scannez ce QR code ou copiez votre code Delicat.</p>
-                        <?php // 6.7.0: lazy — this legacy dialog stays hidden, so the remote QR image (and the customer's code) is no longer fetched on every wallet page view. ?>
-                        <img loading="lazy" decoding="async" width="160" height="160" src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=10&data=<?php echo esc_attr( $qr_data ); ?>" alt="QR code <?php echo esc_attr( $code ); ?>">
+                        <?php if ( '' !== $qr_src ) : ?>
+                        <img decoding="async" width="160" height="160" src="<?php echo esc_attr( $qr_src ); ?>" alt="QR code <?php echo esc_attr( $code ); ?>">
+                        <?php endif; ?>
                         <div class="dw12-qr-code"><?php echo esc_html( $code ); ?></div>
                         <button type="button" class="dw12-qr-copy" data-dsm-copy="<?php echo esc_attr( $code ); ?>"><span class="dsm-copytxt">Copier mon code</span></button>
                     </div>
