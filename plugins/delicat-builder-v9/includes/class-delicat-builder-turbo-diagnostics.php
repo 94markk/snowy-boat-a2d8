@@ -68,8 +68,43 @@ final class Delicat_Builder_V9_Turbo_Diagnostics {
 			<div>DB queries: <b><?php echo esc_html( (string) get_num_queries() ); ?></b> · Peak memory: <b><?php echo esc_html( size_format( memory_get_peak_usage( true ) ) ); ?></b></div>
 			<div>V9 JS: <b><?php echo esc_html( size_format( $js_bytes ) ); ?></b> (<?php echo esc_html( (string) count( $script_handles ) ); ?>) · CSS: <b><?php echo esc_html( size_format( $css_bytes ) ); ?></b> (<?php echo esc_html( (string) count( $style_handles ) ); ?>)</div>
 			<div>Query cache: <b><?php echo ! empty( $query_stats['persistent'] ) ? 'Persistent object cache' : 'Transient fallback'; ?></b> · H/M <?php echo esc_html( (string) ( $query_stats['hits'] ?? 0 ) ); ?>/<?php echo esc_html( (string) ( $query_stats['misses'] ?? 0 ) ); ?></div>
+			<div id="dbv9-turbo-overflow" style="margin-top:7px">Page width: …</div>
 			<div style="margin-top:7px;opacity:.72">Visible only to administrators with <code style="color:inherit">?dbv9_turbo_diag=1</code>.</div>
 		</aside>
+		<script>
+		/* 9.14.3: names the elements that reach past the right edge of the screen (the cause of a
+		   page that iPhone Safari shows zoomed out). Read-only, administrators with the switch only. */
+		(function () {
+			function label(el) {
+				var s = el.tagName.toLowerCase();
+				if (el.id) { s += '#' + el.id; }
+				var c = typeof el.className === 'string' ? el.className : (el.getAttribute('class') || '');
+				c = c.trim().split(/\s+/).slice(0, 2).join('.');
+				return c ? s + '.' + c : s;
+			}
+			function run() {
+				var box = document.getElementById('dbv9-turbo-overflow');
+				if (!box) { return; }
+				var vw = document.documentElement.clientWidth, hits = [], all = document.body.getElementsByTagName('*');
+				for (var i = 0; i < all.length && hits.length < 6; i++) {
+					var el = all[i];
+					if (el.closest && el.closest('#dbv9-turbo-diagnostics')) { continue; }
+					var r = el.getBoundingClientRect();
+					if ((r.width || r.height) && r.right > vw + 1 && window.getComputedStyle(el).position !== 'fixed') {
+						/* Skip it when a parent already reaches past the edge (that parent is listed) or when a
+						   scrolling/clipping parent that fits the screen holds it (product rails, page content). */
+						var p = el.parentElement, inside = false;
+						for (; p && p !== document.body; p = p.parentElement) {
+							if (p.getBoundingClientRect().right > vw + 1 || window.getComputedStyle(p).overflowX !== 'visible') { inside = true; break; }
+						}
+						if (!inside) { hits.push(label(el) + ' → ' + Math.round(r.right) + ' px'); }
+					}
+				}
+				box.textContent = 'Page width: ' + document.documentElement.scrollWidth + ' / screen ' + vw + ' px' + (hits.length ? ' · Too wide: ' + hits.join(' | ') : ' · nothing past the edge');
+			}
+			if (document.readyState === 'complete') { setTimeout(run, 1500); } else { window.addEventListener('load', function () { setTimeout(run, 1500); }); }
+		}());
+		</script>
 		<?php
 	}
 }

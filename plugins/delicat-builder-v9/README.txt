@@ -1,3 +1,19 @@
+9.14.3 — Page Compte sur iPhone : plus de page rétrécie (15 novembre 2026)
+(1) Sur iPhone, la page Compte pouvait s’afficher rétrécie : tout le contenu tassé dans le tiers gauche de l’écran,
+le reste vide, et la barre du bas posée sur le pied de page. Cause : un élément qui dépasse le bord droit de l’écran
+fait dézoomer Safari sur toute la page (la règle html{overflow-x:hidden} de la 9.14.2 cachait cet élément mais
+Safari mesurait quand même la page avec). Désormais ce qui dépasse est coupé au bord sans compter dans la largeur :
+la page reste à 100 %, la barre du bas reste en bas, au-dessus du pied de page. Vaut pour toutes les pages.
+(2) Petits téléphones (320 px) : le logo de l’en-tête se réduit un peu pour que le panier ne sorte plus de l’écran.
+(3) Le menu, les tiroirs, les fenêtres, l’en-tête collant et la barre WordPress (administrateurs) fonctionnent comme
+avant. Mêmes écrans au pixel près sur iPhone (clair et sombre) et sur ordinateur.
+(4) Pour l’administrateur : n’importe quelle page ouverte avec ?dbv9_turbo_diag=1 affiche « Page width » et, si un
+élément dépasse encore, son nom (lecture seule, administrateurs seulement). En cas de souci, envoyer cette ligne.
+Technique : chrome-fixes.css, overflow-x:clip (iOS 16+, Android récents) sur body (« html body » passe devant le
+« visible » de storefront-polish), le pied de page et #wpadminbar ; min-width:0 sur le logo de l’en-tête. Seule la
+feuille « chrome » change (règles ajoutées à la fin) ; les autres feuilles sont identiques octet pour octet.
+Après installation : vider le cache LiteSpeed (Purge All) et le CDN.
+
 9.14.2 — Téléphone plus réactif (12 novembre 2026)
 (1) Toucher un produit répond tout de suite : quand la page suivante se charge en entier (réglage LiteSpeed
 « JS Combine » activé), la ligne de chargement part et la page s’estompe dès le toucher, au lieu de rester

@@ -351,3 +351,28 @@ body .wc-block-grid__product .woocommerce-Price-amount {
 body .wc-block-grid__product-add-to-cart .wp-block-button__link {
   color: #fff !important; /* the button is drawn on #111 */
 }
+/* 9.14.3 — A page is never wider than the screen. Something reaching past the right
+   edge made iPhone Safari zoom the whole page out (account page: the content shrank
+   into the left third, the bottom bar sat on the footer). html{overflow-x:hidden}
+   (storefront-polish) only hides that part: Safari still sizes the page by it.
+   `clip` on body removes it from the page width without making body a scroll box,
+   so the sticky header, the fixed bottom bar and the drawers behave as before. The
+   native documents keep body `visible` in storefront-polish; `html body…` outranks
+   it. The WordPress toolbar (staff) is positioned against the window, so it clips its own
+   width (its menus open downwards). Browsers without `clip` keep the 9.14.2 behaviour. */
+@supports (overflow: clip) {
+  html body,
+  html body.delicat-native-document,
+  html body.delicat-native-product-document,
+  html body.delicat-native-archive-document,
+  .dbv9-ft,
+  #wpadminbar {
+    overflow-x: clip;
+  }
+}
+/* 9.14.3 — On the smallest phones (320 px) the header's buttons no longer push the cart past
+   the screen edge: the logo gives way (as it already does in the installed app). */
+.dsb8-header__row > .dsb8-header__logo,
+.dsb8-header__row > .dsb8-header__logo .custom-logo-link {
+  min-width: 0;
+}
