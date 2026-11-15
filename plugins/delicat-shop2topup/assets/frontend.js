@@ -15,6 +15,10 @@
 
 	var GENERIC_ERROR = 'Impossible de vérifier le compte pour le moment. Vérifiez votre connexion puis réessayez.';
 	var historyCache = {};
+	// Saved IDs are fetched once the shopper starts using the purchase form (a
+	// package, a field), not on every product view: each fetch is a full uncached
+	// WordPress request, and most views never reach the Player ID step.
+	var historyWanted = false;
 
 	function each(list, fn) {
 		Array.prototype.forEach.call(list || [], fn);
@@ -157,10 +161,23 @@
 		return Object.keys(fields || {}).map(function (key) { return fields[key]; }).filter(Boolean).join(' · ');
 	}
 
+	// Inserting the box above a field the shopper is typing in must not move that
+	// field under their finger or the keyboard.
+	function insertKeepingFocus(wrap, box, before) {
+		var active = document.activeElement;
+		var keep = active && active !== document.body && wrap.contains(active) ? active : null;
+		var top = keep ? keep.getBoundingClientRect().top : 0;
+		if (before && before.parentNode) before.parentNode.insertBefore(box, before); else wrap.appendChild(box);
+		if (!keep) return;
+		var delta = keep.getBoundingClientRect().top - top;
+		if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+	}
+
 	function initHistory(wrap) {
 		if (!historyConfig || wrap.getAttribute('data-dst2t-history-ready') === '1') return;
 		var productId = wrap.getAttribute('data-dst2t-history-product');
 		if (!productId) return;
+		if (!historyWanted && !historyCache[String(productId)]) return;
 		wrap.setAttribute('data-dst2t-history-ready', '1');
 
 		historyRequest(productId).then(function (data) {
@@ -247,7 +264,7 @@
 			heading.appendChild(clear);
 			var firstField = wrap.querySelector('.dst2t-field');
 			if (!isAttached(wrap)) return;
-			if (firstField && firstField.parentNode) firstField.parentNode.insertBefore(box, firstField); else wrap.appendChild(box);
+			insertKeepingFocus(wrap, box, firstField);
 		}).catch(function () {
 			wrap.removeAttribute('data-dst2t-history-ready');
 		});
@@ -346,6 +363,7 @@
 				// Never display a stale response as verification of edited fields.
 				if (!isAttached(wrap) || requestRevision !== revision || JSON.stringify(getValues(wrap)) !== JSON.stringify(values)) return;
 				historyCache = {};
+				historyWanted = true;
 				var previousHistory = wrap.querySelector('.dst2t-player-history');
 				if (previousHistory) previousHistory.remove();
 				wrap.removeAttribute('data-dst2t-history-ready');
@@ -374,6 +392,31 @@
 			initHistory(wrap);
 			initVerify(wrap);
 		});
+	}
+
+	// First sign of intent: a tap or focus in the fields, or a package chosen in
+	// the product form (the Builder's package cards dispatch a native change).
+	function onHistoryIntent(event) {
+		if (historyWanted) return;
+		var target = event.target;
+		if (!target || !target.closest) return;
+		var hit = target.closest('.dst2t-field-list[data-dst2t-history-product]');
+		if (!hit && event.type !== 'pointerdown') {
+			var form = target.closest('form.cart');
+			hit = form && form.querySelector('.dst2t-field-list[data-dst2t-history-product]');
+		}
+		if (!hit) return;
+		historyWanted = true;
+		document.removeEventListener('pointerdown', onHistoryIntent, true);
+		document.removeEventListener('focusin', onHistoryIntent, true);
+		document.removeEventListener('change', onHistoryIntent, true);
+		scanHistory();
+	}
+
+	if (historyConfig) {
+		document.addEventListener('pointerdown', onHistoryIntent, true);
+		document.addEventListener('focusin', onHistoryIntent, true);
+		document.addEventListener('change', onHistoryIntent, true);
 	}
 
 	$(function () {
@@ -410,18 +453,38 @@
 				});
 			}
 
-			function paint(html, fallback) {
+			function paint(html, fallback, productId) {
 				var remembered = valuesFromTarget();
 				var next = typeof html === 'string' ? html : '';
 				if (!next && fallback) next = defaultHtml;
 				$target.html(next).attr('aria-hidden', next ? 'false' : 'true');
+				if (next && productId) $target.find('[data-dst2t-history-product]').attr('data-dst2t-history-product', String(productId));
 				restoreValues(remembered);
 				scanHistory();
 			}
 
+			// The server sends each distinct form once per variation list; the other
+			// packages carry only its key (dst2t_fields_key) and their own id.
+			function variationFieldsHtml(variation, form) {
+				if (typeof variation.dst2t_fields_html === 'string') return variation.dst2t_fields_html;
+				var key = variation.dst2t_fields_key;
+				if (!key) return '';
+				var list = $(form).data('product_variations');
+				if (Array.isArray(list)) {
+					for (var i = 0; i < list.length; i++) {
+						if (list[i] && list[i].dst2t_fields_key === key && typeof list[i].dst2t_fields_html === 'string' && list[i].dst2t_fields_html) {
+							return list[i].dst2t_fields_html;
+						}
+					}
+				}
+				// Never leave the shopper without the account fields; the server still
+				// validates them against the chosen package.
+				return defaultHtml;
+			}
+
 			$form.on('found_variation', function (_event, variation) {
 				if (variation && variation.dst2t_enabled) {
-					paint(variation.dst2t_fields_html || '', false);
+					paint(variationFieldsHtml(variation, this), false, variation.dst2t_fields_id);
 				} else {
 					paint('', false);
 				}

@@ -5,8 +5,16 @@ if (!class_exists('Delicat_Package_Selection', false)) {
 final class Delicat_Package_Selection {
     const RECIPE = '_delicat_package_recipe_v1';
     const MIGRATION = 'delicat_package_selector_repair_v1';
+    // Autoloaded index {parent id: [custom package variation ids]}. Storefront
+    // filters skip every product that is not in it, without a query.
+    const INDEX = 'delicat_package_index_v1';
+    const INDEX_CHECK = 'delicat_package_index_checked';
     private static $booted = false;
     private static $rows = array();
+    /** @var array|null Parent id => variation ids; null until known (first request after an update). */
+    private static $index = null;
+    /** @var array Variation id => parent id, derived from $index. */
+    private static $package_ids = array();
     public static function boot() {
         if (self::$booted) { return; }
         self::$booted = true;
@@ -19,6 +27,83 @@ final class Delicat_Package_Selection {
         add_action('woocommerce_new_product_variation', array(__CLASS__, 'invalidate'), 100, 2);
         add_action('woocommerce_update_product_variation', array(__CLASS__, 'invalidate'), 100, 2);
         add_action('admin_init', array(__CLASS__, 'repair_batch'));
+        // Keep the index in step with every way a package recipe is written or removed.
+        add_action('added_post_meta', array(__CLASS__, 'meta_written'), 10, 3);
+        add_action('updated_post_meta', array(__CLASS__, 'meta_written'), 10, 3);
+        add_action('deleted_post_meta', array(__CLASS__, 'meta_deleted'), 10, 3);
+        add_action('deleted_post', array(__CLASS__, 'post_deleted'), 10, 1);
+        if (null === self::index()) {
+            // Built once from the database after post types and statuses exist.
+            add_action('init', array(__CLASS__, 'rebuild_index'), 99);
+        }
+    }
+    /** @return array|null Parent id => custom package variation ids, or null while unknown. */
+    public static function index() {
+        if (null === self::$index && function_exists('get_option')) {
+            $stored = get_option(self::INDEX, null);
+            if (is_array($stored)) { self::set_index($stored, false); }
+        }
+        return self::$index;
+    }
+    /** @return bool|null Whether this parent has custom packages; null while the index is unknown. */
+    public static function has_packages($pid) {
+        $index = self::index();
+        return null === $index ? null : !empty($index[absint($pid)]);
+    }
+    /** @return bool|null Whether this id is a custom package variation; null while the index is unknown. */
+    public static function is_package($id) {
+        if (null === self::$index && null === self::index()) { return null; }
+        return isset(self::$package_ids[(int) $id]);
+    }
+    private static function set_index($index, $save) {
+        $clean = array(); $ids = array();
+        foreach ((array) $index as $pid => $children) {
+            $pid = absint($pid); if (!$pid) { continue; }
+            foreach ((array) $children as $id) { $id = absint($id); if ($id && !isset($ids[$id])) { $clean[$pid][] = $id; $ids[$id] = $pid; } }
+        }
+        self::$index = $clean; self::$package_ids = $ids;
+        if ($save && function_exists('update_option')) { update_option(self::INDEX, $clean, true); }
+    }
+    public static function rebuild_index() {
+        if (!function_exists('get_posts')) { return; }
+        $rows = get_posts(array('post_type' => 'product_variation', 'post_status' => array('publish','private','draft','pending','future','trash'), 'fields' => 'id=>parent', 'posts_per_page' => -1, 'meta_key' => self::RECIPE, 'orderby' => 'ID', 'order' => 'ASC', 'no_found_rows' => true));
+        $index = array();
+        foreach ((array) $rows as $row) {
+            $id = is_object($row) ? absint($row->ID) : absint($row);
+            $pid = is_object($row) ? absint($row->post_parent) : absint(wp_get_post_parent_id($id));
+            if ($id && $pid) { $index[$pid][] = $id; }
+        }
+        self::set_index($index, true);
+        if ($index && class_exists('Delicat_Custom_Packages', false) && method_exists('Delicat_Custom_Packages', 'hook_mapping')) { Delicat_Custom_Packages::hook_mapping(); }
+    }
+    private static function remember($id, $pid = 0) {
+        $id = absint($id);
+        $pid = $pid ? absint($pid) : ($id ? absint(wp_get_post_parent_id($id)) : 0);
+        $index = self::index();
+        // Unknown index: the pending rebuild reads the database, which already has it.
+        if (!$id || !$pid || null === $index || (isset(self::$package_ids[$id]) && self::$package_ids[$id] === $pid)) { return; }
+        if (isset(self::$package_ids[$id])) { self::forget($id); $index = self::index(); }
+        $index[$pid][] = $id;
+        self::set_index($index, true);
+        if (class_exists('Delicat_Custom_Packages', false) && method_exists('Delicat_Custom_Packages', 'hook_mapping')) { Delicat_Custom_Packages::hook_mapping(); }
+    }
+    private static function forget($id) {
+        $id = absint($id);
+        if (null === self::index() || !isset(self::$package_ids[$id])) { return; }
+        $pid = self::$package_ids[$id]; $index = self::$index;
+        $index[$pid] = array_values(array_diff($index[$pid], array($id)));
+        if (!$index[$pid]) { unset($index[$pid]); }
+        self::set_index($index, true);
+        unset(self::$rows[$pid]);
+    }
+    public static function meta_written($meta_id, $id, $key) {
+        if (self::RECIPE === $key) { self::remember($id); }
+    }
+    public static function meta_deleted($meta_ids, $id, $key) {
+        if (self::RECIPE === $key) { self::forget($id); }
+    }
+    public static function post_deleted($id) {
+        if (self::is_package($id)) { self::forget($id); }
     }
     private static function rows($pid) {
         $pid = absint($pid);
@@ -54,10 +139,15 @@ final class Delicat_Package_Selection {
         }
         return $attributes;
     }
-    public static function attributes($attributes, $product) { return self::merge($attributes, $product, true); }
+    public static function attributes($attributes, $product) {
+        // Most variable products have no custom package: no query for them.
+        if ($product && is_object($product) && method_exists($product, 'get_id') && false === self::has_packages($product->get_id())) { return $attributes; }
+        return self::merge($attributes, $product, true);
+    }
     public static function dropdown($args) {
         $product = $args['product'] ?? null;
         if (!$product || !is_object($product) || !$product->is_type('variable')) { return $args; }
+        if (false === self::has_packages($product->get_id())) { return $args; }
         $attribute_name = sanitize_title((string) ($args['attribute'] ?? ''));
         // Only extend a local variation attribute belonging to this product.
         $local = false;
@@ -95,11 +185,17 @@ final class Delicat_Package_Selection {
         if (!is_array(get_post_meta($id, self::RECIPE, true))) { return; }
         $pid = $variation && is_object($variation) ? $variation->get_parent_id() : wp_get_post_parent_id($id);
         if (!$pid) { return; }
+        self::remember($id, $pid);
         unset(self::$rows[absint($pid)]);
         wc_delete_product_transients($pid);
     }
     public static function repair_batch() {
         if (!current_user_can('manage_woocommerce') || !function_exists('wc_get_product')) { return; }
+        // Daily self-check of the index from wp-admin (one query), never on the storefront.
+        if (function_exists('get_transient') && !get_transient(self::INDEX_CHECK)) {
+            set_transient(self::INDEX_CHECK, 1, DAY_IN_SECONDS);
+            self::rebuild_index();
+        }
         $state = get_option(self::MIGRATION, array('offset' => 0, 'done' => false));
         if (!empty($state['done'])) { return; }
         $offset = max(0, (int) ($state['offset'] ?? 0));

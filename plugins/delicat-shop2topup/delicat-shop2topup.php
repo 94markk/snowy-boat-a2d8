@@ -38,16 +38,32 @@ $dst2t_files = array(
 	'class-dst2t-sync.php',
 	'class-dst2t-privacy.php',
 	'class-dst2t-webhook.php',
-	'class-dst2t-admin.php',
-	'class-dst2t-cli.php',
 	'class-dst2t-plugin.php',
 );
+
+// Admin screens and WP-CLI code stay off storefront requests (about 88 KB of PHP).
+// wp-admin, admin-ajax and admin-post are all is_admin(), so their handlers load.
+if ( is_admin() ) {
+	$dst2t_files[] = 'class-dst2t-admin.php';
+}
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+	$dst2t_files[] = 'class-dst2t-cli.php';
+}
 
 foreach ( $dst2t_files as $dst2t_file ) {
 	require_once DST2T_PATH . 'includes/' . $dst2t_file;
 }
 
 unset( $dst2t_files, $dst2t_file );
+
+// DST2T_Admin::PAGE is also read by cron alerts and plugin links; load it on demand there.
+spl_autoload_register(
+	static function ( $class ) {
+		if ( 'DST2T_Admin' === $class ) {
+			require_once DST2T_PATH . 'includes/class-dst2t-admin.php';
+		}
+	}
+);
 
 register_activation_hook( __FILE__, array( 'DST2T_Plugin', 'activate' ) );
 register_deactivation_hook( __FILE__, array( 'DST2T_Plugin', 'deactivate' ) );
@@ -57,6 +73,9 @@ add_action( 'plugins_loaded', array( 'DST2T_Plugin', 'instance' ), 20 );
 
 require_once __DIR__ . '/includes/class-delicat-custom-packages.php';
 
-require_once __DIR__ . '/includes/class-delicat-package-product-editor.php';
+// Product edit screen only (meta boxes, product data tab, product save).
+if ( is_admin() ) {
+	require_once __DIR__ . '/includes/class-delicat-package-product-editor.php';
+}
 
 require_once __DIR__ . '/includes/class-delicat-package-selection.php';

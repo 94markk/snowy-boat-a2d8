@@ -1,7 +1,6 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
-const source=fs.readFileSync(__dirname+'/../includes/class-dfr-catalog.php','utf8');
-const start=source.indexOf('(function(){\n  function safeRows');
-const script=source.slice(start,source.indexOf('</script>',start));
+// The storefront script is a static file (assets/product-fields.js), no longer inline markup.
+const script=fs.readFileSync(__dirname+'/../assets/product-fields.js','utf8');
 async function scenario(edit){
  const handlers={},token={value:'previous-token'},status={style:{},textContent:''},label={textContent:'Vérifier'};
  const field={value:'8593173765',required:true,getAttribute:()=> 'uid',matches:()=>true,closest:()=>wrap};

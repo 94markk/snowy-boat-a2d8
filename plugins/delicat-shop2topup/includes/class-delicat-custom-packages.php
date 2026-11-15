@@ -7,12 +7,15 @@ final class Delicat_Custom_Packages {
     const RECIPE = '_delicat_package_recipe_v1';
     private static $booted = false;
     private static $splitting = false;
+    private static $mapping_hooked = false;
     public static function boot() {
         if (self::$booted) { return; }
         self::$booted = true;
         add_action('admin_menu', array(__CLASS__, 'menu'));
         add_action('admin_post_delicat_package_save', array(__CLASS__, 'save'));
-        add_filter('get_post_metadata', array(__CLASS__, 'mapping_meta'), 5, 4);
+        // Runs on every post-meta read of the site: only while custom packages exist
+        // (or before the package index is first built).
+        if (false !== self::any_package()) { self::hook_mapping(); }
         add_filter('update_post_metadata', array(__CLASS__, 'guard_meta'), 1, 4);
         add_filter('add_post_metadata', array(__CLASS__, 'guard_meta'), 1, 4);
         add_filter('woocommerce_add_cart_item_data', array(__CLASS__, 'cart_data'), 100, 4);
@@ -23,12 +26,38 @@ final class Delicat_Custom_Packages {
         // The Store API builds lines without the classic per-line hook. Fail closed.
         add_action('woocommerce_store_api_checkout_update_order_from_request', array(__CLASS__, 'block_unsupported_checkout'), 1, 2);
     }
+    public static function hook_mapping() {
+        if (self::$mapping_hooked) { return; }
+        self::$mapping_hooked = true;
+        add_filter('get_post_metadata', array(__CLASS__, 'mapping_meta'), 5, 4);
+    }
+    /** @return bool|null From the shared package index; null when it is unknown or unavailable. */
+    private static function any_package() {
+        if (!class_exists('Delicat_Package_Selection', false) || !method_exists('Delicat_Package_Selection', 'index')) { return null; }
+        $index = Delicat_Package_Selection::index();
+        return null === $index ? null : !empty($index);
+    }
+    /** @return bool|null False only when the index knows this id is not a custom package. */
+    private static function maybe_package($id) {
+        static $api = false;
+        if (!$api) {
+            if (!class_exists('Delicat_Package_Selection', false) || !method_exists('Delicat_Package_Selection', 'is_package')) { return null; }
+            $api = true;
+        }
+        return Delicat_Package_Selection::is_package($id);
+    }
+    private static function supplier_key($key) {
+        return 0 === strncmp($key, '_dst2t_', 7) || 0 === strncmp($key, '_dfr_', 5);
+    }
     public static function recipe($id) {
         $r = get_post_meta(absint($id), self::RECIPE, true);
         return is_array($r) ? $r : array();
     }
     public static function mapping_meta($value, $id, $key, $single) {
-        if (null !== $value || !preg_match('/^_(dst2t|dfr)_/', (string) $key)) { return $value; }
+        // Hot path (every post-meta read): plain string checks first, '_d' prefilter
+        // before strncmp, then the package index; the recipe() lookup only after.
+        if (null !== $value || !is_string($key) || !isset($key[4]) || 'd' !== $key[1] || '_' !== $key[0]) { return $value; }
+        if ((0 !== strncmp($key, '_dst2t_', 7) && 0 !== strncmp($key, '_dfr_', 5)) || false === self::maybe_package($id)) { return $value; }
         $r = self::recipe($id);
         if (!$r || empty($r['parts'][0]['id'])) { return $value; }
         // No copied supplier ID in the database: native importer/sync queries cannot
@@ -40,7 +69,7 @@ final class Delicat_Custom_Packages {
     }
     public static function guard_meta($check, $id, $key, $value) {
         if (null !== $check) { return $check; }
-        return preg_match('/^_(dst2t|dfr)_/', (string) $key) && self::recipe($id) ? true : $check;
+        return is_string($key) && self::supplier_key($key) && self::recipe($id) ? true : $check;
     }
     public static function source($id) {
         $p = wc_get_product($id);
@@ -118,6 +147,7 @@ final class Delicat_Custom_Packages {
         } catch (Throwable $e) { wc_add_notice($e->getMessage(), 'error'); }
     }
     public static function in_stock($stock, $p) {
+        if (false === self::maybe_package($p->get_id())) { return $stock; }
         $r = self::recipe($p->get_id());
         if (!$r) { return $stock; }
         try { self::available($r); return $stock; } catch (Throwable $e) { return false; }
@@ -194,6 +224,7 @@ final class Delicat_Custom_Packages {
     public static function menu() { add_submenu_page('edit.php?post_type=product', 'Forfaits personnalisés', 'Forfaits personnalisés', 'manage_woocommerce', 'delicat-packages', array(__CLASS__, 'page')); }
     public static function page() {
         if (!current_user_can('manage_woocommerce')) { return; }
+        if (class_exists('Delicat_Package_Selection', false) && method_exists('Delicat_Package_Selection', 'rebuild_index')) { Delicat_Package_Selection::rebuild_index(); }
         $pid = absint($_GET['product_id'] ?? 0); $parent = wc_get_product($pid);
         echo '<div class="wrap"><h1>Forfaits personnalisés</h1><p>Créez une option comme 220 = 110 × 2 ou 451 = 110 + 341. Chaque recharge est envoyée au même joueur et suivie séparément.</p>';
         if (!empty($_GET['saved'])) { echo '<div class="notice notice-success"><p>Forfait créé. Modifiez son prix ou désactivez-le dans les variations du produit.</p></div>'; }

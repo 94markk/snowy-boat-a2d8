@@ -68,7 +68,6 @@ final class DST2T_Plugin {
 		$this->sync        = new DST2T_Sync( $this->api, $this->settings, $this->products );
 
 		$webhook = new DST2T_Webhook( $this->settings, $this->repository, $this->fulfillment );
-		$admin   = new DST2T_Admin( $this->settings, $this->api, $this->repository, $this->products, $this->catalog, $this->fulfillment, $this->balance, $this->sync );
 
 		$this->products->hooks();
 		$this->catalog->hooks();
@@ -80,6 +79,7 @@ final class DST2T_Plugin {
 		DST2T_Privacy::hooks();
 
 		if ( is_admin() ) {
+			$admin = new DST2T_Admin( $this->settings, $this->api, $this->repository, $this->products, $this->catalog, $this->fulfillment, $this->balance, $this->sync );
 			$admin->hooks();
 		}
 

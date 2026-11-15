@@ -524,8 +524,12 @@ final class DFR_Plugin {
         if (!is_user_logged_in() || !function_exists('is_account_page') || !is_account_page()) {
             return;
         }
+        // Page output only. DONOTCACHEOBJECT is deliberately not set: the object
+        // cache holds data, not this response, and drop-ins that honour it would
+        // run the whole account page without Redis. Decrypted codes never reach
+        // the page or the object cache; they are sent only by the private
+        // dfr_delica_reveal_codes AJAX response.
         if (!defined('DONOTCACHEPAGE')) { define('DONOTCACHEPAGE', true); }
-        if (!defined('DONOTCACHEOBJECT')) { define('DONOTCACHEOBJECT', true); }
         if (function_exists('nocache_headers') && !headers_sent()) { nocache_headers(); }
         if (!headers_sent()) {
             header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');

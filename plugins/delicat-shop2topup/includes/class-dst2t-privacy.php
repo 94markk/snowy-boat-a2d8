@@ -42,7 +42,7 @@ final class DST2T_Privacy {
 	 * inlined instead of linked, so the plugin directory never appears in the
 	 * page source of a public product page.
 	 */
-	public static function enqueue_frontend() {
+	public static function enqueue_frontend( $history_enabled = true ) {
 		// The handle becomes the printed element id (dst2t-ui-js-after), so it has
 		// to carry the neutral prefix as well, not just the CSS and markup.
 		$prefix = self::prefix();
@@ -82,7 +82,8 @@ final class DST2T_Privacy {
 			)
 		);
 
-		if ( is_user_logged_in() ) {
+		// No saved-ID UI (and no request for it) when the feature is switched off.
+		if ( $history_enabled && is_user_logged_in() ) {
 			wp_localize_script(
 				$handle,
 				$prefix . '_history',

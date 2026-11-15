@@ -21,6 +21,8 @@ final class DFR_Catalog {
     const UID_INTERACTIVE_ATTEMPT_TIMEOUT = 12;
     const UID_INTERACTIVE_MIN_RETRY_SECONDS = 6;
     const UID_BROWSER_ABORT_MS = 22000;
+    // Storefront account-field assets (style + script handle).
+    const FIELDS_ASSET = 'dfr-product-fields';
 
     /**
      * Request-local bridge state for the authenticated Delicat App API cart.
@@ -3815,6 +3817,20 @@ final class DFR_Catalog {
         return '<svg class="dfr-glyph" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . $paths[$name] . '</svg>';
     }
 
+    /**
+     * Prints the account-field stylesheet once, inside the product form it styles
+     * (was a 5.3 KB inline <style> on every top-up product page). Kept with the
+     * markup, not in <head>, so pages and fragments the Builder swaps in (router,
+     * region switcher) bring it along.
+     */
+    private function print_product_fields_style() {
+        if (wp_style_is(self::FIELDS_ASSET, 'done')) { return; }
+        if (!wp_style_is(self::FIELDS_ASSET, 'registered')) {
+            wp_register_style(self::FIELDS_ASSET, DFR_URL . 'assets/product-fields.css', array(), DFR_VERSION);
+        }
+        wp_print_styles(array(self::FIELDS_ASSET));
+    }
+
     public function render_native_fields() {
         global $product;
         if (!$product || !is_a($product, 'WC_Product')) {
@@ -3831,18 +3847,10 @@ final class DFR_Catalog {
         $can_verify = is_array($uid_context);
         $nonce = $can_verify ? wp_create_nonce('dfr_uid_verify') : '';
         $recent = $this->recent_player_ids();
-        static $uid_style = false;
-        if (!$uid_style) {
-            $uid_style = true;
-            echo <<<'HTML'
-<style>
-.dfr-native-fields{--dfr-purple:#7c3aed;--dfr-purple2:#9333ea;--dfr-ink:#171321;--dfr-muted:#706b7b;margin:16px 0;padding:18px;border:1px solid #ebe7f2;border-radius:24px;background:linear-gradient(145deg,#fff 0%,#fdfbff 100%);box-shadow:0 18px 48px -34px rgba(74,29,150,.48);font-family:inherit;isolation:isolate}.dfr-native-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}.dfr-native-head-icon{display:grid;place-items:center;width:44px;height:44px;flex:0 0 44px;border-radius:15px;color:#fff;background:linear-gradient(135deg,var(--dfr-purple2),var(--dfr-purple));box-shadow:0 10px 22px -12px rgba(124,58,237,.8)}.dfr-native-head strong{display:block;color:var(--dfr-ink);font-size:17px;line-height:1.2}.dfr-native-head small{display:block;margin-top:4px;color:var(--dfr-muted);font-size:12.5px;line-height:1.35}.dfr-glyph{width:22px;height:22px;display:block;fill:currentColor}.dfr-recent{margin:0 0 17px;padding:13px;border:1px solid #ece7f4;border-radius:18px;background:rgba(248,246,253,.78)}.dfr-recent-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.dfr-recent-title{display:flex;align-items:center;gap:8px;color:#322b3e;font-size:13px;font-weight:800}.dfr-recent-title .dfr-glyph{width:19px;height:19px;color:var(--dfr-purple)}.dfr-recent-clear{display:flex;align-items:center;gap:5px;padding:6px 7px;border:0;background:transparent;color:#8a3dc1;font:700 11px/1 inherit;cursor:pointer}.dfr-recent-clear .dfr-glyph{width:16px;height:16px}.dfr-recent-picker{position:relative}.dfr-recent-toggle{width:100%;min-height:48px;display:flex;align-items:center;gap:10px;padding:0 13px;border:1px solid #ded8e8;border-radius:14px;background:#fff;color:#383142;font:650 13px/1.25 inherit;text-align:left;cursor:pointer}.dfr-recent-toggle>.dfr-glyph:first-child{color:var(--dfr-purple);width:20px;height:20px}.dfr-recent-toggle>.dfr-glyph:last-child{margin-left:auto;width:18px;height:18px;transition:transform .2s ease}.dfr-recent-picker.is-open .dfr-recent-toggle>.dfr-glyph:last-child{transform:rotate(180deg)}.dfr-recent-menu{display:none;position:absolute;z-index:30;top:calc(100% + 6px);left:0;right:0;padding:6px;border:1px solid #e4deec;border-radius:14px;background:#fff;box-shadow:0 18px 45px -18px rgba(37,24,58,.35)}.dfr-recent-picker.is-open .dfr-recent-menu{display:block}.dfr-recent-id{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px;border:0;border-radius:10px;background:transparent;color:#241d2d;font:750 13px/1.2 inherit;text-align:left;cursor:pointer}.dfr-recent-id:hover,.dfr-recent-id:focus-visible{background:#f5f1ff;color:#6d28d9}.dfr-recent-id small{color:#8b8495;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.dfr-native-field{margin:0 0 14px!important}.dfr-native-field label{display:block;margin:0 0 7px;color:#241e2e;font-size:14px;font-weight:800}.dfr-field-shell{position:relative}.dfr-field-shell>.dfr-glyph{position:absolute;left:15px;top:50%;width:20px;height:20px;color:#8450d8;transform:translateY(-50%);pointer-events:none}.dfr-native-fields input[data-dfr-field-key],.dfr-native-fields select[data-dfr-field-key]{width:100%!important;min-height:52px!important;margin:0!important;padding:0 44px!important;border:1px solid #dcd6e5!important;border-radius:16px!important;background:#fff!important;color:#211a2c!important;font:650 15px/1.2 inherit!important;box-shadow:0 1px 0 rgba(255,255,255,.8) inset!important;outline:none!important;transition:border-color .2s,box-shadow .2s,background .2s}.dfr-native-fields input[data-dfr-field-key]:focus,.dfr-native-fields select[data-dfr-field-key]:focus{border-color:#9b6de3!important;box-shadow:0 0 0 4px rgba(124,58,237,.11)!important}.dfr-native-fields input::placeholder{color:#aaa3b4}.dfr-uid-verify-btn{width:100%!important;min-height:52px!important;display:flex!important;align-items:center!important;justify-content:center!important;gap:10px!important;margin-top:3px!important;border:0!important;border-radius:16px!important;background:linear-gradient(135deg,var(--dfr-purple2),var(--dfr-purple))!important;color:#fff!important;font:850 14px/1 inherit!important;box-shadow:0 13px 28px -15px rgba(124,58,237,.85)!important;cursor:pointer!important;transition:transform .18s,box-shadow .18s,opacity .18s}.dfr-uid-verify-btn:active{transform:scale(.985)}.dfr-uid-verify-btn:disabled{opacity:.68;cursor:wait}.dfr-uid-verify-btn .dfr-glyph{width:20px;height:20px}.dfr-uid-status{display:none;margin-top:11px;padding:12px 13px;border-radius:14px;font-size:12.5px;font-weight:750;line-height:1.4}.dfr-uid-advisory{margin-top:10px;padding:12px 13px;border:1px solid #f0d59e;border-radius:14px;background:#fff9ec;color:#7a4a0c;font-size:12px;font-weight:700;line-height:1.45}@media(max-width:380px){.dfr-native-fields{padding:14px;border-radius:20px}.dfr-native-head-icon{width:40px;height:40px;flex-basis:40px;border-radius:13px}.dfr-native-head strong{font-size:15px}.dfr-native-head small{font-size:11.5px}.dfr-recent{padding:11px}.dfr-recent-clear{font-size:0}.dfr-recent-clear .dfr-glyph{width:18px;height:18px}.dfr-native-fields input[data-dfr-field-key],.dfr-native-fields select[data-dfr-field-key],.dfr-uid-verify-btn{min-height:48px!important;font-size:13px!important}}
-</style>
-HTML;
-        }
+        $this->print_product_fields_style();
         echo '<div class="dfr-native-fields" data-dfr-product="' . esc_attr($product_id) . '" data-recent-key="dfrRecentPlayerIdsV1">';
         echo '<div class="dfr-native-head"><span class="dfr-native-head-icon">' . $this->material_glyph('sports_esports') . '</span><span><strong>' . esc_html__('Informations du compte de jeu', 'delicat-fazercards') . '</strong><small>' . esc_html__('Saisissez les informations exactement comme dans le jeu.', 'delicat-fazercards') . '</small></span></div>';
-        echo '<div class="dfr-recent" data-server-recent="' . esc_attr(wp_json_encode($recent)) . '" data-clear-ajax="' . esc_url(admin_url('admin-ajax.php')) . '" data-clear-nonce="' . esc_attr(wp_create_nonce('dfr_recent_player_ids')) . '"><div class="dfr-recent-top"><span class="dfr-recent-title">' . $this->material_glyph('history') . esc_html__('Mes 5 derniers UID / ID Joueur', 'delicat-fazercards') . '</span><button type="button" class="dfr-recent-clear" aria-label="' . esc_attr__('Effacer les identifiants récents', 'delicat-fazercards') . '">' . $this->material_glyph('delete') . '<span>' . esc_html__('Effacer', 'delicat-fazercards') . '</span></button></div><div class="dfr-recent-picker"><button type="button" class="dfr-recent-toggle" aria-expanded="false">' . $this->material_glyph('person') . '<span>' . esc_html__('Choisir un UID / ID récent', 'delicat-fazercards') . '</span>' . $this->material_glyph('expand_more') . '</button><div class="dfr-recent-menu" role="listbox"></div></div></div>';
+        echo '<div class="dfr-recent"' . ($recent ? '' : ' hidden') . ' data-server-recent="' . esc_attr(wp_json_encode($recent)) . '" data-clear-ajax="' . esc_url(admin_url('admin-ajax.php')) . '" data-clear-nonce="' . esc_attr(wp_create_nonce('dfr_recent_player_ids')) . '"><div class="dfr-recent-top"><span class="dfr-recent-title">' . $this->material_glyph('history') . esc_html__('Mes 5 derniers UID / ID Joueur', 'delicat-fazercards') . '</span><button type="button" class="dfr-recent-clear" aria-label="' . esc_attr__('Effacer les identifiants récents', 'delicat-fazercards') . '">' . $this->material_glyph('delete') . '<span>' . esc_html__('Effacer', 'delicat-fazercards') . '</span></button></div><div class="dfr-recent-picker"><button type="button" class="dfr-recent-toggle" aria-expanded="false">' . $this->material_glyph('person') . '<span>' . esc_html__('Choisir un UID / ID récent', 'delicat-fazercards') . '</span>' . $this->material_glyph('expand_more') . '</button><div class="dfr-recent-menu" role="listbox"></div></div></div>';
         foreach ($fields as $field) {
             $name = 'dfr_field_' . $field['key'];
             echo '<p class="form-row form-row-wide dfr-native-field">';
@@ -3870,68 +3878,9 @@ HTML;
             echo '<button type="button" class="button dfr-uid-verify-btn">' . $this->material_glyph('verified_user') . '<span>' . esc_html__('Vérifier votre compte', 'delicat-fazercards') . '</span>' . $this->material_glyph('arrow_forward') . '</button>';
             echo '<div class="dfr-uid-status" role="status" aria-live="polite"></div>';
             echo '</div>';
-            static $uid_script = false;
-            if (!$uid_script) {
-                $uid_script = true;
-                echo <<<'HTML'
-<script>
-(function(){
-  function safeRows(value){return Array.isArray(value)?value.filter(function(r){return r&&/^[A-Za-z0-9._:-]{1,64}$/.test(String(r.value||''));}).slice(0,5):[];}
-  function localRows(wrap){try{return safeRows(JSON.parse(localStorage.getItem(wrap.dataset.recentKey)||'[]'));}catch(e){return [];}}
-  function mergedRows(wrap){var recent=wrap.querySelector('.dfr-recent'),server=[];try{server=safeRows(JSON.parse(recent.dataset.serverRecent||'[]'));}catch(e){}var out=[];server.concat(localRows(wrap)).forEach(function(r){if(!out.some(function(x){return x.value===r.value;}))out.push(r);});return out.slice(0,5);}
-  function renderRecent(wrap){var recent=wrap.querySelector('.dfr-recent'),menu=recent&&recent.querySelector('.dfr-recent-menu'),rows=mergedRows(wrap);if(!menu)return;menu.textContent='';rows.forEach(function(r){var b=document.createElement('button');b.type='button';b.className='dfr-recent-id';b.dataset.value=r.value;var id=document.createElement('span');id.textContent=r.value;b.appendChild(id);if(r.label){var sm=document.createElement('small');sm.textContent=r.label;b.appendChild(sm);}menu.appendChild(b);});recent.hidden=rows.length===0;}
-  function saveRecent(wrap,value,label){value=String(value||'').trim();if(!/^[A-Za-z0-9._:-]{1,64}$/.test(value))return;var rows=localRows(wrap).filter(function(r){return r.value!==value;});rows.unshift({value:value,label:String(label||'').slice(0,80),used_at:Math.floor(Date.now()/1000)});try{localStorage.setItem(wrap.dataset.recentKey,JSON.stringify(rows.slice(0,5)));}catch(e){}renderRecent(wrap);}
-  document.querySelectorAll('.dfr-native-fields').forEach(renderRecent);
-  function setStatus(box, ok, text){
-    var s=box.querySelector('.dfr-uid-status'); if(!s)return;
-    s.style.display='block'; s.style.background=ok?'#eaf8ef':'#fff1f1'; s.style.color=ok?'#146b35':'#9b2727';
-    s.style.border='1px solid '+(ok?'#bfe8cc':'#f1caca'); s.textContent=text;
-  }
-  function clearVerification(wrap){
-    wrap._dfrVerifyRevision=(wrap._dfrVerifyRevision||0)+1;
-    var token=wrap.querySelector('.dfr-uid-token'); if(token)token.value='';
-    var box=wrap.querySelector('.dfr-uid-verify'); if(box){var s=box.querySelector('.dfr-uid-status');if(s)s.style.display='none';}
-  }
-  document.addEventListener('input',function(e){var wrap=e.target.closest&&e.target.closest('.dfr-native-fields');if(wrap&&e.target.matches('[data-dfr-field-key]'))clearVerification(wrap);});
-  document.addEventListener('change',function(e){var wrap=e.target.closest&&e.target.closest('.dfr-native-fields');if(wrap&&e.target.matches('[data-dfr-field-key]'))clearVerification(wrap);});
-  document.addEventListener('click',function(e){
-    var toggle=e.target.closest&&e.target.closest('.dfr-recent-toggle');if(toggle){var picker=toggle.closest('.dfr-recent-picker'),open=!picker.classList.contains('is-open');picker.classList.toggle('is-open',open);toggle.setAttribute('aria-expanded',open?'true':'false');return;}
-    var recentId=e.target.closest&&e.target.closest('.dfr-recent-id');if(recentId){var recentWrap=recentId.closest('.dfr-native-fields'),player=recentWrap&&recentWrap.querySelector('[data-dfr-role="player"]');if(player){player.value=recentId.dataset.value;player.dispatchEvent(new Event('input',{bubbles:true}));player.focus();}var rp=recentId.closest('.dfr-recent-picker');if(rp){rp.classList.remove('is-open');var rt=rp.querySelector('.dfr-recent-toggle');if(rt)rt.setAttribute('aria-expanded','false');}return;}
-    var clear=e.target.closest&&e.target.closest('.dfr-recent-clear');if(clear){var cw=clear.closest('.dfr-native-fields'),cr=clear.closest('.dfr-recent');try{localStorage.removeItem(cw.dataset.recentKey);}catch(err){}cr.dataset.serverRecent='[]';renderRecent(cw);if(cr.dataset.clearNonce){var cb=new URLSearchParams();cb.set('action','dfr_clear_recent_player_ids');cb.set('nonce',cr.dataset.clearNonce);fetch(cr.dataset.clearAjax,{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:cb.toString()}).catch(function(){});}return;}
-    var btn=e.target.closest&&e.target.closest('.dfr-uid-verify-btn'); if(!btn)return;
-    var wrap=btn.closest('.dfr-native-fields'), box=btn.closest('.dfr-uid-verify'); if(!wrap||!box)return;
-    var fields={}, missing=false;
-    wrap.querySelectorAll('[data-dfr-field-key]').forEach(function(el){var v=(el.value||'').trim();if(el.required&&!v)missing=true;if(v)fields[el.getAttribute('data-dfr-field-key')]=v;});
-    if(missing||Object.keys(fields).length===0){setStatus(box,false,'Entrez l’UID / Player ID et les champs requis avant la vérification.');return;}
-    clearVerification(wrap);var revision=wrap._dfrVerifyRevision,product=wrap.dataset.dfrProduct;
-    function isCurrent(){return wrap.isConnected&&revision===wrap._dfrVerifyRevision&&product===wrap.dataset.dfrProduct;}
-    btn.disabled=true; var label=btn.querySelector('span'),old=label?label.textContent:''; if(label)label.textContent='Vérification…';
-    var body=new URLSearchParams(); body.set('action','dfr_verify_player_uid');body.set('nonce',box.dataset.nonce);body.set('product_id',wrap.dataset.dfrProduct);
-    Object.keys(fields).forEach(function(k){body.append('fields['+k+']',fields[k]);});
-    var controller=window.AbortController?new AbortController():null;
-    var abortMs=parseInt(box.dataset.abortMs||'22000',10)||22000; var timeout=controller?setTimeout(function(){controller.abort();},abortMs):null;
-    function post(b){return fetch(box.dataset.ajax,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:b.toString(),signal:controller?controller.signal:undefined}).then(function(r){return r.json().catch(function(){return null;}).then(function(j){return {r:r,j:j};});});}
-    var renewed=false;
-    function renew(x){var d=x&&x.j&&!x.j.success&&x.j.data;if(renewed||!d||d.code!=='nonce')return x;renewed=true;var nb=new URLSearchParams();nb.set('action','dfr_uid_nonce');return post(nb).then(function(n){var nd=n&&n.j&&n.j.success&&n.j.data;if(!nd||!nd.nonce)return x;box.dataset.nonce=nd.nonce;body.set('nonce',nd.nonce);return post(body);});}
-    post(body).then(renew)
-      .then(function(x){
-        if(!isCurrent())return;
-        var d=x.j&&x.j.data?x.j.data:{};
-        if(x.j&&x.j.success&&d.valid&&d.token){
-          var t=wrap.querySelector('.dfr-uid-token');if(t)t.value=d.token;
-          var msg='✅ Compte vérifié'; if(d.player_name)msg+=' — '+d.player_name; if(d.region)msg+=' ('+d.region+')';
-          setStatus(box,true,msg);
-          var player=wrap.querySelector('[data-dfr-role="player"]');if(player)saveRecent(wrap,player.value,d.player_name||d.region||'');
-        }else{clearVerification(wrap);setStatus(box,false,(d&&d.message)?d.message:'Impossible de vérifier cet ID pour le moment.');}
-      })
-      .catch(function(err){if(!isCurrent())return;clearVerification(wrap);setStatus(box,false,(err&&err.name==='AbortError')?'La vérification prend trop de temps. Réessayez dans quelques instants.':'Connexion interrompue. Réessayez.');})
-      .finally(function(){if(timeout)clearTimeout(timeout);btn.disabled=false;if(label)label.textContent=old;});
-  });
-  document.addEventListener('click',function(e){document.querySelectorAll('.dfr-recent-picker.is-open').forEach(function(p){if(!p.contains(e.target)){p.classList.remove('is-open');var t=p.querySelector('.dfr-recent-toggle');if(t)t.setAttribute('aria-expanded','false');}});});
-})();
-</script>
-HTML;
-            }
+            // Static, browser-cached file (was ~7.5 KB inline per product page); loaded
+            // once per tab, also when the Builder swaps product pages in.
+            wp_enqueue_script(self::FIELDS_ASSET, DFR_URL . 'assets/product-fields.js', array(), DFR_VERSION, true);
         }
         echo '</div>';
     }

@@ -53,6 +53,9 @@ final class DST2T_Product {
 	/** @var array Per-request catalog cache keyed by supplier category. */
 	private $catalog_cache = array();
 
+	/** @var array Per parent product: variations seen and field forms already sent in this variation list. */
+	private $variation_forms = array();
+
 	public function __construct( DST2T_API_Client $api, DST2T_Settings $settings ) {
 		$this->api      = $api;
 		$this->settings = $settings;
@@ -607,9 +610,36 @@ final class DST2T_Product {
 			$data[ DST2T_Privacy::prefix() . '_enabled' ] = false;
 			return $data;
 		}
-		$prefix                             = DST2T_Privacy::prefix();
-		$data[ $prefix . '_enabled' ]     = true;
-		$data[ $prefix . '_fields_html' ] = $this->fields_html( $id );
+		$prefix                       = DST2T_Privacy::prefix();
+		$data[ $prefix . '_enabled' ] = true;
+		$html                         = $this->fields_html( $id );
+		if ( '' === $html ) {
+			$data[ $prefix . '_fields_html' ] = '';
+			return $data;
+		}
+
+		// Packages of one game share the same form, which differs only by the
+		// variation id it carries. Send the markup once per distinct form in this
+		// variation list (data-product_variations) and a short key on the others;
+		// the storefront script copies the form from the first package with that key
+		// and sets the id. A 20-package product drops from ~65-90 KB to ~4 KB.
+		$id_attr = 'data-' . $prefix . '-history-product="' . absint( $id ) . '"';
+		$key     = substr( md5( str_replace( $id_attr, '', $html ) ), 0, 12 );
+		$parent  = absint( $product->get_id() );
+		$child   = absint( $variation->get_id() );
+		if ( isset( $this->variation_forms[ $parent ]['seen'][ $child ] ) ) {
+			// The same package again means a new list is being built: start over so
+			// every list carries each form at least once.
+			$this->variation_forms[ $parent ] = array();
+		}
+		$this->variation_forms[ $parent ]['seen'][ $child ] = true;
+
+		$data[ $prefix . '_fields_key' ] = $key;
+		$data[ $prefix . '_fields_id' ]  = absint( $id );
+		if ( empty( $this->variation_forms[ $parent ]['keys'][ $key ] ) ) {
+			$this->variation_forms[ $parent ]['keys'][ $key ] = true;
+			$data[ $prefix . '_fields_html' ]                 = $html;
+		}
 		return $data;
 	}
 
@@ -1008,7 +1038,7 @@ final class DST2T_Product {
 			return;
 		}
 		// Inlined while stealth mode is on so no plugin path reaches the page source.
-		DST2T_Privacy::enqueue_frontend();
+		DST2T_Privacy::enqueue_frontend( $this->settings->enabled( 'player_history' ) );
 	}
 
 	/** Whether a variable parent has at least one supplier-mapped variation. */
