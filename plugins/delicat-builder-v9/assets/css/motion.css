@@ -1,0 +1,255 @@
+/*
+ * Delicat Builder V9 — motion layer (9.4.1). Last file of the chrome bundle,
+ * so it loads on every storefront page.
+ *
+ * One set of easing curves and durations, and the motions built on them:
+ *   1. Tokens
+ *   2. Screen changes: direction-aware (forward slides in from the right,
+ *      back from the left, a product card opens with its image morphing).
+ *      The header and the bottom bar are their own transition groups
+ *      (body.dbp-app, see dbp-app.css), so they stay still.
+ *   3. Theme switch: a circle grows from the toggle (engine, view
+ *      transition). Nothing else animates while it plays.
+ *   4. Bottom bar: the newly active tab's icon pops.
+ *   5. Cards: product cards cascade in when their section is revealed.
+ *   6. Skeletons: a moving highlight band (transform) instead of an animated
+ *      background-position, which repainted every frame.
+ *   7. Cart badges pop when an item is added (engine adds .is-bumping).
+ * Press feedback on cards and tiles is played by the engine (Web Animations,
+ * transform only), so no stylesheet transition of a card is replaced.
+ * Only transform, opacity and clip-path animate. Everything is off with
+ * "reduce motion"; low-power phones keep the cheapest version or none (the
+ * engine already skips view transitions there). No color-mix(),
+ * backdrop-filter or relative colours (old Android WebViews).
+ */
+
+/* 1 ------------------------------------------------------------ tokens */
+:root {
+  --dlc-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dlc-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dlc-ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --dlc-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dlc-dur-fast: 160ms;
+  --dlc-dur-base: 240ms;
+  --dlc-dur-page: 280ms;
+}
+html.delicat-low-power {
+  --dlc-dur-base: 180ms;
+  --dlc-dur-page: 200ms;
+}
+
+/* 2 ---------------------------------------------------- screen changes */
+html[data-delicat-transition="forward"]::view-transition-old(root) {
+  animation: var(--dlc-dur-fast) var(--dlc-ease-in) both dlc-vt-exit-left;
+}
+html[data-delicat-transition="forward"]::view-transition-new(root) {
+  animation: var(--dlc-dur-page) var(--dlc-ease-out) both dlc-vt-enter-right;
+}
+html[data-delicat-transition="back"]::view-transition-old(root) {
+  animation: var(--dlc-dur-fast) var(--dlc-ease-in) both dlc-vt-exit-right;
+}
+html[data-delicat-transition="back"]::view-transition-new(root) {
+  animation: var(--dlc-dur-page) var(--dlc-ease-out) both dlc-vt-enter-left;
+}
+html[data-delicat-transition="product"]::view-transition-old(root) {
+  animation: 120ms var(--dlc-ease-in) both dlc-vt-fade;
+}
+html[data-delicat-transition="product"]::view-transition-new(root) {
+  animation: var(--dlc-dur-base) var(--dlc-ease-out) both dlc-vt-rise;
+}
+html[data-delicat-transition]::view-transition-group(delicat-product-image) {
+  animation-duration: 320ms;
+  animation-timing-function: var(--dlc-ease-out);
+}
+@keyframes dlc-vt-exit-left {
+  to { opacity: 0; transform: translate3d(-20px, 0, 0); }
+}
+@keyframes dlc-vt-exit-right {
+  to { opacity: 0; transform: translate3d(20px, 0, 0); }
+}
+@keyframes dlc-vt-enter-right {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+}
+@keyframes dlc-vt-enter-left {
+  from { opacity: 0; transform: translate3d(-28px, 0, 0); }
+}
+@keyframes dlc-vt-fade {
+  to { opacity: 0; }
+}
+@keyframes dlc-vt-rise {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+}
+
+/* 3 ------------------------------------------------------ theme switch */
+/* The engine animates clip-path on the new snapshot; the snapshots themselves
+   must not run the screen-change animations, and the header and bottom bar
+   join the page so the circle covers them too. */
+html.dlc-theme-vt::view-transition-old(root),
+html.dlc-theme-vt::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* 9.4.2: modest phones get a cross-fade of the snapshot instead of the circle
+   (the engine adds dlc-theme-vt--fade): the new theme fades in over the old. */
+html.dlc-theme-vt.dlc-theme-vt--fade::view-transition-new(root) {
+  animation: 220ms var(--dlc-ease-out) both dlc-vt-theme-in;
+}
+@keyframes dlc-vt-theme-in {
+  from { opacity: 0; }
+}
+html.dlc-theme-vt body .dsb8-header,
+html.dlc-theme-vt body .delicat-bottom-nav,
+html.dlc-theme-vt body .delicat-shell--header {
+  view-transition-name: none !important;
+}
+
+/* 4 -------------------------------------------------------- bottom bar */
+.delicat-bottom-nav .dbn-item.is-popping .dbn-icon {
+  animation: 300ms var(--dlc-ease-pop) both dlc-pop;
+}
+@keyframes dlc-pop {
+  0% { transform: scale(0.84); }
+  60% { transform: scale(1.1); }
+  to { transform: none; }
+}
+
+/* 5 ------------------------------------------------------------- cards */
+/* 9.4.2: only the first four cards of a rail (the first screenful) cascade,
+   and never on Back / Forward (html.dlc-nav-back, set by the engine), where
+   the shopper has already seen them. */
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.delicat-low-power):not(.delicat-reduce-motion):not(.dlc-nav-back) .dbv9-reveal:not(.dbv9-reveal--in) .delicat-carousel__track > .delicat-product-card:nth-child(-n + 4) {
+    opacity: 0;
+  }
+  html:not(.delicat-low-power):not(.delicat-reduce-motion):not(.dlc-nav-back) .dbv9-reveal--in .delicat-carousel__track > .delicat-product-card:nth-child(-n + 4) {
+    animation: 380ms var(--dlc-ease-out) both dlc-card-in;
+    animation-delay: calc(var(--dbv9-reveal-delay, 0ms) + 40ms);
+  }
+  html:not(.delicat-low-power):not(.delicat-reduce-motion):not(.dlc-nav-back) .dbv9-reveal--in .delicat-carousel__track > .delicat-product-card:nth-child(2) {
+    animation-delay: calc(var(--dbv9-reveal-delay, 0ms) + 85ms);
+  }
+  html:not(.delicat-low-power):not(.delicat-reduce-motion):not(.dlc-nav-back) .dbv9-reveal--in .delicat-carousel__track > .delicat-product-card:nth-child(3) {
+    animation-delay: calc(var(--dbv9-reveal-delay, 0ms) + 130ms);
+  }
+  html:not(.delicat-low-power):not(.delicat-reduce-motion):not(.dlc-nav-back) .dbv9-reveal--in .delicat-carousel__track > .delicat-product-card:nth-child(4) {
+    animation-delay: calc(var(--dbv9-reveal-delay, 0ms) + 175ms);
+  }
+}
+@keyframes dlc-card-in {
+  from { opacity: 0; transform: translate3d(0, 14px, 0) scale(0.98); }
+}
+
+/* 6 --------------------------------------------------------- skeletons */
+.dph__bar,
+.dph__chip,
+.dph__thumb,
+.dbp-skeleton,
+.dlc-rv-skel,
+.dnp-express-skeleton span {
+  position: relative;
+  overflow: hidden;
+  background-image: none !important;
+  animation: none !important;
+}
+.dph__bar,
+.dph__chip,
+.dph__thumb {
+  background-color: rgba(120, 126, 150, 0.14);
+}
+.dbp-skeleton {
+  background-color: #eef0f6;
+}
+.dlc-rv-skel {
+  background-color: rgba(13, 27, 77, 0.06);
+}
+.dnp-express-skeleton span {
+  background-color: #eef0f5;
+}
+.dph__bar::after,
+.dph__chip::after,
+.dph__thumb::after,
+.dbp-skeleton::after,
+.dlc-rv-skel::after,
+.dnp-express-skeleton span::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+  transform: translate3d(-100%, 0, 0);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  animation: 1.3s var(--dlc-ease-inout) infinite dlc-sweep;
+}
+html.dlc-theme-dark .dph__bar,
+html.dlc-theme-dark .dph__chip,
+html.dlc-theme-dark .dph__thumb,
+html.dlc-theme-dark .dbp-skeleton,
+html.dlc-theme-dark .dlc-rv-skel,
+html.dlc-theme-dark .dnp-express-skeleton span {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+html.dlc-theme-dark .dph__bar::after,
+html.dlc-theme-dark .dph__chip::after,
+html.dlc-theme-dark .dph__thumb::after,
+html.dlc-theme-dark .dbp-skeleton::after,
+html.dlc-theme-dark .dlc-rv-skel::after,
+html.dlc-theme-dark .dnp-express-skeleton span::after {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0));
+}
+@keyframes dlc-sweep {
+  to { transform: translate3d(100%, 0, 0); }
+}
+html.delicat-low-power .dph__bar::after,
+html.delicat-low-power .dph__chip::after,
+html.delicat-low-power .dph__thumb::after,
+html.delicat-low-power .dbp-skeleton::after,
+html.delicat-low-power .dlc-rv-skel::after,
+html.delicat-low-power .dnp-express-skeleton span::after {
+  display: none;
+}
+
+/* ------------------------------------------------------ reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  html[data-delicat-transition]::view-transition-old(root),
+  html[data-delicat-transition]::view-transition-new(root),
+  html[data-delicat-transition]::view-transition-group(*) {
+    animation: none !important;
+  }
+  .delicat-bottom-nav .dbn-item.is-popping .dbn-icon {
+    animation: none;
+  }
+  .dph__bar::after,
+  .dph__chip::after,
+  .dph__thumb::after,
+  .dbp-skeleton::after,
+  .dlc-rv-skel::after,
+  .dnp-express-skeleton span::after {
+    display: none;
+  }
+}
+html.delicat-reduce-motion .delicat-bottom-nav .dbn-item.is-popping .dbn-icon {
+  animation: none;
+}
+
+/* 7 ------------------------------------------------------- cart badge */
+[data-dsb8-cart-count].is-bumping,
+[data-dbn-cart-count].is-bumping,
+[data-dbp-cart-count].is-bumping,
+[data-delicat-cart-count].is-bumping {
+  animation: 360ms var(--dlc-ease-pop) both dlc-bump;
+}
+@keyframes dlc-bump {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.35); }
+  to { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-dsb8-cart-count].is-bumping,
+  [data-dbn-cart-count].is-bumping,
+  [data-dbp-cart-count].is-bumping,
+  [data-delicat-cart-count].is-bumping {
+    animation: none;
+  }
+}

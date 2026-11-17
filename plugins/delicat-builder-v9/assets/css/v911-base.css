@@ -1,0 +1,184 @@
+/* Delicat Builder 9.11.0 — storefront redesign, shared layer.
+   Loaded last on every storefront page (end of the polish bundles), so it wins
+   ties against the older sheets without touching them. Flat surfaces, hairline
+   borders, one action colour from the Design studio, « Nuit douce » in dark.
+   Old Android WebViews: no color-mix(), no :has(), no backdrop-filter, no
+   relative colours; transforms/opacity only for motion.
+   The « Avec Délicat vous pouvez ! » banner section (.delicat-section--banner,
+   .delicat-banner-*) is deliberately never targeted here. */
+
+/* 1. Tokens ---------------------------------------------------------------- */
+:root{--v-bg:var(--ds-color-background,#F3F5F9);--v-sf:var(--ds-color-surface,#FFFFFF);--v-track:var(--ds-color-surface-2,#EEF1F6);--v-edge:var(--ds-color-border,#E2E6EE);--v-edge2:#C9D0DC;--v-line:#EDF0F5;--v-ink:var(--ds-color-text,#121629);--v-mut:var(--ds-color-text-muted,#4A5370);--v-fnt:#5F6884;--v-ac:var(--ds-color-primary-fill,var(--ds-color-primary,#2563EB));--v-aci:var(--ds-color-primary-hover,#1D4ED8);--v-acs:var(--ds-color-primary-subtle,#EFF6FF);--v-on:#FFFFFF;--v-ok:var(--ds-color-success-text,#0B7A55);--v-oks:rgba(16,163,107,.13);--v-bad:var(--ds-color-danger-text,#B42335);--v-warn:#94470A;--v-warns:#FDF3E3;--v-buy:var(--dlc-buy,#D81E4B);--v-buy-ink:#FFFFFF;--v-skel:#E6EAF1;--v-r-card:18px;--v-r-btn:14px;--v-r-chip:12px;--v-font:var(--ds-font-sans,"Inter",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif)}
+html.dlc-theme-dark,html[data-delicat-theme="dark"]{--v-bg:#0F1218;--v-sf:#171B22;--v-track:#1E232C;--v-edge:#262B35;--v-edge2:#353C49;--v-line:#21262F;--v-ink:#E6E8EF;--v-mut:#A7AEBE;--v-fnt:#8A93A6;--v-aci:var(--ds-color-primary,#60A5FA);--v-acs:var(--ds-color-primary-tint,#1A294A);--v-ok:#5BD3A0;--v-oks:rgba(91,211,160,.14);--v-bad:#FF8C95;--v-warn:#F2C36B;--v-warns:#2A2416;--v-skel:#1F242D}
+@media (prefers-color-scheme:dark){html:not([data-delicat-theme]):not(.dlc-theme-light){--v-bg:#0F1218;--v-sf:#171B22;--v-track:#1E232C;--v-edge:#262B35;--v-edge2:#353C49;--v-line:#21262F;--v-ink:#E6E8EF;--v-mut:#A7AEBE;--v-fnt:#8A93A6;--v-aci:var(--ds-color-primary,#60A5FA);--v-acs:var(--ds-color-primary-tint,#1A294A);--v-ok:#5BD3A0;--v-oks:rgba(91,211,160,.14);--v-bad:#FF8C95;--v-warn:#F2C36B;--v-warns:#2A2416;--v-skel:#1F242D}}
+
+/* 2. No costly effects: no blur, no glass, anywhere on the storefront. */
+/* 9.11.1: targeted (no universal * rule: it made every element and pseudo-element pay a style lookup). */
+body:not(#d) .dbv9-live-sale__link,body:not(#d) .dbv9-mb-topbar,body:not(#d) .dbv9-notifications__panel,body:not(#d) .dbv9-push-help__backdrop,body:not(#d) .delicat-bottom-nav,body:not(#d) .delicat-builder-hero--style-neo_glass_pro,body:not(#d) .delicat-design-buybar__inner,body:not(#d) .delicat-faq__item,body:not(#d) .delicat-process__card,body:not(#d) .delicat-product-card,body:not(#d) .delicat-shell--header,body:not(#d) .delicat-shell__bottom-nav,body:not(#d) .delicat-shell__drawer-layer,body:not(#d) .delicat-shell__drawer-panel,body:not(#d) .delicat-shell__search-layer,body:not(#d) .delicat-shell__search-panel,body:not(#d) .delicat-slow-net,body:not(#d) .delicat-trust__panel,body:not(#d) .delicat-woo-product-card,body:not(#d) .dsb-bottom-nav,body:not(#d) .dsb-menu-lite,body:not(#d) .dsb-modern-menu,body:not(#d) .dsb8-header,body:not(#d) .dsb8-header--glass,body:not(#d) .is-mesh,body:not(#d) .product,body:not(#d) .summary,body:not(#d) .dbv9-annc__overlay,body:not(#d) .dlx-drawer__backdrop,body:not(#d) .dlx-drawer__panel,body:not(#d) .dsb8-cart-panel,body:not(#d) .dnp-mobile-dock,body:not(#d) .dpn-checkout-dock,body:not(#d) .dlc-review-overlay,body:not(#d) .dnp-express-sheet{-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+
+/* 3. Header: menu · logo · search · notifications · cart (solid, hairline) */
+body:not(#d) .dsb8-header{background:var(--v-sf)!important;--dsb8-header-bg:var(--v-sf);--dsb8-header-text:var(--v-ink);border-bottom:1px solid var(--v-edge)!important;box-shadow:none!important;color:var(--v-ink)}
+body:not(#d) .dsb8-header.dsb8-header--floating{width:100%;margin:0!important;border-radius:0}
+@media (max-width:600px){body:not(#d) .dsb8-header{--dsb8-header-height:56px!important;--dsb8-mobile-height:56px;--dsb8-action-size:44px;--dsb8-icon-size:22px}body:not(#d) .dsb8-header__row{gap:2px!important;padding:0 8px!important}body:not(#d) .dsb8-header__logo img,body:not(#d) .dsb8-header__logo .custom-logo{max-height:40px!important}}
+body:not(#d) .dsb8-header__action{border-radius:12px!important;color:var(--v-ink)!important;background:transparent!important;box-shadow:none!important}
+body:not(#d) .dsb8-header__action:active{background:var(--v-track)!important}
+body:not(#d) .dsb8-header__menu{color:var(--v-ink)!important}
+body:not(#d) .dsb8-header__theme{display:none!important}
+body:not(#d) .dsb8-header__badge,body:not(#d) .dbv9-notifications__count{background:var(--v-ac)!important;color:var(--v-on)!important;border-color:var(--v-sf)!important}
+body:not(#d) .dsb8-header__assist{display:none!important}
+/* 9.11.1: shown at once on purchase pages (no shift when the assistant is found); hidden only if it is absent */
+body.dlc-buy-page:not(#d) .dsb8-header__assist{display:grid!important}
+html.dlc-no-assist body.dlc-buy-page:not(#d) .dsb8-header__assist{display:none!important}
+body:not(#d) .dsb8-header__search-btn svg,body:not(#d) .dsb8-header__assist svg{width:22px;height:22px}
+
+/* 4. Bottom menu: assets/css/bottom-nav.css (rewritten in 9.11.1). */
+
+/* 5. Purchase pages (product, cart, checkout): ONE bar at the bottom.
+   The bottom menu and the chat bubbles step aside; the assistant opens from the header. */
+html body.dlc-buy-page:not(#d) .delicat-bottom-nav{display:none!important}
+html body.dlc-buy-page:not(#d) #dsa7-root,html body.dlc-buy-page:not(#d) .dap-launcher,html body.dlc-buy-page:not(#d) .dap-floating{display:none!important}
+html body.dlc-buy-page:not(#d)>a[href*="wa.me/"][style*="fixed"]{display:none!important}
+/* 9.14.0: up to 1023 px, where the bottom menu and the product dock now stay (the header nav starts at 1024) */
+@media (max-width:1023px){
+html body.dlc-buy-page.delicat-bottom-nav-active:not(#d){--dbv9-nav-band:0px;padding-bottom:0!important}
+html body.dlc-buy-page.dnp-dock-visible:not(#d){padding-bottom:calc(88px + env(safe-area-inset-bottom,0px))!important}
+html body.dlc-buy-page:not(#d) .delicat-page-layout{scroll-padding-bottom:96px}
+}
+/* 9.14.0: tablets 768-820 px, where the cart's « Valider la commande » bar and the checkout's « Payer » dock are still
+   fixed: the page keeps their 84 px band (zeroed by the buy-page rule above), so the footer's last line is not under
+   the bar. Phones keep the 9.13.0 spacing. */
+@media (min-width:768px) and (max-width:820px){
+html body.dlc-buy-page.dpn-cart:not(#d),html body.dlc-buy-page.dpn-checkout.dpn-checkout-dock-ready:not(#d){padding-bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
+}
+
+/* 6. Chat bubbles elsewhere: above the menu, never on it (9.14.0: the menu shows up to 1023 px) */
+@media (max-width:1023px){
+html body.delicat-bottom-nav-active:not(#d) #dsa7-root{bottom:calc(84px + env(safe-area-inset-bottom,0px))!important}
+html body.delicat-bottom-nav-active:not(#d)>a[href*="wa.me/"][style*="fixed"]{bottom:calc(150px + env(safe-area-inset-bottom,0px))!important;right:20px!important;width:48px!important;height:48px!important;box-shadow:none!important;z-index:2147480000!important}
+html body:not(.delicat-bottom-nav-active):not(#d)>a[href*="wa.me/"][style*="fixed"]{box-shadow:none!important}
+html.dlc-has-assist body.delicat-bottom-nav-active:not(.dlc-buy-page):not(#d){padding-bottom:calc(var(--dbv9-nav-band,84px) + 64px)!important}
+}
+#dsa7-launcher{box-shadow:0 2px 8px rgba(15,23,42,.18)!important}
+html.dlx-open body:not(#d)>a[href*="wa.me/"][style*="fixed"]{opacity:0!important;pointer-events:none!important}
+
+/* 7. Drawer: solid, the light/dark switch lives here */
+body:not(#d) .dlx-drawer__panel{background:var(--v-sf)!important;box-shadow:none!important;border-right:1px solid var(--v-edge)}
+body:not(#d) .dlx-drawer__backdrop{background:rgba(10,12,20,.5)!important}
+body:not(#d) .dlx-theme{min-height:48px;border-radius:14px!important;background:var(--v-track)!important;color:var(--v-ink)!important;border:0!important}
+
+/* 8. Product cards: assets/css/v911-cards.css (9.11.1: only in the bundles of pages that show cards). */
+
+/* 9. Skeletons (engine placeholders): flat grey shapes where the content will
+   land, shown only after ~300 ms (engine), no shimmer gradient. */
+body:not(#d) .dph{background:transparent!important}
+body:not(#d) .dph__bar,body:not(#d) .dph__thumb,body:not(#d) .dph__chip,body:not(#d) .dph__hero,body:not(#d) .dph__avatar{background:var(--v-skel)!important;background-image:none!important;border-radius:10px!important;animation:dlc911-pulse 1.4s ease-in-out infinite}
+body:not(#d) .dph__card{background:var(--v-sf)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card)!important;box-shadow:none!important;overflow:hidden}
+body:not(#d) .dph__card .dph__thumb{border-radius:0!important;width:100%!important;aspect-ratio:1/1;height:auto!important}
+body:not(#d) .dph__chip{border-radius:12px!important}
+@keyframes dlc911-pulse{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* 10. Low power / reduced motion: no looping animation, short transitions only */
+@media (prefers-reduced-motion:reduce){body:not(#d) .dph__bar,body:not(#d) .dph__thumb,body:not(#d) .dph__chip,body:not(#d) .dph__hero,body:not(#d) .dph__avatar{animation:none!important}}
+html.delicat-reduce-motion body:not(#d) .dph__bar,html.delicat-reduce-motion body:not(#d) .dph__thumb,html.delicat-reduce-motion body:not(#d) .dph__chip,html.delicat-reduce-motion body:not(#d) .dph__hero,html.delicat-low-power body:not(#d) .dph__bar,html.delicat-low-power body:not(#d) .dph__thumb,html.delicat-low-power body:not(#d) .dph__chip,html.delicat-low-power body:not(#d) .dph__hero{animation:none!important}
+
+
+/* 11. Account (Builder-rendered parts only: the Delicat Identity card and the signed-in
+   greeting). Identity Pro / WooCommerce own the forms and the account pages themselves. */
+body:not(#d) .delicat-site-account__hero{background:var(--v-sf)!important;background-image:none!important;color:var(--v-ink)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card)!important;box-shadow:none!important}
+body:not(#d) .delicat-site-account__avatar{background:var(--v-acs)!important;color:var(--v-aci)!important;border:0!important;border-radius:50%!important}
+body:not(#d) .delicat-site-account__greeting{color:var(--v-ink)!important}
+body:not(#d) .delicat-site-account__email{color:var(--v-mut)!important}
+body:not(#d) .delicat-site-account__identity-card{background:var(--v-sf)!important;background-image:none!important;color:var(--v-ink)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card)!important;box-shadow:none!important}
+body:not(#d) .delicat-site-account__identity-card h1{color:var(--v-ink)!important}
+body:not(#d) .delicat-site-account__identity-card p{color:var(--v-mut)!important}
+body:not(#d) .delicat-site-account__identity-button{height:48px!important;border-radius:var(--v-r-btn)!important;background:var(--v-ac)!important;background-image:none!important;color:var(--v-on)!important;border:0!important;box-shadow:none!important;font-weight:700!important}
+html body.woocommerce-account:not(#d) .woocommerce-form-login,html body.woocommerce-account:not(#d) .woocommerce-MyAccount-navigation{background:var(--v-sf)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card)!important;box-shadow:none!important}
+html body.woocommerce-account:not(#d) .woocommerce-form-login .input-text{height:48px!important;border-radius:var(--v-r-btn)!important;border:1.5px solid var(--v-edge2)!important;background:var(--v-sf)!important;color:var(--v-ink)!important;font-size:16px!important;box-shadow:none!important}
+html body.woocommerce-account:not(#d) .woocommerce-form-login__submit{height:48px!important;border-radius:var(--v-r-btn)!important;background:var(--v-ac)!important;background-image:none!important;color:var(--v-on)!important;border:0!important;box-shadow:none!important}
+
+/* 12. Footer « Informations légales »: one card like the Boutique / Mon espace / Aide groups,
+   one clean column on phones, two on wide screens, 44 px rows. Same links and order. */
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal{display:block!important;width:100%!important;margin:0!important;border:1px solid var(--ft-line,var(--v-edge))!important;border-radius:20px!important;background:var(--ft-surface,var(--v-sf))!important;box-shadow:none!important;overflow:hidden!important}
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal ul.dbv9-ft__legal-list{display:grid!important;grid-template-columns:minmax(0,1fr)!important;gap:0!important;margin:0!important;padding:0 8px 10px!important;list-style:none!important}
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal .dbv9-ft__legal-list li{margin:0!important;padding:0!important}
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal .dbv9-ft__legal-list a{display:flex!important;align-items:center!important;width:100%!important;min-height:44px!important;margin:0!important;padding:0 8px!important;border-radius:10px!important;color:var(--ft-muted,var(--v-mut))!important;font:600 14px/1.3 var(--v-font)!important;text-decoration:none!important;overflow-wrap:normal!important}
+@media (min-width:600px){body:not(#d) #dbv9-universal-footer .dbv9-ft__legal ul.dbv9-ft__legal-list{grid-template-columns:repeat(2,minmax(0,1fr))!important;column-gap:8px!important}}
+
+/* 13. « Disponible sur Google Play » badge (footer « Notre application », menu). Always black with its
+   1 px grey border (light and Nuit douce), 162×48 reserved (no shift), clear space around it.
+   Hidden before it is parsed on iPhone/iPad and inside the app (html.dlc-no-play, header script). */
+.dlc-play-badge{display:inline-block;flex:none;width:162px;height:48px;margin:6px 0;padding:0;line-height:0;border-radius:8px;text-decoration:none!important;-webkit-tap-highlight-color:transparent}
+body:not(#d) .dlc-play-badge,body:not(#d) .dlc-play-badge svg{display:block!important;width:162px!important;height:48px!important;min-width:162px!important;max-width:none!important;flex:none!important}
+.dlc-play-badge:focus-visible{outline:2px solid var(--v-ac,#2563eb);outline-offset:3px}
+.dlc-play-badge:active{transform:scale(.98)}
+html.dlc-no-play .dlc-play-wrap{display:none!important}
+body:not(#d) .dbv9-ft__app{display:flex;flex-direction:column;align-items:flex-start;gap:6px;margin:0 0 14px}
+body:not(#d) .dlx-app{display:flex;justify-content:flex-start;padding:8px 4px 4px}
+/* the badge's own colours win over menu / footer icon rules (no recolouring of the Google Play mark) */
+body:not(#d) .dlc-play-badge svg rect{fill:#000!important;stroke:#A6A6A6!important;stroke-width:1!important}
+body:not(#d) .dlc-play-badge svg text{fill:#fff!important;stroke:none!important}
+body:not(#d) .dlc-play-badge svg path{stroke:none!important}
+body:not(#d) .dlc-play-badge svg path[fill="#4285F4"]{fill:#4285F4!important}
+body:not(#d) .dlc-play-badge svg path[fill="#34A853"]{fill:#34A853!important}
+body:not(#d) .dlc-play-badge svg path[fill="#EA4335"]{fill:#EA4335!important}
+body:not(#d) .dlc-play-badge svg path[fill="#FBBC04"]{fill:#FBBC04!important}
+/* 9.12.1: the chat bubble steps up while a home-banner button passes under it (engine sets the lift) */
+html.dlc-bubble-lift body:not(#d) #dsa7-root,html.dlc-bubble-lift body:not(#d) .dap-launcher{transform:translateY(calc(-1 * var(--dlc-bubble-lift,0px)))!important;transition:transform .2s ease,opacity .2s ease}
+/* 9.14.0: the bubble fades away while the page scrolls down, so it never sits on the products (engine: html.dlc-bubble-away) */
+html body:not(#d) #dsa7-root,html body:not(#d) .dap-launcher{transition:transform .2s ease,opacity .2s ease}
+html.dlc-bubble-away body:not(#d) #dsa7-root,html.dlc-bubble-away body:not(#d) .dap-launcher{opacity:0!important;pointer-events:none!important;transition:transform .2s ease,opacity .12s ease}
+html.dlc-bubble-away body:not(#d) #dsa7-root *,html.dlc-bubble-away body:not(#d) .dap-launcher *{pointer-events:none!important}
+@media (prefers-reduced-motion:reduce){html.dlc-bubble-lift body:not(#d) #dsa7-root,html body:not(#d) #dsa7-root,html.dlc-bubble-away body:not(#d) #dsa7-root{transition:none!important}}
+html.delicat-reduce-motion body:not(#d) #dsa7-root,html.delicat-low-power body:not(#d) #dsa7-root{transition:none!important}
+
+/* 14. 9.14.0 tablets and laptops. ONE content container for every page from 768 px:
+   1200 px of content, 24 px gutters (header row, home, shop, product, checkout, footer). */
+@media (min-width:768px){:root{--dlc-max:1200px;--dlc-gutter:24px;--dlc-wrap:min(var(--dlc-max),calc(100% - 2*var(--dlc-gutter)))}}
+/* Header from 1024 px: the bottom menu's links after the logo, the search as a field-like pill. */
+@media (min-width:1024px){
+body:not(#d) .dsb8-header__nav{margin-left:4px}
+body:not(#d) .dsb8-header__nav-link{display:inline-flex;align-items:center;height:44px;padding:0 12px;border-radius:10px;color:var(--v-mut);font:600 14px/1 var(--v-font);text-decoration:none;white-space:nowrap;transition:background-color .15s ease,color .15s ease}
+body:not(#d) .dsb8-header__nav-link:hover{background:var(--v-track);color:var(--v-ink)}
+body:not(#d) .dsb8-header__nav-link.is-active,body:not(#d) .dsb8-header__nav-link[aria-current="page"]{background:var(--v-track);color:var(--v-ink)}
+body:not(#d) .dsb8-header__nav-link:focus-visible{outline:2px solid var(--v-ac);outline-offset:2px}
+body:not(#d) .dsb8-header__search-btn{display:flex!important;align-items:center;justify-content:flex-start;gap:10px;flex:0 1 clamp(200px,22vw,320px);width:clamp(200px,22vw,320px);min-width:160px;height:44px;padding:0 14px!important;border:1px solid var(--v-edge)!important;background:var(--v-track)!important;color:var(--v-mut)!important}
+body:not(#d) .dsb8-header__search-btn svg{flex:none;width:20px;height:20px}
+body:not(#d) .dsb8-header__search-label{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:400 14px/1 var(--v-font);color:var(--v-mut)}
+}
+@media (min-width:1024px) and (hover:hover){body:not(#d) .dsb8-header__search-btn:hover{border-color:var(--v-edge2)!important}}
+@media (prefers-reduced-motion:reduce){body:not(#d) .dsb8-header__nav-link{transition:none}}
+/* Footer from 768 px: the same 1200 px edges as the pages; « Informations légales » keeps its inner
+   padding inside its card (the desktop summary reset cut its first letter); from 1024 px it spans the
+   row with its links in four columns. */
+@media (min-width:768px){
+body:not(#d) #dbv9-universal-footer.dbv9-footer{padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+body:not(#d) #dbv9-universal-footer .dbv9-ft__inner{width:var(--dlc-wrap);max-width:var(--dlc-max)}
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal .dbv9-ft__summary{padding:14px 16px 4px!important}
+}
+@media (min-width:1024px){
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal{grid-column:1/-1}
+body:not(#d) #dbv9-universal-footer .dbv9-ft__legal ul.dbv9-ft__legal-list{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+/* Page-switch skeletons (engine placeholders after ~300 ms) shaped like the tablet / laptop pages that
+   follow, so nothing jumps when the real page lands: the 1200 px container, a 300 px home hero, rails of
+   3.3 / 4 / 5 cards, shop grids of 3 then 4 columns, the product's square picture beside its column. */
+@media (min-width:768px){
+body:not(#d) .dph__body{max-width:calc(var(--dlc-max) + 2 * var(--dlc-gutter));padding-left:var(--dlc-gutter);padding-right:var(--dlc-gutter)}
+body:not(#d) .dph__hero--home{aspect-ratio:auto!important;height:300px;border-radius:var(--v-r-card,18px)!important}
+body:not(#d) .dph__rail{grid-auto-columns:calc((100% - 3 * 14px) / 3.3);gap:14px}
+body:not(#d) .dph--shop .dph__grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important}
+body:not(#d) .dph--product{display:grid;align-items:start;margin:0 auto}
+body:not(#d) .dph--product .dph__hero{aspect-ratio:1/1;border-radius:var(--v-r-card,18px)!important}
+body:not(#d) .dph--product .dph__body{max-width:none;margin:0;padding:0 0 140px}
+}
+@media (min-width:768px) and (max-width:1023px){
+body:not(#d) .dph--product{grid-template-columns:200px minmax(0,1fr);column-gap:14px;max-width:720px;padding:16px 0 0}
+}
+@media (min-width:1024px){
+body:not(#d) .dph__rail{grid-auto-columns:calc((100% - 3 * 16px) / 4);gap:16px}
+body:not(#d) .dph--product{grid-template-columns:minmax(0,5fr) minmax(0,7fr);column-gap:32px;max-width:var(--dlc-wrap);padding:24px 0 0}
+}
+@media (min-width:1280px){
+body:not(#d) .dph__rail{grid-auto-columns:calc((100% - 4 * 20px) / 5);gap:20px}
+body:not(#d) .dph--shop .dph__grid{grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:16px!important}
+}

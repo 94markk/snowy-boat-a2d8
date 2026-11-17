@@ -1,0 +1,15 @@
+/* Delicat Builder 9.12.1 — product cards are the 9.10.1 cards again (owner: picture of the pre-9.11 home:
+   image on top with the name and the « Top Vente » pill over it, the dark price strip, the plain cart icon,
+   the 9.10.1 width and height, the 9.10.1 dark card). The 9.11 / 9.12 card layer is gone; only what the
+   newer markup needs, and three fixes, stay:
+   - the initial tile printed under the picture since 9.11 sits BEHIND the picture (it shows only when a
+     product has no picture);
+   - the cart and heart buttons keep their 9.10.1 look with an invisible 44 px tap area;
+   - the price never clips (one line, the strip grows with it). */
+body:not(#d) .delicat-product-card__media{isolation:isolate}
+body:not(#d) .delicat-product-card__ph{position:absolute;top:0;left:0;right:0;bottom:0;z-index:-1;display:flex;align-items:center;justify-content:center;background:var(--v-track,#EEF1F6);color:var(--v-fnt,#5F6884);font:800 40px/1 var(--v-font,Inter,system-ui,sans-serif);text-transform:uppercase;pointer-events:none}
+body:not(#d) .delicat-product-card__cta,body:not(#d) .delicat-product-card .delicat-like,body:not(#d) .delicat-product-card__like{position:relative}
+body:not(#d) .delicat-product-card .delicat-like,body:not(#d) .delicat-product-card__like{position:absolute}
+body:not(#d) .delicat-product-card__cta::after,body:not(#d) .delicat-product-card .delicat-like::after,body:not(#d) .delicat-product-card__like::after{content:"";position:absolute;top:50%;left:50%;width:44px;height:44px;transform:translate(-50%,-50%);border-radius:50%;background:transparent}
+body:not(#d) .delicat-product-card__price strong,body:not(#d) .delicat-product-card__poster-price strong{white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;font-variant-numeric:tabular-nums}
+body:not(#d) .delicat-product-card__body{height:auto!important;overflow:visible!important}

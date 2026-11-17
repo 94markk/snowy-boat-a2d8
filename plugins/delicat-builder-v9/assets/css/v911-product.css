@@ -1,0 +1,330 @@
+/* Delicat Builder 9.11.0 — product page layer (end of the product bundles).
+   Picture, identity card, compact notice, ONE row of regions, the Builder's PACKAGE
+   panel (its colours untouched), the Player ID card, plans as radio cards and ONE
+   purchase bar. Presentation only: selection, prices, the variation form and the
+   supplier / Player ID checks are unchanged. */
+body:not(#d) .delicat-native-product{--v-bp:var(--dnp-primary,#5B3DF5);display:flex!important;flex-direction:column!important;gap:14px!important;padding:12px 16px 24px!important;max-width:var(--dnp-max,920px);margin:0 auto!important;background:transparent!important;color:var(--v-ink)!important}
+body:not(#d) .delicat-native-product>*{margin-top:0!important;margin-bottom:0!important}
+
+/* Picture: a calm 4:3 frame with its place reserved (no jump when it arrives) */
+body:not(#d) .dnp-hero{display:flex!important;flex-direction:column!important;gap:14px!important;margin:0!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
+body:not(#d) .dnp-media{position:relative!important;width:100%!important;aspect-ratio:4/3;margin:0!important;padding:0!important;border-radius:var(--v-r-card,18px)!important;overflow:hidden!important;background:var(--v-track)!important;border:0!important;box-shadow:none!important}
+body:not(#d) .dnp-media .dnp-image,body:not(#d) .dnp-media img{position:absolute!important;top:0;left:0;width:100%!important;height:100%!important;max-height:none!important;object-fit:cover!important;object-position:50% 55%!important;border-radius:0!important;box-shadow:none!important;transform:none!important;filter:none!important}
+@supports not (aspect-ratio:1/1){body:not(#d) .dnp-media{height:0!important;padding-top:75%!important}}
+@media (min-width:768px){body:not(#d) .dnp-media{aspect-ratio:16/9}}
+
+/* Identity: icon + name in one card */
+body:not(#d) .dnp-summary{margin:0!important;padding:14px!important;background:var(--v-sf)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card,18px)!important;box-shadow:none!important;display:flex!important;flex-direction:column!important;gap:8px!important}
+body:not(#d) .dnp-identity{display:flex!important;align-items:center!important;gap:12px!important;margin:0!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important;flex-wrap:wrap}
+body:not(#d) .dnp-product-icon{width:52px!important;height:52px!important;flex:none!important;border-radius:14px!important;overflow:hidden!important;background:var(--v-track)!important;box-shadow:none!important;border:0!important;margin:0!important;padding:0!important}
+body:not(#d) .dnp-product-icon img{width:100%!important;height:100%!important;object-fit:cover!important;border-radius:0!important}
+body:not(#d) .dnp-identity-copy{flex:1 1 0!important;min-width:0!important}
+body:not(#d) .dnp-identity-copy h1{margin:0!important;color:var(--v-ink)!important;font:800 19px/1.2 var(--v-font)!important;letter-spacing:-.01em!important;-webkit-text-fill-color:currentColor!important;background:none!important;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:normal!important;word-break:normal!important;hyphens:manual!important;white-space:normal!important}
+/* 9.12.1: the name has the full width of its card (no badge beside it) and wraps between words */
+body:not(#d) .dnp-identity .delicat-badge{display:none!important}
+body:not(#d) .dnp-subtitle{margin:2px 0 0!important;color:var(--v-mut)!important;font:400 13px/1.4 var(--v-font)!important}
+body:not(#d) .dnp-identity .delicat-badge{display:inline-flex!important;align-items:center!important;gap:5px!important;height:26px!important;padding:0 10px!important;border-radius:13px!important;border:0!important;background:var(--v-oks)!important;color:var(--v-ok)!important;font:700 12px/1 var(--v-font)!important;box-shadow:none!important}
+body:not(#d) .dnp-meta:empty{display:none!important}
+body:not(#d) .dnp-trust{display:none!important}
+
+/* Compact notice: one short coloured band, the Builder's text and colours */
+body:not(#d) .dnp-important{display:flex!important;align-items:flex-start!important;gap:10px!important;margin:0!important;padding:11px 14px!important;border:0!important;border-radius:16px!important;background:var(--dnp-important-bg,var(--v-warns))!important;color:var(--dnp-important-text,var(--v-warn))!important;box-shadow:none!important}
+body:not(#d) .dnp-important::before,body:not(#d) .dnp-important::after{display:none!important}
+body:not(#d) .dnp-important-icon{flex:none!important;width:20px!important;height:20px!important;margin:0!important;padding:0!important;border:0!important;border-radius:50%!important;background:none!important;box-shadow:none!important;color:var(--dnp-important-accent,currentColor)!important;font-size:17px!important;line-height:20px!important;text-align:center!important;display:block!important}
+body:not(#d) .dnp-important-body{flex:1 1 0!important;min-width:0!important;display:block!important;margin:0!important;padding:0!important}
+body:not(#d) .dnp-important-head{display:inline!important;margin:0!important;padding:0!important}
+body:not(#d) .dnp-important-head strong{display:inline!important;margin:0 4px 0 0!important;color:inherit!important;font:800 13.5px/1.4 var(--v-font)!important;letter-spacing:0!important;text-transform:none!important}
+body:not(#d) .dnp-important-head strong::after{content:" :"}
+body:not(#d) .dnp-important-copy,body:not(#d) .dnp-important-copy p{display:inline!important;margin:0!important;padding:0!important;color:inherit!important;font:600 13.5px/1.4 var(--v-font)!important}
+body:not(#d) .dnp-important-copy p+p::before{content:" "}
+body:not(#d) .dnp-important-copy strong{font-weight:inherit!important;color:inherit!important}
+body:not(#d) .dnp-important-copy br{display:none}
+
+/* Purchase card: regions + packs */
+body:not(#d) .dnp-purchase{display:block!important;margin:0!important;padding:16px 0 14px!important;background:var(--v-sf)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card,18px)!important;box-shadow:none!important;overflow:hidden!important}
+body:not(#d) .dnp-purchase>h2{margin:0 16px 12px!important;color:var(--v-ink)!important;font:800 17px/1.25 var(--v-font)!important}
+body:not(#d) .dnp-purchase form.cart{margin:0!important;padding:0 12px!important}
+
+/* Regions: ONE horizontal row, flag + one-line label, a check on the chosen one, « n / N » */
+body:not(#d) .dpsr-switcher{margin:0 0 14px!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
+body:not(#d) .dpsr-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:0 16px;margin:0 0 10px}
+body:not(#d) .dpsr-head__title{margin:0!important;min-width:0;color:var(--v-ink)!important;font:800 17px/1.25 var(--v-font)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body:not(#d) .dpsr-count{flex:none;color:var(--v-fnt);font:500 12.5px/1 var(--v-font);font-feature-settings:"tnum" 1}
+body:not(#d) .dpsr-switcher .dpsr-switcher-track{display:flex!important;flex-wrap:nowrap!important;gap:8px!important;overflow-x:auto!important;overflow-y:hidden!important;padding:2px 16px 4px!important;margin:0!important;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;overscroll-behavior-inline:contain;border:0!important;background:none!important;box-shadow:none!important;grid-template-columns:none!important}
+body:not(#d) .dpsr-switcher .dpsr-switcher-track::-webkit-scrollbar{display:none}
+body:not(#d) .dpsr-switcher .dpsr-switcher-option{flex:none!important;display:inline-flex!important;align-items:center!important;gap:8px!important;height:46px!important;min-height:46px!important;padding:0 14px 0 11px!important;border:1.5px solid var(--v-edge)!important;border-radius:14px!important;background:var(--v-sf)!important;background-image:none!important;color:var(--v-ink)!important;box-shadow:none!important;font:700 13px/1 var(--v-font)!important;letter-spacing:.02em!important;white-space:nowrap!important;scroll-snap-align:start;transform:none!important;width:auto!important;max-width:none!important}
+body:not(#d) .dpsr-switcher .dpsr-switcher-option.is-active{background:rgba(91,61,245,.09)!important;border-color:var(--v-bp)!important;color:var(--v-bp)!important}
+html.dlc-theme-dark body:not(#d) .dpsr-switcher .dpsr-switcher-option.is-active,html[data-delicat-theme="dark"] body:not(#d) .dpsr-switcher .dpsr-switcher-option.is-active{background:rgba(142,123,255,.14)!important;border-color:#8E7BFF!important;color:#B9ADFF!important}
+body:not(#d) .dpsr-switcher .dpsr-switcher-option span{white-space:nowrap!important;overflow:visible!important}
+body:not(#d) .dpsr-switcher-icon{font-size:17px!important;line-height:1!important;flex:none}
+body:not(#d) .dpsr-check{display:none;width:16px;height:16px;flex:none}
+body:not(#d) .dpsr-switcher-option.is-active .dpsr-check{display:block}
+body:not(#d) .dpsr-switcher-progress{display:none!important}
+body:not(#d) .dpsr-switcher.is-loading .dpsr-switcher-option.is-active{opacity:.75}
+body:not(#d) .dpsr-region-warning{margin:8px 16px 0!important;color:var(--v-fnt)!important;font:500 12.5px/1.4 var(--v-font)!important}
+
+/* PACKAGE panel: the Builder's colours stay; only spacing, the shared delivery pill and focus */
+body:not(#d) form.variations_form .ddsw-section-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 14px;padding:0 4px;flex-wrap:wrap}
+body:not(#d) form.variations_form .ddsw-section-head .ddsw-section-title{margin:0!important}
+body:not(#d) form.variations_form .ddsw-delivery--once{display:inline-flex!important;align-items:center!important;gap:5px!important;width:auto!important;max-width:100%!important;height:26px!important;padding:0 10px!important;border-radius:13px!important;margin:0!important;font-size:12px!important;font-weight:700!important;white-space:nowrap!important;align-self:center!important}
+body:not(#d) form.variations_form .ddsw-card{transform:none!important}
+body:not(#d) form.variations_form .ddsw-card:focus-visible{outline:3px solid #fff!important;outline-offset:2px}
+body:not(#d) form.variations_form .ddsw-card .ddsw-price,body:not(#d) form.variations_form .ddsw-card .ddsw-price *{white-space:nowrap!important}
+
+/* Subscription plans: radio cards stacked (instant choice, the total updates in the bar) */
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-grid{display:flex!important;flex-direction:column!important;gap:12px!important;overflow:visible!important;grid-auto-flow:row!important;scroll-snap-type:none!important;padding:0!important;transform:none!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card{position:relative!important;display:grid!important;grid-template-columns:22px minmax(0,1fr) auto!important;grid-template-areas:"dot title price" "dot feats feats" "dot del del"!important;align-items:center!important;column-gap:12px!important;row-gap:6px!important;width:100%!important;min-width:0!important;max-width:none!important;min-height:0!important;padding:16px!important;margin:0!important;text-align:left!important;border-radius:var(--v-r-card,18px)!important;box-shadow:none!important;flex:none!important;transform:none!important;opacity:1!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card::before{content:"";grid-area:dot;align-self:start;margin-top:1px;width:22px;height:22px;border-radius:50%;border:2px solid var(--v-edge2);box-sizing:border-box;background:var(--v-sf)}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected::before{border-color:var(--ddsw-sub-accent,var(--v-bp));background:var(--ddsw-sub-accent,var(--v-bp));box-shadow:inset 0 0 0 4px var(--v-sf)}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-title{grid-area:title!important;font-size:16px!important;font-weight:800!important;text-align:left!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-price-row{grid-area:price!important;justify-content:flex-end!important;text-align:right!important;margin:0!important;width:auto!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-price{font-size:17px!important;font-weight:800!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-features{grid-area:feats!important;display:flex!important;flex-direction:column!important;gap:4px!important;margin:0!important;padding:0!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-feature{font-size:13.5px!important;text-align:left!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-delivery{grid-area:del!important;justify-self:start!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-plan-cta,body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-nav,body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-check{display:none!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-heading{margin:0 4px 12px!important;padding:0!important;background:none!important;border:0!important;box-shadow:none!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-spark{display:none!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-heading h3{margin:0!important;font:800 18px/1.25 var(--v-font)!important;color:var(--v-ink)!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-heading p{margin:2px 0 0!important;font:400 13px/1.4 var(--v-font)!important;color:var(--v-mut)!important}
+body:not(#d) .ddsw-subscription-trust{box-shadow:none!important;background:none!important;border:0!important}
+
+/* Player ID card (Top-Up connector markup, restyled only) */
+body:not(#d) .dfr-native-fields{margin:12px 0 0!important;padding:16px!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card,18px)!important;background:var(--v-sf)!important;background-image:none!important;box-shadow:none!important}
+body:not(#d) .dfr-native-head{margin-bottom:12px!important}
+body:not(#d) .dfr-native-head-icon{width:40px!important;height:40px!important;flex:0 0 40px!important;border-radius:12px!important;background:var(--v-acs)!important;background-image:none!important;color:var(--v-aci)!important;box-shadow:none!important}
+body:not(#d) .dfr-native-head strong{color:var(--v-ink)!important;font:800 17px/1.25 var(--v-font)!important}
+body:not(#d) .dfr-native-head small{color:var(--v-mut)!important;font:400 13px/1.4 var(--v-font)!important}
+body:not(#d) .dfr-recent{padding:10px 12px!important;border:1px solid var(--v-line)!important;border-radius:14px!important;background:var(--v-track)!important;box-shadow:none!important}
+body:not(#d) .dfr-recent-title{color:var(--v-mut)!important;font:600 12.5px/1.3 var(--v-font)!important}
+body:not(#d) .dfr-recent-toggle{border-radius:12px!important;background:var(--v-sf)!important;border:1px solid var(--v-edge)!important;color:var(--v-ink)!important;box-shadow:none!important}
+body:not(#d) .dfr-native-field label{color:var(--v-mut)!important;font:600 13px/1.3 var(--v-font)!important}
+/* 9.11.1: the shell is an inline <span> in the connector's markup — never border it (that drew the thin
+   20 px pill in 9.11.0). The input itself is the field: 48 px, 16 px text (no iOS zoom), room for the glyph. */
+body:not(#d) .dfr-field-shell{display:block!important;position:relative!important;width:100%!important;border:0!important;background:none!important;box-shadow:none!important;min-height:0!important;padding:0!important}
+body:not(#d) .dfr-native-fields input[data-dfr-field-key],body:not(#d) .dfr-native-fields select[data-dfr-field-key]{display:block!important;box-sizing:border-box!important;width:100%!important;height:48px!important;min-height:48px!important;padding:0 14px 0 44px!important;border:1.5px solid var(--v-edge2)!important;border-radius:14px!important;background:var(--v-sf)!important;color:var(--v-ink)!important;font:500 16px/1.2 var(--v-font)!important;box-shadow:none!important;outline:none}
+body:not(#d) .dfr-native-fields input[data-dfr-field-key]:focus,body:not(#d) .dfr-native-fields select[data-dfr-field-key]:focus{border-color:var(--v-ac)!important;box-shadow:none!important}
+body:not(#d) .dfr-native-fields input::placeholder{color:var(--v-fnt)!important;opacity:1}
+body:not(#d) .dfr-recent-top{flex-wrap:nowrap!important}
+body:not(#d) .dfr-recent-title{min-width:0!important;flex:1 1 auto!important}
+body:not(#d) .dfr-recent-clear{flex:none!important;white-space:nowrap!important;min-height:44px}
+/* Any supplier's Player ID input inside the purchase form (Builder fields, Fazercard / Shop2TopUp
+   « game account » fields, Delicat Top-Up Connector): a normal 48 px field with 16 px text. Style only. */
+body:not(#d) .dnp-purchase form.cart input[type="text"]:not([type="hidden"]),body:not(#d) .dnp-purchase form.cart input[type="tel"],body:not(#d) .dnp-purchase form.cart input[type="number"]:not(.qty),body:not(#d) .dnp-purchase form.cart input[type="email"],body:not(#d) .dnp-purchase form.cart select:not([name^="attribute_"]){box-sizing:border-box!important;min-height:48px!important;font-size:16px!important;line-height:1.2!important}
+body:not(#d) .dfr-uid-verify-btn{height:48px!important;min-height:48px!important;border-radius:14px!important;border:1.5px solid var(--v-aci)!important;background:var(--v-sf)!important;background-image:none!important;color:var(--v-aci)!important;font:700 15px/1 var(--v-font)!important;box-shadow:none!important;text-shadow:none!important}
+
+/* Inline buttons stay as the no-script fallback; with the bar ready they hide (unchanged rule) */
+body:not(#d) .single_add_to_cart_button,body:not(#d) .dnp-buy-now{border-radius:14px!important;box-shadow:none!important;background-image:none!important}
+
+/* ONE purchase bar at the bottom: total · square add-to-cart · « Acheter » (Builder buy colour) */
+body:not(#d) .dnp-mobile-dock{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;z-index:2147481000!important;display:flex!important;align-items:center!important;gap:10px!important;width:auto!important;max-width:none!important;margin:0!important;padding:10px 12px calc(14px + env(safe-area-inset-bottom,0px))!important;border:0!important;border-top:1px solid var(--v-edge)!important;border-radius:0!important;background:var(--v-sf)!important;background-image:none!important;box-shadow:none!important;transform:none!important}
+body:not(#d) .dnp-mobile-dock[hidden]{display:none!important}
+body:not(#d) .dnp-dock-price{flex:1 1 auto!important;min-width:0!important;display:flex!important;flex-direction:column!important;gap:1px!important;padding-left:4px!important;margin:0!important;background:none!important;border:0!important}
+body:not(#d) .dnp-dock-price small{display:block!important;margin:0!important;color:var(--v-fnt)!important;font:500 12.5px/1.3 var(--v-font)!important;letter-spacing:0!important;text-transform:none!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important}
+body:not(#d) .dnp-dock-price strong{display:block!important;margin:0!important;color:var(--v-ink)!important;font:800 17px/1.25 var(--v-font)!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;font-feature-settings:"tnum" 1}
+body:not(#d) .dnp-mobile-dock button{flex:none!important;height:50px!important;min-height:50px!important;margin:0!important;border-radius:14px!important;box-shadow:none!important;background-image:none!important;font:800 15px/1 var(--v-font)!important;letter-spacing:0!important;text-transform:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;white-space:nowrap!important;transform:none}
+body:not(#d) .dnp-mobile-dock button.is-add,body:not(#d) .dnp-mobile-dock [data-dnp-proxy="add"]{width:50px!important;min-width:50px!important;padding:0!important;border:1.5px solid var(--v-edge2)!important;background:var(--v-sf)!important;color:var(--v-ink)!important}
+body:not(#d) .dnp-mobile-dock .dnp-dock-label-text{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0 0 0 0)!important;white-space:nowrap!important;border:0!important}
+body:not(#d) .dnp-mobile-dock button.is-buy{padding:0 18px!important;border:0!important;background:var(--v-buy)!important;color:var(--v-buy-ink,#fff)!important}
+body:not(#d) .dnp-mobile-dock button[disabled]{opacity:.5!important;cursor:default}
+body:not(#d) .dnp-mobile-dock button:active:not([disabled]){transform:scale(.97)}
+body:not(#d) .dnp-mobile-dock svg{flex:none}
+
+/* Reviews: one flat card */
+body:not(#d) .dnp-reviews,body:not(#d) .dnp-section{margin:0!important;padding:16px!important;background:var(--v-sf)!important;border:1px solid var(--v-edge)!important;border-radius:var(--v-r-card,18px)!important;box-shadow:none!important}
+body:not(#d) .dnp-reviews h2,body:not(#d) .dnp-section h2{color:var(--v-ink)!important;font:800 17px/1.25 var(--v-font)!important;margin:0 0 8px!important}
+body:not(#d) .dnp-review{background:none!important;border:0!important;border-top:1px solid var(--v-line)!important;border-radius:0!important;box-shadow:none!important;padding:12px 0!important;margin:0!important}
+body:not(#d) .dnp-reviews-btn,body:not(#d) .dlc-reviews-all-btn{border-radius:14px!important;box-shadow:none!important;background-image:none!important}
+
+/* Old WebViews and very small screens */
+@media (max-width:340px){body:not(#d) .dnp-mobile-dock button.is-buy{padding:0 14px!important}body:not(#d) .dnp-dock-price strong{font-size:15.5px!important}}
+/* 9.14.0: the bar stays up to 1023 px (no bottom menu and no bar between 821 and 1023 px before) */
+@media (min-width:1024px){body:not(#d) .dnp-mobile-dock{display:none!important}}
+
+/* 9.12.1 — packs as the owner's pictures (app « Produit », light and « Sombre · Produit »). The PACKAGE
+   panel keeps the Builder's colours. Header row: « PACKAGE » left, ONE delivery pill right (the only
+   delivery badge on the page). Cards: 2 columns, compact (~68 px), solid surface, radius 16, name and price
+   centred; special badges sit ON the top border line; the chosen pack gets an accent border and a soft,
+   static glow ring (owner's request; no animation, no filter, no blur). Four rows, then « Voir plus (N) ». */
+body:not(#d) form.variations_form .ddsw-section-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px 10px!important;margin:0 0 4px!important;padding:0 2px!important;flex-wrap:wrap!important}
+body:not(#d) form.variations_form .ddsw-section-head .ddsw-section-title{letter-spacing:.14em!important}
+body:not(#d) form.variations_form .ddsw-section-head .ddsw-section-title{margin:0!important;flex:none!important;white-space:nowrap!important}
+body:not(#d) form.variations_form .ddsw-delivery-slot{display:inline-flex;flex:0 1 auto;min-width:0;max-width:100%;justify-content:flex-end}
+body:not(#d) form.variations_form .ddsw-delivery-slot:empty{display:none}
+body:not(#d) form.variations_form .ddsw-delivery,body:not(#d) form.variations_form .ddsw-delivery--once{display:inline-flex!important;align-items:center!important;gap:5px!important;width:auto!important;max-width:100%!important;height:28px!important;margin:0!important;padding:0 11px 0 9px!important;border:1.5px solid rgba(255,255,255,.78)!important;border-radius:14px!important;background:rgba(255,255,255,.12)!important;color:#fff!important;font:600 12px/1 var(--v-font)!important;white-space:nowrap!important;overflow:hidden!important;box-shadow:none!important;filter:none!important;align-self:center!important}
+body:not(#d) form.variations_form .ddsw-delivery .delicat-badge__icon{width:14px;height:14px;flex:none}
+body:not(#d) form.variations_form .ddsw-delivery .dlc-badge-text{overflow:hidden;text-overflow:ellipsis}
+/* the cards */
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;grid-auto-rows:auto!important;align-items:stretch!important;column-gap:10px!important;row-gap:18px!important;margin:0!important;padding:14px 0 2px!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card{position:relative!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:3px!important;box-sizing:border-box!important;width:100%!important;height:auto!important;min-height:68px!important;margin:0!important;padding:13px 8px 11px!important;text-align:center!important;background:var(--v-sf)!important;background-image:none!important;color:var(--v-ink)!important;border:2px solid var(--v-edge)!important;border-radius:16px!important;box-shadow:0 1px 2px rgba(16,24,40,.06)!important;transform:none!important;filter:none!important;overflow:visible!important;transition:border-color .18s ease,box-shadow .18s ease!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card.is-selected{background:var(--v-sf)!important;background-image:none!important;color:var(--v-ink)!important;border-color:#2563EB!important;border-color:var(--v-ac)!important;box-shadow:0 0 0 3px rgba(37,99,235,.25),0 4px 14px rgba(37,99,235,.22)!important;transform:none!important}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card.is-selected,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card.is-selected{border-color:var(--v-aci)!important;box-shadow:0 0 0 3px rgba(96,165,250,.30),0 4px 14px rgba(96,165,250,.26)!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-title{order:1;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden!important;width:100%!important;margin:0!important;padding:0!important;white-space:normal!important;overflow-wrap:anywhere;color:var(--v-ink)!important;font:600 14.5px/1.25 var(--v-font)!important;letter-spacing:0!important;text-align:center!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-price-row{order:2;display:block!important;width:auto!important;margin:0!important;padding:0!important;text-align:center!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-price{display:inline-flex!important;flex-direction:row!important;align-items:baseline!important;justify-content:center!important;gap:5px!important;width:auto!important;margin:0!important;padding:0!important;color:var(--v-ink)!important;font:600 14.5px/1.25 var(--v-font)!important;font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;white-space:nowrap!important;text-align:center!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-price ins{order:2;color:inherit!important;text-decoration:none!important;background:none!important;font:inherit!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-price del{order:1;margin:0!important;color:var(--v-fnt)!important;opacity:1!important;font:500 12px/1.2 var(--v-font)!important;text-decoration-line:line-through!important;text-decoration-thickness:1px!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-oos-label{order:3}
+body:not(#d) form.variations_form .ddsw-card .ddsw-check{display:none!important}
+/* special badges: a small pill centred ON the card's top border, half above, half below */
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge{position:absolute!important;top:0!important;left:50%!important;right:auto!important;bottom:auto!important;transform:translate(-50%,-50%)!important;z-index:2;display:inline-flex!important;align-items:center!important;gap:4px!important;width:max-content!important;max-width:calc(100% - 16px)!important;height:22px!important;margin:0!important;padding:0 9px 0 7px!important;border:1px solid var(--v-edge)!important;border-radius:11px!important;background:var(--v-sf)!important;color:var(--v-ink)!important;font:600 12px/1 var(--v-font)!important;letter-spacing:0!important;white-space:nowrap!important;overflow:hidden!important;box-shadow:0 1px 3px rgba(16,24,40,.08)!important}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2 .delicat-badge__icon,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge .delicat-badge__icon{width:14px;height:14px;flex:none;color:var(--dlc-bi,#EA580C)}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--popular{--dlc-bi:#EA580C}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-offer,body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-value{--dlc-bi:#D97706}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-choice{--dlc-bi:#CA8A04}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--new{--dlc-bi:#7C3AED}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--promo{--dlc-bi:#DC2626}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--secure,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge{--dlc-bi:#16A34A}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--bonus,body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--fastest,body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--custom{--dlc-bi:#2563EB}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-card .ddsw-badge2,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-card .ddsw-badge2,html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge{background:var(--v-sf)!important;color:var(--v-ink)!important;border-color:var(--v-edge2)!important;box-shadow:none!important}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--popular,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--popular{--dlc-bi:#FB923C}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-offer,html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-value,html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-choice,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-offer,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-value,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-card .ddsw-badge2--best-choice{--dlc-bi:#FBBF24}
+body:not(#d) form.variations_form .ddsw-card.has-recommended-badge.has-badge2 .ddsw-recommended-badge{display:none!important}
+body:not(#d) form.variations_form .ddsw-card .dlc-badge-text{min-width:0;overflow:hidden;text-overflow:ellipsis}
+body:not(#d) form.variations_form .ddsw-oos-label{display:inline-flex!important;align-items:center!important;gap:4px!important;color:var(--v-bad)!important;font:600 12px/1.2 var(--v-font)!important}
+body:not(#d) form.variations_form .ddsw-card.is-out-of-stock{opacity:.62}
+/* four rows, then « Voir plus (N) » */
+body:not(#d) form.variations_form .ddsw-grid--folded .ddsw-card:nth-child(n+9){display:none!important}
+body:not(#d) form.variations_form .ddsw-more{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:46px;margin:14px 0 0;padding:0 16px;border:1px solid var(--v-edge);border-radius:14px;background:var(--v-sf);color:var(--v-ink);font:600 14px/1 var(--v-font);cursor:pointer;box-shadow:none}
+body:not(#d) form.variations_form .ddsw-more:focus-visible,body:not(#d) form.variations_form .ddsw-card:focus-visible{outline:3px solid #fff!important;outline-offset:2px}
+body:not(#d) form.variations_form .ddsw-more__chev{flex:none;transition:transform .18s ease}
+body:not(#d) form.variations_form .ddsw-more[aria-expanded="true"] .ddsw-more__chev{transform:rotate(180deg)}
+@media (max-width:340px){body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-title,body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-price{font-size:13.5px!important}body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card{padding:13px 5px 11px!important}body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-card .ddsw-title{font-size:13px!important}body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-grid{column-gap:8px!important}}
+@media (prefers-reduced-motion:reduce){body:not(#d) form.variations_form .ddsw-card,body:not(#d) form.variations_form .ddsw-more__chev{transition:none!important}}
+/* plans (subscription preset): the same card — name and price centred, badge on the line, the glow */
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-grid{gap:18px!important;padding-top:12px!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card{display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:4px!important;min-height:68px!important;padding:14px 12px 12px!important;text-align:center!important;border:2px solid var(--v-edge)!important;border-radius:16px!important;background:var(--v-sf)!important;background-image:none!important;color:var(--v-ink)!important;box-shadow:0 1px 2px rgba(16,24,40,.06)!important;overflow:visible!important;transition:border-color .18s ease,box-shadow .18s ease!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card::before{display:none!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected{border-color:var(--v-ac)!important;box-shadow:0 0 0 3px rgba(37,99,235,.25),0 4px 14px rgba(37,99,235,.22)!important;background:var(--v-sf)!important;color:var(--v-ink)!important}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected{border-color:var(--v-aci)!important;box-shadow:0 0 0 3px rgba(96,165,250,.30),0 4px 14px rgba(96,165,250,.26)!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-title,body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected .ddsw-title{font:600 14.5px/1.25 var(--v-font)!important;color:var(--v-ink)!important;text-align:center!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-price-row{justify-content:center!important;text-align:center!important;width:auto!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-price,body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected .ddsw-price{display:inline-flex!important;align-items:baseline!important;justify-content:center!important;gap:5px!important;color:var(--v-ink)!important;font:600 14.5px/1.25 var(--v-font)!important;font-variant-numeric:tabular-nums}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-price del,body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card.is-selected .ddsw-price del{order:-1!important;color:var(--v-fnt)!important;font:500 12px/1.2 var(--v-font)!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-features{align-items:center!important;border:0!important;padding-top:4px!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-price-row{border:0!important;padding-bottom:0!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-heading{display:flex!important;align-items:center!important;gap:10px!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-premium-heading>div{flex:1 1 auto;min-width:0}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-delivery{border-color:var(--v-edge2)!important;background:var(--v-sf)!important;color:var(--v-ok)!important}
+
+/* 9.12.0 — regions: the row shows it scrolls (fade at the right edge while more chips follow) */
+body:not(#d) .dpsr-switcher .dpsr-switcher-track{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);scroll-padding-inline:16px}
+body:not(#d) .dpsr-switcher.is-at-end .dpsr-switcher-track{-webkit-mask-image:none;mask-image:none}
+body:not(#d) .dpsr-switcher .dpsr-switcher-option{scroll-snap-align:start;min-height:44px!important}
+body:not(#d) .dpsr-switcher .dpsr-switcher-option:focus-visible{outline:3px solid var(--v-ac)!important;outline-offset:2px}
+
+/* 9.12.0 — « Important » folded to one line; « Lire plus » opens the Builder's full text */
+body:not(#d) .dnp-important.is-folded .dnp-important-body{display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+body:not(#d) .dnp-important-more{display:inline-flex;align-items:center;min-height:44px;margin:-10px 0 -12px;padding:0 2px;border:0;background:none;color:inherit;font:700 13.5px/1 var(--v-font);text-decoration:underline;text-underline-offset:2px;cursor:pointer;flex:none;align-self:flex-end}
+body:not(#d) .dnp-important:not(.is-folded) .dnp-important-more{display:none}
+
+/* 9.12.0 — reviews: two, then « Voir les N avis » (the list keeps every review for the button) */
+body:not(#d) .dnp-reviews.is-short .dnp-reviews-list>.dnp-review:nth-child(n+3){display:none!important}
+body:not(#d) .dlc-reviews-all-btn{min-height:44px!important}
+
+/* 9.12.0 — Player ID: the message sits right under the field */
+body:not(#d) .dlc-field-error{display:flex;align-items:center;gap:6px;margin:6px 2px 0!important;padding:0!important;color:var(--v-bad)!important;font:600 13px/1.35 var(--v-font)!important}
+body:not(#d) .dnp-purchase form.cart input[aria-invalid="true"]{border-color:var(--v-bad)!important}
+/* 9.12.1: region flags drawn as SVG (no flag emoji on Windows) */
+body:not(#d) .dpsr-switcher-icon{display:inline-flex!important;align-items:center;justify-content:center;width:20px;height:20px;flex:none;color:var(--v-mut)}
+body:not(#d) .dpsr-flag{display:block;width:20px;height:14px;border-radius:2.5px;box-shadow:0 0 0 1px rgba(15,23,42,.12)}
+body:not(#d) .dpsr-flag--globe{width:18px;height:18px;border-radius:0;box-shadow:none}
+body:not(#d) .dpsr-switcher-option.is-active .dpsr-flag--globe{color:currentColor}
+@media (max-width:340px){body:not(#d) .dnp-identity-copy h1{font-size:17px!important}}
+/* 9.12.2 — the chosen pack (owner): a bolder 3 px accent border plus the soft glow, and a small round check at the
+   top-right corner (solid accent, white drawn check, a 2 px ring so it reads on the PACKAGE gradient). Every card
+   keeps a 3 px transparent border so nothing moves on select; the 1.5 px grey outline is an inset shadow. */
+body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card{border:3px solid transparent!important;background-clip:padding-box!important;box-shadow:inset 0 0 0 1.5px var(--v-edge),0 1px 2px rgba(16,24,40,.06)!important}
+body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card.is-selected{border-color:var(--v-ac)!important;box-shadow:0 0 0 3px rgba(37,99,235,.22),0 4px 14px rgba(37,99,235,.22)!important}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card.is-selected,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card.is-selected{border-color:var(--v-aci)!important;box-shadow:0 0 0 3px rgba(96,165,250,.28),0 4px 14px rgba(96,165,250,.24)!important}
+body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card::after{content:""!important;position:absolute!important;top:-11px!important;right:-11px!important;left:auto!important;bottom:auto!important;z-index:3;display:block!important;width:22px!important;height:22px!important;border-radius:50%!important;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 12.5 4 4 8-9'/%3E%3C/svg%3E") center/13px 13px no-repeat,var(--v-ac)!important;box-shadow:0 0 0 2px #fff!important;opacity:0;transform:scale(.5);transition:opacity .15s ease,transform .15s cubic-bezier(.16,1,.3,1);pointer-events:none}
+body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card.is-selected::after{opacity:1;transform:none}
+html.dlc-theme-dark body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card::after,html[data-delicat-theme="dark"] body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card::after{box-shadow:0 0 0 2px var(--v-sf)!important;background-color:var(--v-aci)!important}
+body:not(#d) form.variations_form .ddsw-preset-delicat-abonnement-premium .ddsw-card::before{display:none!important}
+@media (prefers-reduced-motion:reduce){body:not(#d) form.variations_form .ddsw-root.ddsw-root .ddsw-card::after{transition:none}}
+/* 9.12.2 — pack cards are only ≈ 125 px wide at 375 and ≈ 105 px at 320: at 12 px + a 14 px icon « Meilleure offre »
+   could not fit, whatever the pill width. 11 px label + 12 px icon fits inside card − 16 px from 360 px up; below
+   360 px the icon steps aside (10.5 px label) and the pill may use card − 8 px (still 4 px clear of each edge).
+   The ellipsis stays only for a longer custom label. */
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge{gap:3px!important;padding:0 7px 0 6px!important;font-size:11px!important}
+body:not(#d) form.variations_form .ddsw-card .ddsw-badge2 .delicat-badge__icon,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge .delicat-badge__icon{width:12px!important;height:12px!important}
+@media (max-width:359px){body:not(#d) form.variations_form .ddsw-card .ddsw-badge2,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge{max-width:calc(100% - 8px)!important;padding:0 6px!important;font-size:10.5px!important}body:not(#d) form.variations_form .ddsw-card .ddsw-badge2 .delicat-badge__icon,body:not(#d) form.variations_form .ddsw-card .ddsw-recommended-badge .delicat-badge__icon{display:none!important}}
+/* 9.12.4 — a tap is always answered. The dock buttons look disabled (aria-disabled) but still receive the tap;
+   a tap waiting for LiteSpeed's delayed scripts shows a spinner at once; a required field left empty is outlined
+   with its message right under it. */
+body:not(#d) .dnp-mobile-dock button[aria-disabled="true"]{opacity:.5!important;cursor:default}
+body:not(#d) .dnp-mobile-dock button.dlc-tap-queued{opacity:1!important;position:relative!important;color:transparent!important;cursor:progress}
+body:not(#d) .dnp-mobile-dock button.dlc-tap-queued>*{visibility:hidden}
+body:not(#d) .dnp-mobile-dock button.dlc-tap-queued::after{content:""!important;position:absolute!important;left:50%!important;top:50%!important;width:20px!important;height:20px!important;margin:-10px 0 0 -10px!important;border:2.5px solid rgba(255,255,255,.45)!important;border-top-color:#fff!important;border-radius:50%!important;animation:dlc-tap-spin .7s linear infinite}
+body:not(#d) .dnp-mobile-dock button.dlc-tap-queued:not(.is-buy)::after{border-color:rgba(18,22,41,.2)!important;border-top-color:var(--v-ink,#121629)!important}
+@keyframes dlc-tap-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){body:not(#d) .dnp-mobile-dock button.dlc-tap-queued::after{animation:none!important;border-top-color:rgba(255,255,255,.45)!important;border-right-color:#fff!important}}
+body:not(#d) .dlc-field-error{display:block;margin:6px 2px 0!important;color:var(--v-bad,#C62828)!important;font:600 13px/1.35 var(--v-font,Inter,sans-serif)!important;text-align:left}
+body:not(#d) .dlc-field-invalid,body:not(#d) .dlc-field-invalid-box{border-color:var(--v-bad,#C62828)!important;box-shadow:0 0 0 3px rgba(198,40,40,.16)!important}
+html.dlc-theme-dark body:not(#d) .dlc-field-error,html[data-delicat-theme="dark"] body:not(#d) .dlc-field-error{color:#F87171!important}
+html.dlc-theme-dark body:not(#d) .dlc-field-invalid,html.dlc-theme-dark body:not(#d) .dlc-field-invalid-box,html[data-delicat-theme="dark"] body:not(#d) .dlc-field-invalid,html[data-delicat-theme="dark"] body:not(#d) .dlc-field-invalid-box{border-color:#F87171!important;box-shadow:0 0 0 3px rgba(248,113,113,.2)!important}
+/* 9.12.5 — a region tap answers in the same frame: the chosen chip shows a small spinner in place of its check,
+   the PACKAGE panel dims (opacity .6, no blur) with a thin progress bar along its top, and after 8 s an
+   « Ouvrir la page » link offers a plain page load. */
+body:not(#d) .dpsr-switcher-option.is-pending .dpsr-check{display:none!important}
+body:not(#d) .dpsr-switcher-option.is-pending::after{content:"";flex:none;width:14px;height:14px;margin-left:2px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;opacity:.85;animation:dlc-tap-spin .7s linear infinite}
+body:not(#d) .dpsr-switcher.is-loading .dpsr-switcher-option.is-active{opacity:1!important}
+body:not(#d) .dlc-region-wait{position:relative!important;opacity:.6!important;transition:opacity .15s ease!important;pointer-events:none}
+body:not(#d) .dlc-region-wait::before{content:"";position:absolute;left:0;right:0;top:0;z-index:4;height:3px;border-radius:3px 3px 0 0;background:linear-gradient(90deg,transparent 0,var(--v-ac,#2563EB) 30%,var(--v-ac,#2563EB) 70%,transparent 100%);background-size:200% 100%;animation:dlc-region-bar 1.1s linear infinite}
+@keyframes dlc-region-bar{from{background-position:100% 0}to{background-position:-100% 0}}
+body:not(#d) .dpsr-switcher .dpsr-open-page{pointer-events:auto!important}
+body:not(#d) .dpsr-open-page{display:flex;align-items:center;justify-content:center;min-height:44px;margin:10px 0 0;padding:0 14px;border:1px solid var(--v-edge,#E2E6EE);border-radius:12px;background:var(--v-sf,#fff);color:var(--v-ink,#121629)!important;font:600 14px/1.2 var(--v-font,Inter,sans-serif);text-decoration:none!important}
+@media (prefers-reduced-motion:reduce){body:not(#d) .dpsr-switcher-option.is-pending::after{animation:none!important;border-right-color:currentColor;opacity:.5}body:not(#d) .dlc-region-wait::before{animation:none!important;background:var(--v-ac,#2563EB);opacity:.7}body:not(#d) .dlc-region-wait{transition:none!important}}
+
+/* 9.14.0 — tablets and laptops (phones unchanged). The purchase bar (.dnp-mobile-dock) now stays up to
+   1023 px, like the bottom menu, so the inline buttons it relays hide there as on phones. */
+@media (max-width:1023px){
+body.dnp-floating-ready .dnp-mobile-floating-only .single_add_to_cart_button,body.dnp-floating-ready .dnp-mobile-floating-only .dnp-buy-now{display:none!important}
+body.dnp-floating-ready .delicat-native-product.dnp-compact-quantity .dnp-purchase .quantity,body.dnp-floating-ready .delicat-native-product.dnp-compact-quantity .dnp-purchase .ddsw-quantity-mount{display:none!important}
+}
+/* Regions wrap onto two rows instead of scrolling once there is room */
+@media (min-width:768px){
+body:not(#d) .dpsr-switcher .dpsr-switcher-track{flex-wrap:wrap!important;overflow:visible!important;-webkit-mask-image:none;mask-image:none;scroll-snap-type:none}
+}
+/* Tablets (768-1023): ONE 720 px column; a 200 px square picture beside the name; packs in 4 columns
+   (8 packs = 2 full rows before « Voir plus »); the purchase bar aligned to the column. */
+@media (min-width:768px) and (max-width:1023px){
+body:not(#d) .delicat-native-product{max-width:720px!important;padding:16px 0 32px!important}
+body:not(#d) .dnp-hero{display:grid!important;grid-template-columns:200px minmax(0,1fr)!important;align-items:center!important;gap:14px!important}
+body:not(#d) .dnp-media{align-self:start;aspect-ratio:1/1!important}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+body:not(#d) .dnp-mobile-dock{padding-left:max(12px,calc((100% - 720px) / 2))!important;padding-right:max(12px,calc((100% - 720px) / 2))!important}
+}
+/* Laptops (1024+): two columns in the 1200 px container. Left (5/12): the square picture and the name,
+   sticky while the right column scrolls. Right (7/12): Important, regions, PACKAGE (2 columns), Player ID,
+   then « Ajouter au panier » and « Acheter » (52 px) kept in view at the bottom of the screen on a flat
+   strip with a hairline top border (sticky, no shadow, no blur). Reviews run under both columns.
+   CSS only: WooCommerce's form, its buttons and the express pop-up are unchanged. */
+@media (min-width:1024px){
+body:not(#d) .delicat-native-product-main{padding-left:var(--dlc-gutter,24px)!important;padding-right:var(--dlc-gutter,24px)!important}
+body:not(#d) .delicat-native-product{display:grid!important;grid-template-columns:minmax(0,5fr) minmax(0,7fr);align-items:start;column-gap:32px!important;row-gap:0!important;max-width:var(--dlc-max,1200px)!important;padding:24px 0 48px!important}
+/* Explicit rows in the template's order, so the optional Builder sections (breadcrumb, « Comment ça
+   marche », details, related - all switchable in the product settings) keep their page order across
+   both columns instead of being auto-placed into a half cell. Empty rows collapse (no row gap). */
+body:not(#d) .delicat-native-product>*{grid-column:1/-1}
+body:not(#d) .delicat-native-product>.dnp-breadcrumb{grid-row:1}
+body:not(#d) .dnp-hero{grid-column:1;grid-row:2/span 2;position:-webkit-sticky;position:sticky;top:calc(var(--dsb8-header-height,76px) + 16px);gap:12px!important}
+body:not(#d) .dnp-media{aspect-ratio:1/1!important;max-height:calc(100vh - 220px)}
+/* no row gap: a product without « Important » keeps its purchase card level with the picture */
+body:not(#d) .delicat-native-product>.dnp-important{grid-column:2;grid-row:2;margin-bottom:16px!important}
+body:not(#d) .dnp-purchase{grid-column:2;grid-row:3;overflow:visible!important}
+body:not(#d) .delicat-native-product>.dnp-steps{grid-row:4;margin-top:24px!important}
+body:not(#d) .delicat-native-product>.dnp-details{grid-row:5;margin-top:24px!important}
+body:not(#d) .delicat-native-product>.dnp-reviews{grid-row:6;margin-top:24px!important}
+body:not(#d) .delicat-native-product>.dnp-related{grid-row:7;margin-top:24px!important}
+body:not(#d) .dnp-reviews .dnp-review p,body:not(#d) .dnp-reviews .dnp-review-text{max-width:72ch}
+body:not(#d) form.variations_form .ddsw-root:not(.ddsw-preset-delicat-abonnement-premium) .ddsw-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+/* the buy row: the two real WooCommerce buttons side by side, sticky inside the form */
+body:not(#d) .dnp-purchase form.cart{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:10px;align-items:start}
+body:not(#d) .dnp-purchase form.cart>*,body:not(#d) .dnp-purchase form.cart .single_variation_wrap>*,body:not(#d) .dnp-purchase form.cart .woocommerce-variation-add-to-cart>*{grid-column:1/-1}
+body:not(#d) .dnp-purchase form.cart .single_variation_wrap,body:not(#d) .dnp-purchase form.cart .woocommerce-variation-add-to-cart{display:contents!important}
+body:not(#d) .dnp-purchase form.cart .single_add_to_cart_button,body:not(#d) .dnp-purchase form.cart .dnp-buy-now{grid-column:auto;position:-webkit-sticky;position:sticky;bottom:12px;z-index:7;display:inline-flex!important;align-items:center;justify-content:center;width:100%!important;height:52px!important;min-height:52px!important;margin:14px 0 0!important;padding:0 16px!important;font:800 15px/1 var(--v-font)!important;letter-spacing:0!important;text-transform:none!important}
+body:not(#d) .dnp-purchase form.cart .single_add_to_cart_button{border:1.5px solid var(--v-edge2)!important;background:var(--v-sf)!important;color:var(--v-ink)!important}
+body:not(#d) .dnp-purchase form.cart .dnp-buy-now{border:0!important;background:var(--v-buy)!important;color:var(--v-buy-ink,#fff)!important}
+body:not(#d) .dnp-purchase form.cart::after{content:"";grid-column:1/-1;position:-webkit-sticky;position:sticky;bottom:0;z-index:6;height:76px;margin:-64px -12px 0;border-top:1px solid var(--v-edge);background:var(--v-sf);pointer-events:none}
+}

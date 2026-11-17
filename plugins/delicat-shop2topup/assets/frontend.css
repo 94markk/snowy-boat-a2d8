@@ -1,0 +1,490 @@
+/* Delicat Shop2TopUp storefront — premium, dependency-free Material-style UI. */
+.dst2t-requirements:not(:empty) {
+	--dst2t-accent: #7447e8;
+	--dst2t-accent-2: #9c4be8;
+	--dst2t-accent-soft: #f5f0ff;
+	--dst2t-text: #171a24;
+	--dst2t-muted: #707789;
+	--dst2t-border: #e4e1ec;
+	--dst2t-success: #16733a;
+	--dst2t-danger: #b42318;
+	background: linear-gradient(180deg, #fff 0%, #fcfaff 100%);
+	border: 1px solid rgba(116, 71, 232, .15);
+	border-radius: 22px;
+	box-shadow: 0 12px 34px rgba(43, 34, 82, .07);
+	box-sizing: border-box;
+	color: var(--dst2t-text);
+	margin: 16px 0 20px;
+	padding: 18px;
+	width: 100%;
+}
+
+.dst2t-field-list {
+	min-width: 0;
+}
+
+.dst2t-material-icon {
+	align-items: center;
+	display: inline-flex;
+	flex: 0 0 auto;
+	justify-content: center;
+	line-height: 1;
+}
+
+.dst2t-material-icon svg {
+	display: block;
+	fill: currentColor;
+	height: 1em;
+	width: 1em;
+}
+
+.dst2t-fields-title {
+	align-items: center;
+	color: var(--dst2t-text);
+	display: flex;
+	font-size: 18px;
+	font-weight: 850;
+	gap: 11px;
+	letter-spacing: -.025em;
+	line-height: 1.2;
+	margin: 0 0 18px;
+}
+
+.dst2t-title-icon {
+	background: linear-gradient(135deg, var(--dst2t-accent) 0%, #c83dcc 100%);
+	border-radius: 13px;
+	box-shadow: 0 9px 20px rgba(116, 71, 232, .22);
+	color: #fff;
+	height: 42px;
+	width: 42px;
+}
+
+.dst2t-title-icon svg {
+	height: 24px;
+	width: 24px;
+}
+
+/* The verbose WooCommerce/payment notice was deliberately removed from the
+ * storefront in 2.6.1. Hide stale cached markup as a defensive fallback. */
+.dst2t-verification-note {
+	display: none !important;
+}
+
+.dst2t-player-history {
+	background: rgba(255, 255, 255, .92);
+	border: 1px solid var(--dst2t-border);
+	border-radius: 18px;
+	box-shadow: 0 8px 24px rgba(34, 29, 63, .045);
+	box-sizing: border-box;
+	margin: 0 0 18px;
+	padding: 15px;
+}
+
+.dst2t-player-history-heading {
+	align-items: center;
+	display: flex;
+	font-size: 15px;
+	font-weight: 820;
+	gap: 9px;
+	line-height: 1.25;
+	margin: 0 0 11px;
+}
+
+.dst2t-history-heading-icon {
+	background: var(--dst2t-accent-soft);
+	border-radius: 10px;
+	color: var(--dst2t-accent);
+	height: 30px;
+	width: 30px;
+}
+
+.dst2t-history-heading-icon svg {
+	height: 19px;
+	width: 19px;
+}
+
+.dst2t-history-control,
+.dst2t-field-control {
+	align-items: center;
+	background: #fff;
+	border: 1.5px solid #d9d6e3;
+	border-radius: 15px;
+	box-shadow: inset 0 1px 0 rgba(255,255,255,.7);
+	display: flex;
+	min-height: 52px;
+	position: relative;
+}
+
+.dst2t-history-control:focus-within,
+.dst2t-field-control:focus-within {
+	background: #fff;
+	border-color: #9c74ee;
+	box-shadow: 0 0 0 4px rgba(116, 71, 232, .10), 0 8px 20px rgba(116, 71, 232, .06);
+}
+
+.dst2t-history-leading-icon,
+.dst2t-field-leading-icon {
+	color: #7757c7;
+	height: 22px;
+	left: 15px;
+	pointer-events: none;
+	position: absolute;
+	width: 22px;
+	z-index: 2;
+}
+
+.dst2t-history-leading-icon svg,
+.dst2t-field-leading-icon svg {
+	height: 22px;
+	width: 22px;
+}
+
+.dst2t-player-history-select,
+.dst2t-field-control input,
+.dst2t-field-control select {
+	-webkit-appearance: none;
+	appearance: none;
+	background: transparent !important;
+	border: 0 !important;
+	border-radius: 15px !important;
+	box-shadow: none !important;
+	box-sizing: border-box;
+	color: var(--dst2t-text);
+	font: inherit;
+	font-size: 16px;
+	line-height: 1.2;
+	margin: 0 !important;
+	min-height: 52px;
+	outline: 0 !important;
+	padding: 0 44px 0 50px !important;
+	width: 100%;
+}
+
+.dst2t-field-control input::placeholder {
+	color: #9a9eaa;
+	opacity: 1;
+}
+
+.dst2t-player-history-select,
+.dst2t-field-control select {
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%233d4050' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 1 5 5 5-5'/%3E%3C/svg%3E") !important;
+	background-position: right 18px center !important;
+	background-repeat: no-repeat !important;
+	background-size: 12px 8px !important;
+}
+
+.dst2t-player-history-select:disabled,
+.dst2t-field-control select:disabled,
+.dst2t-field-control input:disabled {
+	cursor: not-allowed;
+	opacity: .62;
+}
+
+.dst2t-history-control::after,
+.dst2t-field-control:has(select)::after {
+	border-bottom: 2px solid #3d4050;
+	border-right: 2px solid #3d4050;
+	content: "";
+	height: 8px;
+	pointer-events: none;
+	position: absolute;
+	right: 18px;
+	top: 19px;
+	transform: rotate(45deg);
+	width: 8px;
+}
+
+.dst2t-player-history-note {
+	color: var(--dst2t-muted);
+	display: block;
+	font-size: 12.5px;
+	line-height: 1.45;
+	margin: 9px 3px 0;
+}
+
+.dst2t-player-history-clear {
+	align-items: center;
+	background: transparent !important;
+	border: 0 !important;
+	box-shadow: none !important;
+	color: #6e42d6 !important;
+	cursor: pointer;
+	display: inline-flex;
+	font-size: 12.5px;
+	font-weight: 750;
+	gap: 7px;
+	line-height: 1.35;
+	margin: 10px 0 0 !important;
+	min-height: 30px;
+	padding: 3px !important;
+	text-decoration: none !important;
+}
+
+.dst2t-player-history-clear:hover span:last-child,
+.dst2t-player-history-clear:focus span:last-child {
+	text-decoration: underline;
+}
+
+.dst2t-clear-icon {
+	color: #8a4ee0;
+	height: 19px;
+	width: 19px;
+}
+
+.dst2t-clear-icon svg {
+	height: 19px;
+	width: 19px;
+}
+
+.dst2t-field {
+	box-sizing: border-box;
+	margin: 0 0 16px !important;
+	padding: 0 !important;
+}
+
+.dst2t-field:last-of-type {
+	margin-bottom: 0 !important;
+}
+
+.dst2t-field > label {
+	color: var(--dst2t-text);
+	display: block;
+	font-size: 14px;
+	font-weight: 820;
+	line-height: 1.3;
+	margin: 0 0 8px;
+}
+
+.dst2t-field .required {
+	color: #e02b2b;
+}
+
+.dst2t-player-id-field input,
+.dst2t-player-id-field select {
+	font-variant-numeric: tabular-nums;
+}
+
+.dst2t-field-help {
+	color: var(--dst2t-muted);
+	display: block;
+	font-size: 12.5px;
+	line-height: 1.48;
+	margin: 8px 3px 0;
+}
+
+.dst2t-verify-actions {
+	display: grid;
+	gap: 10px;
+	margin-top: 17px;
+}
+
+.dst2t-verify-button {
+	align-items: center !important;
+	appearance: none;
+	background: linear-gradient(105deg, #9d3de2 0%, #7048e8 55%, #5c45e8 100%) !important;
+	border: 0 !important;
+	border-radius: 15px !important;
+	box-shadow: 0 12px 28px rgba(108, 65, 221, .24) !important;
+	color: #fff !important;
+	display: grid !important;
+	font-size: 15px !important;
+	font-weight: 830 !important;
+	grid-template-columns: 28px 1fr 28px;
+	justify-content: center;
+	letter-spacing: -.01em;
+	min-height: 54px;
+	padding: 0 16px !important;
+	text-align: center;
+	text-decoration: none !important;
+	/* Compositor-only: box-shadow/filter transitions repaint on every frame,
+	 * which stutters on low-end Android WebViews. */
+	transition: transform .16s ease;
+	width: 100%;
+}
+
+.dst2t-verify-button:hover,
+.dst2t-verify-button:focus {
+	box-shadow: 0 15px 32px rgba(108, 65, 221, .30) !important;
+	filter: brightness(1.035);
+	outline: none;
+	transform: translateY(-1px);
+}
+
+.dst2t-verify-button:active {
+	transform: translateY(0);
+}
+
+.dst2t-verify-button:disabled,
+.dst2t-verify-button.is-loading {
+	cursor: wait;
+	filter: saturate(.75);
+	opacity: .76;
+	transform: none;
+}
+
+.dst2t-verify-button-icon,
+.dst2t-verify-button-arrow {
+	color: #fff;
+	height: 23px;
+	width: 23px;
+}
+
+.dst2t-verify-button-icon svg,
+.dst2t-verify-button-arrow svg {
+	height: 23px;
+	width: 23px;
+}
+
+.dst2t-verify-button-arrow {
+	justify-self: end;
+}
+
+.dst2t-verify-status:empty {
+	display: none;
+}
+
+.dst2t-verify-status {
+	border: 1px solid var(--dst2t-border);
+	border-radius: 14px;
+	font-size: 13px;
+	line-height: 1.45;
+	padding: 11px 13px;
+}
+
+.dst2t-verify-head {
+	align-items: flex-start;
+	display: flex;
+	gap: 9px;
+}
+
+.dst2t-verify-status-icon {
+	flex: 0 0 22px;
+	height: 22px;
+	margin-top: 1px;
+	width: 22px;
+}
+
+.dst2t-verify-status-icon svg {
+	height: 22px;
+	width: 22px;
+}
+
+.dst2t-verify-status-text {
+	font-weight: 700;
+}
+
+.dst2t-verify-status.is-loading {
+	background: #f5f1ff;
+	border-color: #ded3ff;
+	color: #5b3ec8;
+}
+
+.dst2t-verify-status.is-success {
+	background: #effaf2;
+	border-color: #b9e3c5;
+	box-shadow: 0 8px 20px rgba(22, 115, 58, .07);
+	color: var(--dst2t-success);
+}
+
+.dst2t-verify-status.is-error {
+	background: #fff4f2;
+	border-color: #ffd0cc;
+	color: var(--dst2t-danger);
+}
+
+.dst2t-verify-status.is-info {
+	background: #f8f9fc;
+	color: #50586a;
+}
+
+.dst2t-verify-status-icon.is-spin {
+	animation: dst2t-spin .85s linear infinite;
+}
+
+.dst2t-verify-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 7px;
+	margin-top: 9px;
+}
+
+.dst2t-verify-meta span {
+	background: #fff;
+	border: 1px solid rgba(0,0,0,.06);
+	border-radius: 999px;
+	font-size: 11.5px;
+	font-weight: 740;
+	padding: 5px 9px;
+}
+
+@keyframes dst2t-spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+/* Compact Material card: shared visual language with the Digital Gateway. */
+.dst2t-requirements:not(:empty) { border-radius:24px; box-shadow:0 18px 48px -34px rgba(74,29,150,.48); }
+.dst2t-player-history { background:#f8f6fd; box-shadow:none; padding:13px; }
+.dst2t-player-history-heading { font-size:13px; gap:7px; }
+.dst2t-player-history-heading .dst2t-player-history-clear { margin:0 0 0 auto; padding:10px 6px; min-height:44px; flex-shrink:0; font-size:12px; }
+.dst2t-fields-title { font-size:17px; }
+.dst2t-title-icon { width:44px; height:44px; border-radius:15px; }
+.dst2t-history-leading-icon svg, .dst2t-field-leading-icon svg { width:20px; height:20px; }
+.dst2t-field-control input, .dst2t-field-control select, .dst2t-player-history-select { font-size:16px!important; }
+.dst2t-verify-button { border-radius:16px; min-height:52px; }
+.dst2t-verify-button:focus-visible, .dst2t-player-history-clear:focus-visible { outline:3px solid #a78bfa; outline-offset:3px; }
+@media(max-width:380px) {
+ .dst2t-requirements:not(:empty) { padding:13px; border-radius:20px; }
+ .dst2t-fields-title { font-size:15px; gap:9px; }
+ .dst2t-title-icon { width:38px; height:38px; }
+ .dst2t-player-history { padding:10px; }
+ .dst2t-player-history-heading { font-size:12px; }
+ .dst2t-player-history-note, .dst2t-field-help { font-size:12px; }
+}
+
+/* Delicat Builder native product compatibility. */
+.delicat-native-product .dst2t-requirements:not(:empty),
+.delicat-native-product .topup-requirements:not(:empty) {
+	margin-bottom: 14px;
+	margin-top: 14px;
+}
+
+.delicat-native-product .dst2t-requirements .dst2t-field-list,
+.delicat-native-product .topup-requirements .topup-field-list {
+	min-width: 0;
+}
+
+/* Stealth mode rewrites dst2t-* to topup-* before output, so the same rules
+ * continue to apply without exposing the provider/plugin path. */
+@media (max-width: 480px) {
+	.dst2t-requirements:not(:empty) {
+		border-radius: 19px;
+		margin-left: 0;
+		margin-right: 0;
+		padding: 16px;
+	}
+	.dst2t-fields-title {
+		font-size: 17px;
+	}
+	.dst2t-title-icon {
+		height: 40px;
+		width: 40px;
+	}
+	.dst2t-player-history {
+		padding: 14px;
+	}
+	.dst2t-player-history-select,
+	.dst2t-field-control input,
+	.dst2t-field-control select {
+		font-size: 15px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.dst2t-verify-button {
+		transition: none;
+	}
+	.dst2t-verify-status-icon.is-spin {
+		animation-duration: 1.6s;
+	}
+}

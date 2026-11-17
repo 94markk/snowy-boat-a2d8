@@ -1,0 +1,179 @@
+/*
+ * Delicat Builder V9 — dark mode completion (9.3.15). Last file of the chrome
+ * bundle, so it loads on every page before first paint.
+ *
+ * 1. Text logo in dark mode (header and footer) instead of the image, whose
+ *    white background showed as a light box on the dark header.
+ * 2. Product page pieces that kept light colours in dark mode (review cards,
+ *    trust chips, stock pill, selects, delivery badge).
+ * 3. Placeholder colour inside fields darkened by the dark adapter (engine).
+ * No color-mix(), backdrop-filter or relative colours (Android WebView).
+ *
+ * 9.10.1: colours moved to the « Nuit douce » palette (see dark-glass.css):
+ * solid #1B2029 chips and cards on #171B22, #262B35 / #353C49 hairlines,
+ * soft-white #E6E8EF ink, #A7AEBE secondary, #5BD3A0 / #FF8C95 status on
+ * solid tints (#223836 / #3C2D34) instead of translucent washes.
+ */
+
+/* 1 ------------------------------------------------------------------ */
+.dsb8-header .dsb8-header__wordmark,
+.dbv9-footer-logo .dbv9-footer-wordmark {
+  display: none;
+}
+html[data-delicat-theme="dark"] .dsb8-header .dsb8-header__logo.has-wordmark img,
+html.dlc-theme-dark .dsb8-header .dsb8-header__logo.has-wordmark img,
+.dsb8-header.dsb8-header--dark .dsb8-header__logo.has-wordmark img {
+  display: none !important;
+}
+html[data-delicat-theme="dark"] .dsb8-header .dsb8-header__logo.has-wordmark .dsb8-header__wordmark,
+html.dlc-theme-dark .dsb8-header .dsb8-header__logo.has-wordmark .dsb8-header__wordmark,
+.dsb8-header.dsb8-header--dark .dsb8-header__logo.has-wordmark .dsb8-header__wordmark {
+  display: flex;
+}
+html[data-delicat-theme="dark"] body .dsb8-header__logo.has-wordmark,
+html.dlc-theme-dark body .dsb8-header__logo.has-wordmark,
+.dsb8-header.dsb8-header--dark .dsb8-header__logo.has-wordmark {
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.dsb8-header__logo.has-wordmark a,
+.dbv9-footer-logo.has-wordmark {
+  text-decoration: none !important;
+}
+/* 9.3.16: the wordmark is an SVG fitted to its box (see wordmark_svg()):
+   it scales like an image, so it never overflows or gets clipped. Smaller
+   than the image logo: about 100px wide on a phone. */
+.dsb8-header__wordmark {
+  flex: 0 0 auto;
+  align-items: center;
+  width: min(var(--dsb8-logo-width, 154px), 26vw, 108px);
+  min-width: 72px;
+  line-height: 0;
+}
+.dlc-wordmark {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.dlc-wordmark text {
+  font-family: inherit;
+  text-rendering: geometricPrecision;
+}
+.dlc-wordmark__top {
+  font-size: 30px;
+  font-weight: 900;
+  fill: #e6e8ef;
+}
+.dlc-wordmark__sub {
+  font-size: 16px;
+  font-weight: 800;
+  fill: #a9b6ff;
+}
+html.delicat-standalone body .dsb8-header.has-back .dsb8-header__wordmark {
+  width: min(var(--dsb8-logo-width, 154px), 24vw, 96px);
+}
+
+html[data-delicat-theme="dark"] .dbv9-footer-logo.has-wordmark img,
+html.dlc-theme-dark .dbv9-footer-logo.has-wordmark img {
+  display: none !important;
+}
+html[data-delicat-theme="dark"] .dbv9-footer-logo.has-wordmark .dbv9-footer-wordmark,
+html.dlc-theme-dark .dbv9-footer-logo.has-wordmark .dbv9-footer-wordmark {
+  display: block;
+  width: 136px;
+  max-width: 50vw;
+  line-height: 0;
+}
+/* fallback markup (header class missing) */
+.dbv9-footer-wordmark b {
+  display: block;
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1.1;
+  color: #e6e8ef;
+}
+.dbv9-footer-wordmark small {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  line-height: 1.4;
+  color: #a9b6ff;
+}
+
+/* 2 ------------------------------------------------------------------ */
+html[data-delicat-theme="dark"] body .delicat-native-product,
+html.dlc-theme-dark body .delicat-native-product {
+  --dnp-surface: var(--ds-color-surface-2,#1b2029);
+  --dnp-border: var(--ds-color-border,#262b35);
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review,
+html.dlc-theme-dark body .delicat-native-product .dnp-review {
+  border-color: #262b35;
+  background: #1b2029;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review-id strong,
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review p,
+html.dlc-theme-dark body .delicat-native-product .dnp-review-id strong,
+html.dlc-theme-dark body .delicat-native-product .dnp-review p {
+  color: #e6e8ef !important;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review-meta,
+html.dlc-theme-dark body .delicat-native-product .dnp-review-meta {
+  color: #a7aebe !important;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-review-verified,
+html.dlc-theme-dark body .delicat-native-product .dnp-review-verified {
+  color: #5bd3a0;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-reviews-stars,
+html.dlc-theme-dark body .delicat-native-product .dnp-reviews-stars {
+  color: #353c49;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-trust span,
+html.dlc-theme-dark body .delicat-native-product .dnp-trust span {
+  border-color: #262b35;
+  background: #1b2029;
+  color: #e6e8ef;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-stock,
+html.dlc-theme-dark body .delicat-native-product .dnp-stock {
+  background: #223836;
+  color: #5bd3a0;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-stock.is-out,
+html.dlc-theme-dark body .delicat-native-product .dnp-stock.is-out {
+  background: #3c2d34;
+  color: #ff8c95;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-stock.is-neutral,
+html.dlc-theme-dark body .delicat-native-product .dnp-stock.is-neutral {
+  background: #1b2029;
+  color: #e6e8ef;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-purchase select,
+html.dlc-theme-dark body .delicat-native-product .dnp-purchase select {
+  border-color: #353c49;
+  background-color: #1b2029;
+  color: #e6e8ef;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-more-options,
+html.dlc-theme-dark body .delicat-native-product .dnp-more-options {
+  border-color: #262b35;
+  background: #1b2029;
+  color: #e6e8ef;
+}
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-media,
+html[data-delicat-theme="dark"] body .delicat-native-product .dnp-related-card img,
+html.dlc-theme-dark body .delicat-native-product .dnp-media,
+html.dlc-theme-dark body .delicat-native-product .dnp-related-card img {
+  background: #1b2029;
+}
+
+/* 3 ------------------------------------------------------------------ */
+html.dlc-theme-dark [data-dlc-dk]::placeholder {
+  color: #8a93a6;
+}

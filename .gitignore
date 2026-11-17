@@ -26,3 +26,6 @@ pnpm-debug.log*
 # wrangler files
 .wrangler
 .dev.vars
+
+# Plugin release bundles are source-controlled (Builder V9 serves assets/dist).
+!plugins/*/assets/dist/
