@@ -1,0 +1,45 @@
+---
+import Icon from './Icon.astro';
+---
+
+<section class="player panel" id="player" aria-label="Player">
+  <header class="panel-head">
+    <h2>Player</h2>
+    <span class="rec-badge" aria-live="polite"><i></i>REC</span>
+  </header>
+
+  <div class="preview-stage" id="preview-stage">
+    <div class="canvas-wrap" id="canvas-wrap">
+      <canvas id="preview-canvas" aria-label="Video preview"></canvas>
+      <div class="guide guide-v" id="guide-v" hidden></div>
+      <div class="guide guide-h" id="guide-h" hidden></div>
+      <div class="sel-box" id="sel-box" hidden>
+        <span class="sel-h nw" data-h="scale"></span>
+        <span class="sel-h ne" data-h="scale"></span>
+        <span class="sel-h sw" data-h="scale"></span>
+        <span class="sel-h se" data-h="scale"></span>
+        <span class="sel-rot" data-h="rotate" title="Rotate"><Icon name="rotate" size={12} /></span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="transport">
+    <div class="tc" aria-label="Timecode">
+      <span id="time-current" class="tc-cur">00:00:00</span>
+      <span class="tc-sep">/</span>
+      <span id="time-total" class="tc-total">00:00:00</span>
+    </div>
+    <div class="transport-main">
+      <button class="icon-btn" type="button" data-cmd="toStart" title="Go to start (Home)"><Icon name="toStart" /></button>
+      <button class="icon-btn" type="button" data-cmd="stepBack" title="Previous frame (←)"><Icon name="stepBack" /></button>
+      <button class="play-btn" type="button" id="btn-play" data-cmd="play" aria-label="Play" title="Play / pause (Space)"><Icon name="play" size={22} /></button>
+      <button class="icon-btn" type="button" data-cmd="stepFwd" title="Next frame (→)"><Icon name="stepFwd" /></button>
+      <button class="icon-btn" type="button" data-cmd="toEnd" title="Go to end (End)"><Icon name="toEnd" /></button>
+    </div>
+    <div class="transport-right">
+      <button class="icon-btn" type="button" id="btn-loop" data-cmd="loop" aria-pressed="false" title="Loop (L)"><Icon name="repeat" /></button>
+      <button class="icon-btn" type="button" data-cmd="snapshot" title="Save frame as PNG"><Icon name="camera" /></button>
+      <button class="icon-btn" type="button" id="btn-fullscreen" title="Full screen"><Icon name="maximize" /></button>
+    </div>
+  </footer>
+</section>

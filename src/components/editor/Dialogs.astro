@@ -1,0 +1,128 @@
+---
+import Icon from './Icon.astro';
+
+const shortcuts: [string, string][] = [
+  ['Space', 'Play / pause'],
+  ['← / →', 'Previous / next frame'],
+  ['Shift + ← / →', 'Back / forward 1 second'],
+  ['Home / End', 'Go to start / end'],
+  ['Ctrl + B or S', 'Split at playhead'],
+  ['Q / W', 'Delete left / right of playhead'],
+  ['Delete', 'Delete selection'],
+  ['Ctrl + D', 'Duplicate'],
+  ['Ctrl + C / V', 'Copy / paste at playhead'],
+  ['Ctrl + A', 'Select all clips'],
+  ['Ctrl + Z', 'Undo'],
+  ['Ctrl + Shift + Z', 'Redo'],
+  ['M', 'Add / remove marker'],
+  ['N', 'Toggle snapping'],
+  ['L', 'Toggle loop'],
+  ['+ / −', 'Zoom timeline'],
+  ['Shift + Z', 'Fit timeline to window'],
+  ['Ctrl + scroll', 'Zoom timeline at cursor'],
+  ['Shift + click', 'Add clip to selection'],
+  ['Esc', 'Clear selection'],
+];
+---
+
+<dialog class="dialog" id="export-dialog" aria-labelledby="export-title">
+  <form class="dialog-card export-card" id="export-form" method="dialog">
+    <header class="dialog-head">
+      <h2 id="export-title">Export</h2>
+      <button class="icon-btn" type="button" id="export-close" aria-label="Close"><Icon name="x" /></button>
+    </header>
+    <div class="export-body">
+      <figure class="export-cover"><img id="export-cover" alt="Cover frame" /></figure>
+      <div class="export-fields">
+        <label class="field">
+          <span>File name</span>
+          <input name="filename" type="text" class="text-input" />
+        </label>
+        <label class="field video-only">
+          <span>Resolution</span>
+          <select name="res">
+            <option value="480">480p</option>
+            <option value="720">720p</option>
+            <option value="1080" selected>1080p</option>
+            <option value="1440">2K</option>
+            <option value="2160">4K</option>
+          </select>
+        </label>
+        <label class="field video-only">
+          <span>Frame rate</span>
+          <select name="fps">
+            <option value="24">24 fps</option>
+            <option value="25">25 fps</option>
+            <option value="30" selected>30 fps</option>
+            <option value="50">50 fps</option>
+            <option value="60">60 fps</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Format</span>
+          <select name="format" id="export-format"></select>
+        </label>
+        <label class="field video-only">
+          <span>Quality</span>
+          <select name="quality">
+            <option value="low">Smaller file</option>
+            <option value="rec" selected>Recommended</option>
+            <option value="high">Higher quality</option>
+          </select>
+        </label>
+        <p class="export-est" id="export-est"></p>
+      </div>
+    </div>
+    <div class="export-progress" id="export-progress" hidden>
+      <div class="progress"><span id="export-bar"></span></div>
+      <p id="export-status" role="status"></p>
+    </div>
+    <p class="dialog-note">Rendering happens in real time inside your browser, so a 1-minute video takes about a minute. Keep this tab in front while exporting.</p>
+    <footer class="dialog-foot">
+      <button class="btn" type="button" id="export-cancel">Close</button>
+      <button class="btn btn-primary" type="button" id="export-start">Export</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog class="dialog" id="projects-dialog" aria-labelledby="projects-title">
+  <div class="dialog-card projects-card">
+    <header class="dialog-head">
+      <h2 id="projects-title">Projects</h2>
+      <div class="dialog-head-actions">
+        <button class="btn btn-accent" type="button" id="btn-new-project"><Icon name="plus" size={16} /><span>New project</span></button>
+        <button class="icon-btn" type="button" id="projects-close" aria-label="Close"><Icon name="x" /></button>
+      </div>
+    </header>
+    <ul class="project-list" id="project-list"></ul>
+    <p class="dialog-note">Projects and media are saved automatically in this browser (IndexedDB).</p>
+  </div>
+</dialog>
+
+<dialog class="dialog" id="shortcuts-dialog" aria-labelledby="shortcuts-title">
+  <div class="dialog-card">
+    <header class="dialog-head">
+      <h2 id="shortcuts-title">Keyboard shortcuts</h2>
+      <button class="icon-btn" type="button" data-close-dialog aria-label="Close"><Icon name="x" /></button>
+    </header>
+    <dl class="shortcut-list">
+      {
+        shortcuts.map(([k, v]) => (
+          <div>
+            <dt>
+              <kbd>{k}</kbd>
+            </dt>
+            <dd>{v}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </div>
+</dialog>
+
+<div class="drop-overlay" id="drop-overlay" hidden>
+  <div><Icon name="upload" size={40} /><strong>Drop to import</strong><span>Video, images and audio</span></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="media-pool" id="media-pool" aria-hidden="true"></div>

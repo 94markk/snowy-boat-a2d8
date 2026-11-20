@@ -27,7 +27,7 @@
   "scripts": {
     "astro": "astro",
     "build": "astro build",
-    "check": "astro build && tsc && wrangler deploy --dry-run",
+    "check": "astro build && tsc && tsc -p src/editor && wrangler deploy --dry-run",
     "deploy": "astro build && wrangler deploy",
     "dev": "astro dev",
     "preview": "astro build && wrangler dev",

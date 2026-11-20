@@ -1,0 +1,185 @@
+---
+import Icon from './Icon.astro';
+import { EFFECTS, FILTERS, SOUNDS, STICKERS, TEXT_PRESETS, TRANSITIONS, TRANS_GLYPH, cssFilter, textPreviewStyle } from '../../editor/presets';
+
+const tabs = [
+  { id: 'media', label: 'Media', icon: 'folder' },
+  { id: 'audio', label: 'Audio', icon: 'music' },
+  { id: 'text', label: 'Text', icon: 'type' },
+  { id: 'stickers', label: 'Stickers', icon: 'smile' },
+  { id: 'effects', label: 'Effects', icon: 'sparkles' },
+  { id: 'transitions', label: 'Transitions', icon: 'transition' },
+  { id: 'filters', label: 'Filters', icon: 'filter' },
+];
+
+const music = SOUNDS.filter((s) => s.group === 'music');
+const sfx = SOUNDS.filter((s) => s.group === 'sfx');
+// A neutral, colourful sample used to preview filters before any media is imported.
+const sample = 'linear-gradient(135deg,#f97316 0%,#facc15 30%,#22c55e 55%,#06b6d4 75%,#8b5cf6 100%)';
+---
+
+<aside class="library panel" id="library" aria-label="Library">
+  <nav class="lib-rail" role="tablist" aria-label="Library sections">
+    {
+      tabs.map((t, i) => (
+        <button type="button" role="tab" data-tab={t.id} aria-selected={i === 0 ? 'true' : 'false'}>
+          <Icon name={t.icon} size={20} />
+          <span>{t.label}</span>
+        </button>
+      ))
+    }
+  </nav>
+
+  <div class="lib-panels">
+    <!-- Media bin -->
+    <section class="lib-panel" data-panel="media" aria-label="Media">
+      <header class="lib-head">
+        <h2>Media</h2>
+        <button class="btn btn-accent" id="btn-import" type="button"><Icon name="upload" size={16} /><span>Import</span></button>
+      </header>
+      <div class="chips" id="media-filter" role="group" aria-label="Filter media">
+        <button type="button" class="chip" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" class="chip" data-filter="video" aria-pressed="false">Video</button>
+        <button type="button" class="chip" data-filter="image" aria-pressed="false">Images</button>
+        <button type="button" class="chip" data-filter="audio" aria-pressed="false">Audio</button>
+      </div>
+      <button class="dropzone" id="media-empty" type="button">
+        <Icon name="upload" size={30} />
+        <strong>Import media</strong>
+        <span>Drop video, photo or audio files anywhere, or click to browse.</span>
+        <small>Everything stays on this device.</small>
+      </button>
+      <div class="media-grid" id="media-grid" hidden></div>
+    </section>
+
+    <!-- Audio -->
+    <section class="lib-panel" data-panel="audio" aria-label="Audio" hidden>
+      <header class="lib-head"><h2>Audio</h2></header>
+      <div class="vo-card">
+        <button class="vo-btn" id="btn-voiceover" type="button" aria-label="Record voiceover"><Icon name="mic" size={18} /></button>
+        <div class="vo-meta">
+          <strong id="vo-label">Record voiceover</strong>
+          <span>Records from the playhead while the project plays · <b id="vo-timer">0:00</b></span>
+          <label class="vo-opt"><input type="checkbox" id="vo-mute" /> Mute project audio while recording</label>
+        </div>
+      </div>
+      <h3 class="lib-sub">Music</h3>
+      <ul class="sound-list">
+        {
+          music.map((s) => (
+            <li class="sound-row" data-add="sound" data-id={s.id} title="Click to add at playhead, or drag to the timeline">
+              <span class="sound-ic"><Icon name="music" size={16} /></span>
+              <span class="sound-name">{s.label}</span>
+              <span class="sound-dur">{s.dur}</span>
+              <span class="icon-btn" aria-hidden="true"><Icon name="plus" size={16} /></span>
+            </li>
+          ))
+        }
+      </ul>
+      <h3 class="lib-sub">Sound effects</h3>
+      <ul class="sound-list">
+        {
+          sfx.map((s) => (
+            <li class="sound-row" data-add="sound" data-id={s.id} title="Click to add at playhead, or drag to the timeline">
+              <span class="sound-ic"><Icon name="volume" size={16} /></span>
+              <span class="sound-name">{s.label}</span>
+              <span class="sound-dur">{s.dur}</span>
+              <span class="icon-btn" aria-hidden="true"><Icon name="plus" size={16} /></span>
+            </li>
+          ))
+        }
+      </ul>
+      <h3 class="lib-sub">Your audio</h3>
+      <ul class="sound-list" id="audio-list"></ul>
+      <p class="lib-hint">Built-in sounds are generated in your browser and are free to use.</p>
+    </section>
+
+    <!-- Text -->
+    <section class="lib-panel" data-panel="text" aria-label="Text" hidden>
+      <header class="lib-head"><h2>Text</h2></header>
+      <button class="add-text" type="button" data-add="text" data-id="default">
+        <Icon name="plus" size={18} /><span>Add text</span>
+      </button>
+      <h3 class="lib-sub">Text styles</h3>
+      <div class="lib-tiles tiles-text">
+        {
+          TEXT_PRESETS.map((p) => (
+            <button type="button" class="lib-tile" data-add="text" data-id={p.id} title={p.label}>
+              <span class="lib-tile-thumb text-thumb"><span style={textPreviewStyle(p.style)}>Aa</span></span>
+              <span class="lib-tile-label">{p.label}</span>
+            </button>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Stickers -->
+    <section class="lib-panel" data-panel="stickers" aria-label="Stickers" hidden>
+      <header class="lib-head"><h2>Stickers</h2></header>
+      {
+        STICKERS.map((g) => (
+          <>
+            <h3 class="lib-sub">{g.cat}</h3>
+            <div class="sticker-grid">
+              {g.items.map((e) => (
+                <button type="button" class="sticker" data-add="sticker" data-id={e} aria-label={`Add sticker ${e}`}>
+                  {e}
+                </button>
+              ))}
+            </div>
+          </>
+        ))
+      }
+    </section>
+
+    <!-- Effects -->
+    <section class="lib-panel" data-panel="effects" aria-label="Effects" hidden>
+      <header class="lib-head"><h2>Video effects</h2></header>
+      <p class="lib-hint">Effects sit on their own track and affect everything underneath them.</p>
+      <div class="lib-tiles">
+        {
+          EFFECTS.map((e) => (
+            <button type="button" class="lib-tile" data-add="effect" data-id={e.id} title={e.label}>
+              <span class="lib-tile-thumb fx-thumb" style={`--h:${e.hue}`}>
+                <Icon name="sparkles" size={20} />
+              </span>
+              <span class="lib-tile-label">{e.label}</span>
+            </button>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Transitions -->
+    <section class="lib-panel" data-panel="transitions" aria-label="Transitions" hidden>
+      <header class="lib-head"><h2>Transitions</h2></header>
+      <p class="lib-hint">Drag onto a cut between two clips, or select a clip and click a style.</p>
+      <div class="lib-tiles">
+        {
+          TRANSITIONS.map((t) => (
+            <button type="button" class="lib-tile" data-add="transition" data-id={t.id} title={t.label}>
+              <span class="lib-tile-thumb glyph-thumb"><b>{TRANS_GLYPH[t.id]}</b></span>
+              <span class="lib-tile-label">{t.label}</span>
+            </button>
+          ))
+        }
+      </div>
+    </section>
+
+    <!-- Filters -->
+    <section class="lib-panel" data-panel="filters" aria-label="Filters" hidden>
+      <header class="lib-head"><h2>Filters</h2></header>
+      <p class="lib-hint">Select a video or image clip, then pick a look. Fine-tune intensity in the Filters tab on the right.</p>
+      <div class="lib-tiles">
+        {
+          FILTERS.map((f) => (
+            <button type="button" class="lib-tile" data-add="filter" data-id={f.id} title={f.label}>
+              <span class="lib-tile-thumb" style={`background:${sample};filter:${f.id === 'none' ? 'none' : cssFilter({}, f, 1)}`} />
+              <span class="lib-tile-label">{f.label}</span>
+            </button>
+          ))
+        }
+      </div>
+    </section>
+  </div>
+</aside>

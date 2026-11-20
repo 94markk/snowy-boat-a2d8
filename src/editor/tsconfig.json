@@ -1,0 +1,10 @@
+{
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["astro/client"],
+    "noEmit": true,
+    "noUnusedLocals": true
+  },
+  "include": ["./**/*.ts"]
+}

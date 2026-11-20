@@ -1,0 +1,54 @@
+---
+import Icon from './Icon.astro';
+
+const edit = [
+  { cmd: 'split', icon: 'scissors', title: 'Split (Ctrl+B)' },
+  { cmd: 'trimLeft', icon: 'trimLeft', title: 'Delete left of playhead (Q)' },
+  { cmd: 'trimRight', icon: 'trimRight', title: 'Delete right of playhead (W)' },
+  { cmd: 'delete', icon: 'trash', title: 'Delete (Del)' },
+  { cmd: 'duplicate', icon: 'copy', title: 'Duplicate (Ctrl+D)' },
+  null,
+  { cmd: 'freeze', icon: 'freeze', title: 'Freeze frame' },
+  { cmd: 'detach', icon: 'detach', title: 'Extract audio' },
+  { cmd: 'marker', icon: 'flag', title: 'Add marker (M)' },
+];
+---
+
+<section class="timeline" id="timeline" aria-label="Timeline">
+  <div class="tl-toolbar">
+    <div class="tl-tools">
+      {
+        edit.map((b) =>
+          b ? (
+            <button class="icon-btn" type="button" data-cmd={b.cmd} title={b.title} aria-label={b.title}>
+              <Icon name={b.icon} />
+            </button>
+          ) : (
+            <span class="tl-sep" aria-hidden="true" />
+          ),
+        )
+      }
+    </div>
+    <div class="tl-tools">
+      <button class="icon-btn toggle" type="button" data-cmd="magnet" aria-pressed="true" title="Main track magnet: keep main clips back-to-back"><Icon name="magnet" /></button>
+      <button class="icon-btn toggle" type="button" data-cmd="snap" aria-pressed="true" title="Snapping (N)"><Icon name="snap" /></button>
+      <span class="tl-sep" aria-hidden="true"></span>
+      <button class="icon-btn" type="button" data-cmd="zoomOut" title="Zoom out (−)"><Icon name="zoomOut" /></button>
+      <input class="tl-zoom" id="tl-zoom" type="range" min="0" max="100" step="0.5" aria-label="Timeline zoom" />
+      <button class="icon-btn" type="button" data-cmd="zoomIn" title="Zoom in (+)"><Icon name="zoomIn" /></button>
+      <button class="icon-btn" type="button" data-cmd="zoomFit" title="Fit timeline (Shift+Z)"><Icon name="fit" /></button>
+    </div>
+  </div>
+
+  <div class="tl-scroll" id="tl-scroll">
+    <div class="tl-content" id="tl-content">
+      <div class="tl-ruler-row">
+        <div class="tl-corner"></div>
+        <div class="tl-ruler-lane"><canvas class="tl-ruler" id="tl-ruler" aria-hidden="true"></canvas></div>
+      </div>
+      <div class="tl-rows" id="tl-rows"></div>
+      <div class="tl-playhead" id="tl-playhead" aria-hidden="true"><span class="tl-playhead-knob"></span></div>
+      <div class="tl-snapline" id="tl-snapline" hidden></div>
+    </div>
+  </div>
+</section>
