@@ -11,6 +11,9 @@ import 'package:delicat_studio/core/settings.dart';
 import 'package:delicat_studio/features/collage/collage_screen.dart';
 import 'package:delicat_studio/features/cutout/cutout_screen.dart';
 import 'package:delicat_studio/features/editor/editor_screen.dart';
+import 'package:delicat_studio/features/video/video_editor_screen.dart';
+import 'package:delicat_studio/features/video/video_model.dart';
+import 'package:delicat_studio/features/video/video_timeline.dart';
 import 'package:delicat_studio/main.dart';
 import 'package:delicat_studio/theme/app_theme.dart';
 import 'package:flutter/services.dart';
@@ -74,12 +77,12 @@ Future<(ui.Image, Float32List)> _portrait(int w, int h, {int seed = 0}) async {
   return (img, conf);
 }
 
-Future<void> _shot(WidgetTester tester, Widget app, String name, {Future<void> Function()? after}) async {
+Future<void> _shot(WidgetTester tester, Widget app, String name, {Future<void> Function()? after, int cycles = 6}) async {
   tester.view.physicalSize = const Size(1080, 2340);
   tester.view.devicePixelRatio = 2.625;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(app);
-  for (var i = 0; i < 6; i++) {
+  for (var i = 0; i < cycles; i++) {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 150)));
     await tester.pump(const Duration(milliseconds: 600));
   }
@@ -127,6 +130,41 @@ void main() {
     final (img, _) = (await t.runAsync(() => _portrait(900, 1200, seed: 3)))!;
     await _shot(t, _wrap(EditorScreen(photo: Photo('', img), initialTool: EditorTool.styles)), '06_editor_styles', after: () async {
       await t.tap(find.text('Velours'));
+      for (var i = 0; i < 3; i++) {
+        await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
+        await t.pump(const Duration(milliseconds: 400));
+      }
+    });
+  });
+
+  testWidgets('video editor', (t) async {
+    final paths = (await t.runAsync(() async {
+      final dir = await Directory.systemTemp.createTemp('ds_shots');
+      final out = <String>[];
+      for (var i = 0; i < 3; i++) {
+        final (img, _) = await _portrait(720, 1280, seed: i);
+        final png = await img.toByteData(format: ui.ImageByteFormat.png);
+        final f = File('${dir.path}/clip_$i.png');
+        await f.writeAsBytes(png!.buffer.asUint8List());
+        out.add(f.path);
+      }
+      return out;
+    }))!;
+    await _shot(t, _wrap(VideoEditorScreen(paths: paths, initialRatio: VRatio.story)), '08_video_editor', cycles: 40, after: () async {
+      Future<void> settle() async {
+        for (var i = 0; i < 4; i++) {
+          await t.pump(const Duration(milliseconds: 300));
+        }
+      }
+
+      await t.tap(find.text('Texte'));
+      await settle();
+      await t.enterText(find.byType(TextField), 'Promo -20 %');
+      await t.tap(find.text('Ajouter le texte'));
+      await settle();
+      // Select the first clip on the timeline and show the transition marker.
+      final box = t.getRect(find.byType(VideoTimeline));
+      await t.tapAt(Offset(box.center.dx + 40, box.top + 60));
       for (var i = 0; i < 3; i++) {
         await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 100)));
         await t.pump(const Duration(milliseconds: 400));

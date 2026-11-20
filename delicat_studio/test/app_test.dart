@@ -19,9 +19,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Que crée-t-on aujourd’hui ?'), findsOneWidget);
-    expect(find.text('Retirer un arrière-plan'), findsOneWidget);
-    expect(find.text('Créer un collage'), findsOneWidget);
-    expect(find.text('Retirer le fond'), findsOneWidget);
+    expect(find.text('Monter une vidéo'), findsOneWidget);
+    expect(find.text('Détourer'), findsOneWidget);
+    expect(find.text('Recommandé pour toi'), findsOneWidget);
+    expect(find.text('Monte une vidéo pour ta boutique'), findsOneWidget);
     expect(find.text('Studio'), findsWidgets);
     expect(find.text('Créations'), findsOneWidget);
   });

@@ -8,7 +8,8 @@ import 'package:path_provider/path_provider.dart';
 enum CreationKind {
   cutout('Détourage'),
   collage('Collage'),
-  edit('Retouche');
+  edit('Retouche'),
+  video('Vidéo');
 
   const CreationKind(this.label);
   final String label;
@@ -24,6 +25,7 @@ class Creation {
     required this.height,
     required this.bytes,
     required this.created,
+    this.durationMs,
   });
 
   final String id;
@@ -35,6 +37,10 @@ class Creation {
   final int bytes;
   final DateTime created;
 
+  /// Set for videos.
+  final int? durationMs;
+
+  bool get isVideo => kind == CreationKind.video;
   String get fileName => file.split('/').last;
 
   Map<String, Object> toJson() => {
@@ -46,6 +52,7 @@ class Creation {
         'height': height,
         'bytes': bytes,
         'created': created.millisecondsSinceEpoch,
+        'durationMs': ?durationMs,
       };
 
   static Creation fromJson(Map<String, dynamic> j) => Creation(
@@ -57,6 +64,7 @@ class Creation {
         height: j['height'] as int,
         bytes: j['bytes'] as int,
         created: DateTime.fromMillisecondsSinceEpoch(j['created'] as int),
+        durationMs: j['durationMs'] as int?,
       );
 }
 
@@ -132,6 +140,44 @@ class CreationsStore extends ChangeNotifier {
       height: height,
       bytes: bytes.length,
       created: now,
+    );
+    _items.insert(0, c);
+    await _persist();
+    notifyListeners();
+    return c;
+  }
+
+  /// Moves an exported video into the library (no full read into memory).
+  Future<Creation> addVideo({
+    required String source,
+    required Uint8List thumb,
+    required int width,
+    required int height,
+    required int durationMs,
+  }) async {
+    final d = await _folder();
+    final now = DateTime.now();
+    final id = now.microsecondsSinceEpoch.toString();
+    final target = File('${d.path}/${fileNameFor(now, 'mp4')}');
+    final src = File(source);
+    try {
+      await src.rename(target.path);
+    } on FileSystemException {
+      await src.copy(target.path);
+      await src.delete();
+    }
+    final thumbFile = File('${d.path}/thumb_$id.jpg');
+    await thumbFile.writeAsBytes(thumb, flush: true);
+    final c = Creation(
+      id: id,
+      file: target.path,
+      thumb: thumbFile.path,
+      kind: CreationKind.video,
+      width: width,
+      height: height,
+      bytes: await target.length(),
+      created: now,
+      durationMs: durationMs,
     );
     _items.insert(0, c);
     await _persist();

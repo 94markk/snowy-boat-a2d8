@@ -4,6 +4,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../core/creations.dart';
 import '../features/launch.dart';
+import '../features/video/video_export.dart' show formatDuration;
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/kat_button.dart';
@@ -75,6 +76,23 @@ class _CreationsScreenState extends State<CreationsScreen> {
                                     children: [
                                       ColoredBox(color: k.sheetAlt),
                                       Image.file(File(c.thumb), fit: BoxFit.cover, cacheWidth: 300),
+                                      if (c.isVideo)
+                                        Positioned(
+                                          left: KatSpace.s4,
+                                          bottom: KatSpace.s4,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: const Color(0xB3000000), borderRadius: BorderRadius.circular(6)),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.play_arrow_rounded, size: 14, color: Color(0xFFFFFFFF)),
+                                                Text(formatDuration(c.durationMs ?? 0),
+                                                    style: KatType.ui(12, weight: FontWeight.w600, tabular: true, color: const Color(0xFFFFFFFF))),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

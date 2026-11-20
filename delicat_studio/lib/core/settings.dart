@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -24,6 +26,9 @@ class AppSettings extends ChangeNotifier {
   bool saveToGallery = true;
   ImportQuality importQuality = ImportQuality.high;
 
+  /// How often each tool was opened (drives « Recommandé pour toi »).
+  Map<String, int> toolUses = {};
+
   SharedPreferences? _prefs;
 
   Future<void> load() async {
@@ -36,6 +41,8 @@ class AppSettings extends ChangeNotifier {
       jpgQuality = p.getInt('jpgQuality') ?? 92;
       saveToGallery = p.getBool('saveToGallery') ?? true;
       importQuality = ImportQuality.values[p.getInt('importQuality') ?? ImportQuality.high.index];
+      final raw = p.getString('toolUses');
+      if (raw != null) toolUses = (jsonDecode(raw) as Map).map((k, v) => MapEntry(k as String, (v as num).toInt()));
     } catch (_) {
       // Preferences unavailable (tests, first boot hiccup): keep defaults.
     }
@@ -70,6 +77,11 @@ class AppSettings extends ChangeNotifier {
   void setSaveToGallery(bool v) {
     saveToGallery = v;
     _save((p) => p.setBool('saveToGallery', v));
+  }
+
+  void recordUse(String tool) {
+    toolUses = {...toolUses, tool: (toolUses[tool] ?? 0) + 1};
+    _save((p) => p.setString('toolUses', jsonEncode(toolUses)));
   }
 
   void setImportQuality(ImportQuality q) {

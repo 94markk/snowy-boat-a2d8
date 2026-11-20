@@ -49,16 +49,21 @@ enum _CropRatio {
 }
 
 class EditorScreen extends StatefulWidget {
-  const EditorScreen({super.key, required this.photo, this.initialTool = EditorTool.adjust});
+  const EditorScreen({super.key, required this.photo, this.initialTool = EditorTool.adjust, this.initialStyle, this.initialFrame});
   final Photo photo;
   final EditorTool initialTool;
+  final String? initialStyle;
+  final FrameStyle? initialFrame;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
 }
 
 class _EditorScreenState extends State<EditorScreen> {
-  final History<EditorDoc> _h = History(const EditorDoc());
+  late final History<EditorDoc> _h = History(EditorDoc(
+    style: widget.initialStyle ?? 'original',
+    frame: widget.initialFrame ?? FrameStyle.none,
+  ));
   late String _tool = widget.initialTool.name;
   ui.Image get _img => widget.photo.image;
   ui.Image? _grain;

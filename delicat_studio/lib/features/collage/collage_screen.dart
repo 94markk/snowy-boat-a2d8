@@ -89,8 +89,9 @@ void paintCollage(Canvas canvas, Size size, CollageScene s, {int? selected, Colo
 }
 
 class CollageScreen extends StatefulWidget {
-  const CollageScreen({super.key, required this.photos});
+  const CollageScreen({super.key, required this.photos, this.initialRatio = CollageRatio.portrait});
   final List<Photo> photos;
+  final CollageRatio initialRatio;
 
   @override
   State<CollageScreen> createState() => _CollageScreenState();
@@ -100,7 +101,7 @@ class _CollageScreenState extends State<CollageScreen> {
   late List<CollageCell> _cells = widget.photos.map((p) => CollageCell(p.image)).toList();
   late List<CollageLayout> _layouts = layoutsFor(_cells.length);
   late CollageLayout _layout = _layouts.first;
-  CollageRatio _ratio = CollageRatio.portrait;
+  late CollageRatio _ratio = widget.initialRatio;
   double _spacing = 0.015;
   double _radius = 0.012;
   Color _bg = const Color(0xFFFFFFFF);

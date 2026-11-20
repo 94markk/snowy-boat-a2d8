@@ -47,3 +47,11 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Same Media3 version as video_player_android, so all Media3 modules stay aligned.
+    val media3 = "1.9.2"
+    implementation("androidx.media3:media3-transformer:$media3")
+    implementation("androidx.media3:media3-effect:$media3")
+    implementation("androidx.media3:media3-common:$media3")
+}
