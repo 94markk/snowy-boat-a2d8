@@ -93,7 +93,7 @@ class SettingsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: KatSpace.s24),
-            Center(child: Text('Delicat Studio 1.0.0', style: KatType.code(12, color: k.inkMuted))),
+            Center(child: Text('Delicat Studio 1.1.0', style: KatType.code(12, color: k.inkMuted))),
           ],
         ),
       ),
