@@ -4,6 +4,23 @@ Delicat Studio is an Android photo studio built with Flutter. It removes backgro
 
 ## Features
 
+**What's new in 1.2.0**
+- **Drafts with autosave.** Montages, retouches and collages save themselves a moment after each change and when the app goes to the background. They come back under « Reprendre » on Home; long-press in the drafts list to remove one. Media is kept inside each draft's folder, so clearing the cache never breaks a draft.
+- **Promo templates.** Free Fire diamonds, eFootball coins, gift cards, streaming, promo du jour, nouveau, Wallet, holidays and Bon Kliyan. Each template is available in French or Kreyòl, as a 9:16, 4:5 or 1:1 poster or an 8-second video. You can add a product photo with its background removed. The shop types the price, and it is shown as « HTG 1 500,00 ». Leave it empty to hide it.
+- **Ma marque.** Set the logo, two colours, title font, shop link and WhatsApp number once. Brand colours come first in every colour picker, and the logo can be added to each new montage automatically.
+- **QR codes.** Add a QR layer in the photo and video editors, linking to the shop or to the shop's WhatsApp chat.
+- **WhatsApp.** One tap sends a photo or video to WhatsApp or WhatsApp Business, ready for a status or a chat. If neither is installed, the system share sheet opens.
+- **Voice-over.** Record from the playhead while the video plays silently, which avoids echo. Recordings sit on their own lane, where you can move them or change their volume.
+- **Royalty-free music.** Six loops are generated on the phone: Kompa, Afro, Fête, Chill, Énergie and Suspense. No download is needed.
+- **Picture overlays.** Place a product photo or another picture over the video for a chosen time.
+- **Stability.**
+  - A local crash journal, with « Signaler un problème » in Réglages.
+  - Lighter defaults on phones with 3 GB of RAM or less.
+  - If Android closes the app while the photo picker is open, the chosen photos are recovered.
+  - Atomic library writes.
+  - Preview players are released during export, so the hardware encoder is free.
+  - Many fixes from a full code review: collage crop crash, export cancel lock, mirrored-and-rotated exports, overlay transparency, colour-erase memory, music loop sync and trimming very short clips.
+
 **Video editing**
 - Import videos and photos together. Photos become 3-second still clips that you can lengthen or shorten.
 - A CapCut-style timeline: the playhead stays in the centre while the tracks scroll under it. Pinch to zoom, see filmstrip frames, and use separate lanes for text and music.
@@ -77,16 +94,20 @@ The app uses the Delicat « Kat » design system:
 lib/
 ├── main.dart                     app, themes, settings bootstrap
 ├── theme/                        Kat tokens (ThemeExtension) and ThemeData
-├── core/                         settings, image I/O, colour matrices, styles, history, creations store
+├── core/                         settings, image I/O, colour matrices, styles, history, creations, drafts,
+│                                 brand kit, crash journal, device profile, generated music library
 ├── widgets/                      kat voucher, buttons, press feedback, sliders, chips, tool rails
-├── screens/                      shell (NavigationBar), home, créations, viewer, réglages
+├── screens/                      shell (NavigationBar), home, créations, viewer, réglages, ma marque,
+│                                 brouillons, confidentialité
 └── features/
     ├── cutout/                   segmentation, mask maths, controller, compositor, screen
     ├── collage/                  layout generator and screen
-    ├── editor/                   document model, renderer, text sheet, screen
+    ├── editor/                   document model, renderer, text and QR sheets, picture layers, screen
+    ├── templates/                promo templates (copy, layout, poster and video builders) and form
     ├── video/                    video model, preview playback, timeline, editor, export
     └── export/                   export sheet and kat receipt
 android/app/src/main/kotlin/…/VideoEngine.kt   probing, thumbnails, frame grabs, Media3 Transformer export
+android/app/src/main/kotlin/…/SystemChannel.kt device profile, WhatsApp detection and direct sharing
 test/                             unit tests (matrices, layouts, mask/flood fill) and widget tests
 screenshots/                      renders store-style screenshots with the real fonts
 ```
@@ -103,11 +124,17 @@ flutter build apk --release --split-per-abi   # build/app/outputs/flutter-apk/
 flutter test screenshots --update-goldens     # optional: screenshots in screenshots/goldens/
 ```
 
-Release builds are signed with the debug key so they install directly. Before publishing on Google Play, create your own upload key and set `signingConfig` in `android/app/build.gradle.kts`.
+Without `android/key.properties`, release builds are signed with the debug key so they install directly. For Google Play, run `tool/make_upload_key.sh` once to create your upload key outside the repository, then build with `flutter build appbundle --release`. The key and `key.properties` are git-ignored. The full release checklist, store listing and Data safety answers are in `docs/play-store.md`. The privacy policy is in `PRIVACY.md`, and the app shows it in Réglages.
+
+CI (`.github/workflows/delicat-studio.yml`) runs analyze and tests, then builds the APKs and the App Bundle on every push that touches `delicat_studio/`.
 
 ## Notes
 
 - The subject model is downloaded by Google Play services. `AndroidManifest.xml` requests it at install time. Phones without Play services use the bundled people model, or manual cut-out with the brush and the colour eraser.
 - The video export uses Media3 1.9.2, the same version as the `video_player` plugin, so all Media3 modules stay aligned. Colour effects run on display-encoded values (`WORKING_COLOR_SPACE_ORIGINAL`), so exported videos match the preview.
-- `WRITE_EXTERNAL_STORAGE` is requested only on Android 9 and older, for gallery saves. Newer versions need no storage permission.
+- `WRITE_EXTERNAL_STORAGE` is requested only on Android 10 and older, for gallery saves. Newer versions need no storage permission. `RECORD_AUDIO` is used only while « Enregistrer ma voix » is active.
+- Android backup and device transfer are turned off (`allowBackup="false"` and `data_extraction_rules.xml`), so drafts and the brand kit stay on the phone.
+- Not included, on purpose:
+  - Video picture-in-picture and reverse playback. Each would need extra video decoders at the same time, which budget phones don't have.
+  - AI captions. These would need an online speech service or a large on-device model.
 - The `INTERNET` and network-state permissions come from Google Play services / ML Kit (model download). The app never uploads photos.

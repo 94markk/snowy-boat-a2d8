@@ -153,9 +153,59 @@ class VClip {
         fadeOutMs: fadeOutMs ?? this.fadeOutMs,
         transitionIn: transitionIn ?? this.transitionIn,
       );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'path': path,
+        'isImage': isImage,
+        'sourceMs': sourceMs,
+        'width': width,
+        'height': height,
+        'inMs': inMs,
+        'outMs': outMs,
+        'hasAudio': hasAudio,
+        'speed': speed,
+        'volume': volume,
+        'mute': mute,
+        'rotation': rotation,
+        'flipH': flipH,
+        'style': style,
+        'styleAmount': styleAmount,
+        'adjust': adjToJson(adjust),
+        'motion': motion.name,
+        'fadeInMs': fadeInMs,
+        'fadeOutMs': fadeOutMs,
+        'transitionIn': transitionIn,
+      };
+
+  static VClip fromJson(Map<String, dynamic> j) => VClip(
+        id: j['id'] as String,
+        path: j['path'] as String,
+        isImage: j['isImage'] == true,
+        sourceMs: _d(j['sourceMs'], 3000),
+        width: (j['width'] as num).toInt(),
+        height: (j['height'] as num).toInt(),
+        inMs: _d(j['inMs'], 0),
+        outMs: _d(j['outMs'], 3000),
+        hasAudio: j['hasAudio'] != false,
+        speed: _d(j['speed'], 1),
+        volume: _d(j['volume'], 1),
+        mute: j['mute'] == true,
+        rotation: (j['rotation'] as num?)?.toInt() ?? 0,
+        flipH: j['flipH'] == true,
+        style: j['style'] as String? ?? 'original',
+        styleAmount: _d(j['styleAmount'], 1),
+        adjust: adjFromJson(j['adjust']),
+        motion: VMotion.values.where((m) => m.name == j['motion']).firstOrNull ?? VMotion.none,
+        fadeInMs: _d(j['fadeInMs'], 0),
+        fadeOutMs: _d(j['fadeOutMs'], 0),
+        transitionIn: j['transitionIn'] == true,
+      );
 }
 
-/// Text or sticker shown between [startMs] and [endMs].
+double _d(Object? v, double fallback) => v is num ? v.toDouble() : fallback;
+
+/// Text, sticker, QR code or picture shown between [startMs] and [endMs].
 @immutable
 class VText {
   const VText({required this.layer, required this.startMs, required this.endMs});
@@ -168,6 +218,37 @@ class VText {
 
   VText copyWith({EditorLayer? layer, double? startMs, double? endMs}) =>
       VText(layer: layer ?? this.layer, startMs: startMs ?? this.startMs, endMs: endMs ?? this.endMs);
+
+  Map<String, Object?> toJson() => {'layer': layer.toJson(), 'startMs': startMs, 'endMs': endMs};
+
+  static VText fromJson(Map<String, dynamic> j) =>
+      VText(layer: EditorLayer.fromJson(j['layer'] as Map<String, dynamic>), startMs: _d(j['startMs'], 0), endMs: _d(j['endMs'], 3000));
+}
+
+/// Recorded voice-over placed on the timeline.
+@immutable
+class VVoice {
+  const VVoice({required this.id, required this.path, required this.startMs, required this.durationMs, this.volume = 1});
+  final String id;
+  final String path;
+  final double startMs;
+  final double durationMs;
+  final double volume;
+
+  double get endMs => startMs + durationMs;
+
+  VVoice copyWith({double? startMs, double? volume}) =>
+      VVoice(id: id, path: path, startMs: startMs ?? this.startMs, durationMs: durationMs, volume: volume ?? this.volume);
+
+  Map<String, Object?> toJson() => {'id': id, 'path': path, 'startMs': startMs, 'durationMs': durationMs, 'volume': volume};
+
+  static VVoice fromJson(Map<String, dynamic> j) => VVoice(
+        id: j['id'] as String,
+        path: j['path'] as String,
+        startMs: _d(j['startMs'], 0),
+        durationMs: _d(j['durationMs'], 0),
+        volume: _d(j['volume'], 1),
+      );
 }
 
 @immutable
@@ -184,6 +265,17 @@ class VMusic {
 
   VMusic copyWith({double? inMs, double? volume, bool? loop}) =>
       VMusic(path: path, name: name, sourceMs: sourceMs, inMs: inMs ?? this.inMs, volume: volume ?? this.volume, loop: loop ?? this.loop);
+
+  Map<String, Object?> toJson() => {'path': path, 'name': name, 'sourceMs': sourceMs, 'inMs': inMs, 'volume': volume, 'loop': loop};
+
+  static VMusic fromJson(Map<String, dynamic> j) => VMusic(
+        path: j['path'] as String,
+        name: j['name'] as String? ?? 'Musique',
+        sourceMs: _d(j['sourceMs'], 0),
+        inMs: _d(j['inMs'], 0),
+        volume: _d(j['volume'], 0.8),
+        loop: j['loop'] != false,
+      );
 }
 
 /// Watermark logo pinned to a corner for the whole video.
@@ -199,6 +291,13 @@ class VLogo {
 
   VLogo copyWith({Alignment? corner, double? size, double? opacity}) =>
       VLogo(path: path, corner: corner ?? this.corner, size: size ?? this.size, opacity: opacity ?? this.opacity);
+
+  Map<String, Object?> toJson() => {'path': path, 'corner': [corner.x, corner.y], 'size': size, 'opacity': opacity};
+
+  static VLogo fromJson(Map<String, dynamic> j) {
+    final c = jsonOffset(j['corner'], const Offset(1, 1));
+    return VLogo(path: j['path'] as String, corner: Alignment(c.dx, c.dy), size: _d(j['size'], 0.2), opacity: _d(j['opacity'], 0.9));
+  }
 }
 
 @immutable
@@ -206,6 +305,7 @@ class VideoDoc {
   const VideoDoc({
     this.clips = const [],
     this.texts = const [],
+    this.voices = const [],
     this.music,
     this.logo,
     this.ratio = VRatio.original,
@@ -215,6 +315,7 @@ class VideoDoc {
 
   final List<VClip> clips;
   final List<VText> texts;
+  final List<VVoice> voices;
   final VMusic? music;
   final VLogo? logo;
   final VRatio ratio;
@@ -285,6 +386,7 @@ class VideoDoc {
   VideoDoc copyWith({
     List<VClip>? clips,
     List<VText>? texts,
+    List<VVoice>? voices,
     VMusic? music,
     bool clearMusic = false,
     VLogo? logo,
@@ -296,6 +398,7 @@ class VideoDoc {
       VideoDoc(
         clips: clips ?? this.clips,
         texts: texts ?? this.texts,
+        voices: voices ?? this.voices,
         music: clearMusic ? null : (music ?? this.music),
         logo: clearLogo ? null : (logo ?? this.logo),
         ratio: ratio ?? this.ratio,
@@ -305,6 +408,63 @@ class VideoDoc {
 
   VideoDoc replaceClip(VClip c) => copyWith(clips: [for (final x in clips) x.id == c.id ? c : x]);
   VideoDoc replaceText(VText t) => copyWith(texts: [for (final x in texts) x.id == t.id ? t : x]);
+  VideoDoc replaceVoice(VVoice v) => copyWith(voices: [for (final x in voices) x.id == v.id ? v : x]);
+
+  /// Every media file the montage depends on (for drafts).
+  Set<String> get mediaPaths => {
+        for (final c in clips) c.path,
+        for (final t in texts) ?t.layer.image,
+        for (final v in voices) v.path,
+        ?music?.path,
+        ?logo?.path,
+      };
+
+  Map<String, Object?> toJson() => {
+        'v': 1,
+        'clips': [for (final c in clips) c.toJson()],
+        'texts': [for (final t in texts) t.toJson()],
+        'voices': [for (final v in voices) v.toJson()],
+        'music': ?music?.toJson(),
+        'logo': ?logo?.toJson(),
+        'ratio': ratio.name,
+        'fill': fill,
+        'muteAll': muteAll,
+      };
+
+  static VideoDoc fromJson(Map<String, dynamic> j) {
+    List<Map<String, dynamic>> list(String k) => [for (final e in (j[k] as List? ?? const [])) e as Map<String, dynamic>];
+    return VideoDoc(
+      clips: [for (final c in list('clips')) VClip.fromJson(c)],
+      texts: [for (final t in list('texts')) VText.fromJson(t)],
+      voices: [for (final v in list('voices')) VVoice.fromJson(v)],
+      music: j['music'] == null ? null : VMusic.fromJson(j['music'] as Map<String, dynamic>),
+      logo: j['logo'] == null ? null : VLogo.fromJson(j['logo'] as Map<String, dynamic>),
+      ratio: VRatio.values.where((r) => r.name == j['ratio']).firstOrNull ?? VRatio.original,
+      fill: j['fill'] == true,
+      muteAll: j['muteAll'] == true,
+    );
+  }
+
+  /// Rewrites media paths (after files move into a draft folder).
+  VideoDoc remap(Map<String, String> moved) {
+    String m(String p) => moved[p] ?? p;
+    return VideoDoc(
+      clips: [
+        for (final c in clips)
+          VClip.fromJson({...c.toJson(), 'path': m(c.path)}),
+      ],
+      texts: [
+        for (final t in texts)
+          t.layer.image == null ? t : VText.fromJson({...t.toJson(), 'layer': {...t.layer.toJson(), 'image': m(t.layer.image!)}}),
+      ],
+      voices: [for (final v in voices) VVoice.fromJson({...v.toJson(), 'path': m(v.path)})],
+      music: music == null ? null : VMusic.fromJson({...music!.toJson(), 'path': m(music!.path)}),
+      logo: logo == null ? null : VLogo.fromJson({...logo!.toJson(), 'path': m(logo!.path)}),
+      ratio: ratio,
+      fill: fill,
+      muteAll: muteAll,
+    );
+  }
 
   /// Keeps texts inside the timeline after clips change length.
   VideoDoc clampTexts() {
@@ -316,6 +476,9 @@ class VideoDoc {
     }
     return copyWith(texts: next);
   }
+
+  /// Voice-overs that start inside the montage (later ones stay saved but silent).
+  List<VVoice> get audibleVoices => [for (final v in voices) if (v.startMs < durationMs - 50) v];
 
   /// Splits clip [index] at timeline time [t]. Returns null if too close to an edge.
   VideoDoc? splitAt(int index, double t, String newId) {

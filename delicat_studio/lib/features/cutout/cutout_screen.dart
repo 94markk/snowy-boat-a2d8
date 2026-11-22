@@ -93,6 +93,7 @@ class _CutoutScreenState extends State<CutoutScreen> {
       initial: initial,
       runDetection: widget.preset != CutoutPreset.colorErase,
       confidence: widget.debugConfidence,
+      ownsPhoto: true,
     );
   }
 

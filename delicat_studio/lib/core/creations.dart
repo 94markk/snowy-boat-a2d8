@@ -5,6 +5,8 @@ import 'dart:typed_data';
 import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'crash_log.dart';
+
 enum CreationKind {
   cutout('Détourage'),
   collage('Collage'),
@@ -100,14 +102,24 @@ class CreationsStore extends ChangeNotifier {
         ..clear()
         ..addAll(list.map((e) => Creation.fromJson(e as Map<String, dynamic>)).where((c) => File(c.file).existsSync()));
       notifyListeners();
-    } catch (_) {
-      // A damaged index should never block the app from starting.
+    } catch (e, s) {
+      // A damaged index should never block the app from starting. Keep a copy so
+      // the next save does not erase what could still be recovered.
+      CrashLog.record(e, s, context: 'creations.load');
+      try {
+        final f = _index(await _folder());
+        if (await f.exists()) await f.copy('${f.path}.damaged');
+      } catch (_) {}
     }
   }
 
+  /// Written to a temporary file then renamed, so a crash mid-write never empties the library.
   Future<void> _persist() async {
     final d = await _folder();
-    await _index(d).writeAsString(jsonEncode(_items.map((c) => c.toJson()).toList()));
+    final f = _index(d);
+    final tmp = File('${f.path}.tmp');
+    await tmp.writeAsString(jsonEncode(_items.map((c) => c.toJson()).toList()), flush: true);
+    await tmp.rename(f.path);
   }
 
   static String fileNameFor(DateTime t, String ext) {

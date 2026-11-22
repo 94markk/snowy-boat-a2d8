@@ -21,6 +21,9 @@ void main() {
     expect(find.text('Que crée-t-on aujourd’hui ?'), findsOneWidget);
     expect(find.text('Monter une vidéo'), findsOneWidget);
     expect(find.text('Détourer'), findsOneWidget);
+    expect(find.text('Modèles promo'), findsOneWidget);
+    expect(find.text('Diamants Free Fire'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Recommandé pour toi'), 300, scrollable: find.byType(Scrollable).first);
     expect(find.text('Recommandé pour toi'), findsOneWidget);
     expect(find.text('Monte une vidéo pour ta boutique'), findsOneWidget);
     expect(find.text('Studio'), findsWidgets);

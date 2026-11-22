@@ -1,7 +1,9 @@
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
 
+import '../../core/crash_log.dart';
 import '../../core/creations.dart';
 import '../../core/image_io.dart';
 import '../../core/settings.dart';
@@ -9,6 +11,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/common.dart';
 import '../../widgets/kat_button.dart';
 import '../../widgets/kat_voucher.dart';
+import '../../widgets/share_actions.dart';
 
 class ExportRequest {
   const ExportRequest({required this.cropToSubject});
@@ -17,14 +20,15 @@ class ExportRequest {
 
 typedef ExportRenderer = Future<ui.Image> Function(ExportRequest request);
 
-Future<void> showExportSheet(
+/// Completes with the saved creation, or null if the sheet was closed first.
+Future<Creation?> showExportSheet(
   BuildContext context, {
   required ExportRenderer render,
   required CreationKind kind,
   bool transparent = false,
   bool offerSubjectCrop = false,
 }) {
-  return showModalBottomSheet<void>(
+  return showModalBottomSheet<Creation>(
     context: context,
     isScrollControlled: true,
     builder: (_) => _ExportSheet(render: render, kind: kind, transparent: transparent, offerSubjectCrop: offerSubjectCrop),
@@ -61,17 +65,24 @@ class _ExportSheetState extends State<_ExportSheet> {
     });
     try {
       final image = await widget.render(ExportRequest(cropToSubject: _cropSubject));
-      final bytes = await ImageIO.encode(image, _format, quality: _quality);
-      final thumb = await ImageIO.thumbnail(image);
+      final w = image.width;
+      final h = image.height;
+      final Uint8List bytes;
+      final Uint8List thumb;
+      try {
+        bytes = await ImageIO.encode(image, _format, quality: _quality);
+        thumb = await ImageIO.thumbnail(image);
+      } finally {
+        image.dispose();
+      }
       final c = await creations.add(
         bytes: bytes,
         thumb: thumb,
         ext: _format == ExportFormat.png ? 'png' : 'jpg',
         kind: widget.kind,
-        width: image.width,
-        height: image.height,
+        width: w,
+        height: h,
       );
-      image.dispose();
       if (_gallery) {
         try {
           await ImageIO.saveToGallery(bytes, c.fileName.split('.').first);
@@ -88,7 +99,8 @@ class _ExportSheetState extends State<_ExportSheet> {
           _stage = _Stage.done;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      CrashLog.record(e, st, context: 'photo export');
       if (mounted) {
         setState(() {
           _stage = _Stage.options;
@@ -218,20 +230,11 @@ class _ExportSheetState extends State<_ExportSheet> {
             Text(_galleryNote ?? '', style: KatType.ui(14, color: k.onKatMuted)),
           ],
         ),
-        stub: Row(
+        stub: Column(
           children: [
-            Expanded(
-              child: KatButton(
-                label: 'Partager',
-                icon: Icons.share_rounded,
-                expand: true,
-                onPressed: () => ImageIO.shareFile(c.file, text: 'Créé avec Delicat Studio'),
-              ),
-            ),
-            const SizedBox(width: KatSpace.s8),
-            Expanded(
-              child: KatButton(label: 'Terminé', kind: KatButtonKind.onKat, expand: true, onPressed: () => Navigator.pop(context)),
-            ),
+            ShareActions(path: c.file, isVideo: false, onKat: true),
+            const SizedBox(height: KatSpace.s8),
+            KatButton(label: 'Terminé', kind: KatButtonKind.onKat, expand: true, onPressed: () => Navigator.pop(context, c)),
           ],
         ),
       ),

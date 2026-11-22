@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/creations.dart';
+import '../../core/drafts.dart';
 import '../../core/image_io.dart';
 import '../../core/settings.dart';
 import '../../core/styles.dart';
@@ -17,8 +18,11 @@ import '../launch.dart';
 import 'collage_layouts.dart';
 
 class CollageCell {
-  CollageCell(this.image);
+  CollageCell(this.image, this.path);
   ui.Image image;
+
+  /// File the photo came from (kept in the draft folder once saved).
+  String path;
   Offset focus = const Offset(0.5, 0.5);
   double zoom = 1;
   bool flip = false;
@@ -51,11 +55,16 @@ Rect srcRectFor(CollageCell c, Rect dst) {
   final iw = c.image.width.toDouble();
   final ih = c.image.height.toDouble();
   final s = math.max(dst.width / iw, dst.height / ih) * c.zoom;
-  final sw = dst.width / s;
-  final sh = dst.height / s;
-  final cx = (c.focus.dx * iw).clamp(sw / 2, iw - sw / 2);
-  final cy = (c.focus.dy * ih).clamp(sh / 2, ih - sh / 2);
-  return Rect.fromCenter(center: Offset(cx, cy), width: sw, height: sh);
+  // Rounding can make the window a hair wider than the photo: never let it exceed it.
+  final sw = math.min(dst.width / s, iw);
+  final sh = math.min(dst.height / s, ih);
+  double centre(double f, double size, double full) {
+    final lo = size / 2;
+    final hi = full - size / 2;
+    return lo <= hi ? (f * full).clamp(lo, hi) : full / 2;
+  }
+
+  return Rect.fromCenter(center: Offset(centre(c.focus.dx, sw, iw), centre(c.focus.dy, sh, ih)), width: sw, height: sh);
 }
 
 void paintCollage(Canvas canvas, Size size, CollageScene s, {int? selected, Color? selection}) {
@@ -88,17 +97,31 @@ void paintCollage(Canvas canvas, Size size, CollageScene s, {int? selected, Colo
   }
 }
 
+/// Collage maker. It owns the photos it receives and frees them when closed.
 class CollageScreen extends StatefulWidget {
-  const CollageScreen({super.key, required this.photos, this.initialRatio = CollageRatio.portrait});
+  const CollageScreen({super.key, required this.photos, this.initialRatio = CollageRatio.portrait, this.draftId, this.initialState});
   final List<Photo> photos;
   final CollageRatio initialRatio;
+
+  /// Reopens a saved collage; [initialState] then holds its layout and settings.
+  final String? draftId;
+  final Map<String, dynamic>? initialState;
 
   @override
   State<CollageScreen> createState() => _CollageScreenState();
 }
 
 class _CollageScreenState extends State<CollageScreen> {
-  late List<CollageCell> _cells = widget.photos.map((p) => CollageCell(p.image)).toList();
+  late List<CollageCell> _cells = widget.photos.map((p) => CollageCell(p.image, p.path)).toList();
+
+  /// Every image this screen decoded, freed together on close (cells can be swapped or removed).
+  late final List<ui.Image> _owned = [for (final p in widget.photos) p.image];
+  late final String _draftId = widget.draftId ?? DraftsStore.newId();
+  late bool _hasDraft = widget.draftId != null;
+  late final Autosaver _autosave = Autosaver(_saveDraft);
+  late final AppLifecycleListener _life = AppLifecycleListener(onHide: () {
+    if (_hasDraft) _autosave.flush();
+  });
   late List<CollageLayout> _layouts = layoutsFor(_cells.length);
   late CollageLayout _layout = _layouts.first;
   late CollageRatio _ratio = widget.initialRatio;
@@ -116,10 +139,79 @@ class _CollageScreenState extends State<CollageScreen> {
   double _gZoom0 = 1;
   Offset _gStart = Offset.zero;
 
-  void _change(VoidCallback fn) => setState(() {
-        fn();
-        _dirty = true;
-      });
+  @override
+  void initState() {
+    super.initState();
+    _life;
+    final st = widget.initialState;
+    if (st != null) _applyState(st);
+  }
+
+  @override
+  void dispose() {
+    _life.dispose();
+    _autosave.dispose();
+    for (final i in _owned) {
+      i.dispose();
+    }
+    super.dispose();
+  }
+
+  void _applyState(Map<String, dynamic> j) {
+    final cells = (j['cells'] as List? ?? const []).cast<Map<String, dynamic>>();
+    for (var i = 0; i < cells.length && i < _cells.length; i++) {
+      final c = cells[i];
+      final f = (c['focus'] as List?)?.cast<num>();
+      _cells[i]
+        ..focus = f != null && f.length == 2 ? Offset(f[0].toDouble(), f[1].toDouble()) : const Offset(0.5, 0.5)
+        ..zoom = (c['zoom'] as num?)?.toDouble() ?? 1
+        ..flip = c['flip'] == true
+        ..style = c['style'] as String? ?? 'original';
+    }
+    _layout = _layouts.where((l) => l.id == j['layout']).firstOrNull ?? _layouts.first;
+    _ratio = CollageRatio.values.where((r) => r.name == j['ratio']).firstOrNull ?? _ratio;
+    _spacing = (j['spacing'] as num?)?.toDouble() ?? _spacing;
+    _radius = (j['radius'] as num?)?.toDouble() ?? _radius;
+    _bg = Color((j['bg'] as num?)?.toInt() ?? _bg.toARGB32());
+  }
+
+  Future<void> _saveDraft() async {
+    for (final c in _cells) {
+      c.path = await drafts.adopt(_draftId, c.path);
+    }
+    const side = 320.0;
+    final size = _ratio.value >= 1 ? Size(side, side / _ratio.value) : Size(side * _ratio.value, side);
+    final scene = _scene;
+    final img = await ImageIO.render(size.width.round(), size.height.round(), (c) => paintCollage(c, size, scene));
+    final thumb = await ImageIO.thumbnail(img, side: 320);
+    img.dispose();
+    await drafts.save(
+      _draftId,
+      DraftKind.collage,
+      {
+        'v': 1,
+        'layout': _layout.id,
+        'ratio': _ratio.name,
+        'spacing': _spacing,
+        'radius': _radius,
+        'bg': _bg.toARGB32(),
+        'cells': [
+          for (final c in _cells)
+            {'path': c.path, 'focus': [c.focus.dx, c.focus.dy], 'zoom': c.zoom, 'flip': c.flip, 'style': c.style},
+        ],
+      },
+      thumb: thumb,
+    );
+  }
+
+  void _change(VoidCallback fn) {
+    setState(() {
+      fn();
+      _dirty = true;
+      _hasDraft = true;
+    });
+    _autosave.schedule();
+  }
 
   void _setCount(List<CollageCell> next) {
     _cells = next;
@@ -130,9 +222,9 @@ class _CollageScreenState extends State<CollageScreen> {
   }
 
   Future<void> _close() async {
-    if (_dirty) {
-      final ok = await confirmKat(context, title: 'Quitter le collage ?', message: 'Ta mise en page sera perdue.', confirm: 'Quitter');
-      if (!ok) return;
+    if (_hasDraft) {
+      await _autosave.flush();
+      if (mounted && _dirty) showKatSnack(context, 'Collage gardé dans tes brouillons.');
     }
     if (mounted) Navigator.pop(context);
   }
@@ -207,8 +299,11 @@ class _CollageScreenState extends State<CollageScreen> {
     final src = await pickSource(context);
     if (src == null) return;
     try {
-      final p = await ImageIO.pick(src);
-      if (p != null) _change(() => _cells[i] = CollageCell(p.image));
+      final p = await ImageIO.pick(src, maxSide: ImageIO.collageSide);
+      if (p != null) {
+        _owned.add(p.image);
+        _change(() => _cells[i] = CollageCell(p.image, p.path));
+      }
     } catch (_) {
       if (mounted) showKatSnack(context, 'Impossible d’ouvrir cette photo. Essaie une autre image.');
     }
@@ -216,9 +311,10 @@ class _CollageScreenState extends State<CollageScreen> {
 
   Future<void> _addPhotos() async {
     try {
-      final more = await ImageIO.pickMany(limit: 9 - _cells.length);
+      final more = await ImageIO.pickMany(limit: 9 - _cells.length, maxSide: ImageIO.collageSide);
       if (more.isEmpty) return;
-      _change(() => _setCount([..._cells, ...more.take(9 - _cells.length).map((p) => CollageCell(p.image))]));
+      _owned.addAll(more.map((p) => p.image));
+      _change(() => _setCount([..._cells, ...more.take(9 - _cells.length).map((p) => CollageCell(p.image, p.path))]));
     } catch (_) {
       if (mounted) showKatSnack(context, 'Impossible d’ajouter ces photos. Réessaie.');
     }
@@ -231,7 +327,7 @@ class _CollageScreenState extends State<CollageScreen> {
       _selected = null;
       _swapFrom = null;
     });
-    await showExportSheet(
+    final saved = await showExportSheet(
       context,
       kind: CreationKind.collage,
       render: (_) {
@@ -241,6 +337,10 @@ class _CollageScreenState extends State<CollageScreen> {
         return ImageIO.render(size.width.round(), size.height.round(), (c) => paintCollage(c, size, scene));
       },
     );
+    if (saved != null && _hasDraft) {
+      await _autosave.flush();
+      await drafts.markExported(_draftId);
+    }
   }
 
   @override

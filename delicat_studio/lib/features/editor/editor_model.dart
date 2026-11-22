@@ -1,10 +1,13 @@
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:material_ui/material_ui.dart';
+import 'package:qr/qr.dart';
 
 import '../../core/color_matrix.dart';
+import '../../core/crash_log.dart';
 import '../../core/image_io.dart';
 import '../../core/styles.dart';
 
@@ -56,6 +59,9 @@ class EditorLayer {
     required this.id,
     this.text = '',
     this.emoji,
+    this.qr,
+    this.image,
+    this.aspect = 1,
     this.font = 'Bricolage',
     this.color = const Color(0xFFFFFFFF),
     this.look = TextLook.plain,
@@ -68,6 +74,15 @@ class EditorLayer {
   final String id;
   final String text;
   final String? emoji;
+
+  /// Text or link encoded as a QR code.
+  final String? qr;
+
+  /// Path of a picture placed on top (product photo, logo).
+  final String? image;
+
+  /// Width / height of [image].
+  final double aspect;
   final String font;
   final Color color;
   final TextLook look;
@@ -76,17 +91,21 @@ class EditorLayer {
   /// Centre as a fraction of the photo area.
   final Offset pos;
 
-  /// Font size as a fraction of the photo width.
+  /// Font size as a fraction of the photo width (QR codes and pictures: their width).
   final double size;
 
   /// Radians.
   final double rotation;
 
   bool get isSticker => emoji != null;
+  bool get isQr => qr != null;
+  bool get isPicture => image != null;
+  bool get isText => emoji == null && qr == null && image == null;
 
   EditorLayer copyWith({
     String? id,
     String? text,
+    String? qr,
     String? font,
     Color? color,
     TextLook? look,
@@ -99,6 +118,9 @@ class EditorLayer {
         id: id ?? this.id,
         text: text ?? this.text,
         emoji: emoji,
+        qr: qr ?? this.qr,
+        image: image,
+        aspect: aspect,
         font: font ?? this.font,
         color: color ?? this.color,
         look: look ?? this.look,
@@ -107,6 +129,57 @@ class EditorLayer {
         size: size ?? this.size,
         rotation: rotation ?? this.rotation,
       );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'text': text,
+        'emoji': ?emoji,
+        'qr': ?qr,
+        'image': ?image,
+        'aspect': aspect,
+        'font': font,
+        'color': color.toARGB32(),
+        'look': look.name,
+        'align': align.name,
+        'pos': [pos.dx, pos.dy],
+        'size': size,
+        'rotation': rotation,
+      };
+
+  static EditorLayer fromJson(Map<String, dynamic> j) => EditorLayer(
+        id: j['id'] as String,
+        text: j['text'] as String? ?? '',
+        emoji: j['emoji'] as String?,
+        qr: j['qr'] as String?,
+        image: j['image'] as String?,
+        aspect: (j['aspect'] as num?)?.toDouble() ?? 1,
+        font: j['font'] as String? ?? 'Bricolage',
+        color: Color((j['color'] as num?)?.toInt() ?? 0xFFFFFFFF),
+        look: _byName(TextLook.values, j['look'], TextLook.plain),
+        align: _byName(TextAlign.values, j['align'], TextAlign.center),
+        pos: jsonOffset(j['pos'], const Offset(0.5, 0.5)),
+        size: (j['size'] as num?)?.toDouble() ?? 0.08,
+        rotation: (j['rotation'] as num?)?.toDouble() ?? 0,
+      );
+}
+
+T _byName<T extends Enum>(List<T> values, Object? name, T fallback) => values.firstWhere((v) => v.name == name, orElse: () => fallback);
+
+Offset jsonOffset(Object? v, Offset fallback) {
+  if (v is List && v.length == 2) return Offset((v[0] as num).toDouble(), (v[1] as num).toDouble());
+  return fallback;
+}
+
+Map<String, double> adjToJson(Map<Adj, double> a) => {for (final e in a.entries) e.key.name: e.value};
+
+Map<Adj, double> adjFromJson(Object? j) {
+  if (j is! Map) return const {};
+  final out = <Adj, double>{};
+  for (final e in j.entries) {
+    final a = Adj.values.where((x) => x.name == e.key).firstOrNull;
+    if (a != null && e.value is num) out[a] = (e.value as num).toDouble();
+  }
+  return out;
 }
 
 @immutable
@@ -122,7 +195,26 @@ class DrawStroke {
   final bool eraser;
 
   DrawStroke adding(Offset p) => DrawStroke([...points, p], color, width, eraser);
+
+  Map<String, Object?> toJson() => {
+        'p': [for (final o in points) ...[_r(o.dx), _r(o.dy)]],
+        'c': color.toARGB32(),
+        'w': width,
+        'e': eraser,
+      };
+
+  static DrawStroke fromJson(Map<String, dynamic> j) {
+    final flat = (j['p'] as List).cast<num>();
+    return DrawStroke(
+      [for (var i = 0; i + 1 < flat.length; i += 2) Offset(flat[i].toDouble(), flat[i + 1].toDouble())],
+      Color((j['c'] as num).toInt()),
+      (j['w'] as num).toDouble(),
+      j['e'] == true,
+    );
+  }
 }
+
+double _r(double v) => (v * 10000).roundToDouble() / 10000;
 
 @immutable
 class EditorDoc {
@@ -203,6 +295,37 @@ class EditorDoc {
   }
 
   bool get hasColorWork => adjust.values.any((v) => v != 0) || style != 'original';
+
+  Map<String, Object?> toJson() => {
+        'quarterTurns': quarterTurns,
+        'flipH': flipH,
+        'straighten': straighten,
+        'crop': [crop.left, crop.top, crop.right, crop.bottom],
+        'adjust': adjToJson(adjust),
+        'style': style,
+        'styleAmount': styleAmount,
+        'layers': [for (final l in layers) l.toJson()],
+        'strokes': [for (final s in strokes) s.toJson()],
+        'frame': frame.name,
+        'frameColor': frameColor.toARGB32(),
+      };
+
+  static EditorDoc fromJson(Map<String, dynamic> j) {
+    final c = (j['crop'] as List?)?.cast<num>();
+    return EditorDoc(
+      quarterTurns: (j['quarterTurns'] as num?)?.toInt() ?? 0,
+      flipH: j['flipH'] == true,
+      straighten: (j['straighten'] as num?)?.toDouble() ?? 0,
+      crop: c != null && c.length == 4 ? Rect.fromLTRB(c[0].toDouble(), c[1].toDouble(), c[2].toDouble(), c[3].toDouble()) : const Rect.fromLTWH(0, 0, 1, 1),
+      adjust: adjFromJson(j['adjust']),
+      style: j['style'] as String? ?? 'original',
+      styleAmount: (j['styleAmount'] as num?)?.toDouble() ?? 1,
+      layers: [for (final l in (j['layers'] as List? ?? const [])) EditorLayer.fromJson(l as Map<String, dynamic>)],
+      strokes: [for (final s in (j['strokes'] as List? ?? const [])) DrawStroke.fromJson(s as Map<String, dynamic>)],
+      frame: _byName(FrameStyle.values, j['frame'], FrameStyle.none),
+      frameColor: Color((j['frameColor'] as num?)?.toInt() ?? 0xFFFFFFFF),
+    );
+  }
 }
 
 /// Geometry derived from the base photo and the document.
@@ -277,6 +400,64 @@ class Grain {
   }
 }
 
+/// Decoded pictures used by picture layers, shared by every screen (small LRU).
+class LayerImages extends ChangeNotifier {
+  LayerImages._();
+  static final instance = LayerImages._();
+  static const _max = 10;
+
+  final Map<String, ui.Image> _images = {};
+  final Map<String, Future<void>> _loading = {};
+
+  ui.Image? operator [](String path) {
+    final img = _images.remove(path);
+    if (img != null) _images[path] = img; // most recently used last
+    return img;
+  }
+
+  Future<void> ensure(String path, {int maxSide = 1440}) {
+    if (_images.containsKey(path)) return Future.value();
+    return _loading[path] ??= () async {
+      try {
+        final img = await ImageIO.decode(await File(path).readAsBytes(), maxSide: maxSide);
+        _images[path] = img;
+        while (_images.length > _max) {
+          final oldest = _images.keys.first;
+          _images.remove(oldest)?.dispose();
+        }
+        notifyListeners();
+      } catch (e, s) {
+        CrashLog.record(e, s, context: 'layer image');
+      } finally {
+        _loading.remove(path);
+      }
+    }();
+  }
+
+  Future<void> ensureAll(Iterable<EditorLayer> layers) async {
+    for (final l in layers) {
+      if (l.image != null) await ensure(l.image!);
+    }
+  }
+}
+
+final Map<String, QrImage> _qrCache = {};
+
+QrImage? qrFor(String data) {
+  final hit = _qrCache[data];
+  if (hit != null) return hit;
+  try {
+    final q = QrImage(QrCode(payload: QrPayload.fromString(data), errorCorrectLevel: QrErrorCorrectLevel.medium));
+    if (_qrCache.length > 16) _qrCache.remove(_qrCache.keys.first);
+    return _qrCache[data] = q;
+  } catch (_) {
+    return null; // too long for a QR code
+  }
+}
+
+/// Quiet zone around QR codes, in modules.
+const kQrQuiet = 3;
+
 TextPainter layoutLayer(EditorLayer l, double photoWidth) {
   final fontSize = math.max(4.0, l.size * photoWidth);
   if (l.isSticker) {
@@ -306,12 +487,66 @@ Color _contrastOn(Color c) => c.computeLuminance() > 0.5 ? const Color(0xFF11111
 
 /// Half-size of a layer in photo pixels (for hit testing and the selection box).
 Size layerHalfSize(EditorLayer l, double photoWidth) {
+  if (l.isQr) {
+    final side = l.size * photoWidth;
+    return Size(side / 2, side / 2);
+  }
+  if (l.isPicture) {
+    final w = l.size * photoWidth;
+    return Size(w / 2, w / l.aspect.clamp(0.1, 10) / 2);
+  }
   final tp = layoutLayer(l, photoWidth);
   final pad = l.look == TextLook.label && !l.isSticker ? l.size * photoWidth * 0.35 : 0.0;
   return Size(tp.width / 2 + pad, tp.height / 2 + pad * 0.6);
 }
 
+void _paintQr(Canvas canvas, EditorLayer l, Size photo) {
+  final side = l.size * photo.width;
+  final rect = Rect.fromCenter(center: Offset.zero, width: side, height: side);
+  canvas.drawRRect(RRect.fromRectAndRadius(rect, Radius.circular(side * 0.06)), Paint()..color = const Color(0xFFFFFFFF));
+  final q = qrFor(l.qr!);
+  if (q == null) return;
+  final n = q.moduleCount;
+  final m = side / (n + kQrQuiet * 2);
+  final ink = l.color.computeLuminance() < 0.3 ? l.color : const Color(0xFF141834);
+  final path = Path();
+  for (var r = 0; r < n; r++) {
+    for (var c = 0; c < n; c++) {
+      if (q.isDark(r, c)) {
+        // Slight overlap avoids hairline seams between modules.
+        path.addRect(Rect.fromLTWH(rect.left + (c + kQrQuiet) * m, rect.top + (r + kQrQuiet) * m, m + 0.5, m + 0.5));
+      }
+    }
+  }
+  canvas.drawPath(path, Paint()..color = ink..isAntiAlias = false);
+}
+
+void _paintPicture(Canvas canvas, EditorLayer l, Size photo) {
+  final half = layerHalfSize(l, photo.width);
+  final dst = Rect.fromLTRB(-half.width, -half.height, half.width, half.height);
+  final img = LayerImages.instance[l.image!];
+  if (img == null) {
+    LayerImages.instance.ensure(l.image!);
+    canvas.drawRect(dst, Paint()..color = const Color(0x33FFFFFF));
+    return;
+  }
+  canvas.drawImageRect(
+    img,
+    Rect.fromLTWH(0, 0, img.width.toDouble(), img.height.toDouble()),
+    dst,
+    Paint()..filterQuality = FilterQuality.medium,
+  );
+}
+
 void paintLayer(Canvas canvas, EditorLayer l, Size photo) {
+  if (l.isQr || l.isPicture) {
+    canvas.save();
+    canvas.translate(l.pos.dx * photo.width, l.pos.dy * photo.height);
+    canvas.rotate(l.rotation);
+    l.isQr ? _paintQr(canvas, l, photo) : _paintPicture(canvas, l, photo);
+    canvas.restore();
+    return;
+  }
   final tp = layoutLayer(l, photo.width);
   canvas.save();
   canvas.translate(l.pos.dx * photo.width, l.pos.dy * photo.height);

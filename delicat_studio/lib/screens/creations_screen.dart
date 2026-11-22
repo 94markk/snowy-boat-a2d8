@@ -75,7 +75,7 @@ class _CreationsScreenState extends State<CreationsScreen> {
                                     fit: StackFit.expand,
                                     children: [
                                       ColoredBox(color: k.sheetAlt),
-                                      Image.file(File(c.thumb), fit: BoxFit.cover, cacheWidth: 300),
+                                      Image.file(File(c.thumb), fit: BoxFit.cover, cacheWidth: 300, errorBuilder: (_, _, _) => const SizedBox.shrink()),
                                       if (c.isVideo)
                                         Positioned(
                                           left: KatSpace.s4,

@@ -1,15 +1,22 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:record/record.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../core/brand.dart';
+import '../../core/crash_log.dart';
+import '../../core/drafts.dart';
 import '../../core/history.dart';
 import '../../core/image_io.dart';
+import '../../core/music_library.dart';
 import '../../core/settings.dart';
 import '../../theme/tokens.dart';
 import '../../widgets/common.dart';
@@ -18,6 +25,7 @@ import '../../widgets/pressable.dart';
 import '../../widgets/style_strip.dart';
 import '../editor/editor_model.dart';
 import '../editor/editor_screen.dart';
+import '../editor/layer_tools.dart';
 import '../editor/text_sheet.dart';
 import 'video_export.dart';
 import 'video_model.dart';
@@ -36,9 +44,15 @@ const _emojis = [
 /// Mobile video editor in the spirit of CapCut: preview, centred-playhead timeline,
 /// clip tools, texts, stickers, music, logo and MP4 export.
 class VideoEditorScreen extends StatefulWidget {
-  const VideoEditorScreen({super.key, required this.paths, this.initialRatio = VRatio.original});
+  const VideoEditorScreen({super.key, this.paths = const [], this.initialRatio = VRatio.original, this.draftId, this.initialDoc});
   final List<String> paths;
   final VRatio initialRatio;
+
+  /// Reopens a saved montage.
+  final String? draftId;
+
+  /// Starts from a ready-made montage (templates).
+  final VideoDoc? initialDoc;
 
   @override
   State<VideoEditorScreen> createState() => _VideoEditorScreenState();
@@ -63,25 +77,168 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
   Offset _gStart = Offset.zero;
   Size _previewSize = Size.zero;
 
+  // Drafts.
+  late final String _draftId = widget.draftId ?? DraftsStore.newId();
+  late final Autosaver _autosave = Autosaver(_saveDraft);
+  String? _thumbSource;
+  late final AppLifecycleListener _life = AppLifecycleListener(onInactive: _onBackground, onHide: _onBackground);
+
+  // Voice-over recording.
+  AudioRecorder? _rec;
+  bool _recording = false;
+  double _recStart = 0;
+  String? _recPath;
+  final Stopwatch _recClock = Stopwatch();
+
   VideoDoc get _d => _h.value;
 
   @override
   void initState() {
     super.initState();
     _h.addListener(_onDoc);
-    _pb.addListener(() {
-      if (mounted) setState(() {});
-    });
-    _h.replace(VideoDoc(ratio: widget.initialRatio));
-    _import(widget.paths).whenComplete(() {
+    _pb.addListener(_onPlayback);
+    LayerImages.instance.addListener(_onImages);
+    _life;
+    final Future<void> start;
+    if (widget.draftId != null) {
+      start = _restore();
+    } else if (widget.initialDoc != null) {
+      start = _startFrom(widget.initialDoc!);
+    } else {
+      _h.replace(VideoDoc(ratio: widget.initialRatio));
+      start = _import(widget.paths).then((_) => _applyBrandLogo());
+    }
+    start.catchError((Object e, StackTrace s) => CrashLog.record(e, s, context: 'video start')).whenComplete(() {
       if (mounted) setState(() => _loading = false);
     });
+  }
+
+  void _onImages() {
+    if (mounted) setState(() {});
+  }
+
+  void _onBackground() {
+    if (_recording) _stopRecording();
+    _pb.pause();
+    if (_d.clips.isNotEmpty) _autosave.flush();
+  }
+
+  void _onPlayback() {
+    // Recording stops by itself when the playhead reaches the end.
+    if (_recording && !_pb.playing) _stopRecording();
+    if (mounted) setState(() {});
   }
 
   void _onDoc() {
     _pb.setDoc(_d);
     _syncLogo();
+    if (!_loading && _d.clips.isNotEmpty) _autosave.schedule();
     if (mounted) setState(() {});
+  }
+
+  // ---- drafts -------------------------------------------------------------
+
+  Future<void> _saveDraft() async {
+    final d = _d;
+    if (d.clips.isEmpty) return;
+    final first = d.clips.first;
+    Uint8List? thumb;
+    if (_thumbSource != first.path) {
+      final img = _thumbs[first.path]?.images.firstOrNull;
+      if (img != null) {
+        thumb = await ImageIO.thumbnail(img, side: 320);
+        _thumbSource = first.path;
+      }
+    }
+    await drafts.save(_draftId, DraftKind.video, d.toJson(), thumb: thumb);
+  }
+
+  Future<void> _thumbsFor(VClip c) async {
+    if (_thumbs.containsKey(c.path)) return;
+    if (c.isImage) {
+      final img = await ImageIO.decode(await File(c.path).readAsBytes(), maxSide: 240);
+      _thumbs[c.path] = ClipThumbs([img], 60000);
+      return;
+    }
+    final count = (c.sourceMs / 1000).clamp(4, 30).round();
+    final frames = await VideoNative.thumbnails(c.path, count: count, height: 96);
+    final imgs = <ui.Image>[for (final f in frames) await ImageIO.decode(f)];
+    _thumbs[c.path] = ClipThumbs(imgs, c.sourceMs / math.max(1, count));
+  }
+
+  /// Drops media whose file disappeared, so a damaged draft still opens.
+  VideoDoc _withExistingMedia(VideoDoc d) {
+    bool ok(String p) => File(p).existsSync();
+    final next = d.copyWith(
+      clips: [for (final c in d.clips) if (ok(c.path)) c],
+      texts: [for (final t in d.texts) if (t.layer.image == null || ok(t.layer.image!)) t],
+      voices: [for (final v in d.voices) if (ok(v.path)) v],
+      clearMusic: d.music != null && !ok(d.music!.path),
+      clearLogo: d.logo != null && !ok(d.logo!.path),
+    );
+    return next.clampTexts();
+  }
+
+  Future<void> _showDoc(VideoDoc doc, {required String missingMessage}) async {
+    final d = _withExistingMedia(doc);
+    for (final c in d.clips) {
+      try {
+        await _thumbsFor(c);
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (d.clips.isEmpty) {
+      showKatSnack(context, missingMessage);
+      Navigator.pop(context);
+      return;
+    }
+    if (d.mediaPaths.length < doc.mediaPaths.length) {
+      showKatSnack(context, 'Certains fichiers de ce montage ont disparu du téléphone. Le reste est prêt.');
+    }
+    _h.replace(d);
+  }
+
+  Future<void> _restore() async {
+    _loadingText = 'Ouverture du brouillon…';
+    final j = await drafts.read(_draftId);
+    if (!mounted) return;
+    if (j == null) {
+      showKatSnack(context, 'Ce brouillon ne peut pas être ouvert.');
+      Navigator.pop(context);
+      return;
+    }
+    await _showDoc(VideoDoc.fromJson(j), missingMessage: 'Les vidéos de ce brouillon ont disparu du téléphone.');
+  }
+
+  /// Copies a template's files into the draft folder, then opens it.
+  Future<void> _startFrom(VideoDoc doc) async {
+    final moved = <String, String>{};
+    for (final p in doc.mediaPaths) {
+      try {
+        moved[p] = await drafts.adopt(_draftId, p, move: p.contains('/cache/'));
+      } catch (_) {}
+    }
+    await _showDoc(doc.remap(moved), missingMessage: 'Ce modèle n’a pas pu être préparé. Réessaie.');
+  }
+
+  Future<void> _applyBrandLogo() async {
+    final kit = brand.kit;
+    if (!kit.autoLogo || !kit.hasLogo || _d.logo != null || _d.clips.isEmpty) return;
+    try {
+      final p = await drafts.adopt(_draftId, kit.logoPath!);
+      _h.replace(_d.copyWith(logo: VLogo(path: p)));
+    } catch (_) {}
+  }
+
+  /// Moves a picked file into the draft folder. If that fails (full storage), the montage
+  /// keeps working from the original file; only the draft is less durable.
+  Future<String> _keep(String path, {bool move = true}) async {
+    try {
+      return await drafts.adopt(_draftId, path, move: move);
+    } catch (e, s) {
+      CrashLog.record(e, s, context: 'draft adopt');
+      return path;
+    }
   }
 
   Future<void> _syncLogo() async {
@@ -98,9 +255,19 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
 
   @override
   void dispose() {
+    _life.dispose();
+    LayerImages.instance.removeListener(_onImages);
+    _autosave.dispose();
+    _rec?.dispose();
     _pb.dispose();
     _h.dispose();
     _logoImage?.dispose();
+    for (final t in _thumbs.values) {
+      for (final i in t.images) {
+        i.dispose();
+      }
+    }
+    _thumbs.clear();
     super.dispose();
   }
 
@@ -110,12 +277,13 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
 
   Future<List<VClip>> _loadClips(List<String> paths) async {
     final out = <VClip>[];
-    for (final p in paths) {
+    for (final original in paths) {
       try {
+        final p = await _keep(original);
         if (isVideoPath(p)) {
           final info = await VideoNative.probe(p);
           if (info.durationMs <= 0 || info.width <= 0) continue;
-          out.add(VClip(
+          final clip = VClip(
             id: _id(),
             path: p,
             isImage: false,
@@ -125,18 +293,13 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
             inMs: 0,
             outMs: info.durationMs.toDouble(),
             hasAudio: info.hasAudio,
-          ));
-          if (!_thumbs.containsKey(p)) {
-            final count = (info.durationMs / 1000).clamp(4, 30).round();
-            final frames = await VideoNative.thumbnails(p, count: count, height: 96);
-            final imgs = <ui.Image>[for (final f in frames) await ImageIO.decode(f)];
-            _thumbs[p] = ClipThumbs(imgs, info.durationMs / math.max(1, count));
-          }
+          );
+          await _thumbsFor(clip);
+          out.add(clip);
         } else {
-          final img = await ImageIO.decode(await File(p).readAsBytes(), maxSide: 240);
           final buffer = await ui.ImmutableBuffer.fromFilePath(p);
           final desc = await ui.ImageDescriptor.encoded(buffer);
-          out.add(VClip(
+          final clip = VClip(
             id: _id(),
             path: p,
             isImage: true,
@@ -146,13 +309,15 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
             inMs: 0,
             outMs: 3000,
             hasAudio: false,
-          ));
+          );
           desc.dispose();
           buffer.dispose();
-          _thumbs[p] = ClipThumbs([img], 60000);
+          await _thumbsFor(clip);
+          out.add(clip);
         }
-      } catch (_) {
+      } catch (e, s) {
         // Unreadable file: skip it and keep the others.
+        CrashLog.record(e, s, context: 'video import');
       }
     }
     return out;
@@ -220,8 +385,13 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
   }
 
   void _updateClip(VClip c, {bool live = false}) {
-    final next = _d.replaceClip(c).clampTexts();
-    live ? _live(next) : _h.push(next);
+    if (live) {
+      // Clamp from the state before the drag, so a temporary speed-up never cuts texts for good.
+      _base ??= _d;
+      _h.replace(_base!.replaceClip(c).clampTexts());
+      return;
+    }
+    _h.push(_d.replaceClip(c).clampTexts());
   }
 
   void _onTrim(String id, bool left, double deltaMs) {
@@ -234,11 +404,15 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
       return;
     }
     final srcDelta = deltaMs * base.speed;
+    // Keep at least 100 ms of timeline (the same minimum as « Diviser »), within the file.
+    final minSrc = 100 * base.speed;
     if (left) {
-      final nin = (base.inMs + srcDelta).clamp(0.0, base.outMs - 200 * base.speed);
+      final hi = math.max(0.0, base.outMs - minSrc);
+      final nin = (base.inMs + srcDelta).clamp(0.0, hi);
       _h.replace(_base!.replaceClip(base.copyWith(inMs: nin)).clampTexts());
     } else {
-      final nout = (base.outMs + srcDelta).clamp(base.inMs + 200 * base.speed, base.sourceMs);
+      final lo = math.min(base.sourceMs, base.inMs + minSrc);
+      final nout = (base.outMs + srcDelta).clamp(lo, math.max(lo, base.sourceMs)).toDouble();
       _h.replace(_base!.replaceClip(base.copyWith(outMs: nout)).clampTexts());
     }
   }
@@ -298,9 +472,9 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
     _pb.seek(_d.startOf(j) + 1);
   }
 
-  Future<File> _frameFile(VClip c) async {
+  Future<File> _frameFile(VClip c, double at) async {
     final tmp = await getTemporaryDirectory();
-    final local = _pb.t - _d.startOf(_clipIndex);
+    final local = at - _d.startOf(_d.clips.indexWhere((x) => x.id == c.id));
     final out = '${tmp.path}/ds_frame_${_id()}.jpg';
     await VideoNative.frame(c.path, c.sourceAt(local).round(), out);
     return File(out);
@@ -310,19 +484,18 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
     final c = _clip;
     final i = _clipIndex;
     if (c == null || c.isImage) return;
-    if (_d.indexAt(_pb.t) != i) {
+    _pb.pause();
+    final at = _pb.t;
+    if (_d.indexAt(at) != i) {
       showKatSnack(context, 'Place la tête de lecture sur le clip à figer.');
       return;
     }
     try {
-      final f = await _frameFile(c);
-      final docs = await getApplicationDocumentsDirectory();
-      final kept = await f.copy('${docs.path}/ds_freeze_${_id()}.jpg');
-      final still = (await _loadClips([kept.path])).first;
-      final split = _d.splitAt(i, _pb.t, _id());
+      final f = await _frameFile(c, at);
+      final still = (await _loadClips([f.path])).first;
+      final split = _d.splitAt(i, at, _id());
       final base = split ?? _d;
-      final at = split == null ? i + 1 : i + 1;
-      final list = [...base.clips]..insert(at, still.copyWith(rotation: c.rotation, flipH: c.flipH, style: c.style, styleAmount: c.styleAmount, adjust: c.adjust));
+      final list = [...base.clips]..insert(i + 1, still.copyWith(rotation: c.rotation, flipH: c.flipH, style: c.style, styleAmount: c.styleAmount, adjust: c.adjust));
       _h.push(base.copyWith(clips: list));
       if (mounted) showKatSnack(context, 'Image figée ajoutée (3 s).');
     } catch (_) {
@@ -338,7 +511,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
     }
     _pb.pause();
     try {
-      final f = await _frameFile(c);
+      final f = await _frameFile(c, _pb.t);
       final photo = await ImageIO.load(f.path);
       if (!mounted) return;
       await Navigator.of(context).push(MaterialPageRoute(builder: (_) => EditorScreen(photo: photo)));
@@ -347,36 +520,164 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
     }
   }
 
+  bool _tooShort() {
+    if (_d.durationMs >= 300) return false;
+    showKatSnack(context, 'Allonge le montage avant d’ajouter un élément.');
+    return true;
+  }
+
+  /// Places [layer] at the playhead for 3 seconds (or the whole montage for pictures and QR codes).
+  void _placeLayer(EditorLayer layer, {bool whole = false}) {
+    final start = whole || _pb.t >= _d.durationMs - 300 ? 0.0 : _pb.t;
+    final end = whole ? _d.durationMs : math.min(start + 3000, _d.durationMs);
+    final v = VText(layer: layer, startMs: start, endMs: end);
+    _h.push(_d.copyWith(texts: [..._d.texts, v]));
+    _select(VSel(VSelKind.text, v.id));
+  }
+
   Future<void> _addText({String? emoji}) async {
-    if (_d.durationMs < 300) return;
+    if (_tooShort()) return;
     _pb.pause();
-    final start = _pb.t >= _d.durationMs - 300 ? 0.0 : _pb.t;
-    final end = math.min(start + 3000, _d.durationMs);
     EditorLayer? layer;
     if (emoji != null) {
       layer = EditorLayer(id: _id(), emoji: emoji, size: 0.2, pos: const Offset(0.5, 0.4));
     } else {
       layer = await showTextSheet(context, EditorLayer(id: _id(), pos: const Offset(0.5, 0.75), size: 0.07), isNew: true);
     }
-    if (layer == null) return;
-    final v = VText(layer: layer, startMs: start, endMs: end);
-    _h.push(_d.copyWith(texts: [..._d.texts, v]));
-    _select(VSel(VSelKind.text, v.id));
+    if (layer == null || !mounted) return;
+    _placeLayer(layer);
+  }
+
+  Future<void> _addQr() async {
+    if (_tooShort()) return;
+    _pb.pause();
+    final data = await showQrSheet(context);
+    if (data == null || !mounted) return;
+    _placeLayer(EditorLayer(id: _id(), qr: data, size: 0.26, pos: const Offset(0.8, 0.82)), whole: true);
+  }
+
+  Future<void> _addPicture() async {
+    if (_tooShort()) return;
+    _pb.pause();
+    final pic = await pickLayerPicture(context);
+    if (pic == null || !mounted) return;
+    final path = await _keep(pic.path);
+    await LayerImages.instance.ensure(path);
+    if (!mounted) return;
+    _placeLayer(EditorLayer(id: _id(), image: path, aspect: pic.aspect, size: 0.5, pos: const Offset(0.5, 0.5)));
   }
 
   Future<void> _editText() async {
     final v = _text;
-    if (v == null || v.layer.isSticker) return;
+    if (v == null) return;
+    if (v.layer.isQr) {
+      final data = await showQrSheet(context, initial: v.layer.qr);
+      if (data != null) _h.push(_d.replaceText(v.copyWith(layer: v.layer.copyWith(qr: data))));
+      return;
+    }
+    if (!v.layer.isText) return;
     final l = await showTextSheet(context, v.layer, isNew: false);
     if (l != null) _h.push(_d.replaceText(v.copyWith(layer: l)));
+  }
+
+  // ---- voice-over -----------------------------------------------------------
+
+  VVoice? get _voice => _sel.kind == VSelKind.voice ? _d.voices.where((v) => v.id == _sel.id).firstOrNull : null;
+
+  Future<void> _startRecording() async {
+    if (_recording) return;
+    if (_d.durationMs - _pb.t < 500) {
+      showKatSnack(context, 'Place la tête de lecture avant la fin pour enregistrer ta voix.');
+      return;
+    }
+    final rec = _rec ??= AudioRecorder();
+    try {
+      if (!await rec.hasPermission()) {
+        if (mounted) showKatSnack(context, 'Autorise le micro pour Delicat Studio dans les réglages Android.');
+        return;
+      }
+      final dir = await drafts.folderFor(_draftId);
+      final path = '${dir.path}/voice_${_id()}.m4a';
+      await rec.start(const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 96000, sampleRate: 44100, numChannels: 1, noiseSuppress: true), path: path);
+      _recPath = path;
+      _recStart = _pb.t;
+      _recClock
+        ..reset()
+        ..start();
+      _pb.silent = true;
+      setState(() => _recording = true);
+      _pb.play();
+    } catch (e, s) {
+      CrashLog.record(e, s, context: 'voice start');
+      if (mounted) showKatSnack(context, 'Le micro n’a pas pu démarrer. Ferme les autres applis qui l’utilisent et réessaie.');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    if (!_recording) return;
+    _recording = false;
+    _recClock.stop();
+    _pb.pause();
+    _pb.silent = false;
+    try {
+      final path = await _rec?.stop() ?? _recPath;
+      if (path == null || !File(path).existsSync()) throw const FileSystemException('voice missing');
+      var ms = _recClock.elapsedMilliseconds.toDouble();
+      try {
+        final info = await VideoNative.probe(path);
+        if (info.durationMs > 0) ms = info.durationMs.toDouble();
+      } catch (_) {}
+      if (ms < 300) {
+        await File(path).delete();
+        if (mounted) showKatSnack(context, 'Enregistrement trop court. Maintiens un peu plus longtemps.');
+        return;
+      }
+      final v = VVoice(id: _id(), path: path, startMs: _recStart, durationMs: math.min(ms, _d.durationMs - _recStart));
+      _h.push(_d.copyWith(voices: [..._d.voices, v]));
+      _pb.seek(_recStart);
+      _select(VSel(VSelKind.voice, v.id));
+    } catch (e, s) {
+      CrashLog.record(e, s, context: 'voice stop');
+      if (mounted) showKatSnack(context, 'La voix n’a pas pu être enregistrée. Réessaie.');
+    } finally {
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onMoveVoice(String id, double start) {
+    _base ??= _d;
+    final v = _base!.voices.where((x) => x.id == id).firstOrNull;
+    if (v == null) return;
+    final s = start.clamp(0.0, math.max(0.0, _d.durationMs - 300)).toDouble();
+    _h.replace(_base!.replaceVoice(v.copyWith(startMs: s)));
+  }
+
+  Future<void> _useLibraryMusic(MusicMood mood) async {
+    _pb.pause();
+    final path = await showLoaderWhile(context, 'Préparation de la musique…', () async {
+      try {
+        return await MusicLibrary.pathFor(mood);
+      } catch (e, s) {
+        CrashLog.record(e, s, context: 'music library');
+        return null;
+      }
+    });
+    if (!mounted) return;
+    if (path == null) {
+      showKatSnack(context, 'Cette musique n’a pas pu être préparée. Libère un peu d’espace et réessaie.');
+      return;
+    }
+    _h.push(_d.copyWith(music: VMusic(path: path, name: mood.label, sourceMs: MusicLibrary.lengthOf(mood).inMilliseconds.toDouble(), volume: 0.7)));
+    _select(const VSel(VSelKind.music, 'music'));
   }
 
   Future<void> _pickMusic() async {
     _pb.pause();
     try {
       final files = await FilePicker.pickFiles(type: FileType.audio);
-      final path = files.firstOrNull?.path;
-      if (path == null) return;
+      final picked = files.firstOrNull?.path;
+      if (picked == null) return;
+      final path = await _keep(picked);
       final info = await VideoNative.probe(path);
       if (info.durationMs <= 0) throw const FormatException();
       final name = files.first.name.replaceAll(RegExp(r'\.[^.]+$'), '');
@@ -389,12 +690,19 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
 
   Future<void> _useVideoSound() async {
     _pb.pause();
-    final f = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    final XFile? f;
+    try {
+      f = await ImagePicker().pickVideo(source: ImageSource.gallery);
+    } catch (_) {
+      if (mounted) showKatSnack(context, 'La galerie n’a pas pu s’ouvrir. Vérifie l’accès aux vidéos.');
+      return;
+    }
     if (f == null) return;
     try {
-      final info = await VideoNative.probe(f.path);
+      final path = await _keep(f.path);
+      final info = await VideoNative.probe(path);
       if (!info.hasAudio) throw const FormatException();
-      _h.push(_d.copyWith(music: VMusic(path: f.path, name: 'Son de ${f.name}', sourceMs: info.durationMs.toDouble())));
+      _h.push(_d.copyWith(music: VMusic(path: path, name: 'Son de ${f.name}', sourceMs: info.durationMs.toDouble())));
       _select(const VSel(VSelKind.music, 'music'));
     } catch (_) {
       if (mounted) showKatSnack(context, 'Cette vidéo n’a pas de son à extraire.');
@@ -405,27 +713,34 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
     try {
       final f = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1024, maxHeight: 1024);
       if (f == null) return;
-      final docs = await getApplicationDocumentsDirectory();
-      final kept = await File(f.path).copy('${docs.path}/ds_logo_${_id()}.${f.path.split('.').last}');
-      _h.push(_d.copyWith(logo: VLogo(path: kept.path)));
+      final kept = await _keep(f.path);
+      _h.push(_d.copyWith(logo: VLogo(path: kept)));
     } catch (_) {
       if (mounted) showKatSnack(context, 'Impossible d’ouvrir ce logo. Choisis une image PNG ou JPG.');
     }
   }
 
   Future<void> _close() async {
+    if (_recording) await _stopRecording();
     _pb.pause();
-    if (_h.canUndo) {
-      final ok = await confirmKat(context, title: 'Quitter le montage ?', message: 'Ton montage non exporté sera perdu.', confirm: 'Quitter');
-      if (!ok) return;
+    if (_d.clips.isNotEmpty) {
+      await _autosave.flush();
+      if (mounted) showKatSnack(context, 'Montage gardé dans tes brouillons. Reprends-le depuis Studio.');
     }
     if (mounted) Navigator.pop(context);
   }
 
   Future<void> _export() async {
+    if (_recording) await _stopRecording();
     _pb.pause();
     setState(() => _sel = const VSel.none());
-    await showVideoExportSheet(context, _d);
+    await _autosave.flush();
+    if (!mounted) return;
+    // Hand the hardware decoders to the encoder while exporting.
+    _pb.releasePlayers();
+    final saved = await showVideoExportSheet(context, _d);
+    if (saved != null) await drafts.markExported(_draftId);
+    _pb.restorePlayers();
   }
 
   // ---- preview gestures (texts) ------------------------------------------------
@@ -487,6 +802,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
                 onSelect: _select,
                 onTrim: _onTrim,
                 onMoveText: _onMoveText,
+                onMoveVoice: _onMoveVoice,
                 onGestureEnd: _commit,
                 onToggleTransition: (i) {
                   final c = _d.clips[i];
@@ -593,7 +909,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
     final c = d.clips[i];
     Widget content;
     if (c.isImage) {
-      content = Image.file(File(c.path), fit: BoxFit.fill, gaplessPlayback: true, cacheWidth: 1440);
+      content = Image.file(File(c.path), fit: BoxFit.fill, gaplessPlayback: true, cacheWidth: 1440, errorBuilder: (_, _, _) => const ColoredBox(color: Color(0xFF000000)));
     } else {
       final ctl = _pb.controllerFor(c);
       content = ctl == null ? const ColoredBox(color: Color(0xFF000000)) : VideoPlayer(ctl);
@@ -686,7 +1002,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
         final v = _text;
         return [
           back,
-          if (v != null && !v.layer.isSticker) const ToolItem('edit', Icons.edit_rounded, 'Modifier'),
+          if (v != null && (v.layer.isText || v.layer.isQr)) const ToolItem('edit', Icons.edit_rounded, 'Modifier'),
           const ToolItem('start', Icons.first_page_rounded, 'Début ici'),
           const ToolItem('end', Icons.last_page_rounded, 'Fin ici'),
           const ToolItem('tduplicate', Icons.copy_rounded, 'Dupliquer'),
@@ -696,13 +1012,21 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
         return [
           back,
           const ToolItem('music', Icons.graphic_eq_rounded, 'Réglages'),
-          const ToolItem('replace', Icons.library_music_rounded, 'Remplacer'),
+          const ToolItem('audio', Icons.library_music_rounded, 'Remplacer'),
           const ToolItem('mdelete', Icons.delete_outline_rounded, 'Supprimer'),
+        ];
+      case VSelKind.voice:
+        return [
+          back,
+          const ToolItem('vvolume', Icons.volume_up_rounded, 'Volume'),
+          const ToolItem('vhere', Icons.first_page_rounded, 'Début ici'),
+          const ToolItem('vdelete', Icons.delete_outline_rounded, 'Supprimer'),
         ];
       case VSelKind.none:
         return const [
           ToolItem('add', Icons.add_photo_alternate_rounded, 'Ajouter'),
           ToolItem('audio', Icons.music_note_rounded, 'Audio'),
+          ToolItem('voice', Icons.mic_rounded, 'Voix off'),
           ToolItem('text', Icons.title_rounded, 'Texte'),
           ToolItem('stickers', Icons.emoji_emotions_rounded, 'Stickers'),
           ToolItem('logo', Icons.branding_watermark_rounded, 'Logo'),
@@ -714,6 +1038,7 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
 
   void _onTool(String id) {
     if (_loading || _d.clips.isEmpty) return;
+    if (_recording && id != 'voice') return;
     final c = _clip;
     final v = _text;
     switch (id) {
@@ -766,8 +1091,21 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
           _h.push(_d.copyWith(texts: _d.texts.where((x) => x.id != v.id).toList()));
           _select(const VSel.none());
         }
-      case 'replace':
-        _pickMusic();
+      case 'vhere':
+        final vo = _voice;
+        if (vo != null) {
+          if (_pb.t < _d.durationMs - 300) {
+            _h.push(_d.replaceVoice(vo.copyWith(startMs: _pb.t)));
+          } else {
+            showKatSnack(context, 'Place la tête de lecture avant la fin du montage.');
+          }
+        }
+      case 'vdelete':
+        final vo = _voice;
+        if (vo != null) {
+          _h.push(_d.copyWith(voices: _d.voices.where((x) => x.id != vo.id).toList()));
+          _select(const VSel.none());
+        }
       case 'mdelete':
         _h.push(_d.copyWith(clearMusic: true));
         _select(const VSel.none());
@@ -947,12 +1285,48 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
           mainAxisSize: MainAxisSize.min,
           children: [
             SizedBox(
+              height: 76,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
+                itemCount: MusicMood.values.length,
+                separatorBuilder: (_, _) => const SizedBox(width: KatSpace.s8),
+                itemBuilder: (context, i) {
+                  final m = MusicMood.values[i];
+                  final sel = d.music?.name == m.label && d.music!.path.contains('/music/');
+                  return Pressable(
+                    onTap: () => _useLibraryMusic(m),
+                    selected: sel,
+                    semanticLabel: 'Musique ${m.label}',
+                    child: Container(
+                      width: 132,
+                      padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12, vertical: KatSpace.s8),
+                      decoration: BoxDecoration(
+                        color: sel ? k.primarySoft : k.sheet,
+                        borderRadius: BorderRadius.circular(KatRadius.tile),
+                        border: Border.all(color: sel ? k.ink : k.line, width: sel ? 2 : 1),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(m.label, maxLines: 1, overflow: TextOverflow.ellipsis, style: KatType.ui(16, weight: FontWeight.w600, color: k.ink)),
+                          Text(m.hint, maxLines: 1, overflow: TextOverflow.ellipsis, style: KatType.ui(12, color: k.inkMuted)),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            _note(k, 'Musiques libres de droits, créées sur ton téléphone.'),
+            SizedBox(
               height: 52,
               child: ListView(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
                 children: [
-                  _btn(d.music == null ? 'Choisir une musique' : 'Changer la musique', Icons.library_music_rounded, _pickMusic),
+                  _btn('Mes fichiers audio', Icons.library_music_rounded, _pickMusic),
                   _btn('Son d’une vidéo', Icons.movie_filter_rounded, _useVideoSound),
                 ],
               ),
@@ -1001,20 +1375,74 @@ class _VideoEditorScreenState extends State<VideoEditorScreen> with TickerProvid
           ],
         );
       case 'stickers':
-        return SizedBox(
+        return Column(
           key: const ValueKey('stickers'),
-          height: 112,
-          child: GridView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisExtent: 52),
-            itemCount: _emojis.length,
-            itemBuilder: (context, i) => Pressable(
-              onTap: () => _addText(emoji: _emojis[i]),
-              semanticLabel: 'Sticker ${_emojis[i]}',
-              child: Center(child: Text(_emojis[i], style: const TextStyle(fontSize: 28))),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              height: 52,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
+                children: [
+                  _btn('Code QR', Icons.qr_code_2_rounded, _addQr),
+                  _btn('Photo par-dessus', Icons.add_photo_alternate_rounded, _addPicture),
+                ],
+              ),
             ),
-          ),
+            SizedBox(
+              height: 112,
+              child: GridView.builder(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisExtent: 52),
+                itemCount: _emojis.length,
+                itemBuilder: (context, i) => Pressable(
+                  onTap: () => _addText(emoji: _emojis[i]),
+                  semanticLabel: 'Sticker ${_emojis[i]}',
+                  child: Center(child: Text(_emojis[i], style: const TextStyle(fontSize: 28))),
+                ),
+              ),
+            ),
+          ],
+        );
+      case 'voice':
+        final secs = (_recClock.elapsedMilliseconds / 1000).floor();
+        return Column(
+          key: const ValueKey('voice'),
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: KatSpace.gutter, vertical: KatSpace.s4),
+              child: _recording
+                  ? KatButton(
+                      label: 'Arrêter  ${(secs ~/ 60).toString().padLeft(2, '0')}:${(secs % 60).toString().padLeft(2, '0')}',
+                      icon: Icons.stop_rounded,
+                      expand: true,
+                      onPressed: _stopRecording,
+                    )
+                  : KatButton(label: 'Enregistrer ma voix', icon: Icons.mic_rounded, kind: KatButtonKind.secondary, expand: true, onPressed: _startRecording),
+            ),
+            _note(
+              k,
+              _recording
+                  ? 'Parle maintenant. La vidéo défile sans le son pour éviter l’écho.'
+                  : 'L’enregistrement commence à la tête de lecture. Mets des écouteurs pour un son plus propre.',
+            ),
+          ],
+        );
+      case 'vvolume':
+        final vo = _voice;
+        if (vo == null) break;
+        return SliderRow(
+          key: const ValueKey('vvolume'),
+          label: 'Volume de la voix',
+          value: vo.volume * 100,
+          min: 0,
+          max: 100,
+          format: (v) => '${v.round()} %',
+          onChanged: (v) => _live(d.replaceVoice(vo.copyWith(volume: v / 100))),
+          onChangeEnd: (_) => _commit(),
         );
       case 'logo':
         final l = d.logo;

@@ -129,6 +129,34 @@ Uint8List? unionRegions(List<Uint8List> regions, int length) {
   return out;
 }
 
+/// Packs 0/1 flags into bits (8 pixels per byte), so each undo step stays small.
+Uint8List packBits(Uint8List flags) {
+  final out = Uint8List((flags.length + 7) >> 3);
+  for (var i = 0; i < flags.length; i++) {
+    if (flags[i] != 0) out[i >> 3] |= 1 << (i & 7);
+  }
+  return out;
+}
+
+Uint8List unpackBits(Uint8List packed, int length) {
+  final out = Uint8List(length);
+  for (var i = 0; i < length; i++) {
+    if (packed[i >> 3] & (1 << (i & 7)) != 0) out[i] = 1;
+  }
+  return out;
+}
+
+/// Adds the pixels of [flags] to a packed union (a fresh copy; [packed] is left untouched).
+Uint8List mergePacked(Uint8List? packed, Uint8List flags) {
+  final add = packBits(flags);
+  if (packed == null) return add;
+  final out = Uint8List.fromList(packed);
+  for (var i = 0; i < out.length && i < add.length; i++) {
+    out[i] |= add[i];
+  }
+  return out;
+}
+
 /// Bounding box (left, top, right, bottom) of alpha above [cutoff], or null.
 List<int>? alphaBounds(Uint8List alpha, int w, int h, {int cutoff = 12}) {
   var l = w;

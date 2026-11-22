@@ -111,7 +111,8 @@ class VideoEngine(private val context: Context) : MethodChannel.MethodCallHandle
             try {
                 val value = block()
                 main.post { result.success(value) }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
+                // Throwable, not Exception: an OutOfMemoryError must still answer Dart.
                 main.post { result.error("video", e.message ?: e.toString(), null) }
             }
         }
@@ -146,7 +147,13 @@ class VideoEngine(private val context: Context) : MethodChannel.MethodCallHandle
         } else {
             val full = r.getFrameAtTime(us, option) ?: return null
             val s = min(maxW.toFloat() / full.width, maxH.toFloat() / full.height).coerceAtMost(1f)
-            if (s >= 1f) full else Bitmap.createScaledBitmap(full, (full.width * s).roundToInt(), (full.height * s).roundToInt(), true)
+            if (s >= 1f) {
+                full
+            } else {
+                val scaled = Bitmap.createScaledBitmap(full, (full.width * s).roundToInt(), (full.height * s).roundToInt(), true)
+                if (scaled !== full) full.recycle()
+                scaled
+            }
         }
     }
 
@@ -219,6 +226,9 @@ class VideoEngine(private val context: Context) : MethodChannel.MethodCallHandle
                     .build(),
             )
             spec.optJSONObject("music")?.let { sequences.add(musicSequence(it)) }
+            spec.optJSONArray("voices")?.let { voices ->
+                for (i in 0 until voices.length()) sequences.add(voiceSequence(voices.getJSONObject(i)))
+            }
 
             val compositionEffects = ArrayList<Effect>()
             val segments = segments(spec.optJSONArray("timeline"))
@@ -292,15 +302,16 @@ class VideoEngine(private val context: Context) : MethodChannel.MethodCallHandle
         val video = ArrayList<Effect>()
         val rotation = o.optInt("rotation", 0)
         val flip = o.optBoolean("flipH", false)
-        if (rotation != 0 || flip) {
+        // Same order as the preview: rotate first, then mirror the rotated picture.
+        if (rotation != 0) {
             video.add(
                 ScaleAndRotateTransformation.Builder()
-                    .setScale(if (flip) -1f else 1f, 1f)
                     // Media3 rotates counter-clockwise; the app rotates clockwise.
                     .setRotationDegrees(((360 - rotation) % 360).toFloat())
                     .build(),
             )
         }
+        if (flip) video.add(ScaleAndRotateTransformation.Builder().setScale(-1f, 1f).build())
         video.add(
             Presentation.createForWidthAndHeight(
                 width,
@@ -344,6 +355,22 @@ class VideoEngine(private val context: Context) : MethodChannel.MethodCallHandle
             .addItem(edited)
             .setIsLooping(o.optBoolean("loop", true))
             .build()
+    }
+
+    /** A voiceover placed at [startMs] on the timeline (a leading gap keeps it in sync). */
+    private fun voiceSequence(o: JSONObject): EditedMediaItemSequence {
+        val item = MediaItem.Builder().setUri(Uri.fromFile(File(o.getString("path"))))
+        // Never let a voice-over run past the end of the montage.
+        val maxMs = o.optLong("maxMs", 0)
+        if (maxMs > 0) item.setClippingConfiguration(MediaItem.ClippingConfiguration.Builder().setEndPositionMs(maxMs).build())
+        val edited = EditedMediaItem.Builder(item.build())
+            .setRemoveVideo(true)
+            .setEffects(Effects(listOf(volumeProcessor(o.optDouble("volume", 1.0).toFloat())), listOf()))
+            .build()
+        val builder = EditedMediaItemSequence.Builder(setOf(C.TRACK_TYPE_AUDIO))
+        val startUs = o.optLong("startMs", 0) * 1000
+        if (startUs > 0) builder.addGap(startUs)
+        return builder.addItem(edited).build()
     }
 
     /** Builds a 33×33×33 LUT from the app's 4×5 colour matrix (offsets in 0..255). */
@@ -432,7 +459,13 @@ class VideoEngine(private val context: Context) : MethodChannel.MethodCallHandle
             val ms = presentationTimeUs / 1000
             val s = segments.firstOrNull { ms >= it.startMs && ms < it.endMs } ?: return empty
             if (s.path != currentPath) {
-                val opts = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+                // Straight alpha: the overlay shader applies alpha itself, so premultiplied
+                // pixels would be faded twice.
+                val opts = BitmapFactory.Options().apply {
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
+                    inPremultiplied = false
+                }
+                current?.recycle()
                 current = BitmapFactory.decodeFile(s.path, opts)
                 currentPath = s.path
             }

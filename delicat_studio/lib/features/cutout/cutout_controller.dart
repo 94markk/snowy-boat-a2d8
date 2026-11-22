@@ -16,7 +16,7 @@ enum CutoutStatus { analyzing, ready, failed, manual }
 
 /// Owns the photo, the ML confidence mask and the undoable [CutoutDoc].
 class CutoutController extends ChangeNotifier {
-  CutoutController(this.photo, {required CutoutDoc initial, bool runDetection = true, Float32List? confidence})
+  CutoutController(this.photo, {required CutoutDoc initial, bool runDetection = true, Float32List? confidence, this.ownsPhoto = false})
       : history = History<CutoutDoc>(initial),
         _confidence = confidence,
         status = confidence != null
@@ -33,7 +33,25 @@ class CutoutController extends ChangeNotifier {
   }
 
   final ui.Image photo;
+
+  /// Frees [photo] on dispose, once any work still reading it has finished.
+  final bool ownsPhoto;
   final History<CutoutDoc> history;
+  bool _disposed = false;
+  final Set<Future<void>> _inflight = {};
+
+  /// Keeps track of async work that reads [photo], so it is never freed under it.
+  Future<T> _track<T>(Future<T> f) {
+    final done = f.then<void>((_) {}, onError: (Object _) {});
+    _inflight.add(done);
+    done.whenComplete(() => _inflight.remove(done));
+    return f;
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
   CutoutStatus status;
   String? error;
   SegEngine? engine;
@@ -49,7 +67,7 @@ class CutoutController extends ChangeNotifier {
   bool _rebuilding = false;
   bool _rebuildAgain = false;
   Completer<void>? _maskReady;
-  (double, double, int)? _maskKey;
+  (double, double, Uint8List?)? _maskKey;
 
   CutoutDoc get doc => history.value;
   int get w => photo.width;
@@ -64,13 +82,15 @@ class CutoutController extends ChangeNotifier {
     error = null;
     notifyListeners();
     try {
-      final r = await segmentPhoto(photo);
+      final r = await _track(segmentPhoto(photo));
+      if (_disposed) return;
       _confidence = r.confidence;
       engine = r.engine;
       status = CutoutStatus.ready;
       _maskKey = null;
       await _rebuildMask();
     } catch (e) {
+      if (_disposed) return;
       status = CutoutStatus.failed;
       error = e is SegmentationException ? e.message : 'La détection a échoué. Réessaie ou détoure à la main.';
       notifyListeners();
@@ -85,9 +105,14 @@ class CutoutController extends ChangeNotifier {
     _rebuildMask();
   }
 
+  /// Erased pixels are kept as one packed union per history step (see [eraseColorAt]),
+  /// so the key compares that union by identity.
+  (double, double, Uint8List?) _keyOf(CutoutDoc d) => (d.threshold, d.softness, d.regions.lastOrNull);
+
   void _onDoc() {
-    final key = (doc.threshold, doc.softness, doc.regions.length);
-    if (key != _maskKey) _rebuildMask();
+    // While a rebuild runs, always ask for another pass: an undo can bring back the key
+    // that was current before the running rebuild started.
+    if (_rebuilding || _keyOf(doc) != _maskKey) _rebuildMask();
     notifyListeners();
   }
 
@@ -103,21 +128,21 @@ class CutoutController extends ChangeNotifier {
       do {
         _rebuildAgain = false;
         final d = doc;
-        final key = (d.threshold, d.softness, d.regions.length);
+        final key = _keyOf(d);
         final conf = _confidence;
-        final regions = d.regions;
+        final packed = d.regions.lastOrNull;
         final length = w * h;
-        if (conf == null && regions.isEmpty) {
+        if (conf == null && packed == null) {
           _swapMask(null);
         } else {
           final rgba = await Isolate.run(() {
-            final erased = unionRegions(regions, length);
+            final erased = packed == null ? null : unpackBits(packed, length);
             return buildMaskRgba(conf, length, d.threshold, d.softness, erased);
           });
           _swapMask(await ImageIO.fromRgba(rgba, w, h));
         }
         _maskKey = key;
-      } while (_rebuildAgain);
+      } while (!_disposed && (_rebuildAgain || _keyOf(doc) != _maskKey));
     } finally {
       _rebuilding = false;
       _maskReady?.complete();
@@ -126,6 +151,10 @@ class CutoutController extends ChangeNotifier {
   }
 
   void _swapMask(ui.Image? next) {
+    if (_disposed) {
+      next?.dispose();
+      return;
+    }
     final old = mask;
     mask = next;
     if (old != null && old != next) old.dispose();
@@ -173,22 +202,29 @@ class CutoutController extends ChangeNotifier {
   }
 
   /// « Gomme couleur »: erases pixels similar to the colour under [p].
+  /// Returns the number of erased pixels, or -1 while a previous erase is still running.
   Future<int> eraseColorAt(Offset p, double tolerance, bool contiguous) async {
-    if (busy) return 0;
+    if (busy) return -1;
     busy = true;
     notifyListeners();
     try {
-      final rgba = _rgba ??= await ImageIO.rgba(photo);
+      final rgba = _rgba ??= await _track<Uint8List>(ImageIO.rgba(photo));
+      if (_disposed) return 0;
       final x = p.dx.floor();
       final y = p.dy.floor();
       final ww = w;
       final hh = h;
-      final region = await Isolate.run(() => colorRegion(rgba, ww, hh, x, y, tolerance, contiguous));
-      var count = 0;
-      for (final v in region) {
-        count += v;
-      }
-      if (count > 0) history.push(doc.copyWith(regions: [...doc.regions, region]));
+      final previous = doc.regions.lastOrNull;
+      final (count, merged) = await Isolate.run(() {
+        final region = colorRegion(rgba, ww, hh, x, y, tolerance, contiguous);
+        var n = 0;
+        for (final v in region) {
+          n += v;
+        }
+        return (n, n > 0 ? mergePacked(previous, region) : null);
+      });
+      if (_disposed) return 0;
+      if (merged != null) history.push(doc.copyWith(regions: [merged]));
       return count;
     } finally {
       busy = false;
@@ -245,10 +281,14 @@ class CutoutController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     history.removeListener(_onDoc);
     history.dispose();
     mask?.dispose();
+    mask = null;
     bgPhoto?.dispose();
+    bgPhoto = null;
+    if (ownsPhoto) Future.wait(_inflight.toList()).whenComplete(photo.dispose);
     super.dispose();
   }
 }

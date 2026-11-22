@@ -6,15 +6,20 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:delicat_studio/core/brand.dart';
 import 'package:delicat_studio/core/image_io.dart';
 import 'package:delicat_studio/core/settings.dart';
 import 'package:delicat_studio/features/collage/collage_screen.dart';
 import 'package:delicat_studio/features/cutout/cutout_screen.dart';
+import 'package:delicat_studio/features/editor/editor_model.dart';
 import 'package:delicat_studio/features/editor/editor_screen.dart';
+import 'package:delicat_studio/features/templates/template_screens.dart';
+import 'package:delicat_studio/features/templates/templates.dart';
 import 'package:delicat_studio/features/video/video_editor_screen.dart';
 import 'package:delicat_studio/features/video/video_model.dart';
 import 'package:delicat_studio/features/video/video_timeline.dart';
 import 'package:delicat_studio/main.dart';
+import 'package:delicat_studio/screens/brand_screen.dart';
 import 'package:delicat_studio/theme/app_theme.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -178,5 +183,21 @@ void main() {
       await t.tap(find.text('Réglages'));
       await t.pump(const Duration(milliseconds: 600));
     });
+  });
+
+  testWidgets('template form', (t) async {
+    await _shot(t, _wrap(TemplateScreen(template: kPromoTemplates.first)), '09_template_form');
+  });
+
+  testWidgets('template poster in the editor', (t) async {
+    final spec = PosterSpec(template: kPromoTemplates.first, product: '572 diamants', price: '1500');
+    final bg = (await t.runAsync(() => renderPosterBackground(spec, brand.kit)))!;
+    final layers = [for (final (l, _) in posterLayers(spec, brand.kit)) l];
+    await _shot(t, _wrap(EditorScreen(photo: Photo('', bg), initialTool: EditorTool.text, initialDoc: EditorDoc(layers: layers), title: 'Affiche')), '10_template_poster');
+  });
+
+  testWidgets('brand kit', (t) async {
+    settings.setThemeMode(ThemeMode.light);
+    await _shot(t, _wrap(const BrandScreen(), b: Brightness.light), '11_brand_light');
   });
 }

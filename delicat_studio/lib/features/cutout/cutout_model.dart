@@ -56,6 +56,7 @@ class CutoutDoc {
   final double threshold;
   final double softness;
   final double feather;
+  /// Colour-erased pixels: at most one bit-packed union (see `mergePacked`).
   final List<Uint8List> regions;
   final List<MaskStroke> strokes;
   final BgMode bg;

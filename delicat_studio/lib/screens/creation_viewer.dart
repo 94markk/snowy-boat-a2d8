@@ -11,6 +11,7 @@ import '../features/launch.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/kat_button.dart';
+import '../widgets/share_actions.dart';
 import 'creations_screen.dart';
 
 class CreationViewer extends StatelessWidget {
@@ -81,7 +82,7 @@ class CreationViewer extends StatelessWidget {
                       child: Center(
                         child: CustomPaint(
                           painter: CheckerPainter(k.stage, k.sheetAlt),
-                          child: Image.file(File(c.file), fit: BoxFit.contain),
+                          child: Image.file(File(c.file), fit: BoxFit.contain, errorBuilder: (context, _, _) => Center(child: Text('Ce fichier ne peut pas être affiché.', style: KatType.ui(14, color: KatColors.of(context).inkMuted)))),
                         ),
                       ),
                     ),
@@ -103,33 +104,25 @@ class CreationViewer extends StatelessWidget {
                   Text('${c.width} × ${c.height} px  ${formatBytes(c.bytes)}', style: KatType.code(12, color: k.inkMuted)),
                   Text('Créée le $date', style: KatType.ui(14, color: k.inkMuted)),
                   const SizedBox(height: KatSpace.s16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: KatButton(
-                          label: 'Partager',
-                          icon: Icons.share_rounded,
-                          expand: true,
-                          onPressed: () => ImageIO.shareFile(c.file, text: 'Créé avec Delicat Studio'),
-                        ),
-                      ),
-                      if (!c.isVideo) const SizedBox(width: KatSpace.s8),
-                      if (!c.isVideo)
-                        Expanded(
-                          child: KatButton(
-                            label: 'Retoucher',
-                            icon: Icons.tune_rounded,
-                            kind: KatButtonKind.secondary,
-                            expand: true,
-                            onPressed: () async {
-                              final nav = Navigator.of(context);
-                              final photo = await withLoader(context, 'Ouverture…', () => ImageIO.load(c.file));
-                              if (photo != null) await nav.push(MaterialPageRoute(builder: (_) => EditorScreen(photo: photo)));
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
+                  ShareActions(path: c.file, isVideo: c.isVideo, durationMs: c.durationMs),
+                  if (!c.isVideo) ...[
+                    const SizedBox(height: KatSpace.s8),
+                    KatButton(
+                      label: 'Retoucher',
+                      icon: Icons.tune_rounded,
+                      kind: KatButtonKind.ghost,
+                      expand: true,
+                      onPressed: () async {
+                        final nav = Navigator.of(context);
+                        try {
+                          final photo = await withLoader(context, 'Ouverture…', () => ImageIO.load(c.file));
+                          if (photo != null) await nav.push(MaterialPageRoute(builder: (_) => EditorScreen(photo: photo)));
+                        } catch (_) {
+                          if (context.mounted) showKatSnack(context, 'Cette image ne peut pas être ouverte.');
+                        }
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -150,6 +143,7 @@ class _VideoView extends StatefulWidget {
 
 class _VideoViewState extends State<_VideoView> {
   late final VideoPlayerController _c = VideoPlayerController.file(File(widget.path));
+  bool _failed = false;
 
   @override
   void initState() {
@@ -159,6 +153,8 @@ class _VideoViewState extends State<_VideoView> {
       _c.setLooping(true);
       _c.play();
       setState(() {});
+    }).catchError((Object _) {
+      if (mounted) setState(() => _failed = true);
     });
     _c.addListener(() {
       if (mounted) setState(() {});
@@ -173,6 +169,15 @@ class _VideoViewState extends State<_VideoView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_failed) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(KatSpace.s24),
+          child: Text('Cette vidéo ne peut pas être lue ici. Partage-la ou ouvre-la depuis la galerie.',
+              textAlign: TextAlign.center, style: KatType.ui(14, color: KatColors.of(context).inkMuted)),
+        ),
+      );
+    }
     if (!_c.value.isInitialized) return const Center(child: CircularProgressIndicator());
     final playing = _c.value.isPlaying;
     return GestureDetector(

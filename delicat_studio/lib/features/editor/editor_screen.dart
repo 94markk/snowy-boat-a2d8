@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:material_ui/material_ui.dart';
 
 import '../../core/creations.dart';
+import '../../core/drafts.dart';
 import '../../core/history.dart';
 import '../../core/image_io.dart';
 import '../../core/settings.dart';
@@ -14,6 +15,7 @@ import '../../widgets/pressable.dart';
 import '../../widgets/style_strip.dart';
 import '../export/export_sheet.dart';
 import 'editor_model.dart';
+import 'layer_tools.dart';
 import 'text_sheet.dart';
 
 export 'editor_model.dart' show EditorTool;
@@ -48,22 +50,49 @@ enum _CropRatio {
   final double? value;
 }
 
+/// Photo editor. It owns [photo] and frees its image when closed.
 class EditorScreen extends StatefulWidget {
-  const EditorScreen({super.key, required this.photo, this.initialTool = EditorTool.adjust, this.initialStyle, this.initialFrame});
+  const EditorScreen({
+    super.key,
+    required this.photo,
+    this.initialTool = EditorTool.adjust,
+    this.initialStyle,
+    this.initialFrame,
+    this.initialDoc,
+    this.draftId,
+    this.title = 'Retouche',
+  });
   final Photo photo;
   final EditorTool initialTool;
   final String? initialStyle;
   final FrameStyle? initialFrame;
+
+  /// Restored draft or a ready-made template.
+  final EditorDoc? initialDoc;
+
+  /// Set when reopening a saved draft (the photo then already lives in its folder).
+  final String? draftId;
+  final String title;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
 }
 
 class _EditorScreenState extends State<EditorScreen> {
-  late final History<EditorDoc> _h = History(EditorDoc(
-    style: widget.initialStyle ?? 'original',
-    frame: widget.initialFrame ?? FrameStyle.none,
-  ));
+  late final History<EditorDoc> _h = History(widget.initialDoc ??
+      EditorDoc(
+        style: widget.initialStyle ?? 'original',
+        frame: widget.initialFrame ?? FrameStyle.none,
+      ));
+
+  // Drafts: created on the first change, then saved a moment after each edit.
+  late final String _draftId = widget.draftId ?? DraftsStore.newId();
+  late bool _hasDraft = widget.draftId != null || widget.initialDoc != null;
+  String? _basePath;
+  late final Autosaver _autosave = Autosaver(_saveDraft);
+  late final AppLifecycleListener _life = AppLifecycleListener(onHide: () {
+    if (_hasDraft) _autosave.flush();
+  });
   late String _tool = widget.initialTool.name;
   ui.Image get _img => widget.photo.image;
   ui.Image? _grain;
@@ -96,7 +125,12 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   void initState() {
     super.initState();
-    _h.addListener(() => setState(() {}));
+    _life;
+    _h.addListener(_onDoc);
+    LayerImages.instance.addListener(_onImages);
+    LayerImages.instance.ensureAll(_d.layers);
+    if (widget.draftId != null) _basePath = widget.photo.path;
+    if (widget.initialDoc != null && widget.draftId == null) _adoptPictures();
     Grain.tile().then((g) {
       if (mounted) setState(() => _grain = g);
     });
@@ -109,10 +143,71 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  void _onDoc() {
+    if (_h.canUndo) _hasDraft = true;
+    if (_hasDraft) _autosave.schedule();
+    setState(() {});
+  }
+
+  void _onImages() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _saveDraft() async {
+    final base = _basePath ??= await drafts.adopt(_draftId, widget.photo.path);
+    final d = _d;
+    final g = EditorGeometry(_img, d);
+    final out = g.outputSize;
+    final sc = 320 / math.max(out.width, out.height);
+    final thumb = await ImageIO.render(math.max(1, (out.width * sc).round()), math.max(1, (out.height * sc).round()), (c) {
+      c.scale(sc);
+      paintEdited(c, g, grain: _grain);
+    });
+    final bytes = await ImageIO.thumbnail(thumb, side: 320);
+    thumb.dispose();
+    await drafts.save(_draftId, DraftKind.photo, {'v': 1, 'base': base, 'title': widget.title, 'doc': d.toJson()}, thumb: bytes);
+  }
+
+  /// A template arrives with pictures in the cache or the brand folder: copy them into
+  /// the draft first, so the draft never points at a file that can disappear.
+  Future<void> _adoptPictures() async {
+    final moved = <String, String>{};
+    for (final l in _d.layers) {
+      final p = l.image;
+      if (p == null || moved.containsKey(p)) continue;
+      try {
+        moved[p] = await drafts.adopt(_draftId, p, move: p.contains('/cache/'));
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    if (moved.isNotEmpty) {
+      final layers = [
+        for (final l in _d.layers)
+          l.image != null && moved.containsKey(l.image) ? EditorLayer.fromJson({...l.toJson(), 'image': moved[l.image]}) : l,
+      ];
+      _h.replace(_d.copyWith(layers: layers));
+      LayerImages.instance.ensureAll(layers);
+    }
+    _autosave.schedule();
+  }
+
+  /// Copies a layer picture into the draft folder so it survives cache clean-ups.
+  Future<String> _keep(String path) async {
+    try {
+      return await drafts.adopt(_draftId, path, move: true);
+    } catch (_) {
+      return path;
+    }
+  }
+
   @override
   void dispose() {
+    _life.dispose();
+    _autosave.dispose();
+    LayerImages.instance.removeListener(_onImages);
     _h.dispose();
     _thumb?.dispose();
+    widget.photo.image.dispose();
     super.dispose();
   }
 
@@ -326,7 +421,7 @@ class _EditorScreenState extends State<EditorScreen> {
       setState(() => _selected = null);
       return;
     }
-    if (hit.id == _selected && !hit.isSticker) {
+    if (hit.id == _selected && (hit.isText || hit.isQr)) {
       await _editText(hit);
     } else {
       setState(() => _selected = hit.id);
@@ -345,8 +440,31 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _editText(EditorLayer l) async {
+    if (l.isQr) {
+      final data = await showQrSheet(context, initial: l.qr);
+      if (data != null) _updateLayer(l.copyWith(qr: data));
+      return;
+    }
     final next = await showTextSheet(context, l, isNew: false);
     if (next != null) _updateLayer(next);
+  }
+
+  Future<void> _addQr() async {
+    final data = await showQrSheet(context);
+    if (data == null) return;
+    final l = EditorLayer(id: _newId(), qr: data, size: 0.3, pos: const Offset(0.78, 0.8));
+    _h.push(_d.copyWith(layers: [..._d.layers, l]));
+    setState(() => _selected = l.id);
+  }
+
+  Future<void> _addPicture() async {
+    final pic = await pickLayerPicture(context);
+    if (pic == null || !mounted) return;
+    final path = await _keep(pic.path);
+    await LayerImages.instance.ensure(path);
+    final l = EditorLayer(id: _newId(), image: path, aspect: pic.aspect, size: 0.55, pos: const Offset(0.5, 0.55));
+    _h.push(_d.copyWith(layers: [..._d.layers, l]));
+    if (mounted) setState(() => _selected = l.id);
   }
 
   void _addSticker(String emoji) {
@@ -371,9 +489,9 @@ class _EditorScreenState extends State<EditorScreen> {
   // ---- top bar --------------------------------------------------------------
 
   Future<void> _close() async {
-    if (_h.canUndo) {
-      final ok = await confirmKat(context, title: 'Quitter sans enregistrer ?', message: 'Tes retouches seront perdues.', confirm: 'Quitter');
-      if (!ok) return;
+    if (_hasDraft) {
+      await _autosave.flush();
+      if (mounted) showKatSnack(context, 'Retouche gardée dans tes brouillons.');
     }
     if (mounted) Navigator.pop(context);
   }
@@ -384,8 +502,9 @@ class _EditorScreenState extends State<EditorScreen> {
       if (_cropping) _tool = 'adjust';
     });
     final grain = await Grain.tile();
+    await LayerImages.instance.ensureAll(_d.layers);
     if (!mounted) return;
-    await showExportSheet(
+    final saved = await showExportSheet(
       context,
       kind: CreationKind.edit,
       render: (_) {
@@ -394,6 +513,10 @@ class _EditorScreenState extends State<EditorScreen> {
         return ImageIO.render(out.width.round(), out.height.round(), (c) => paintEdited(c, g, grain: grain));
       },
     );
+    if (saved != null && _hasDraft) {
+      await _autosave.flush();
+      await drafts.markExported(_draftId);
+    }
   }
 
   // ---- build ----------------------------------------------------------------
@@ -414,7 +537,7 @@ class _EditorScreenState extends State<EditorScreen> {
             ColoredBox(
               color: k.canvas,
               child: EditorTopBar(
-                title: 'Retouche',
+                title: widget.title,
                 onClose: _close,
                 onPrimary: _export,
                 actions: [
@@ -486,7 +609,7 @@ class _EditorScreenState extends State<EditorScreen> {
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
           children: [
-            if (!l.isSticker) _act(Icons.edit_rounded, 'Modifier', () => _editText(l)),
+            if (l.isText || l.isQr) _act(Icons.edit_rounded, 'Modifier', () => _editText(l)),
             _act(Icons.copy_rounded, 'Dupliquer', () => _duplicateLayer(l)),
             _act(Icons.flip_to_front_rounded, 'Premier plan', () => _bringFront(l)),
             _act(Icons.delete_outline_rounded, 'Supprimer', () => _deleteLayer(l)),
@@ -611,7 +734,7 @@ class _EditorScreenState extends State<EditorScreen> {
               padding: const EdgeInsets.symmetric(horizontal: KatSpace.gutter, vertical: KatSpace.s4),
               child: KatButton(label: 'Ajouter du texte', icon: Icons.add_rounded, kind: KatButtonKind.secondary, expand: true, onPressed: _addText),
             ),
-            if (sel != null && !sel.isSticker) _layerActions(k, sel) else _note(k, 'Glisse pour déplacer, pince pour agrandir et tourner. Touche deux fois pour modifier.'),
+            if (sel != null && sel.isText) _layerActions(k, sel) else _note(k, 'Glisse pour déplacer, pince pour agrandir et tourner. Touche deux fois pour modifier.'),
           ],
         );
       case 'stickers':
@@ -619,6 +742,17 @@ class _EditorScreenState extends State<EditorScreen> {
           key: const ValueKey('stickers'),
           mainAxisSize: MainAxisSize.min,
           children: [
+            SizedBox(
+              height: 52,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: KatSpace.s12),
+                children: [
+                  _act(Icons.qr_code_2_rounded, 'Code QR', _addQr),
+                  _act(Icons.add_photo_alternate_rounded, 'Photo ou produit', _addPicture),
+                ],
+              ),
+            ),
             SizedBox(
               height: 112,
               child: GridView.builder(
@@ -633,7 +767,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 ),
               ),
             ),
-            if (sel != null && sel.isSticker) _layerActions(k, sel),
+            if (sel != null && !sel.isText) _layerActions(k, sel),
           ],
         );
       case 'draw':

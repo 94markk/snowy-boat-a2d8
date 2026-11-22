@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../core/brand.dart';
 import '../theme/tokens.dart';
 import 'kat_button.dart';
 import 'pressable.dart';
@@ -249,15 +250,17 @@ String hexOf(Color c) {
   return '#${v.toRadixString(16).padLeft(6, '0').toUpperCase()}';
 }
 
+/// Colour picker row. Without [colors], the brand kit colours come first.
 class ColorSwatches extends StatelessWidget {
-  const ColorSwatches({super.key, required this.value, required this.onChanged, this.colors = kSwatches});
+  const ColorSwatches({super.key, required this.value, required this.onChanged, this.colors});
   final Color? value;
   final ValueChanged<Color> onChanged;
-  final List<Color> colors;
+  final List<Color>? colors;
 
   @override
   Widget build(BuildContext context) {
     final k = KatColors.of(context);
+    final colors = this.colors ?? brandSwatches(kSwatches);
     return SizedBox(
       height: KatSpace.minTap + 8,
       child: ListView.builder(

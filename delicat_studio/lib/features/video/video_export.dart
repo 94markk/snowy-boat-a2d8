@@ -1,12 +1,14 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:gal/gal.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/crash_log.dart';
 import '../../core/creations.dart';
 import '../../core/image_io.dart';
 import '../../core/settings.dart';
@@ -14,6 +16,7 @@ import '../../theme/tokens.dart';
 import '../../widgets/common.dart';
 import '../../widgets/kat_button.dart';
 import '../../widgets/kat_voucher.dart';
+import '../../widgets/share_actions.dart';
 import '../editor/editor_model.dart';
 import 'video_model.dart';
 import 'video_native.dart';
@@ -42,7 +45,7 @@ void paintVideoOverlay(Canvas canvas, Size size, Iterable<VText> texts, VLogo? l
 
 enum _Stage { options, working, done }
 
-Future<void> showVideoExportSheet(BuildContext context, VideoDoc doc) => showModalBottomSheet<void>(
+Future<Creation?> showVideoExportSheet(BuildContext context, VideoDoc doc) => showModalBottomSheet<Creation>(
       context: context,
       isScrollControlled: true,
       isDismissible: false,
@@ -59,7 +62,7 @@ class _VideoExportSheet extends StatefulWidget {
 }
 
 class _VideoExportSheetState extends State<_VideoExportSheet> {
-  int _res = 1080;
+  late int _res = settings.videoRes;
   bool _high = false;
   late bool _gallery = settings.saveToGallery;
   _Stage _stage = _Stage.options;
@@ -94,10 +97,13 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
     final tmp = await getTemporaryDirectory();
     final stamp = DateTime.now().microsecondsSinceEpoch;
     final temps = <File>[];
+    ui.Image? logoImage;
     try {
       final size = exportSize(doc.aspect, _res);
-      ui.Image? logoImage;
       if (doc.logo != null) logoImage = await ImageIO.decode(await File(doc.logo!.path).readAsBytes(), maxSide: 1024);
+      for (final t in doc.texts) {
+        if (t.layer.image != null) await LayerImages.instance.ensure(t.layer.image!);
+      }
       final overlays = <Map<String, Object>>[];
       final segs = doc.overlaySegments();
       for (var i = 0; i < segs.length; i++) {
@@ -111,8 +117,12 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
         overlays.add({'startMs': a.round(), 'endMs': b.round(), 'path': f.path});
       }
       logoImage?.dispose();
+      logoImage = null;
 
       final out = '${tmp.path}/ds_video_$stamp.mp4';
+      // Removed in `finally` unless the export succeeds (a cancelled export leaves a partial file).
+      final partial = File(out);
+      temps.add(partial);
       final m = doc.music;
       final spec = <String, Object?>{
         'output': out,
@@ -138,6 +148,15 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
             },
         ],
         'timeline': doc.timelineSpec(),
+        'voices': [
+          for (final v in doc.audibleVoices)
+            {
+              'path': v.path,
+              'startMs': v.startMs.round(),
+              'maxMs': (doc.durationMs - v.startMs).round(),
+              'volume': v.volume,
+            },
+        ],
         'overlays': overlays,
         if (m != null)
           'music': {
@@ -149,11 +168,20 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
           },
       };
 
-      if (!mounted || _cancelled) return;
+      if (!mounted) return;
+      if (_cancelled) {
+        setState(() {
+          _stage = _Stage.options;
+          _error = 'Export annulé.';
+        });
+        return;
+      }
       setState(() => _step = 'Encodage de la vidéo…');
       _poll = Timer.periodic(const Duration(milliseconds: 400), (_) async {
-        final p = await VideoNative.progress();
-        if (mounted && p >= 0) setState(() => _progress = p);
+        try {
+          final p = await VideoNative.progress();
+          if (mounted && p >= 0) setState(() => _progress = p);
+        } catch (_) {}
       });
       final path = await VideoNative.export(spec);
       _poll?.cancel();
@@ -164,9 +192,15 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
       });
 
       final thumbPath = '${tmp.path}/ds_vthumb_$stamp.jpg';
-      await VideoNative.frame(path, 0, thumbPath, maxSide: 480);
-      final thumb = await File(thumbPath).readAsBytes();
       temps.add(File(thumbPath));
+      // A missing thumbnail must not turn a finished video into a failure.
+      var thumb = Uint8List(0);
+      try {
+        await VideoNative.frame(path, 0, thumbPath, maxSide: 480);
+        thumb = await File(thumbPath).readAsBytes();
+      } catch (e, st) {
+        CrashLog.record(e, st, context: 'video thumbnail');
+      }
       final c = await creations.addVideo(
         source: path,
         thumb: thumb,
@@ -191,8 +225,9 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
           _stage = _Stage.done;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
       _poll?.cancel();
+      if (!_cancelled) CrashLog.record(e, st, context: 'video export');
       if (!mounted) return;
       setState(() {
         _stage = _Stage.options;
@@ -201,6 +236,7 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
             : 'La vidéo n’a pas pu être créée. Essaie en 720p, raccourcis le montage ou libère de l’espace, puis réessaie.';
       });
     } finally {
+      logoImage?.dispose();
       for (final f in temps) {
         try {
           if (await f.exists()) await f.delete();
@@ -244,7 +280,15 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
           child: Text('Exporter la vidéo', style: KatType.ui(20, weight: FontWeight.w600, color: k.ink)),
         ),
         const SizedBox(height: KatSpace.s12),
-        KatChoices<int>(items: const [720, 1080], value: _res, label: (r) => '${r}p', onChanged: (r) => setState(() => _res = r)),
+        KatChoices<int>(
+          items: const [720, 1080],
+          value: _res,
+          label: (r) => '${r}p',
+          onChanged: (r) {
+            settings.setVideoRes(r);
+            setState(() => _res = r);
+          },
+        ),
         KatChoices<bool>(
           items: const [false, true],
           value: _high,
@@ -342,18 +386,11 @@ class _VideoExportSheetState extends State<_VideoExportSheet> {
             Text(_galleryNote ?? '', style: KatType.ui(14, color: k.onKatMuted)),
           ],
         ),
-        stub: Row(
+        stub: Column(
           children: [
-            Expanded(
-              child: KatButton(
-                label: 'Partager',
-                icon: Icons.share_rounded,
-                expand: true,
-                onPressed: () => ImageIO.shareFile(c.file, text: 'Créé avec Delicat Studio'),
-              ),
-            ),
-            const SizedBox(width: KatSpace.s8),
-            Expanded(child: KatButton(label: 'Terminé', kind: KatButtonKind.onKat, expand: true, onPressed: () => Navigator.pop(context))),
+            ShareActions(path: c.file, isVideo: true, durationMs: c.durationMs, onKat: true),
+            const SizedBox(height: KatSpace.s8),
+            KatButton(label: 'Terminé', kind: KatButtonKind.onKat, expand: true, onPressed: () => Navigator.pop(context, c)),
           ],
         ),
       ),

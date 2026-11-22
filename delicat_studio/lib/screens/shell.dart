@@ -1,5 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
+import '../features/launch.dart';
 import '../theme/tokens.dart';
 import 'creations_screen.dart';
 import 'home_screen.dart';
@@ -17,6 +18,14 @@ class AppShell extends StatefulWidget {
 
 class AppShellState extends State<AppShell> {
   int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) recoverLostPick(context);
+    });
+  }
 
   void goTo(int i) => setState(() => _index = i);
 

@@ -28,6 +28,25 @@ class VideoPlayback extends ChangeNotifier {
   VideoPlayerController? _music;
   String? _musicPath;
 
+  /// One player per voice-over, created on demand.
+  final Map<String, VideoPlayerController> _voices = {};
+  final Set<String> _voicePlaying = {};
+
+  /// Mutes every sound while a voice-over is being recorded (no echo into the mic).
+  bool _silent = false;
+  bool get silent => _silent;
+  set silent(bool v) {
+    _silent = v;
+    for (final c in doc.clips) {
+      controllerFor(c)?.setVolume(_volumeFor(c));
+    }
+    _music?.setVolume(v ? 0 : (doc.music?.volume ?? 0).clamp(0.0, 1.0));
+    for (final e in _voices.entries) {
+      final voice = doc.voices.where((x) => x.id == e.key).firstOrNull;
+      e.value.setVolume(v ? 0 : (voice?.volume ?? 1).clamp(0.0, 1.0));
+    }
+  }
+
   bool _seeking = false;
   (String, double)? _pendingSeek;
   bool _disposed = false;
@@ -37,7 +56,7 @@ class VideoPlayback extends ChangeNotifier {
     return ctl != null && ctl.value.isInitialized ? ctl : null;
   }
 
-  double _volumeFor(VClip c) => doc.muteAll || c.mute || !c.hasAudio ? 0 : c.volume.clamp(0.0, 1.0);
+  double _volumeFor(VClip c) => _silent || doc.muteAll || c.mute || !c.hasAudio ? 0 : c.volume.clamp(0.0, 1.0);
 
   void setDoc(VideoDoc d) {
     doc = d;
@@ -49,8 +68,18 @@ class VideoPlayback extends ChangeNotifier {
         if (playing && ctl.value.playbackSpeed != c.speed) ctl.setPlaybackSpeed(c.speed);
       }
     }
-    _music?.setVolume((d.music?.volume ?? 0).clamp(0.0, 1.0));
+    _music?.setVolume(_silent ? 0 : (d.music?.volume ?? 0).clamp(0.0, 1.0));
     if (_musicPath != d.music?.path) _resetMusic();
+    final ids = {for (final v in d.voices) v.id};
+    for (final id in _voices.keys.toList()) {
+      if (!ids.contains(id)) {
+        _voices.remove(id)?.dispose();
+        _voicePlaying.remove(id);
+      }
+    }
+    for (final v in d.voices) {
+      _voices[v.id]?.setVolume(_silent ? 0 : v.volume.clamp(0.0, 1.0));
+    }
     if (playing) {
       _sync(force: true);
     } else {
@@ -70,7 +99,14 @@ class VideoPlayback extends ChangeNotifier {
       if (_disposed) return;
       await ctl.setVolume(_volumeFor(c));
       notifyListeners();
-    }).catchError((Object _) {});
+    }).catchError((Object _) {
+      // Forget the failed player so the next visit can try again.
+      if (identical(_ctl[c.id], ctl)) {
+        _ctl.remove(c.id);
+        _ready.remove(c.id);
+      }
+      ctl.dispose();
+    });
     _ready[c.id] = f;
     return f;
   }
@@ -128,6 +164,11 @@ class VideoPlayback extends ChangeNotifier {
       _restartClock();
       _sync(force: true);
       _syncMusic();
+      for (final id in _voicePlaying) {
+        _voices[id]?.pause();
+      }
+      _voicePlaying.clear();
+      _syncVoices();
     } else {
       _syncPaused();
       _gc();
@@ -162,6 +203,10 @@ class VideoPlayback extends ChangeNotifier {
       if (ctl.value.isPlaying) ctl.pause();
     }
     _music?.pause();
+    for (final id in _voicePlaying) {
+      _voices[id]?.pause();
+    }
+    _voicePlaying.clear();
     _syncPaused();
     notifyListeners();
   }
@@ -177,7 +222,46 @@ class VideoPlayback extends ChangeNotifier {
       return;
     }
     _sync();
+    _syncVoices();
+    _tickMusic();
     notifyListeners();
+  }
+
+  /// Starts voice-overs as the playhead enters them and stops them as it leaves.
+  void _syncVoices() {
+    for (final v in doc.audibleVoices) {
+      final inside = t >= v.startMs && t < v.endMs;
+      final on = _voicePlaying.contains(v.id);
+      if (inside && !on) {
+        _voicePlaying.add(v.id);
+        _startVoice(v);
+      } else if (!inside && on) {
+        _voicePlaying.remove(v.id);
+        _voices[v.id]?.pause();
+      }
+    }
+  }
+
+  Future<void> _startVoice(VVoice v) async {
+    var ctl = _voices[v.id];
+    if (ctl == null) {
+      ctl = VideoPlayerController.file(File(v.path), videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+      _voices[v.id] = ctl;
+      try {
+        await ctl.initialize();
+      } catch (_) {
+        if (identical(_voices[v.id], ctl)) _voices.remove(v.id);
+        _voicePlaying.remove(v.id);
+        ctl.dispose();
+        return;
+      }
+    }
+    if (_disposed || !playing || !_voicePlaying.contains(v.id)) return;
+    await ctl.setVolume(_silent ? 0 : v.volume.clamp(0.0, 1.0));
+    // The playhead kept moving while the player loaded: start where it is now.
+    final at = (t - v.startMs).clamp(0.0, v.durationMs);
+    await ctl.seekTo(Duration(milliseconds: at.round()));
+    if (playing && _voicePlaying.contains(v.id)) await ctl.play();
   }
 
   void _sync({bool force = false}) {
@@ -230,29 +314,87 @@ class VideoPlayback extends ChangeNotifier {
       _music?.pause();
       return;
     }
-    if (_musicPath != m.path) {
+    var ctl = _music;
+    if (_musicPath != m.path || ctl == null) {
       _resetMusic();
-      final ctl = VideoPlayerController.file(File(m.path), videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
+      ctl = VideoPlayerController.file(File(m.path), videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true));
       _music = ctl;
       _musicPath = m.path;
       try {
         await ctl.initialize();
       } catch (_) {
+        if (identical(_music, ctl)) _resetMusic();
         return;
       }
     }
-    final ctl = _music!;
-    final len = m.sourceMs - m.inMs;
-    if (len <= 0) return;
-    if (!m.loop && t >= len) {
+    // The music may have been removed or replaced while the player was loading.
+    if (_disposed || !identical(_music, ctl)) return;
+    final pos = _musicPosition(m);
+    if (pos == null) {
       await ctl.pause();
       return;
     }
-    final pos = m.inMs + (m.loop ? t % len : t);
-    await ctl.setVolume(m.volume.clamp(0.0, 1.0));
-    await ctl.setLooping(m.loop);
-    await ctl.seekTo(Duration(milliseconds: pos.round()));
-    if (playing) await ctl.play();
+    _musicBusy = true;
+    try {
+      await ctl.setVolume(_silent ? 0 : m.volume.clamp(0.0, 1.0));
+      // Looping is handled here, so a loop restarts at the chosen start and not at 0:00.
+      await ctl.setLooping(false);
+      await ctl.seekTo(Duration(milliseconds: pos.round()));
+      if (playing && identical(_music, ctl)) await ctl.play();
+    } finally {
+      _musicBusy = false;
+    }
+  }
+
+  /// Where the song should be at the playhead, or null once a non-looping song has ended.
+  double? _musicPosition(VMusic m) {
+    final len = m.sourceMs - m.inMs;
+    if (len <= 0) return null;
+    if (!m.loop && t >= len) return null;
+    return m.inMs + (m.loop ? t % len : t);
+  }
+
+  /// Keeps a looping song in step with the master clock (called every frame while playing).
+  void _tickMusic() {
+    final m = doc.music;
+    final ctl = _music;
+    if (m == null || ctl == null || !ctl.value.isInitialized || _musicBusy) return;
+    final want = _musicPosition(m);
+    if (want == null) {
+      if (ctl.value.isPlaying) ctl.pause();
+      return;
+    }
+    final drift = (ctl.value.position.inMilliseconds - want).abs();
+    if (drift > 900 || !ctl.value.isPlaying) {
+      _musicBusy = true;
+      ctl.seekTo(Duration(milliseconds: want.round())).then((_) {
+        if (playing && identical(_music, ctl)) return ctl.play();
+      }).whenComplete(() => _musicBusy = false);
+    }
+  }
+
+  bool _musicBusy = false;
+
+  /// Frees every preview player (before an export, so the encoder gets the hardware decoders).
+  void releasePlayers() {
+    pause();
+    for (final ctl in _ctl.values) {
+      ctl.dispose();
+    }
+    _ctl.clear();
+    _ready.clear();
+    _resetMusic();
+    for (final v in _voices.values) {
+      v.dispose();
+    }
+    _voices.clear();
+    _voicePlaying.clear();
+  }
+
+  /// Rebuilds the players released by [releasePlayers].
+  void restorePlayers() {
+    _syncPaused();
+    notifyListeners();
   }
 
   @override
@@ -264,6 +406,10 @@ class VideoPlayback extends ChangeNotifier {
     }
     _ctl.clear();
     _music?.dispose();
+    for (final v in _voices.values) {
+      v.dispose();
+    }
+    _voices.clear();
     super.dispose();
   }
 }

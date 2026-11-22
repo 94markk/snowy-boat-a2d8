@@ -3,9 +3,11 @@ import 'dart:io';
 import 'package:material_ui/material_ui.dart';
 
 import '../core/creations.dart';
+import '../core/drafts.dart';
 import '../core/recommendations.dart';
 import '../core/settings.dart';
 import '../features/launch.dart';
+import '../features/templates/template_screens.dart';
 import '../theme/tokens.dart';
 import '../widgets/common.dart';
 import '../widgets/kat_button.dart';
@@ -13,6 +15,7 @@ import '../widgets/kat_voucher.dart';
 import '../widgets/pressable.dart';
 import '../widgets/settle.dart';
 import 'creation_viewer.dart';
+import 'drafts_screen.dart';
 import 'shell.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -29,7 +32,7 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final k = KatColors.of(context);
     final tools = <(StudioTool, IconData, String, String, String?)>[
-      (StudioTool.video, Icons.movie_rounded, 'Montage vidéo', 'Clips, musique, texte et logo en MP4', 'Nouveau'),
+      (StudioTool.video, Icons.movie_rounded, 'Montage vidéo', 'Clips, musique, voix off et logo en MP4', null),
       (StudioTool.cutout, Icons.content_cut_rounded, 'Retirer le fond', 'Détoure un sujet en un geste', null),
       (StudioTool.collage, Icons.dashboard_rounded, 'Collage', 'Jusqu’à 9 photos, dispositions au choix', null),
       (StudioTool.styles, Icons.palette_rounded, 'Styles', '24 looks à doser au pourcentage près', null),
@@ -136,6 +139,37 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              SliverToBoxAdapter(
+                child: ListenableBuilder(
+                  listenable: drafts,
+                  builder: (context, _) {
+                    final list = drafts.items;
+                    if (list.isEmpty) return const SizedBox.shrink();
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SectionHeader(
+                          'Reprendre',
+                          action: list.length > 4 ? 'Tout voir' : null,
+                          onAction: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DraftsScreen())),
+                        ),
+                        SizedBox(
+                          height: 178,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: KatSpace.gutter),
+                            itemCount: list.length.clamp(0, 8),
+                            separatorBuilder: (_, _) => const SizedBox(width: KatSpace.s12),
+                            itemBuilder: (context, i) => DraftCard(draft: list[i]),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+              const SliverToBoxAdapter(child: SectionHeader('Modèles promo')),
+              const SliverToBoxAdapter(child: TemplateStrip()),
               const SliverToBoxAdapter(child: SectionHeader('Recommandé pour toi')),
               SliverToBoxAdapter(child: _Recommendations(items: items)),
               const SliverToBoxAdapter(child: SectionHeader('Outils')),
@@ -195,7 +229,7 @@ class HomeScreen extends StatelessWidget {
                                 child: Container(
                                   width: 112,
                                   color: k.sheetAlt,
-                                  child: Image.file(File(c.thumb), fit: BoxFit.cover, cacheWidth: 240),
+                                  child: Image.file(File(c.thumb), fit: BoxFit.cover, cacheWidth: 240, errorBuilder: (_, _, _) => const SizedBox.shrink()),
                                 ),
                               ),
                             );

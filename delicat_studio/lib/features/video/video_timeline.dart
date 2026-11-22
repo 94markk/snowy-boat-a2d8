@@ -6,7 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../theme/tokens.dart';
 import 'video_model.dart';
 
-enum VSelKind { none, clip, text, music }
+enum VSelKind { none, clip, text, music, voice }
 
 @immutable
 class VSel {
@@ -39,7 +39,10 @@ class _Geo {
   static const textTop = clipTop + clipH + 10;
   static const laneH = 32.0;
   static const musicTop = textTop + laneH + 8;
-  static const height = musicTop + laneH + 8;
+  static const voiceTop = musicTop + laneH + 8;
+
+  /// The voice lane only appears once a voice-over exists.
+  static double heightFor(VideoDoc d) => (d.voices.isEmpty ? voiceTop : voiceTop + laneH + 8);
 
   double get cx => size.width / 2;
   double x(double ms) => cx + (ms - t) * pxPerMs;
@@ -60,6 +63,7 @@ class VideoTimeline extends StatefulWidget {
     required this.onSelect,
     required this.onTrim,
     required this.onMoveText,
+    required this.onMoveVoice,
     required this.onGestureEnd,
     required this.onToggleTransition,
     required this.onAddClip,
@@ -79,6 +83,7 @@ class VideoTimeline extends StatefulWidget {
   /// Live trim of a clip edge by [deltaMs] of timeline time since the gesture began.
   final void Function(String clipId, bool leftEdge, double deltaMs) onTrim;
   final void Function(String textId, double startMs) onMoveText;
+  final void Function(String voiceId, double startMs) onMoveVoice;
   final VoidCallback onGestureEnd;
   final ValueChanged<int> onToggleTransition;
   final VoidCallback onAddClip;
@@ -89,7 +94,7 @@ class VideoTimeline extends StatefulWidget {
   State<VideoTimeline> createState() => _VideoTimelineState();
 }
 
-enum _Drag { none, scrub, zoom, trimLeft, trimRight, moveText }
+enum _Drag { none, scrub, zoom, trimLeft, trimRight, moveText, moveVoice }
 
 class _VideoTimelineState extends State<VideoTimeline> {
   _Drag _drag = _Drag.none;
@@ -109,6 +114,7 @@ class _VideoTimelineState extends State<VideoTimeline> {
   }
 
   Rect _textRect(VText v) => Rect.fromLTRB(_g.x(v.startMs), _Geo.textTop, _g.x(v.endMs), _Geo.textTop + _Geo.laneH);
+  Rect _voiceRect(VVoice v) => Rect.fromLTRB(_g.x(v.startMs), _Geo.voiceTop, _g.x(v.endMs), _Geo.voiceTop + _Geo.laneH);
 
   Rect? _musicRect() {
     final m = widget.doc.music;
@@ -164,6 +170,15 @@ class _VideoTimelineState extends State<VideoTimeline> {
         return;
       }
     }
+    if (widget.sel.kind == VSelKind.voice) {
+      final v = widget.doc.voices.where((x) => x.id == widget.sel.id).firstOrNull;
+      if (v != null && _voiceRect(v).inflate(6).contains(p)) {
+        _drag = _Drag.moveVoice;
+        _target = v.id;
+        _text0 = v.startMs;
+        return;
+      }
+    }
     _drag = _Drag.scrub;
   }
 
@@ -184,13 +199,15 @@ class _VideoTimelineState extends State<VideoTimeline> {
         widget.onTrim(_target!, _drag == _Drag.trimLeft, dx / widget.pxPerMs);
       case _Drag.moveText:
         widget.onMoveText(_target!, _text0 + dx / widget.pxPerMs);
+      case _Drag.moveVoice:
+        widget.onMoveVoice(_target!, _text0 + dx / widget.pxPerMs);
       case _Drag.none:
         break;
     }
   }
 
   void _onScaleEnd(ScaleEndDetails d) {
-    if (_drag == _Drag.trimLeft || _drag == _Drag.trimRight || _drag == _Drag.moveText) widget.onGestureEnd();
+    if (_drag == _Drag.trimLeft || _drag == _Drag.trimRight || _drag == _Drag.moveText || _drag == _Drag.moveVoice) widget.onGestureEnd();
     _drag = _Drag.none;
     _target = null;
   }
@@ -235,6 +252,12 @@ class _VideoTimelineState extends State<VideoTimeline> {
       widget.onAddMusic();
       return;
     }
+    for (final v in doc.voices.reversed) {
+      if (_voiceRect(v).contains(p)) {
+        widget.onSelect(VSel(VSelKind.voice, v.id));
+        return;
+      }
+    }
     widget.onSelect(const VSel.none());
   }
 
@@ -242,7 +265,7 @@ class _VideoTimelineState extends State<VideoTimeline> {
   Widget build(BuildContext context) {
     final k = KatColors.of(context);
     return SizedBox(
-      height: _Geo.height,
+      height: _Geo.heightFor(widget.doc),
       child: LayoutBuilder(builder: (context, box) {
         _size = box.biggest;
         return GestureDetector(
@@ -414,7 +437,14 @@ class _TimelinePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = selected ? 2 : 1
         ..color = selected ? k.ink : k.line);
-      final label = v.layer.isSticker ? v.layer.emoji! : 'T  ${v.layer.text.replaceAll('\n', ' ')}';
+      final l = v.layer;
+      final label = l.isSticker
+          ? l.emoji!
+          : l.isQr
+              ? '▦  Code QR'
+              : l.isPicture
+                  ? '▣  Photo'
+                  : 'T  ${l.text.replaceAll('\n', ' ')}';
       canvas.save();
       canvas.clipRRect(rr);
       _text(canvas, label, Offset(r.left + 10, r.top + 8), color: k.ink, maxWidth: math.max(8, r.width - 16));
@@ -444,6 +474,29 @@ class _TimelinePainter extends CustomPainter {
         canvas.drawRect(Rect.fromLTWH(x, r.center.dy - hgt / 2, 2, hgt), bar);
       }
       _text(canvas, '♪  ${m.name}', Offset(r.left + 10, r.top + 8), color: k.ink, maxWidth: math.max(8, math.min(r.width, 220) - 16));
+      canvas.restore();
+    }
+
+    // Voice-over lane.
+    for (final v in doc.voices) {
+      final r = Rect.fromLTRB(g.x(v.startMs), _Geo.voiceTop, g.x(v.endMs), _Geo.voiceTop + _Geo.laneH);
+      if (r.right < 0 || r.left > size.width) continue;
+      final selected = sel.kind == VSelKind.voice && sel.id == v.id;
+      final late = v.startMs >= dur - 50;
+      final rr = RRect.fromRectAndRadius(r.deflate(1), const Radius.circular(8));
+      canvas.drawRRect(rr, Paint()..color = selected ? k.primarySoft : k.sheet);
+      canvas.drawRRect(rr, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = selected ? 2 : 1
+        ..color = selected ? k.ink : k.line);
+      canvas.save();
+      canvas.clipRRect(rr);
+      final bar = Paint()..color = k.inkMuted.withValues(alpha: 0.35);
+      for (var x = math.max(r.left, 0.0) + 64; x < math.min(r.right, size.width); x += 4) {
+        final hgt = 4 + 16 * (0.5 + 0.5 * math.sin(x * 0.53 + v.startMs) * math.sin(x * 0.07)).abs();
+        canvas.drawRect(Rect.fromLTWH(x, r.center.dy - hgt / 2, 2, hgt), bar);
+      }
+      _text(canvas, late ? 'Voix hors montage' : '🎙  Voix', Offset(r.left + 10, r.top + 8), color: k.ink, maxWidth: math.max(8, r.width - 16));
       canvas.restore();
     }
 

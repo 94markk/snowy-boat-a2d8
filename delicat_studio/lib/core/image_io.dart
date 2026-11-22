@@ -25,44 +25,55 @@ class Photo {
 abstract final class ImageIO {
   static final _picker = ImagePicker();
 
-  static double get _maxSide => settings.importQuality.maxSide.toDouble();
+  /// Collages decode at most this size: 9 photos at full import quality would not fit
+  /// in the memory of a budget phone, and each cell is a fraction of the output.
+  static const collageSide = 1440;
 
-  static Future<Photo?> pick(ImageSource source) async {
+  static Future<Photo?> pick(ImageSource source, {int? maxSide}) async {
+    final side = math.min(maxSide ?? settings.importQuality.maxSide, settings.importQuality.maxSide).toDouble();
     final x = await _picker.pickImage(
       source: source,
-      maxWidth: _maxSide,
-      maxHeight: _maxSide,
+      maxWidth: side,
+      maxHeight: side,
       imageQuality: 95,
       requestFullMetadata: false,
     );
     if (x == null) return null;
-    return load(x.path);
+    return load(x.path, maxSide: maxSide);
   }
 
-  static Future<List<Photo>> pickMany({int limit = 9}) async {
+  static Future<List<Photo>> pickMany({int limit = 9, int? maxSide}) async {
     if (limit < 1) return const [];
     if (limit == 1) {
       // pickMultiImage requires a limit of at least 2.
-      final one = await pick(ImageSource.gallery);
+      final one = await pick(ImageSource.gallery, maxSide: maxSide);
       return one == null ? const [] : [one];
     }
+    final side = math.min(maxSide ?? settings.importQuality.maxSide, settings.importQuality.maxSide).toDouble();
     final files = await _picker.pickMultiImage(
-      maxWidth: _maxSide,
-      maxHeight: _maxSide,
+      maxWidth: side,
+      maxHeight: side,
       imageQuality: 92,
       limit: limit,
       requestFullMetadata: false,
     );
     final out = <Photo>[];
-    for (final f in files.take(limit)) {
-      out.add(await load(f.path));
+    try {
+      for (final f in files.take(limit)) {
+        out.add(await load(f.path, maxSide: maxSide));
+      }
+    } catch (_) {
+      for (final p in out) {
+        p.image.dispose();
+      }
+      rethrow;
     }
     return out;
   }
 
-  static Future<Photo> load(String path) async {
+  static Future<Photo> load(String path, {int? maxSide}) async {
     final bytes = await File(path).readAsBytes();
-    return Photo(path, await decode(bytes, maxSide: settings.importQuality.maxSide));
+    return Photo(path, await decode(bytes, maxSide: math.min(maxSide ?? settings.importQuality.maxSide, settings.importQuality.maxSide)));
   }
 
   /// Decodes (EXIF orientation applied by the engine) and downsizes to [maxSide].
