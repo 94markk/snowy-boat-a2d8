@@ -22,7 +22,7 @@ keystore="${1:-$HOME/delicat-upload.jks}"
 key_alias="${2:-upload}"
 dname="CN=Delicat Studio, O=Delicat Store Haiti, C=HT"
 
-command -v keytool >/dev/null 2>&1 || die "keytool introuvable. Installe un JDK 17 (ou utilise celui d'Android Studio) et ajoute-le au PATH."
+command -v keytool >/dev/null 2>&1 || die "keytool introuvable. Installe un JDK 17 ou plus récent (ou utilise celui d'Android Studio) et ajoute-le au PATH."
 [[ -t 0 ]] || die "ce script est interactif : lance-le dans un terminal."
 [[ "$key_alias" =~ ^[A-Za-z0-9._-]+$ ]] || die "alias invalide (lettres, chiffres, . _ - uniquement)."
 

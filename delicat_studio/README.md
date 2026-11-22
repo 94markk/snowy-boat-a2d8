@@ -114,7 +114,7 @@ screenshots/                      renders store-style screenshots with the real 
 
 ## Build
 
-You need Flutter 3.50 or later, Java 17 or later, and the Android SDK (platform 36).
+You need Flutter 3.50 or later, Java 21 (the release build's Android lint step needs it), and the Android SDK (platform 36).
 
 ```bash
 flutter pub get
